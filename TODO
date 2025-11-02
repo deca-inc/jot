@@ -1,0 +1,128 @@
+# Journal App - TODO List
+
+Based on documentation and current app state.
+
+## Current State ✅
+- Database schema and migrations system
+- SQLite with FTS5 setup  
+- DatabaseProvider component
+- Basic app scaffold
+
+## Tasks
+
+### 1. UI Foundation & Navigation
+☐ **ui-foundation**: Build UI foundation: Theme system, typography, color palette, spacing system
+☐ **navigation**: Set up navigation/routing system (React Navigation or native router)
+
+### 2. Timeline & Entry Display
+☐ **timeline-screen**: Home Timeline Screen: Display entries and AI convos grouped by day with quick filters (Entries, AI, Favorites, Tags)
+☐ **entry-list-item**: Entry List Item component: Display entry preview with title, date, tags, favorite status
+☐ **composer-screen**: Composer Screen: Entry type selection (Journal Entry vs AI Chat), keyboard shortcuts (Cmd+N)
+
+### 3. Editor System (Critical - Writing Experience First)
+
+☐ **rich-editor**: Rich Block-Based Editor: WYSIWYG editor with <16ms latency supporting paragraphs, headings, lists, checkboxes, tables, images, embeds, code blocks, quotes
+☐ **editor-blocks**: Implement all block types per schema: paragraph, heading1-3, list (ordered/unordered), checkbox, code, markdown, table, image, quote
+☐ **editor-autosave**: Implement autosave functionality for entries with optimistic UI updates
+☐ **focus-mode**: Distraction-free focus mode: Full-screen writing mode with minimal UI
+
+### 4. Data & Content Management
+
+☐ **entry-data-layer**: Data access layer: CRUD operations for entries (create, read, update, delete)
+☐ **entry-validation**: Entry validation: Zod schema validation for blocks array before save
+☐ **tags-system**: Tags system: Tag input/management, tag filtering in timeline, tag autocomplete
+☐ **favorites-system**: Favorites system: Toggle favorite status, filter favorites in timeline
+☐ **attachments-storage**: Attachments system: File picker, storage in app data directory, metadata in DB, display in entries
+
+### 5. Search (Fast Search Requirement)
+
+☐ **search-screen**: Search Screen: Unified search bar with tabs (All, Semantic, Filters), keyboard-first navigation (Cmd+K)
+☐ **lexical-search**: Lexical search: FTS5 query implementation with prefix, phrase, tag filters, date ranges, <100ms performance target
+☐ **search-results**: Search results UI: Snippet previews with highlighted terms, jump-to functionality
+☐ **embedding-storage**: Embedding storage: Generate/store embeddings as BLOB (float32 arrays) in Entry.embedding column
+☐ **embedding-generation**: Embedding generation: Background worker to generate embeddings for entries using local embedding model
+☐ **semantic-search**: Semantic search: Vector similarity search with cosine similarity, hybrid scoring (alpha * lexical + (1-alpha) * vector)
+
+### 6. AI Integration (Local-First AI)
+
+☐ **ai-chat-interface**: AI Chat interface: Message bubbles with role indicators (user/assistant), markdown rendering for AI responses
+☐ **ai-model-management**: AI Model Management: Download UI for models, model selection per conversation/global, storage management, performance info
+☐ **local-llm-integration**: Local LLM integration: On-device inference via llama.cpp/MLC with Llama 3.2 3B Instruct
+☐ **ai-conversations**: AI Conversations: Create/manage AI chat entries, conversation threading, inline responses
+☐ **ai-summarization**: AI Summarization: Offer summarization on journal entries, generate summaries on-demand
+☐ **ai-qa**: AI Q&A: RAG pipeline with retrieval (top-k chunks), re-ranking, generate answers over journal content
+
+### 7. Security & Encryption (Privacy First)
+
+☐ **encryption-keys**: Encryption key management: Master key derivation via Argon2id, key storage in OS keystore (Keychain)
+☐ **key-unlock-flow**: Key unlock flow: Passphrase entry UI, unlock app on launch
+☐ **db-encryption**: Database encryption: Encrypt entire SQLite file at rest
+☐ **file-encryption**: File encryption: Encrypt attachments with random file keys wrapped by master key
+
+### 8. Backup System
+
+☐ **backup-ui**: Backup UI: Provider selection (Google Drive, Dropbox, iCloud Drive, Local), backup/restore flows
+☐ **backup-encryption**: Backup encryption: Client-side encryption before upload, zero-knowledge backups
+☐ **backup-scheduler**: Backup scheduler: Periodic snapshots with incremental diffs, background worker
+☐ **backup-integrity**: Backup integrity: HMAC over archive manifest, per-file checksums, verification
+
+### 9. Import/Export
+
+☐ **export-json**: Export: JSON bundle + attachments folder export format
+☐ **export-markdown**: Export: Markdown per-entry export option
+☐ **import-system**: Import system: Parse JSON bundle, restore entries and attachments
+
+### 10. Monetization
+
+☐ **trial-system**: Trial system: 7-day free trial with local clock + monotonic time, tamper checks
+☐ **trial-ui**: Trial UI: Discreet banner post-trial, graceful limits (no hard lock on reading/export)
+☐ **purchase-flow**: Purchase flow: $45 lifetime license, local license file, purchase UI in Settings and timeline banner
+
+### 11. Settings & Polish
+
+☐ **settings-screen**: Settings Screen: Encryption settings, backup management, AI model selection, license info, import/export
+☐ **keyboard-shortcuts**: Keyboard shortcuts: Cmd+N (new entry), Cmd+K (search), full keyboard navigation throughout app
+☐ **accessibility**: Accessibility: Full keyboard navigation, prefers-reduced-motion support, high contrast mode
+☐ **typography-polish**: Typography polish: Beautiful readable fonts, proper spacing, sizing, contrast per product principles
+☐ **ui-polish**: UI polish: Premium delightful UI that feels joy to use, not just functional
+
+### 12. Platform & Performance
+
+☐ **macos-platform**: macOS platform setup: Configure react-native-macos, verify Expo compatibility, desktop-specific features
+☐ **performance-optimization**: Performance optimization: <300ms cold app launch, <16ms keystroke latency, <100ms search on 10k entries
+
+## Performance Targets
+
+- **Keystroke latency**: <16ms (imperceptible)
+- **Search performance**: <100ms on 10k entries
+- **Cold app launch**: <300ms
+- **Week-4 retention**: >40% after trial
+- **NPS**: >50
+
+## Success Metrics
+
+- **Performance**: <100 ms search on 10k notes; <300 ms app launch cold
+- **Reliability**: Zero data loss in local crash scenarios; validated backup/restore
+- **Delight**: >40% week-4 retention after trial; NPS > 50
+
+## v1 Scope (Foundations)
+
+Per roadmap.md:
+- Local SQLite + FTS5, schema + migrations ✅
+- Editor + timeline (entries + AI convos)
+- Local encryption and key unlock flow
+- Basic backups (local file, iCloud Drive)
+- Lexical search; initial embeddings; basic AI summaries (on-device)
+- Trial + purchase
+
+## v1.1 Scope
+
+- Import/export polish; tags and favorites UX
+- Better AI prompts and templates
+- Backup scheduler, integrity checks
+
+## v2 Scope (Future)
+
+- Multi-device sync (CRDT), conflict resolution
+- Advanced analytics/insights fully on-device
+- Additional backup providers and incremental diffs
