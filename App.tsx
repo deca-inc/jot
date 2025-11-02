@@ -1,23 +1,19 @@
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { DatabaseProvider } from "./lib/db/DatabaseProvider";
+import { ThemeProvider } from "./lib/theme/ThemeProvider";
+import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
 
 export default function App() {
   return (
-    <DatabaseProvider>
-      <View style={styles.container}>
-        <Text>Open up App.tsx to start working on your app!</Text>
-        <StatusBar style="auto" />
-      </View>
-    </DatabaseProvider>
+    <SafeAreaProvider>
+      <DatabaseProvider>
+        <ThemeProvider>
+          <StatusBar style="auto" />
+          <SimpleNavigation />
+        </ThemeProvider>
+      </DatabaseProvider>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});

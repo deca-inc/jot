@@ -23,6 +23,9 @@ dependencies:
   react-native:
     specifier: 0.81.5
     version: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
+  react-native-safe-area-context:
+    specifier: ^5.6.2
+    version: 5.6.2(react-native@0.81.5)(react@19.1.0)
 
 devDependencies:
   '@types/better-sqlite3':
@@ -4708,6 +4711,16 @@ packages:
 
   /react-native-is-edge-to-edge@1.2.1(react-native@0.81.5)(react@19.1.0):
     resolution: {integrity: sha512-FLbPWl/MyYQWz+KwqOZsSyj2JmLKglHatd3xLZWskXOpRaio4LfEDEz8E/A6uD8QoTHW6Aobw1jbEwK7KMgR7Q==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+    dependencies:
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
+    dev: false
+
+  /react-native-safe-area-context@5.6.2(react-native@0.81.5)(react@19.1.0):
+    resolution: {integrity: sha512-4XGqMNj5qjUTYywJqpdWZ9IG8jgkS3h06sfVjfw5yZQZfWnRFXczi0GnYyFyCc2EBps/qFmoCH8fez//WumdVg==}
     peerDependencies:
       react: '*'
       react-native: '*'
