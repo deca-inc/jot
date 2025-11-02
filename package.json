@@ -4,18 +4,30 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "prebuild": "expo prebuild",
+    "create:migration": "tsx scripts/createMigration.ts",
+    "test:migrations": "tsx scripts/testMigrations.ts",
+    "test:migrations:up": "pnpm test:migrations up --seeds",
+    "test:migrations:down": "pnpm test:migrations down",
+    "test:migrations:reset": "pnpm test:migrations reset",
+    "test:migrations:status": "pnpm test:migrations status"
   },
   "dependencies": {
     "expo": "~54.0.20",
+    "expo-file-system": "^19.0.17",
+    "expo-sqlite": "~16.0.8",
     "expo-status-bar": "~3.0.8",
     "react": "19.1.0",
     "react-native": "0.81.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/react": "~19.1.0",
+    "better-sqlite3": "^12.4.1",
+    "tsx": "^4.20.6",
     "typescript": "~5.9.2"
   },
   "private": true
