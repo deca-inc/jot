@@ -8,34 +8,44 @@ const DATABASE_NAME = "journal.db";
 
 interface DatabaseProviderProps {
   children: React.ReactNode;
+  encryptionKey: string | null;
 }
 
 // Component that runs migrations once the database is ready
-const DatabaseInitializer: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+const DatabaseInitializer: React.FC<{
+  children: React.ReactNode;
+  encryptionKey: string | null;
+}> = ({ children, encryptionKey }) => {
   const db = useSQLiteContext();
 
   useEffect(() => {
-    const runMigrations = async () => {
+    const initializeDatabase = async () => {
       try {
+        // Set encryption key if provided
+        if (encryptionKey) {
+          await db.execAsync(`PRAGMA key = '${encryptionKey}'`);
+          console.log("Database encryption key set");
+        }
+
         // Log database path for debugging
         await logDatabasePath(db, DATABASE_NAME);
 
         await migrateTo(db, Number.POSITIVE_INFINITY, { verbose: true });
       } catch (error) {
-        console.error("Failed to run migrations:", error);
+        console.error("Failed to initialize database:", error);
+        throw error; // Re-throw to allow error handling upstream
       }
     };
 
-    runMigrations();
-  }, [db]);
+    initializeDatabase();
+  }, [db, encryptionKey]);
 
   return <>{children}</>;
 };
 
 export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({
   children,
+  encryptionKey,
 }) => {
   return (
     <SQLiteProvider
@@ -44,7 +54,9 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({
         console.log(`Database initialized: ${DATABASE_NAME}`);
       }}
     >
-      <DatabaseInitializer>{children}</DatabaseInitializer>
+      <DatabaseInitializer encryptionKey={encryptionKey}>
+        {children}
+      </DatabaseInitializer>
     </SQLiteProvider>
   );
 };
