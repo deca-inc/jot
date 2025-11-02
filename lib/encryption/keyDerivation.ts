@@ -45,12 +45,20 @@ async function generateSalt(): Promise<string> {
 
 /**
  * Get or create salt for key derivation
+ *
+ * Uses SecureStore with AFTER_FIRST_UNLOCK to allow persistence across app installs
+ * and automatic migration to new devices via iCloud backup, enabling seamless
+ * restoration of encrypted data on new devices.
  */
 async function getOrCreateSalt(): Promise<string> {
-  let salt = await SecureStore.getItemAsync(SALT_KEY);
+  let salt = await SecureStore.getItemAsync(SALT_KEY, {
+    keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+  });
   if (!salt) {
     salt = await generateSalt();
-    await SecureStore.setItemAsync(SALT_KEY, salt);
+    await SecureStore.setItemAsync(SALT_KEY, salt, {
+      keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+    });
   }
   return salt;
 }
@@ -121,16 +129,24 @@ export async function deriveKeyFromPassphrase(
 /**
  * Store the derived master key securely
  * The key is encrypted with the OS keystore
+ *
+ * Uses AFTER_FIRST_UNLOCK to allow persistence across app installs and automatic
+ * migration to new devices via iCloud backup, enabling seamless restoration of
+ * encrypted data on new devices.
  */
 export async function storeMasterKey(key: string): Promise<void> {
-  await SecureStore.setItemAsync(DERIVED_KEY_STORAGE_KEY, key);
+  await SecureStore.setItemAsync(DERIVED_KEY_STORAGE_KEY, key, {
+    keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+  });
 }
 
 /**
  * Retrieve the stored master key from secure storage
  */
 export async function getMasterKey(): Promise<string | null> {
-  return await SecureStore.getItemAsync(DERIVED_KEY_STORAGE_KEY);
+  return await SecureStore.getItemAsync(DERIVED_KEY_STORAGE_KEY, {
+    keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+  });
 }
 
 /**
