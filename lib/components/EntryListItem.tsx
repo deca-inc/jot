@@ -1,5 +1,6 @@
 import React from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Text } from "./Text";
 import { Card } from "./Card";
 import { useTheme } from "../theme/ThemeProvider";
@@ -88,15 +89,62 @@ export function EntryListItem({
         ]}
       >
         <View style={styles.header}>
-          <View style={styles.titleRow}>
-            <Text
-              variant="h3"
-              numberOfLines={1}
-              style={[styles.title, { color: itemTheme.textPrimary }]}
-            >
-              {entry.title}
-            </Text>
-            {entry.isFavorite && <Text style={styles.favoriteIcon}>★</Text>}
+          <View style={styles.headerTopRow}>
+            <View style={styles.titleRow}>
+              <Text
+                variant="h3"
+                numberOfLines={1}
+                style={[styles.title, { color: itemTheme.textPrimary }]}
+              >
+                {entry.title}
+              </Text>
+            </View>
+            <View style={styles.badgeContainer}>
+              <View
+                style={[
+                  styles.badge,
+                  {
+                    backgroundColor: itemTheme.cardBg,
+                    borderColor: itemTheme.textSecondary + "20",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    entry.type === "journal"
+                      ? "book-outline"
+                      : "chatbubble-ellipses-outline"
+                  }
+                  size={18}
+                  color={itemTheme.textPrimary}
+                />
+              </View>
+              {onToggleFavorite && (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite(entry);
+                  }}
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor: entry.isFavorite
+                        ? itemTheme.textSecondary + "15"
+                        : itemTheme.cardBg,
+                      borderColor: entry.isFavorite
+                        ? itemTheme.textSecondary + "40"
+                        : itemTheme.textSecondary + "20",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={entry.isFavorite ? "star" : "star-outline"}
+                    size={18}
+                    color={entry.isFavorite ? "#FFA500" : itemTheme.textPrimary}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
           <Text
             variant="caption"
@@ -147,29 +195,6 @@ export function EntryListItem({
           </View>
         )}
 
-        <View style={styles.footer}>
-          <Text variant="caption" style={{ color: itemTheme.textSecondary }}>
-            {entry.type === "journal" ? "Journal Entry" : "AI Chat"}
-          </Text>
-          {onToggleFavorite && (
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                onToggleFavorite(entry);
-              }}
-              style={styles.favoriteButton}
-            >
-              <Text
-                variant="caption"
-                style={{
-                  color: entry.isFavorite ? "#FFA500" : itemTheme.textSecondary,
-                }}
-              >
-                {entry.isFavorite ? "★" : "☆"}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
       </Card>
     </TouchableOpacity>
   );
@@ -185,17 +210,32 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: spacingPatterns.xs,
   },
-  titleRow: {
+  headerTopRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: spacingPatterns.xs,
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: spacingPatterns.xxs,
+  },
+  titleRow: {
+    flex: 1,
+    marginRight: spacingPatterns.xs,
   },
   title: {
     flex: 1,
   },
-  favoriteIcon: {
-    fontSize: 16,
-    color: "#FFA500",
+  badgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.xs,
+    flexShrink: 0,
+  },
+  badge: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    width: 32,
+    height: 32,
   },
   date: {
     marginTop: spacingPatterns.xxs,
@@ -215,14 +255,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingPatterns.xs,
     paddingVertical: spacingPatterns.xxs,
     borderRadius: borderRadius.sm,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: spacingPatterns.sm,
-  },
-  favoriteButton: {
-    padding: spacingPatterns.xxs,
   },
 });
