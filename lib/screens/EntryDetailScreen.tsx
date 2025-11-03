@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Text, Button } from "../components";
+import { Text } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius, springPresets } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -39,21 +39,31 @@ export function EntryDetailScreen({
   // Animation values - initialize based on whether we have animation data
   const hasAnimationData = !!animationData;
   // Start with initial values that will be set before animation begins
-  const titleOpacity = useRef(new Animated.Value(hasAnimationData ? 0 : 1)).current;
+  const titleOpacity = useRef(
+    new Animated.Value(hasAnimationData ? 0 : 1)
+  ).current;
   const titleTranslateY = useRef(new Animated.Value(0)).current;
-  const titleScale = useRef(new Animated.Value(hasAnimationData ? 0.85 : 1)).current;
-  const titleRotateX = useRef(new Animated.Value(hasAnimationData ? -90 : 0)).current;
+  const titleScale = useRef(
+    new Animated.Value(hasAnimationData ? 0.85 : 1)
+  ).current;
+  const titleRotateX = useRef(
+    new Animated.Value(hasAnimationData ? -90 : 0)
+  ).current;
   const previewOpacity = useRef(
     new Animated.Value(hasAnimationData && animationData?.previewLayout ? 0 : 1)
   ).current;
   const previewTranslateY = useRef(new Animated.Value(0)).current;
-  const contentOpacity = useRef(new Animated.Value(hasAnimationData ? 0 : 1)).current;
-  const backgroundOpacity = useRef(new Animated.Value(hasAnimationData ? 0 : 1)).current;
+  const contentOpacity = useRef(
+    new Animated.Value(hasAnimationData ? 0 : 1)
+  ).current;
+  const backgroundOpacity = useRef(
+    new Animated.Value(hasAnimationData ? 0 : 1)
+  ).current;
 
   // Refs for measuring final positions
   const titleRef = useRef<View>(null);
   const previewRef = useRef<View>(null);
-  
+
   // Refs for tracking animation state
   const layoutCompleteRef = useRef(false);
   const measurementsCompleteRef = useRef({
@@ -73,10 +83,10 @@ export function EntryDetailScreen({
 
   const checkAndStartBackground = React.useCallback(() => {
     if (layoutCompleteRef.current) return;
-    
+
     const { title, preview } = measurementsCompleteRef.current;
     if (!title || !preview) return;
-    
+
     layoutCompleteRef.current = true;
 
     // Background and content fade in
@@ -147,11 +157,24 @@ export function EntryDetailScreen({
         checkAndStartBackground();
       }
     });
-  }, [entry, animationData, titleTranslateY, titleScale, titleRotateX, titleOpacity, checkAndStartBackground]);
+  }, [
+    entry,
+    animationData,
+    titleTranslateY,
+    titleScale,
+    titleRotateX,
+    titleOpacity,
+    checkAndStartBackground,
+  ]);
 
   // Handle preview layout measurement
   const handlePreviewLayout = React.useCallback(() => {
-    if (!entry || !animationData || !previewRef.current || !animationData.previewLayout) {
+    if (
+      !entry ||
+      !animationData ||
+      !previewRef.current ||
+      !animationData.previewLayout
+    ) {
       measurementsCompleteRef.current.preview = true;
       checkAndStartBackground();
       return;
@@ -185,7 +208,13 @@ export function EntryDetailScreen({
         checkAndStartBackground();
       }
     });
-  }, [entry, animationData, previewTranslateY, previewOpacity, checkAndStartBackground]);
+  }, [
+    entry,
+    animationData,
+    previewTranslateY,
+    previewOpacity,
+    checkAndStartBackground,
+  ]);
 
   useEffect(() => {
     // Reset animation state when entry or animationData changes
@@ -223,7 +252,12 @@ export function EntryDetailScreen({
 
   if (!entry) {
     return (
-      <View style={[styles.container, { backgroundColor: seasonalTheme.gradient.middle }]}>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: seasonalTheme.gradient.middle },
+        ]}
+      >
         <Text>Loading...</Text>
       </View>
     );
@@ -474,13 +508,17 @@ export function EntryDetailScreen({
                   key={index}
                   style={[
                     styles.tag,
-                    { backgroundColor: seasonalTheme.chipBg || "rgba(0, 0, 0, 0.1)" },
+                    {
+                      backgroundColor:
+                        seasonalTheme.chipBg || "rgba(0, 0, 0, 0.1)",
+                    },
                   ]}
                 >
                   <Text
                     variant="caption"
                     style={{
-                      color: seasonalTheme.chipText || seasonalTheme.textSecondary,
+                      color:
+                        seasonalTheme.chipText || seasonalTheme.textSecondary,
                     }}
                   >
                     {tag}
@@ -586,4 +624,3 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
   },
 });
-

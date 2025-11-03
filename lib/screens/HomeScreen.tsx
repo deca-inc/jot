@@ -272,18 +272,32 @@ export function HomeScreen(props: HomeScreenProps = {}) {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <TextInput
+            <View
               style={[
-                styles.searchInput,
+                styles.searchContainer,
                 {
                   backgroundColor: seasonalTheme.cardBg,
-                  color: seasonalTheme.textPrimary,
                   borderColor: seasonalTheme.textSecondary + "20",
                 },
               ]}
-              placeholder="Search your memories or ask privately…"
-              placeholderTextColor={seasonalTheme.textSecondary}
-            />
+            >
+              <Ionicons
+                name="search-outline"
+                size={20}
+                color={seasonalTheme.textSecondary}
+                style={styles.searchIcon}
+              />
+              <TextInput
+                style={[
+                  styles.searchInput,
+                  {
+                    color: seasonalTheme.textPrimary,
+                  },
+                ]}
+                placeholder="Search your memories or ask privately…"
+                placeholderTextColor={seasonalTheme.textSecondary}
+              />
+            </View>
             {onOpenSettings && (
               <TouchableOpacity
                 onPress={onOpenSettings}
@@ -400,14 +414,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacingPatterns.sm,
   },
-  searchInput: {
+  searchContainer: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: borderRadius.lg,
-    paddingHorizontal: spacingPatterns.md,
-    paddingVertical: spacingPatterns.sm,
-    fontSize: 16,
     borderWidth: 1,
     minHeight: 44,
+    paddingHorizontal: spacingPatterns.md,
+  },
+  searchIcon: {
+    marginRight: spacingPatterns.sm,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: spacingPatterns.sm,
+    fontSize: 16,
   },
   settingsButton: {
     borderRadius: borderRadius.full,

@@ -16,6 +16,16 @@ interface CircleData {
 }
 
 /**
+ * Helper to sanitize numeric values and prevent NaN/Infinity
+ */
+const sanitizeNumber = (value: number, fallback: number = 0): number => {
+  if (typeof value !== "number" || isNaN(value) || !isFinite(value)) {
+    return fallback;
+  }
+  return value;
+};
+
+/**
  * Creates 5 circles that orbit around a center point below the screen
  * Circles move in/out radially and rotate around the center
  */
@@ -25,6 +35,16 @@ export function AnimatedBlob({
   color,
   opacity = 0.6,
 }: AnimatedBlobProps) {
+  // Sanitize dimensions to prevent NaN errors
+  const safeWidth = sanitizeNumber(width, 0);
+  const safeHeight = sanitizeNumber(height, 0);
+  const safeOpacity = sanitizeNumber(opacity, 0.6);
+
+  // Early return if dimensions are invalid
+  if (safeWidth <= 0 || safeHeight <= 0) {
+    return null;
+  }
+
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
   const [circlePositions, setCirclePositions] = useState<
     Array<{ x: number; y: number; r: number }>
@@ -32,15 +52,18 @@ export function AnimatedBlob({
   const positionsRef = useRef<Array<{ x: number; y: number; r: number }>>([]);
 
   // Center point is way below the screen
-  const centerX = width / 2;
-  const centerY = height + height * 0.5; // Position well below the visible area
+  const centerX = sanitizeNumber(safeWidth / 2, 0);
+  const centerY = sanitizeNumber(safeHeight + safeHeight * 0.5, 0);
 
   // Create 5 circles with various sizes
   const numCircles = 5;
   const circlesRef = useRef<CircleData[]>(
     Array.from({ length: numCircles }, (_, i) => {
-      const baseRadius = height * (0.15 + (i % 3) * 0.08); // Various sizes
-      const baseDistance = height * (0.4 + i * 0.12); // Different starting distances
+      const baseRadius = sanitizeNumber(
+        safeHeight * (0.15 + (i % 3) * 0.08),
+        10
+      ); // Various sizes
+      const baseDistance = sanitizeNumber(safeHeight * (0.4 + i * 0.12), 50); // Different starting distances
       const initialAngle = (i / numCircles) * Math.PI * 2; // Stagger starting angles
 
       return {
@@ -67,10 +90,11 @@ export function AnimatedBlob({
       // Static positions
       const staticPositions = circlesRef.map((circle, i) => {
         const angle = (i / numCircles) * Math.PI * 2;
-        const distance = height * (0.4 + i * 0.12);
-        const x = centerX + Math.cos(angle) * distance;
-        const y = centerY + Math.sin(angle) * distance;
-        return { x, y, r: circle.radius };
+        const distance = sanitizeNumber(safeHeight * (0.4 + i * 0.12), 50);
+        const x = sanitizeNumber(centerX + Math.cos(angle) * distance, centerX);
+        const y = sanitizeNumber(centerY + Math.sin(angle) * distance, centerY);
+        const r = sanitizeNumber(circle.radius, 10);
+        return { x, y, r };
       });
       setCirclePositions(staticPositions);
       return;
@@ -87,14 +111,23 @@ export function AnimatedBlob({
       // Always calculate positions every frame for smoothness
       const positions = circlesRef.map((circle) => {
         // Get current angle and distance
-        const angle = (circle.orbitAngle as any).__getValue() * Math.PI * 2;
-        const distance = (circle.distance as any).__getValue();
+        const angleValue = sanitizeNumber(
+          (circle.orbitAngle as any).__getValue(),
+          0
+        );
+        const distanceValue = sanitizeNumber(
+          (circle.distance as any).__getValue(),
+          50
+        );
+        const angle = angleValue * Math.PI * 2;
+        const distance = distanceValue;
 
         // Calculate position: orbit around center point
-        const x = centerX + Math.cos(angle) * distance;
-        const y = centerY + Math.sin(angle) * distance;
+        const x = sanitizeNumber(centerX + Math.cos(angle) * distance, centerX);
+        const y = sanitizeNumber(centerY + Math.sin(angle) * distance, centerY);
+        const r = sanitizeNumber(circle.radius, 10);
 
-        return { x, y, r: circle.radius };
+        return { x, y, r };
       });
 
       // Update ref immediately for smooth rendering
@@ -122,7 +155,14 @@ export function AnimatedBlob({
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [reduceMotionEnabled, circlesRef, width, height, centerX, centerY]);
+  }, [
+    reduceMotionEnabled,
+    circlesRef,
+    safeWidth,
+    safeHeight,
+    centerX,
+    centerY,
+  ]);
 
   // Animate circles - orbit around center and move in/out
   useEffect(() => {
@@ -130,7 +170,7 @@ export function AnimatedBlob({
 
     const animations = circlesRef.map((circle, i) => {
       // Rotation - orbit around center point with smooth linear easing
-      const baseDistance = height * (0.4 + i * 0.12);
+      const baseDistance = sanitizeNumber(safeHeight * (0.4 + i * 0.12), 50);
       const orbitAnim = Animated.loop(
         Animated.timing(circle.orbitAngle, {
           toValue: 1,
@@ -144,13 +184,13 @@ export function AnimatedBlob({
       const radialAnim = Animated.loop(
         Animated.sequence([
           Animated.timing(circle.distance, {
-            toValue: baseDistance * 1.3, // Move out
+            toValue: sanitizeNumber(baseDistance * 1.3, baseDistance), // Move out
             duration: 8000 + i * 1000,
             easing: Easing.bezier(0.4, 0, 0.2, 1), // Smooth bezier curve
             useNativeDriver: false,
           }),
           Animated.timing(circle.distance, {
-            toValue: baseDistance * 0.7, // Move in
+            toValue: sanitizeNumber(baseDistance * 0.7, baseDistance), // Move in
             duration: 8000 + i * 1000,
             easing: Easing.bezier(0.4, 0, 0.2, 1), // Smooth bezier curve
             useNativeDriver: false,
@@ -173,7 +213,7 @@ export function AnimatedBlob({
         radialAnim.stop();
       });
     };
-  }, [reduceMotionEnabled, circlesRef, height]);
+  }, [reduceMotionEnabled, circlesRef, safeHeight]);
 
   // Unique gradient ID for each circle
   const gradientIds = useRef(
@@ -188,21 +228,22 @@ export function AnimatedBlob({
     if (circlePositions.length === 0) {
       const initial = circlesRef.map((circle, i) => {
         const angle = (i / numCircles) * Math.PI * 2;
-        const distance = height * (0.4 + i * 0.12);
-        const x = centerX + Math.cos(angle) * distance;
-        const y = centerY + Math.sin(angle) * distance;
-        return { x, y, r: circle.radius };
+        const distance = sanitizeNumber(safeHeight * (0.4 + i * 0.12), 50);
+        const x = sanitizeNumber(centerX + Math.cos(angle) * distance, centerX);
+        const y = sanitizeNumber(centerY + Math.sin(angle) * distance, centerY);
+        const r = sanitizeNumber(circle.radius, 10);
+        return { x, y, r };
       });
       setCirclePositions(initial);
     }
-  }, []);
+  }, [safeHeight, centerX, centerY]);
 
   return (
     <Svg
-      width={width}
-      height={height}
+      width={safeWidth}
+      height={safeHeight}
       style={StyleSheet.absoluteFillObject}
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={`0 0 ${safeWidth} ${safeHeight}`}
     >
       <Defs>
         {Array.from({ length: numCircles }, (_, i) => (
@@ -210,12 +251,12 @@ export function AnimatedBlob({
             <Stop
               offset="0%"
               stopColor={color}
-              stopOpacity={opacity * (0.7 + i * 0.06)}
+              stopOpacity={sanitizeNumber(safeOpacity * (0.7 + i * 0.06), 0.6)}
             />
             <Stop
               offset="50%"
               stopColor={color}
-              stopOpacity={opacity * (0.5 + i * 0.04)}
+              stopOpacity={sanitizeNumber(safeOpacity * (0.5 + i * 0.04), 0.5)}
             />
             <Stop offset="100%" stopColor={color} stopOpacity={0} />
           </RadialGradient>
@@ -224,16 +265,21 @@ export function AnimatedBlob({
       {(circlePositions.length > 0
         ? circlePositions
         : positionsRef.current
-      ).map((pos, i) => (
-        <Circle
-          key={i}
-          cx={pos.x}
-          cy={pos.y}
-          r={pos.r}
-          fill={`url(#${gradientIds[i]})`}
-          opacity={0.8}
-        />
-      ))}
+      ).map((pos, i) => {
+        const safeX = sanitizeNumber(pos.x, centerX);
+        const safeY = sanitizeNumber(pos.y, centerY);
+        const safeR = sanitizeNumber(pos.r, 10);
+        return (
+          <Circle
+            key={i}
+            cx={safeX}
+            cy={safeY}
+            r={safeR}
+            fill={`url(#${gradientIds[i]})`}
+            opacity={0.8}
+          />
+        );
+      })}
     </Svg>
   );
 }

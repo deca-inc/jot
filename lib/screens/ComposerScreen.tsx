@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Text, Button } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
+import { typography } from "../theme/typography";
 import { useEntryRepository, EntryType, Block } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 
@@ -26,7 +27,7 @@ function blocksToContent(blocks: Block[], entryType: EntryType): string {
   if (entryType === "journal") {
     // For journal entries, convert text-based blocks to plain text
     const textParts: string[] = [];
-    
+
     for (const block of blocks) {
       if (
         block.type === "paragraph" ||
@@ -59,13 +60,16 @@ function blocksToContent(blocks: Block[], entryType: EntryType): string {
         }
       }
     }
-    
+
     return textParts.join("\n\n");
   } else {
     // For AI chat, extract markdown content from user messages
-    const markdownBlocks = blocks.filter(
-      (block) => block.type === "markdown" && block.role === "user"
-    );
+    const markdownBlocks = blocks
+      .filter(
+        (block): block is Extract<Block, { type: "markdown" }> =>
+          block.type === "markdown"
+      )
+      .filter((block) => block.role === "user");
     if (markdownBlocks.length > 0) {
       return markdownBlocks.map((block) => block.content).join("\n\n");
     }
@@ -107,14 +111,22 @@ export function ComposerScreen({
   const [showMenu, setShowMenu] = useState(false); // Settings menu visibility
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  const titleInputRef = useRef<TextInput>(null);
+  const hasLoadedEntryRef = useRef<number | null>(null); // Track which entryId we've loaded
 
-  // Load existing entry if entryId is provided
+  // Load existing entry if entryId is provided (only once per entryId)
   useEffect(() => {
     if (!entryId) {
       setIsLoading(false);
+      hasLoadedEntryRef.current = null;
       if (initialType === "ai_chat") {
         setChatMessages([]);
       }
+      return;
+    }
+
+    // Only load if we haven't loaded this entry yet
+    if (hasLoadedEntryRef.current === entryId) {
       return;
     }
 
@@ -122,10 +134,11 @@ export function ComposerScreen({
       try {
         const entry = await entryRepository.getById(entryId);
         if (entry) {
+          hasLoadedEntryRef.current = entryId;
           setEntryType(entry.type);
           setTitle(entry.title);
           setCreatedEntryId(null); // Reset since we're loading an existing entry
-          
+
           if (entry.type === "ai_chat") {
             // Load conversation messages
             setChatMessages(entry.blocks);
@@ -143,68 +156,77 @@ export function ComposerScreen({
     };
 
     loadEntry();
-  }, [entryId, entryRepository, initialContent, initialType]);
+    // Only depend on entryId - other dependencies shouldn't cause re-load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryId]);
 
-  const performSave = useCallback(async (contentToSave: string, blocksToSave?: Block[]) => {
-    if (!contentToSave.trim() && (!blocksToSave || blocksToSave.length === 0)) {
-      return;
-    }
+  const performSave = useCallback(
+    async (contentToSave: string, blocksToSave?: Block[]) => {
+      if (
+        !contentToSave.trim() &&
+        (!blocksToSave || blocksToSave.length === 0)
+      ) {
+        return;
+      }
 
-    setIsSaving(true);
-    try {
-      const blocks: Block[] = blocksToSave || [];
+      setIsSaving(true);
+      try {
+        const blocks: Block[] = blocksToSave || [];
 
-      if (!blocksToSave) {
-        if (contentToSave.trim()) {
-          if (entryType === "journal") {
-            // For journal entries, create paragraph blocks from content
-            const paragraphs = contentToSave
-              .split("\n\n")
-              .filter((p) => p.trim())
-              .map((p) => ({
-                type: "paragraph" as const,
-                content: p.trim(),
-              }));
+        if (!blocksToSave) {
+          if (contentToSave.trim()) {
+            if (entryType === "journal") {
+              // For journal entries, create paragraph blocks from content
+              const paragraphs = contentToSave
+                .split("\n\n")
+                .filter((p) => p.trim())
+                .map((p) => ({
+                  type: "paragraph" as const,
+                  content: p.trim(),
+                }));
 
-            blocks.push(...paragraphs);
+              blocks.push(...paragraphs);
+            }
           }
         }
-      }
 
-      const finalTitle =
-        title.trim() ||
-        contentToSave.trim().slice(0, 50) + (contentToSave.length > 50 ? "..." : "") ||
-        "Untitled";
+        const finalTitle =
+          title.trim() ||
+          contentToSave.trim().slice(0, 50) +
+            (contentToSave.length > 50 ? "..." : "") ||
+          "Untitled";
 
-      const currentEntryId = entryId || createdEntryId;
-      
-      if (currentEntryId) {
-        // Update existing entry
-        await entryRepository.update(currentEntryId, {
-          title: finalTitle,
-          blocks,
-        });
-        onSave?.(currentEntryId);
-      } else {
-        // Create new entry
-        const entry = await entryRepository.create({
-          type: entryType,
-          title: finalTitle,
-          blocks,
-          tags: [],
-          attachments: [],
-          isFavorite: false,
-        });
-        setCreatedEntryId(entry.id);
-        onSave?.(entry.id);
+        const currentEntryId = entryId || createdEntryId;
+
+        if (currentEntryId) {
+          // Update existing entry
+          await entryRepository.update(currentEntryId, {
+            title: finalTitle,
+            blocks,
+          });
+          onSave?.(currentEntryId);
+        } else {
+          // Create new entry
+          const entry = await entryRepository.create({
+            type: entryType,
+            title: finalTitle,
+            blocks,
+            tags: [],
+            attachments: [],
+            isFavorite: false,
+          });
+          setCreatedEntryId(entry.id);
+          onSave?.(entry.id);
+        }
+      } catch (error) {
+        console.error("Error saving entry:", error);
+        // TODO: Show error message to user
+      } finally {
+        setIsSaving(false);
       }
-    } catch (error) {
-      console.error("Error saving entry:", error);
-      // TODO: Show error message to user
-    } finally {
-      setIsSaving(false);
-    }
-  }, [title, entryType, entryId, entryRepository, onSave]);
+    },
+    [title, entryType, entryId, createdEntryId, entryRepository, onSave]
+  );
 
   // Auto-save with debounce for journal entries
   useEffect(() => {
@@ -231,6 +253,46 @@ export function ComposerScreen({
 
   // Note: Auto-save handles saving on content changes.
   // The debounce will trigger saves, and new entries get created on first save.
+
+  const handleTitleFocus = useCallback(() => {
+    // Select all text when focusing
+    setTimeout(() => {
+      titleInputRef.current?.setNativeProps({
+        selection: { start: 0, end: title.length },
+      });
+    }, 100);
+  }, [title]);
+
+  const handleTitleChange = useCallback((newTitle: string) => {
+    setTitle(newTitle);
+  }, []);
+
+  const handleTitleBlur = useCallback(async () => {
+    const newTitle = title.trim();
+
+    // Only save if the title actually changed and we have an entry
+    if (entryId || createdEntryId) {
+      const currentEntryId = entryId || createdEntryId;
+      if (currentEntryId) {
+        setIsSaving(true);
+        try {
+          await entryRepository.update(currentEntryId, {
+            title: newTitle || undefined,
+          });
+          onSave?.(currentEntryId);
+        } catch (error) {
+          console.error("Error updating title:", error);
+        } finally {
+          setIsSaving(false);
+        }
+      }
+    }
+  }, [title, entryId, createdEntryId, entryRepository, onSave]);
+
+  const handleTitleSubmit = useCallback(async () => {
+    titleInputRef.current?.blur();
+    await handleTitleBlur();
+  }, [handleTitleBlur]);
 
   const handleDelete = useCallback(() => {
     const entryIdToDelete = entryId || createdEntryId;
@@ -339,9 +401,12 @@ export function ComposerScreen({
   if (shouldUseFullScreen) {
     // Full-screen journal editor - minimal UI with auto-save
     // Calculate title dynamically from content or use saved title
-    const entryTitle = title.trim() || 
-      (content.trim() ? content.trim().slice(0, 50) + (content.length > 50 ? "..." : "") : "New Entry");
-    
+    const entryTitle =
+      title.trim() ||
+      (content.trim()
+        ? content.trim().slice(0, 50) + (content.length > 50 ? "..." : "")
+        : "New Entry");
+
     return (
       <KeyboardAvoidingView
         style={[
@@ -363,13 +428,33 @@ export function ComposerScreen({
               color={seasonalTheme.textPrimary}
             />
           </TouchableOpacity>
-          <Text
-            variant="h3"
-            style={[styles.headerTitle, { color: seasonalTheme.textPrimary }]}
-            numberOfLines={1}
-          >
-            {entryTitle}
-          </Text>
+          <View style={styles.headerTitleContainer}>
+            <View style={styles.headerTitleInputWrapper}>
+              <TextInput
+                ref={titleInputRef}
+                style={[
+                  styles.headerTitleInput,
+                  { color: seasonalTheme.textPrimary },
+                ]}
+                value={title}
+                onChangeText={handleTitleChange}
+                onFocus={handleTitleFocus}
+                onBlur={handleTitleBlur}
+                onSubmitEditing={handleTitleSubmit}
+                placeholder={
+                  content.trim()
+                    ? content.trim().slice(0, 50) +
+                      (content.length > 50 ? "..." : "")
+                    : "Entry title"
+                }
+                placeholderTextColor={seasonalTheme.textSecondary}
+                editable={true}
+                {...(Platform.OS === "android" && {
+                  includeFontPadding: false,
+                })}
+              />
+            </View>
+          </View>
           {(entryId || createdEntryId) && (
             <TouchableOpacity
               onPress={() => setShowMenu(true)}
@@ -384,7 +469,7 @@ export function ComposerScreen({
             </TouchableOpacity>
           )}
         </View>
-        
+
         {/* Settings Menu Modal */}
         {showMenu && (
           <Modal
@@ -469,13 +554,28 @@ export function ComposerScreen({
               color={seasonalTheme.textPrimary}
             />
           </TouchableOpacity>
-          <Text
-            variant="h3"
-            style={[styles.headerTitle, { color: seasonalTheme.textPrimary }]}
-            numberOfLines={1}
-          >
-            {title || "AI Conversation"}
-          </Text>
+          <View style={styles.headerTitleContainer}>
+            <View style={styles.headerTitleInputWrapper}>
+              <TextInput
+                ref={titleInputRef}
+                style={[
+                  styles.headerTitleInput,
+                  { color: seasonalTheme.textPrimary },
+                ]}
+                value={title}
+                onChangeText={handleTitleChange}
+                onFocus={handleTitleFocus}
+                onBlur={handleTitleBlur}
+                onSubmitEditing={handleTitleSubmit}
+                placeholder="AI Conversation"
+                placeholderTextColor={seasonalTheme.textSecondary}
+                editable={true}
+                {...(Platform.OS === "android" && {
+                  includeFontPadding: false,
+                })}
+              />
+            </View>
+          </View>
           {entryId && (
             <TouchableOpacity
               onPress={() => setShowMenu(true)}
@@ -490,7 +590,7 @@ export function ComposerScreen({
             </TouchableOpacity>
           )}
         </View>
-        
+
         {/* Settings Menu Modal */}
         {showMenu && (
           <Modal
@@ -554,6 +654,9 @@ export function ComposerScreen({
           ) : (
             chatMessages.map((message, index) => {
               const isUser = message.role === "user";
+              // In AI chat, messages should only be markdown blocks
+              const messageContent =
+                message.type === "markdown" ? message.content : "";
               return (
                 <View
                   key={index}
@@ -580,7 +683,7 @@ export function ComposerScreen({
                           : seasonalTheme.textPrimary,
                       }}
                     >
-                      {message.content}
+                      {messageContent}
                     </Text>
                   </View>
                 </View>
@@ -709,8 +812,37 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: borderRadius.full,
   },
-  headerTitle: {
+  headerTitleContainer: {
     flex: 1,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "flex-start",
+  },
+  headerTitleInputWrapper: {
+    width: "100%",
+    height: 44, // Match container height for perfect alignment
+    justifyContent: "center",
+    alignItems: "flex-start",
+    ...(Platform.OS === "ios" && {
+      paddingTop: 8,
+    }),
+  },
+  headerTitleInput: {
+    width: "100%",
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
+    lineHeight: typography.h3.fontSize,
+    height: typography.h3.fontSize * typography.h3.lineHeight,
+    letterSpacing: typography.h3.letterSpacing,
+    paddingHorizontal: 0,
+    margin: 0,
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    ...(Platform.OS === "android" && {
+      textAlignVertical: "center",
+      includeFontPadding: false,
+      paddingVertical: 0,
+    }),
   },
   menuButton: {
     width: 44,
