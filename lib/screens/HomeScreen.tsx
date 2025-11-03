@@ -31,10 +31,17 @@ export interface HomeScreenProps {
   refreshKey?: number;
   onOpenFullEditor?: (initialText?: string) => void;
   onOpenSettings?: () => void;
+  onOpenEntryEditor?: (entryId: number) => void;
 }
 
 export function HomeScreen(props: HomeScreenProps = {}) {
-  const { onNewEntry, refreshKey, onOpenFullEditor, onOpenSettings } = props;
+  const {
+    onNewEntry,
+    refreshKey,
+    onOpenFullEditor,
+    onOpenSettings,
+    onOpenEntryEditor,
+  } = props;
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const entryRepository = useEntryRepository();
@@ -100,10 +107,14 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     [entryRepository]
   );
 
-  const handleEntryPress = useCallback((entry: Entry) => {
-    // TODO: Navigate to entry detail/editor screen
-    console.log("Entry pressed:", entry.id);
-  }, []);
+  const handleEntryPress = useCallback(
+    (entry: Entry) => {
+      if (onOpenEntryEditor) {
+        onOpenEntryEditor(entry.id);
+      }
+    },
+    [onOpenEntryEditor]
+  );
 
   const handleStartTyping = useCallback(
     (text: string) => {

@@ -20,7 +20,13 @@ import {
 } from "../screens";
 import { isComponentPlaygroundEnabled } from "../utils/isDev";
 
-type Screen = "home" | "settings" | "playground" | "composer" | "fullEditor";
+type Screen =
+  | "home"
+  | "settings"
+  | "playground"
+  | "composer"
+  | "fullEditor"
+  | "entryEditor";
 
 export function SimpleNavigation() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("home");
@@ -30,6 +36,9 @@ export function SimpleNavigation() {
   const [fullEditorInitialText, setFullEditorInitialText] = useState<
     string | undefined
   >(undefined);
+  const [editingEntryId, setEditingEntryId] = useState<number | undefined>(
+    undefined
+  );
   const [homeRefreshKey, setHomeRefreshKey] = useState(0);
   const theme = useTheme();
   const swipeX = useRef(new Animated.Value(0)).current;
@@ -48,6 +57,9 @@ export function SimpleNavigation() {
     } else if (currentScreen === "fullEditor") {
       setCurrentScreen("home");
       setFullEditorInitialText(undefined);
+    } else if (currentScreen === "entryEditor") {
+      setCurrentScreen("home");
+      setEditingEntryId(undefined);
     }
   }, [currentScreen]);
 
@@ -154,13 +166,35 @@ export function SimpleNavigation() {
 
   const handleFullEditorSave = (entryId: number) => {
     setHomeRefreshKey((prev) => prev + 1);
-    setCurrentScreen("home");
-    setFullEditorInitialText(undefined);
+    // Don't navigate away - let user continue writing (auto-save handles saving)
   };
 
   const handleFullEditorCancel = () => {
     setCurrentScreen("home");
     setFullEditorInitialText(undefined);
+  };
+
+  const handleOpenEntryEditor = (entryId: number) => {
+    setEditingEntryId(entryId);
+    setCurrentScreen("entryEditor");
+  };
+
+  const handleEntryEditorSave = (entryId: number) => {
+    setHomeRefreshKey((prev) => prev + 1);
+    // Don't navigate away on save for journal entries (they auto-save)
+    // Only navigate for AI chat or if explicitly closing
+  };
+
+  const handleEntryEditorCancel = () => {
+    setHomeRefreshKey((prev) => prev + 1);
+    setCurrentScreen("home");
+    setEditingEntryId(undefined);
+  };
+
+  const handleEntryEditorDelete = (entryId: number) => {
+    setHomeRefreshKey((prev) => prev + 1);
+    setCurrentScreen("home");
+    setEditingEntryId(undefined);
   };
 
   const renderScreen = () => {
@@ -172,6 +206,7 @@ export function SimpleNavigation() {
             refreshKey={homeRefreshKey}
             onOpenFullEditor={handleOpenFullEditor}
             onOpenSettings={handleOpenSettings}
+            onOpenEntryEditor={handleOpenEntryEditor}
           />
         );
       case "settings":
@@ -205,6 +240,15 @@ export function SimpleNavigation() {
             fullScreen={true}
           />
         );
+      case "entryEditor":
+        return (
+          <ComposerScreen
+            entryId={editingEntryId}
+            onSave={handleEntryEditorSave}
+            onCancel={handleEntryEditorCancel}
+            onDelete={handleEntryEditorDelete}
+          />
+        );
       default:
         return (
           <HomeScreen
@@ -212,6 +256,7 @@ export function SimpleNavigation() {
             refreshKey={homeRefreshKey}
             onOpenFullEditor={handleOpenFullEditor}
             onOpenSettings={handleOpenSettings}
+            onOpenEntryEditor={handleOpenEntryEditor}
           />
         );
     }
