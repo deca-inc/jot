@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { Text } from "./Text";
 import { useTheme } from "../theme/ThemeProvider";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, borderRadius, springPresets } from "../theme";
 
 export interface ButtonProps extends TouchableOpacityProps {
@@ -29,6 +30,7 @@ export function Button({
   ...props
 }: ButtonProps) {
   const theme = useTheme();
+  const seasonalTheme = useSeasonalTheme();
   const scale = useRef(new Animated.Value(1)).current;
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
 
@@ -67,17 +69,23 @@ export function Button({
       backgroundColor: "transparent",
       borderWidth: 1,
       borderColor:
-        disabled || loading ? theme.colors.gray300 : theme.colors.borderDark,
+        disabled || loading
+          ? seasonalTheme.textSecondary + "50"
+          : seasonalTheme.textSecondary + "40",
     },
     ghost: {
       backgroundColor: "transparent",
     },
   };
 
-  const textColors = {
-    primary: "textInverse" as const,
-    secondary: "textPrimary" as const,
-    ghost: "textPrimary" as const,
+  const getTextColor = (variant: "primary" | "secondary" | "ghost") => {
+    if (variant === "primary") {
+      return theme.colors.textInverse;
+    }
+    // Use seasonal theme colors for secondary and ghost variants
+    return disabled || loading
+      ? seasonalTheme.textSecondary
+      : seasonalTheme.textPrimary;
   };
 
   const handlePressIn = (e: any) => {
@@ -131,8 +139,10 @@ export function Button({
         ) : (
           <Text
             variant="label"
-            color={textColors[variant]}
-            style={{ fontWeight: "600" }}
+            style={{
+              fontWeight: "600",
+              color: getTextColor(variant),
+            }}
           >
             {children}
           </Text>

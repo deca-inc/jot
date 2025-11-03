@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { SQLiteProvider, useSQLiteContext } from "expo-sqlite";
 import { migrateTo } from "./migrations";
 import { logDatabasePath } from "./databasePath";
@@ -17,8 +17,14 @@ const DatabaseInitializer: React.FC<{
   encryptionKey: string | null;
 }> = ({ children, encryptionKey }) => {
   const db = useSQLiteContext();
+  const isInitialized = useRef(false);
 
   useEffect(() => {
+    // Prevent multiple initializations
+    if (isInitialized.current) {
+      return;
+    }
+
     const initializeDatabase = async () => {
       try {
         // Set encryption key if provided
@@ -31,6 +37,7 @@ const DatabaseInitializer: React.FC<{
         await logDatabasePath(db, DATABASE_NAME);
 
         await migrateTo(db, Number.POSITIVE_INFINITY, { verbose: true });
+        isInitialized.current = true;
       } catch (error) {
         console.error("Failed to initialize database:", error);
         throw error; // Re-throw to allow error handling upstream
@@ -38,7 +45,8 @@ const DatabaseInitializer: React.FC<{
     };
 
     initializeDatabase();
-  }, [db, encryptionKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   return <>{children}</>;
 };

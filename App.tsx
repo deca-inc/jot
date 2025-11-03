@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { DatabaseProvider } from "./lib/db/DatabaseProvider";
 import { ThemeProvider } from "./lib/theme/ThemeProvider";
+import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
 import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
 
@@ -37,8 +38,10 @@ export default function App() {
     <SafeAreaProvider>
       <DatabaseProvider encryptionKey={encryptionKey}>
         <ThemeProvider>
-          <StatusBar style="auto" />
-          <SimpleNavigation />
+          <SeasonalThemeProvider>
+            <StatusBar style="auto" />
+            <SimpleNavigation />
+          </SeasonalThemeProvider>
         </ThemeProvider>
       </DatabaseProvider>
     </SafeAreaProvider>

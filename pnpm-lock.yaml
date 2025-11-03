@@ -8,6 +8,9 @@ dependencies:
   expo:
     specifier: ~54.0.20
     version: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+  expo-blur:
+    specifier: ~15.0.7
+    version: 15.0.7(expo@54.0.21)(react-native@0.81.5)(react@19.1.0)
   expo-crypto:
     specifier: ~15.0.7
     version: 15.0.7(expo@54.0.21)
@@ -3079,6 +3082,18 @@ packages:
       react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
     transitivePeerDependencies:
       - supports-color
+    dev: false
+
+  /expo-blur@15.0.7(expo@54.0.21)(react-native@0.81.5)(react@19.1.0):
+    resolution: {integrity: sha512-SugQQbQd+zRPy8z2G5qDD4NqhcD7srBF7fN7O7yq6q7ZFK59VWvpDxtMoUkmSfdxgqONsrBN/rLdk00USADrMg==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
+    dependencies:
+      expo: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
     dev: false
 
   /expo-constants@18.0.10(expo@54.0.21)(react-native@0.81.5):

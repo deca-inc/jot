@@ -28,6 +28,7 @@ export const spacing = {
  */
 export const spacingPatterns = {
   // Component internal padding
+  xxs: spacing[1], // 4px
   xs: spacing[2], // 8px
   sm: spacing[3], // 12px
   md: spacing[4], // 16px
@@ -50,5 +51,4 @@ export const spacingPatterns = {
   screenLarge: spacing[6], // 24px
 } as const;
 
-export type SpacingValue = typeof spacing[keyof typeof spacing];
-
+export type SpacingValue = (typeof spacing)[keyof typeof spacing];

@@ -7,14 +7,16 @@ interface MigrationOptions {
 }
 const defaultOptions: MigrationOptions = { verbose: true, includeSeeds: false };
 
+// Client-side lock to prevent concurrent migrations
+let isMigrating = false;
+
 async function createTablesIfNotExists(db: SQLiteDatabase) {
   // Check if migrations table exists
   const tables = await db.getAllAsync<{ name: string }>(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('migrations', 'migration_lock')"
+    "SELECT name FROM sqlite_master WHERE type='table' AND name = 'migrations'"
   );
 
-  const willCreateTables = tables.length < 2;
-  if (!willCreateTables) {
+  if (tables.length > 0) {
     return;
   }
 
@@ -26,19 +28,6 @@ async function createTablesIfNotExists(db: SQLiteDatabase) {
       created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
     );
   `);
-
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS migration_lock (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      is_locked INTEGER NOT NULL DEFAULT 0
-    );
-  `);
-
-  // Initialize lock if it doesn't exist
-  const lock = await db.getAllAsync("SELECT * FROM migration_lock");
-  if (lock.length === 0) {
-    await db.runAsync("INSERT INTO migration_lock (is_locked) VALUES (0)");
-  }
 }
 
 const isRejected = <T>(
@@ -62,25 +51,19 @@ export async function migrateTo(
 ) {
   options.verbose && console.log("Running Migrations");
 
-  await createTablesIfNotExists(db);
-
-  // Check if migrations are locked
-  const isLocked = await db.getAllAsync<{ is_locked: number }>(
-    "SELECT * FROM migration_lock WHERE is_locked = 1"
-  );
-  if (isLocked.length > 0) {
+  // Check if migrations are already running (client-side lock)
+  if (isMigrating) {
     console.error(
-      "Migrations are locked - you need to wait or manually unlock them"
+      "Migrations are already running - please wait for them to complete"
     );
     return;
   }
 
-  let thisRunInitiatedTheLock = false;
+  // Acquire client-side lock
+  isMigrating = true;
 
   try {
-    // Lock migrations
-    await db.runAsync("UPDATE migration_lock SET is_locked = 1");
-    thisRunInitiatedTheLock = true;
+    await createTablesIfNotExists(db);
 
     // Get existing migrations
     const existing = await db.getAllAsync<{
@@ -120,41 +103,45 @@ export async function migrateTo(
       migrationsToRun.map((name) => migrationModules[name]())
     );
 
-    // Run migrations in a transaction
-    for (let i = 0; i < migrationsToRun.length; i++) {
-      const mod = resolvedModules[i];
-      if (isRejected(mod)) {
-        throw new Error(`[Module Load Error] ${mod.reason}`);
+    // Wrap all migrations in a transaction
+    await db.execAsync("BEGIN TRANSACTION");
+
+    try {
+      for (let i = 0; i < migrationsToRun.length; i++) {
+        const mod = resolvedModules[i];
+        if (isRejected(mod)) {
+          throw new Error(`[Module Load Error] ${mod.reason}`);
+        }
+        if (typeof mod.value.up !== "function") {
+          throw new Error(
+            `[Migration Malformed Error] ${migrationsToRun[i]} does not have "up" method`
+          );
+        }
+
+        const runStart = Date.now();
+        await mod.value.up(db);
+        const runEnd = Date.now();
+
+        // Record migration
+        await db.runAsync("INSERT INTO migrations (name, batch) VALUES (?, ?)", [
+          migrationsToRun[i],
+          newBatch,
+        ]);
+
+        options.verbose &&
+          console.log(`- ▲ ${migrationsToRun[i]} [${runEnd - runStart}ms]`);
       }
-      if (typeof mod.value.up !== "function") {
-        throw new Error(
-          `[Migration Malformed Error] ${migrationsToRun[i]} does not have "up" method`
-        );
-      }
 
-      const runStart = Date.now();
-      await mod.value.up(db);
-      const runEnd = Date.now();
-
-      // Record migration
-      await db.runAsync("INSERT INTO migrations (name, batch) VALUES (?, ?)", [
-        migrationsToRun[i],
-        newBatch,
-      ]);
-
-      options.verbose &&
-        console.log(`- ▲ ${migrationsToRun[i]} [${runEnd - runStart}ms]`);
+      // Commit transaction if all migrations succeeded
+      await db.execAsync("COMMIT");
+    } catch (error) {
+      // Rollback transaction on any error
+      await db.execAsync("ROLLBACK");
+      throw error;
     }
   } finally {
-    if (thisRunInitiatedTheLock) {
-      try {
-        await db.runAsync("UPDATE migration_lock SET is_locked = 0");
-      } catch (e: any) {
-        throw new Error(
-          `[Migration Unlock Error] Could not unlock migrations - ${e.toString()}`
-        );
-      }
-    }
+    // Always release the client-side lock
+    isMigrating = false;
   }
 }
 
@@ -165,27 +152,19 @@ export async function migrateBack(
 ) {
   options.verbose && console.log("Rolling Back Migrations");
 
-  await createTablesIfNotExists(db);
-
-  // Always include seeds when rolling back
-  const rollbackOptions = { ...options, includeSeeds: true };
-
-  const isLocked = await db.getAllAsync<{ is_locked: number }>(
-    "SELECT * FROM migration_lock WHERE is_locked = 1"
-  );
-  if (isLocked.length > 0) {
+  // Check if migrations are already running (client-side lock)
+  if (isMigrating) {
     console.error(
-      "Migrations are locked - you need to wait or manually unlock them"
+      "Migrations are already running - please wait for them to complete"
     );
     return;
   }
 
-  let thisRunInitiatedTheLock = false;
-  let rollbackCount = 0;
+  // Acquire client-side lock
+  isMigrating = true;
 
   try {
-    await db.runAsync("UPDATE migration_lock SET is_locked = 1");
-    thisRunInitiatedTheLock = true;
+    await createTablesIfNotExists(db);
 
     const existing = await db.getAllAsync<{
       id: number;
@@ -227,47 +206,54 @@ export async function migrateBack(
     options.verbose &&
       console.log(`- Including seeds (always included in rollback)`);
 
-    for (let i = 0; i < validMigrationsToRollback.length; i++) {
-      const mod = resolvedModules[i];
-      if (isRejected(mod)) {
-        throw new Error(`[Module Load Error] ${mod.reason}`);
+    let rollbackCount = 0;
+
+    // Wrap all rollbacks in a transaction
+    await db.execAsync("BEGIN TRANSACTION");
+
+    try {
+      for (let i = 0; i < validMigrationsToRollback.length; i++) {
+        const mod = resolvedModules[i];
+        if (isRejected(mod)) {
+          throw new Error(`[Module Load Error] ${mod.reason}`);
+        }
+        if (typeof mod.value.down !== "function") {
+          throw new Error(
+            `[Migration Malformed Error] ${validMigrationsToRollback[i].name} does not have "down" method`
+          );
+        }
+
+        const runStart = Date.now();
+        await mod.value.down(db);
+        const runEnd = Date.now();
+
+        await db.runAsync("DELETE FROM migrations WHERE name = ?", [
+          validMigrationsToRollback[i].name,
+        ]);
+
+        rollbackCount += 1;
+        options.verbose &&
+          console.log(
+            `- ▼ ${validMigrationsToRollback[i].name} [${runEnd - runStart}ms]`
+          );
       }
-      if (typeof mod.value.down !== "function") {
-        throw new Error(
-          `[Migration Malformed Error] ${validMigrationsToRollback[i].name} does not have "down" method`
-        );
-      }
 
-      const runStart = Date.now();
-      await mod.value.down(db);
-      const runEnd = Date.now();
-
-      await db.runAsync("DELETE FROM migrations WHERE name = ?", [
-        validMigrationsToRollback[i].name,
-      ]);
-
-      rollbackCount += 1;
-      options.verbose &&
-        console.log(
-          `- ▼ ${validMigrationsToRollback[i].name} [${runEnd - runStart}ms]`
-        );
+      // Commit transaction if all rollbacks succeeded
+      await db.execAsync("COMMIT");
+    } catch (error) {
+      // Rollback transaction on any error
+      await db.execAsync("ROLLBACK");
+      throw error;
     }
+
+    options.verbose &&
+      console.log(
+        `\nRan ${rollbackCount} ${
+          rollbackCount === 1 ? "migration" : "migrations"
+        } rollback`
+      );
   } finally {
-    if (thisRunInitiatedTheLock) {
-      try {
-        await db.runAsync("UPDATE migration_lock SET is_locked = 0");
-      } catch (e: any) {
-        throw new Error(
-          `[Migration Unlock Error] Could not unlock migrations - ${e.toString()}`
-        );
-      }
-    }
+    // Always release the client-side lock
+    isMigrating = false;
   }
-
-  options.verbose &&
-    console.log(
-      `\nRan ${rollbackCount} ${
-        rollbackCount === 1 ? "migration" : "migrations"
-      } rollback`
-    );
 }

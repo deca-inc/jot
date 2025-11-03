@@ -11,8 +11,8 @@ Based on documentation and current app state.
 ## Tasks
 
 ### 1. UI Foundation & Navigation
-☐ **ui-foundation**: Build UI foundation: Theme system, typography, color palette, spacing system
-☐ **navigation**: Set up navigation/routing system (React Navigation or native router)
+✔ **ui-foundation**: Build UI foundation: Theme system, typography, color palette, spacing system @done(25-11-01 23:19)
+✔ **navigation**: Set up navigation/routing system (React Navigation or native router) @done(25-11-01 23:19)
 
 ### 2. Timeline & Entry Display
 ☐ **timeline-screen**: Home Timeline Screen: Display entries and AI convos grouped by day with quick filters (Entries, AI, Favorites, Tags)

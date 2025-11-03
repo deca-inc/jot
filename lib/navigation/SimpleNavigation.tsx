@@ -1,153 +1,260 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
-  Animated,
   Platform,
+  PanResponder,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius, springPresets } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import {
   HomeScreen,
+  type HomeScreenProps,
   SettingsScreen,
   ComponentPlaygroundScreen,
+  ComposerScreen,
 } from "../screens";
 import { isComponentPlaygroundEnabled } from "../utils/isDev";
 
-type Screen = "home" | "settings" | "playground";
+type Screen = "home" | "settings" | "playground" | "composer" | "fullEditor";
 
 export function SimpleNavigation() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("home");
+  const [composerEntryType, setComposerEntryType] = useState<
+    "journal" | "ai_chat" | undefined
+  >(undefined);
+  const [fullEditorInitialText, setFullEditorInitialText] = useState<
+    string | undefined
+  >(undefined);
+  const [homeRefreshKey, setHomeRefreshKey] = useState(0);
   const theme = useTheme();
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const screenWidth = useRef(0);
+
+  const canGoBack = currentScreen !== "home";
+
+  const handleGoBack = useCallback(() => {
+    if (currentScreen === "settings") {
+      setCurrentScreen("home");
+    } else if (currentScreen === "playground") {
+      setCurrentScreen("settings");
+    } else if (currentScreen === "composer") {
+      setCurrentScreen("home");
+      setComposerEntryType(undefined);
+    } else if (currentScreen === "fullEditor") {
+      setCurrentScreen("home");
+      setFullEditorInitialText(undefined);
+    }
+  }, [currentScreen]);
+
+  // Only handle swipe gestures from the left edge
+  // This won't interfere with vertical scrolling
+  const panResponderRef = useRef<ReturnType<typeof PanResponder.create> | null>(
+    null
+  );
+
+  useEffect(() => {
+    panResponderRef.current = PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        if (!canGoBack) return false;
+
+        // Only respond if gesture starts from the very left edge (< 20px)
+        const startX = evt.nativeEvent.pageX;
+        if (startX > 20) return false;
+
+        // Only respond to clearly horizontal gestures
+        // Require horizontal movement to be at least 2x vertical movement
+        const isHorizontal =
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2;
+        if (!isHorizontal) return false;
+
+        // Only respond to rightward swipes
+        if (gestureState.dx < 10) return false;
+
+        return true;
+      },
+      onPanResponderTerminationRequest: (evt, gestureState) => {
+        // Allow termination if gesture becomes vertical (for ScrollView)
+        const isVertical =
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+        return isVertical;
+      },
+      onPanResponderGrant: () => {
+        swipeX.stopAnimation((value) => {
+          swipeX.setOffset(value);
+          swipeX.setValue(0);
+        });
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        // Only allow rightward swipe
+        if (gestureState.dx > 0) {
+          swipeX.setValue(Math.min(gestureState.dx, screenWidth.current));
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        swipeX.flattenOffset();
+        const swipeThreshold = screenWidth.current * 0.25; // 25% threshold
+
+        if (gestureState.dx > swipeThreshold || gestureState.vx > 0.3) {
+          // Complete the swipe - navigate back
+          Animated.spring(swipeX, {
+            toValue: screenWidth.current,
+            ...springPresets.modal,
+            useNativeDriver: false,
+          }).start(() => {
+            handleGoBack();
+            swipeX.setValue(0);
+          });
+        } else {
+          // Cancel the swipe - return to original position
+          Animated.spring(swipeX, {
+            toValue: 0,
+            ...springPresets.modal,
+            useNativeDriver: false,
+          }).start();
+        }
+      },
+    });
+  }, [canGoBack, handleGoBack, swipeX]);
+
+  const handleOpenSettings = () => {
+    setCurrentScreen("settings");
+  };
 
   const handleNavigateToPlayground = () => {
     setCurrentScreen("playground");
   };
 
+  const handleOpenComposer = (type?: "journal" | "ai_chat") => {
+    setComposerEntryType(type);
+    setCurrentScreen("composer");
+  };
+
+  const handleComposerSave = (entryId: number) => {
+    // Navigate back to home after saving and refresh
+    setHomeRefreshKey((prev) => prev + 1);
+    setCurrentScreen("home");
+    setComposerEntryType(undefined);
+  };
+
+  const handleComposerCancel = () => {
+    setCurrentScreen("home");
+    setComposerEntryType(undefined);
+  };
+
+  const handleOpenFullEditor = (initialText?: string) => {
+    setFullEditorInitialText(initialText);
+    setCurrentScreen("fullEditor");
+  };
+
+  const handleFullEditorSave = (entryId: number) => {
+    setHomeRefreshKey((prev) => prev + 1);
+    setCurrentScreen("home");
+    setFullEditorInitialText(undefined);
+  };
+
+  const handleFullEditorCancel = () => {
+    setCurrentScreen("home");
+    setFullEditorInitialText(undefined);
+  };
+
   const renderScreen = () => {
     switch (currentScreen) {
       case "home":
-        return <HomeScreen />;
+        return (
+          <HomeScreen
+            onNewEntry={handleOpenComposer}
+            refreshKey={homeRefreshKey}
+            onOpenFullEditor={handleOpenFullEditor}
+            onOpenSettings={handleOpenSettings}
+          />
+        );
       case "settings":
         return (
-          <SettingsScreen onNavigateToPlayground={handleNavigateToPlayground} />
+          <SettingsScreen
+            onNavigateToPlayground={handleNavigateToPlayground}
+            onBack={() => setCurrentScreen("home")}
+          />
         );
       case "playground":
-        return <ComponentPlaygroundScreen />;
+        return (
+          <ComponentPlaygroundScreen
+            onBack={() => setCurrentScreen("settings")}
+          />
+        );
+      case "composer":
+        return (
+          <ComposerScreen
+            initialType={composerEntryType}
+            onSave={handleComposerSave}
+            onCancel={handleComposerCancel}
+          />
+        );
+      case "fullEditor":
+        return (
+          <ComposerScreen
+            initialType="journal"
+            initialContent={fullEditorInitialText || ""}
+            onSave={handleFullEditorSave}
+            onCancel={handleFullEditorCancel}
+            fullScreen={true}
+          />
+        );
       default:
-        return <HomeScreen />;
+        return (
+          <HomeScreen
+            onNewEntry={handleOpenComposer}
+            refreshKey={homeRefreshKey}
+            onOpenFullEditor={handleOpenFullEditor}
+            onOpenSettings={handleOpenSettings}
+          />
+        );
     }
   };
 
+  const seasonalTheme = useSeasonalTheme();
+
   return (
-    <SafeAreaView style={styles.safeAreaContainer} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={[
+        styles.safeAreaContainer,
+        { backgroundColor: seasonalTheme.gradient.middle },
+      ]}
+      edges={["top"]}
+      onLayout={(event) => {
+        screenWidth.current = event.nativeEvent.layout.width;
+      }}
+    >
       <View style={styles.container}>
-        <View style={styles.content}>{renderScreen()}</View>
-        <View style={[styles.tabBar, { borderTopColor: theme.colors.border }]}>
-          <TabButton
-            label="Home"
-            isActive={currentScreen === "home"}
-            onPress={() => setCurrentScreen("home")}
-          />
-          <TabButton
-            label="Settings"
-            isActive={currentScreen === "settings"}
-            onPress={() => setCurrentScreen("settings")}
-          />
-          {isComponentPlaygroundEnabled() && (
-            <TabButton
-              label="Playground"
-              isActive={currentScreen === "playground"}
-              onPress={() => setCurrentScreen("playground")}
-            />
-          )}
-        </View>
+        <Animated.View
+          style={[
+            styles.content,
+            {
+              transform: [{ translateX: swipeX }],
+            },
+          ]}
+          {...(panResponderRef.current?.panHandlers || {})}
+        >
+          {renderScreen()}
+        </Animated.View>
       </View>
     </SafeAreaView>
-  );
-}
-
-interface TabButtonProps {
-  label: string;
-  isActive: boolean;
-  onPress: () => void;
-}
-
-function TabButton({ label, isActive, onPress }: TabButtonProps) {
-  const theme = useTheme();
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePress = () => {
-    Animated.sequence([
-      Animated.spring(scale, {
-        toValue: 0.95,
-        ...springPresets.subtle,
-      }),
-      Animated.spring(scale, {
-        toValue: 1,
-        ...springPresets.subtle,
-      }),
-    ]).start();
-    onPress();
-  };
-
-  return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <TouchableOpacity
-        style={[
-          styles.tabButton,
-          isActive && {
-            backgroundColor: theme.colors.backgroundSecondary,
-          },
-        ]}
-        onPress={handlePress}
-      >
-        <Text
-          variant="label"
-          color={isActive ? "textPrimary" : "textSecondary"}
-          style={styles.tabLabel}
-        >
-          {label}
-        </Text>
-      </TouchableOpacity>
-    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   safeAreaContainer: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
   },
   container: {
     flex: 1,
   },
   content: {
     flex: 1,
-  },
-  tabBar: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    backgroundColor: "#FFFFFF",
-    paddingVertical: spacingPatterns.sm,
-    paddingBottom:
-      Platform.OS === "ios" ? spacingPatterns.md : spacingPatterns.sm,
-    minHeight: 60,
-  },
-  tabButton: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacingPatterns.sm,
-    paddingHorizontal: spacingPatterns.xs,
-    borderRadius: borderRadius.md,
-    marginHorizontal: spacingPatterns.xs,
-    minHeight: 44, // Minimum touch target size
-  },
-  tabLabel: {
-    fontWeight: "500",
   },
 });

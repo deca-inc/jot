@@ -15,7 +15,7 @@ import {
 } from "../theme";
 
 export interface CardProps extends ViewProps {
-  variant?: "default" | "elevated" | "outlined";
+  variant?: "default" | "elevated" | "outlined" | "borderless";
   padding?: keyof typeof spacingPatterns;
 }
 
@@ -81,6 +81,15 @@ export function Card({
       backgroundColor: theme.colors.background,
       borderWidth: borderWidth.thin,
       borderColor: theme.colors.border,
+    },
+    borderless: {
+      backgroundColor: "rgba(255, 255, 255, 0.55)",
+      borderWidth: borderWidth.none,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 30 },
+      shadowOpacity: 0.12,
+      shadowRadius: 60,
+      elevation: 0,
     },
   };
 
