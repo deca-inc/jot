@@ -15,9 +15,9 @@ Based on documentation and current app state.
 ✔ **navigation**: Set up navigation/routing system (React Navigation or native router) @done(25-11-01 23:19)
 
 ### 2. Timeline & Entry Display
-☐ **timeline-screen**: Home Timeline Screen: Display entries and AI convos grouped by day with quick filters (Entries, AI, Favorites, Tags)
-☐ **entry-list-item**: Entry List Item component: Display entry preview with title, date, tags, favorite status
-☐ **composer-screen**: Composer Screen: Entry type selection (Journal Entry vs AI Chat), keyboard shortcuts (Cmd+N)
+✔ **timeline-screen**: Home Timeline Screen: Display entries and AI convos grouped by day with quick filters (Entries, AI, Favorites, Tags) @done(25-11-02 21:16)
+✔ **entry-list-item**: Entry List Item component: Display entry preview with title, date, tags, favorite status @done(25-11-02 21:16)
+✔ **composer-screen**: Composer Screen: Entry type selection (Journal Entry vs AI Chat), keyboard shortcuts (Cmd+N) @done(25-11-02 21:16)
 
 ### 3. Editor System (Critical - Writing Experience First)
 
