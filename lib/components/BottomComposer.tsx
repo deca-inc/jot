@@ -2,18 +2,20 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   Animated,
   Easing,
   useColorScheme,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "./Text";
+import { ComposerInput } from "./ComposerInput";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { AnimatedBlob } from "./AnimatedBlob";
 
 export type ComposerMode = "journal" | "ai";
 
@@ -146,21 +148,12 @@ export function BottomComposer({
 
       {/* Input row */}
       <View style={[styles.inputRow, { marginTop: spacingPatterns.xxs }]}>
-        <TextInput
-          style={[
-            styles.input,
-            {
-              color: seasonalTheme.textPrimary,
-              backgroundColor: seasonalTheme.cardBg + "CC",
-              borderColor: seasonalTheme.textSecondary + "30",
-            },
-          ]}
+        <ComposerInput
           placeholder={
             mode === "journal"
               ? "Write a quick thought…"
               : "Ask your private AI…"
           }
-          placeholderTextColor={seasonalTheme.textSecondary + "CC"}
           value={inputText}
           onChangeText={handleTextChange}
           multiline={mode === "ai"} // Only multiline for AI mode
@@ -180,65 +173,103 @@ export function BottomComposer({
             },
           ]}
         >
-          <Text
-            variant="label"
-            style={{
-              color: inputText.trim()
+          <Ionicons
+            name="send"
+            size={18}
+            color={
+              inputText.trim()
                 ? seasonalTheme.chipText
-                : seasonalTheme.textSecondary + "80",
-              fontWeight: "600",
-            }}
-          >
-            {mode === "journal" ? "→" : "Send"}
-          </Text>
+                : seasonalTheme.textSecondary + "80"
+            }
+          />
         </TouchableOpacity>
       </View>
     </View>
   );
 
+  const screenWidth = Dimensions.get("window").width;
+  const blobHeight = 140;
+  const peekHeight = 16; // How much the glow peeks up above the composer edge
+
   return (
-    <Animated.View
-      style={[
-        styles.wrapper,
-        {
-          shadowColor: seasonalTheme.subtleGlow.shadowColor,
-          shadowOpacity: glowAnimation.interpolate({
-            inputRange: [0, 1],
-            outputRange: [
-              seasonalTheme.subtleGlow.shadowOpacity * 0.7,
-              seasonalTheme.subtleGlow.shadowOpacity * 1.3,
-            ],
-          }),
-          shadowRadius: glowAnimation.interpolate({
-            inputRange: [0, 1],
-            outputRange: [20, 32],
-          }),
-          shadowOffset: { width: 0, height: -4 },
-        },
-      ]}
-    >
-      <BlurView
-        intensity={80}
-        tint={colorScheme === "dark" ? "dark" : "light"}
+    <View style={[styles.outerWrapper, { paddingTop: peekHeight }]}>
+      {/* Animated blob glow positioned to peek up over the composer */}
+      {/* Positioned at top of outerWrapper to peek above */}
+      <View
         style={[
-          styles.blurContainer,
+          styles.blobContainer,
           {
-            paddingBottom:
-              insets.bottom > 0 ? insets.bottom : spacingPatterns.xxs,
+            height: blobHeight,
+            width: screenWidth,
+            position: "absolute",
+            top: -peekHeight, // Extend above by peekHeight
           },
         ]}
       >
-        {content}
-      </BlurView>
-    </Animated.View>
+        <AnimatedBlob
+          width={screenWidth}
+          height={blobHeight}
+          color={seasonalTheme.subtleGlow.shadowColor}
+          opacity={Math.max(0.6, seasonalTheme.subtleGlow.shadowOpacity * 2.5)}
+        />
+      </View>
+
+      <Animated.View
+        style={[
+          styles.wrapper,
+          {
+            shadowColor: seasonalTheme.subtleGlow.shadowColor,
+            shadowOpacity: glowAnimation.interpolate({
+              inputRange: [0, 1],
+              outputRange: [
+                seasonalTheme.subtleGlow.shadowOpacity * 0.7,
+                seasonalTheme.subtleGlow.shadowOpacity * 1.3,
+              ],
+            }),
+            shadowRadius: glowAnimation.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 32],
+            }),
+            shadowOffset: { width: 0, height: -4 },
+          },
+        ]}
+      >
+        <BlurView
+          intensity={colorScheme === "dark" ? 50 : 70}
+          tint={colorScheme === "dark" ? "dark" : "light"}
+          style={[
+            styles.blurContainer,
+            {
+              paddingBottom:
+                insets.bottom > 0 ? insets.bottom : spacingPatterns.xxs,
+            },
+          ]}
+        >
+          {content}
+        </BlurView>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  outerWrapper: {
+    position: "relative",
+    zIndex: 1,
+    overflow: "hidden", // Enable overflow hidden as requested
+  },
+  blobContainer: {
+    position: "absolute",
+    left: 0,
+    zIndex: 0,
+    pointerEvents: "none", // Don't block touches
+  },
   wrapper: {
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     overflow: "hidden",
+    position: "relative",
+    backgroundColor: "transparent", // Allow glow to show through
   },
   blurContainer: {
     borderTopLeftRadius: borderRadius.xl,
@@ -269,24 +300,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacingPatterns.xs,
   },
-  input: {
-    flex: 1,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacingPatterns.sm,
-    paddingVertical: spacingPatterns.xxs,
-    fontSize: 16,
-    borderWidth: 1,
-    minHeight: 36,
-    maxHeight: 100,
-  },
   submitButton: {
     borderRadius: borderRadius.full,
-    paddingHorizontal: spacingPatterns.sm,
-    paddingVertical: spacingPatterns.xxs,
-    minWidth: 50,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 36,
+    overflow: "visible",
   },
   submitButtonDisabled: {
     opacity: 0.6,
