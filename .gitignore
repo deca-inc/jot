@@ -45,3 +45,6 @@ yarn-error.*
 *.db-shm
 *.db-wal
 journal-test.db
+
+# AI model files (large binary files, download with pnpm download:models)
+assets/models

@@ -13,7 +13,8 @@
     "test:migrations:up": "pnpm test:migrations up --seeds",
     "test:migrations:down": "pnpm test:migrations down",
     "test:migrations:reset": "pnpm test:migrations reset",
-    "test:migrations:status": "pnpm test:migrations status"
+    "test:migrations:status": "pnpm test:migrations status",
+    "download:models": "tsx scripts/downloadModels.ts"
   },
   "dependencies": {
     "expo": "~54.0.20",
@@ -26,6 +27,7 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-argon2": "^3.0.0",
+    "react-native-executorch": "^0.5.15",
     "react-native-quick-crypto": "^0.7.17",
     "react-native-safe-area-context": "^5.6.2",
     "react-native-svg": "15.12.1"

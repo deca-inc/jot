@@ -19,6 +19,7 @@ import {
   ComposerScreen,
 } from "../screens";
 import { isComponentPlaygroundEnabled } from "../utils/isDev";
+import { useEntryRepository } from "../db/entries";
 
 type Screen =
   | "home"
@@ -33,20 +34,30 @@ export function SimpleNavigation() {
   const [composerEntryType, setComposerEntryType] = useState<
     "journal" | "ai_chat" | undefined
   >(undefined);
-  const [fullEditorInitialText, setFullEditorInitialText] = useState<
-    string | undefined
+  const [fullEditorEntryId, setFullEditorEntryId] = useState<
+    number | undefined
   >(undefined);
   const [editingEntryId, setEditingEntryId] = useState<number | undefined>(
     undefined
   );
   const [homeRefreshKey, setHomeRefreshKey] = useState(0);
   const theme = useTheme();
+  const entryRepository = useEntryRepository();
   const swipeX = useRef(new Animated.Value(0)).current;
   const screenWidth = useRef(0);
 
+  // Store onCancel handlers so we can call them when swiping back
+  // ComposerScreen will handle force save internally
+  const fullEditorOnCancelRef = useRef<(() => void | Promise<void>) | null>(
+    null
+  );
+  const entryEditorOnCancelRef = useRef<(() => void | Promise<void>) | null>(
+    null
+  );
+
   const canGoBack = currentScreen !== "home";
 
-  const handleGoBack = useCallback(() => {
+  const handleGoBack = useCallback(async () => {
     if (currentScreen === "settings") {
       setCurrentScreen("home");
     } else if (currentScreen === "playground") {
@@ -55,11 +66,15 @@ export function SimpleNavigation() {
       setCurrentScreen("home");
       setComposerEntryType(undefined);
     } else if (currentScreen === "fullEditor") {
-      setCurrentScreen("home");
-      setFullEditorInitialText(undefined);
+      // Call onCancel (ComposerScreen will handle force save internally)
+      if (fullEditorOnCancelRef.current) {
+        await fullEditorOnCancelRef.current();
+      }
     } else if (currentScreen === "entryEditor") {
-      setCurrentScreen("home");
-      setEditingEntryId(undefined);
+      // Call onCancel (ComposerScreen will handle force save internally)
+      if (entryEditorOnCancelRef.current) {
+        await entryEditorOnCancelRef.current();
+      }
     }
   }, [currentScreen]);
 
@@ -159,9 +174,45 @@ export function SimpleNavigation() {
     setComposerEntryType(undefined);
   };
 
-  const handleOpenFullEditor = (initialText?: string) => {
-    setFullEditorInitialText(initialText);
-    setCurrentScreen("fullEditor");
+  const handleOpenFullEditor = async (initialText?: string) => {
+    // Create entry immediately with the initial text
+    const content = (initialText || "").trim();
+    // If content is empty, still create an entry with one empty paragraph block
+    const blocks =
+      content.length > 0
+        ? content
+            .split("\n\n")
+            .filter((p) => p.trim())
+            .map((p) => ({
+              type: "paragraph" as const,
+              content: p.trim(),
+            }))
+        : [
+            {
+              type: "paragraph" as const,
+              content: "",
+            },
+          ];
+
+    try {
+      const entry = await entryRepository.create({
+        type: "journal",
+        title: "untitled note",
+        blocks,
+        tags: [],
+        attachments: [],
+        isFavorite: false,
+      });
+
+      console.log("Created entry", entry.id, "with", blocks.length, "blocks");
+      setFullEditorEntryId(entry.id);
+      setCurrentScreen("fullEditor");
+      setHomeRefreshKey((prev) => prev + 1);
+    } catch (error) {
+      console.error("Error creating entry:", error);
+      // Still navigate even if creation fails - ComposerScreen can handle it
+      setCurrentScreen("fullEditor");
+    }
   };
 
   const handleFullEditorSave = (entryId: number) => {
@@ -169,10 +220,7 @@ export function SimpleNavigation() {
     // Don't navigate away - let user continue writing (auto-save handles saving)
   };
 
-  const handleFullEditorCancel = () => {
-    setCurrentScreen("home");
-    setFullEditorInitialText(undefined);
-  };
+  // handleFullEditorCancel is now defined inline in renderScreen
 
   const handleOpenEntryEditor = (entryId: number) => {
     setEditingEntryId(entryId);
@@ -185,11 +233,7 @@ export function SimpleNavigation() {
     // Only navigate for AI chat or if explicitly closing
   };
 
-  const handleEntryEditorCancel = () => {
-    setHomeRefreshKey((prev) => prev + 1);
-    setCurrentScreen("home");
-    setEditingEntryId(undefined);
-  };
+  // handleEntryEditorCancel is now defined inline in renderScreen
 
   const handleEntryEditorDelete = (entryId: number) => {
     setHomeRefreshKey((prev) => prev + 1);
@@ -230,25 +274,38 @@ export function SimpleNavigation() {
             onCancel={handleComposerCancel}
           />
         );
-      case "fullEditor":
+      case "fullEditor": {
+        const cancelHandler = async () => {
+          setHomeRefreshKey((prev) => prev + 1);
+          setCurrentScreen("home");
+          setFullEditorEntryId(undefined);
+        };
+        fullEditorOnCancelRef.current = cancelHandler;
         return (
           <ComposerScreen
-            initialType="journal"
-            initialContent={fullEditorInitialText || ""}
+            entryId={fullEditorEntryId}
             onSave={handleFullEditorSave}
-            onCancel={handleFullEditorCancel}
+            onCancel={cancelHandler}
             fullScreen={true}
           />
         );
-      case "entryEditor":
+      }
+      case "entryEditor": {
+        const cancelHandler = async () => {
+          setHomeRefreshKey((prev) => prev + 1);
+          setCurrentScreen("home");
+          setEditingEntryId(undefined);
+        };
+        entryEditorOnCancelRef.current = cancelHandler;
         return (
           <ComposerScreen
             entryId={editingEntryId}
             onSave={handleEntryEditorSave}
-            onCancel={handleEntryEditorCancel}
+            onCancel={cancelHandler}
             onDelete={handleEntryEditorDelete}
           />
         );
+      }
       default:
         return (
           <HomeScreen

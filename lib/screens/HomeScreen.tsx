@@ -147,9 +147,11 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             attachments: [],
             isFavorite: false,
           });
+          // Refresh entries
+          loadEntries();
         } else {
-          // Create AI chat entry
-          await entryRepository.create({
+          // Create AI chat entry and navigate to it
+          const entry = await entryRepository.create({
             type: "ai_chat",
             title: "AI Conversation",
             blocks: [
@@ -163,15 +165,18 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             attachments: [],
             isFavorite: false,
           });
+          // Navigate to the newly created AI chat entry
+          if (onOpenEntryEditor) {
+            onOpenEntryEditor(entry.id);
+          }
+          // Refresh entries
+          loadEntries();
         }
-
-        // Refresh entries
-        loadEntries();
       } catch (error) {
         console.error("Error creating entry:", error);
       }
     },
-    [composerMode, entryRepository, loadEntries]
+    [composerMode, entryRepository, loadEntries, onOpenEntryEditor]
   );
 
   const groupEntriesByDay = (entries: Entry[]): Map<string, Entry[]> => {
@@ -294,7 +299,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
                     color: seasonalTheme.textPrimary,
                   },
                 ]}
-                placeholder="Search your memories or ask privately…"
+                placeholder=""
                 placeholderTextColor={seasonalTheme.textSecondary}
               />
             </View>

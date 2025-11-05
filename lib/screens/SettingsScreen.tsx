@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text, Card, Button, ThemeControl } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { isComponentPlaygroundEnabled } from "../utils/isDev";
+import { ensureModelPresent } from "../ai/modelManager";
+import { Llama32_1B_Instruct } from "../ai/modelConfig";
 
 interface SettingsScreenProps {
   onNavigateToPlayground?: () => void;
@@ -117,6 +119,58 @@ export function SettingsScreen({
           </Text>
 
           <ThemeControl />
+        </Card>
+
+        <Card
+          variant="borderless"
+          style={[
+            styles.section,
+            {
+              backgroundColor: seasonalTheme.cardBg,
+              shadowColor: seasonalTheme.subtleGlow.shadowColor,
+              shadowOpacity: seasonalTheme.subtleGlow.shadowOpacity,
+            },
+          ]}
+        >
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionText}>
+              <Text
+                variant="h3"
+                style={[
+                  styles.sectionTitle,
+                  { color: seasonalTheme.textPrimary },
+                ]}
+              >
+                AI Model
+              </Text>
+              <Text
+                variant="body"
+                style={[
+                  styles.sectionDescription,
+                  { color: seasonalTheme.textSecondary },
+                ]}
+              >
+                Download or verify the on-device LLM (Llama 3.2 1B Instruct)
+              </Text>
+            </View>
+            <Button
+              variant="secondary"
+              size="sm"
+              onPress={async () => {
+                try {
+                  const res = await ensureModelPresent(Llama32_1B_Instruct);
+                  Alert.alert(
+                    "Model ready",
+                    `Model: ${res.ptePath}\nTokenizer: ${res.tokenizerPath ?? "(none)"}`
+                  );
+                } catch (e: any) {
+                  Alert.alert("Download failed", e?.message ?? "Unknown error");
+                }
+              }}
+            >
+              Download / Verify
+            </Button>
+          </View>
         </Card>
 
         <Card
