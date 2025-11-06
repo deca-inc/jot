@@ -27,8 +27,10 @@ export function ComposerScreen({
 }: ComposerScreenProps) {
   const theme = useTheme();
   const entryRepository = useEntryRepository();
-  const [entryType, setEntryType] = useState<EntryType>(initialType);
-  const [isLoading, setIsLoading] = useState(!!entryId);
+  // When entryId is provided, we don't know the type yet - set to undefined initially
+  const [entryType, setEntryType] = useState<EntryType | undefined>(
+    entryId ? undefined : initialType
+  );
   const [actualEntryId, setActualEntryId] = useState<number | undefined>(
     entryId
   );
@@ -40,12 +42,10 @@ export function ComposerScreen({
   // Load existing entry if entryId is provided (only once per entryId)
   useEffect(() => {
     if (!entryId) {
-      setIsLoading(false);
       hasLoadedEntryRef.current = null;
 
       // If no entryId and we need one, create it for journal entries
       if (initialType === "journal" && !actualEntryId) {
-        setIsLoading(true);
         const createEntry = async () => {
           try {
             const blocks = initialContent.trim()
@@ -85,8 +85,6 @@ export function ComposerScreen({
             setActualEntryId(entry.id);
           } catch (error) {
             console.error("Error creating entry:", error);
-          } finally {
-            setIsLoading(false);
           }
         };
 
@@ -120,8 +118,6 @@ export function ComposerScreen({
         }
       } catch (error) {
         console.error("Error loading entry:", error);
-      } finally {
-        setIsLoading(false);
       }
     };
 
@@ -143,31 +139,17 @@ export function ComposerScreen({
     await onCancel?.();
   }, [onCancel]);
 
-  if (isLoading || (shouldUseFullScreen && !actualEntryId)) {
-    return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
+  // Show UI shell immediately
+  // If we have an entryId, show the appropriate composer immediately
+  // The composer will handle loading the entry content in the background
 
-  if (shouldUseFullScreen && actualEntryId) {
-    // Full-screen journal editor - minimal UI with auto-save
-    return (
-      <JournalComposer
-        entryId={actualEntryId}
-        onSave={onSave}
-        onCancel={handleJournalCancel}
-        onDelete={onDelete}
-        forceSaveRef={journalComposerForceSaveRef}
-      />
-    );
-  }
-
-  // AI Chat conversation view
-  if (entryType === "ai_chat") {
+  // AI Chat conversation view - show if type is ai_chat OR if we have entryId but type is unknown
+  // When entryId is provided and type is unknown, we default to showing AIChatComposer
+  // since journal entries use fullScreen mode and would be caught by the next condition
+  if (
+    entryType === "ai_chat" ||
+    (entryId && actualEntryId && entryType !== "journal")
+  ) {
     return (
       <AIChatComposer
         key={`ai-chat-${actualEntryId || "new"}`} // Force remount when entry changes
@@ -181,6 +163,32 @@ export function ComposerScreen({
         onCancel={onCancel}
         onDelete={onDelete}
       />
+    );
+  }
+
+  // Journal composer - show if type is journal OR if we're creating a new journal entry
+  if (shouldUseFullScreen) {
+    // If we have an entryId (even if still creating), show the composer
+    // The composer will handle loading state internally
+    if (actualEntryId) {
+      return (
+        <JournalComposer
+          entryId={actualEntryId}
+          onSave={onSave}
+          onCancel={handleJournalCancel}
+          onDelete={onDelete}
+          forceSaveRef={journalComposerForceSaveRef}
+        />
+      );
+    }
+    // While creating entry, show empty state - entry will be created quickly
+    // This shouldn't normally be visible as entry creation is fast
+    return (
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        {/* Empty state - entry creating in background */}
+      </View>
     );
   }
 

@@ -8,12 +8,15 @@ import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
 import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
 
-// Create a query client
+// Create a query client with aggressive memory management
+// CRITICAL: Reduce cache times to prevent OOM crashes
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+      staleTime: 1000 * 30, // 30 seconds - entries can be refreshed quickly
+      gcTime: 1000 * 60 * 2, // 2 minutes - much shorter to free memory faster
+      refetchOnWindowFocus: false, // Don't refetch on focus to save memory
+      refetchOnReconnect: false, // Don't refetch on reconnect
     },
   },
 });

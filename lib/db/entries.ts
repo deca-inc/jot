@@ -148,6 +148,9 @@ export class EntryRepository {
    * Get entry by ID
    */
   async getById(id: number): Promise<Entry | null> {
+    if (!id || id <= 0) {
+      return null;
+    }
     const result = await this.db.getFirstAsync<{
       id: number;
       type: EntryType;
@@ -236,6 +239,10 @@ export class EntryRepository {
    * Update an entry
    */
   async update(id: number, input: UpdateEntryInput): Promise<Entry> {
+    if (!id || id <= 0) {
+      throw new Error("Invalid entry ID for update");
+    }
+
     const now = Date.now();
     const updates: string[] = [];
     const params: any[] = [];
@@ -277,23 +284,43 @@ export class EntryRepository {
     params.push(now);
     params.push(id);
 
-    await this.db.runAsync(
-      `UPDATE entries SET ${updates.join(", ")} WHERE id = ?`,
-      params
-    );
+    try {
+      await this.db.runAsync(
+        `UPDATE entries SET ${updates.join(", ")} WHERE id = ?`,
+        params
+      );
 
-    const entry = await this.getById(id);
-    if (!entry) {
-      throw new Error("Entry not found after update");
+      const entry = await this.getById(id);
+      if (!entry) {
+        // Entry might have been deleted - throw error
+        throw new Error("Entry not found after update");
+      }
+      return entry;
+    } catch (error) {
+      // If entry was deleted, throw a more specific error
+      if (error instanceof Error && error.message.includes("not found")) {
+        throw error;
+      }
+      console.error(`[EntryRepository] Error updating entry ${id}:`, error);
+      throw error;
     }
-    return entry;
   }
 
   /**
    * Delete an entry
    */
   async delete(id: number): Promise<void> {
-    await this.db.runAsync("DELETE FROM entries WHERE id = ?", [id]);
+    if (!id || id <= 0) {
+      return;
+    }
+    try {
+      await this.db.runAsync("DELETE FROM entries WHERE id = ?", [id]);
+    } catch (error) {
+      // If entry doesn't exist, that's okay - it's already deleted
+      // This prevents crashes from trying to delete non-existent entries
+      console.warn(`[EntryRepository] Error deleting entry ${id}:`, error);
+      // Don't rethrow - deletion is idempotent
+    }
   }
 
   /**

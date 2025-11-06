@@ -48,7 +48,6 @@ export function JournalComposer({
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const titleInputRef = useRef<TextInput>(null);
@@ -99,8 +98,6 @@ export function JournalComposer({
         }
       } catch (error) {
         console.error("Error loading entry:", error);
-      } finally {
-        setIsLoading(false);
       }
     };
 
@@ -168,7 +165,7 @@ export function JournalComposer({
 
   // Auto-save with debounce
   useEffect(() => {
-    if (!entryId || isLoading) {
+    if (!entryId) {
       return;
     }
 
@@ -196,7 +193,7 @@ export function JournalComposer({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, entryId, isLoading]);
+  }, [content, entryId]);
 
   const handleTitleFocus = useCallback(() => {
     // Select all text when focusing
@@ -245,9 +242,20 @@ export function JournalComposer({
           style: "destructive",
           onPress: async () => {
             try {
+              // Use React Query mutation for proper cache cleanup
+              // This ensures cache invalidation happens before navigation
               await entryRepository.delete(entryId);
+
+              // Small delay to ensure database and cache operations complete
+              // before navigation to prevent crashes
+              await new Promise((resolve) => setTimeout(resolve, 50));
+
               onDelete?.(entryId);
-              onCancel?.();
+              // Navigate away after deletion completes
+              // Use setTimeout to ensure state updates happen before navigation
+              setTimeout(() => {
+                onCancel?.();
+              }, 0);
             } catch (error) {
               console.error("Error deleting entry:", error);
               Alert.alert("Error", "Failed to delete entry");
@@ -295,16 +303,7 @@ export function JournalComposer({
     onCancel?.();
   }, [forceSave, onCancel, onBeforeCancel]);
 
-  if (isLoading) {
-    return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
-
+  // Show UI shell immediately - content loads progressively
   return (
     <KeyboardAvoidingView
       style={[

@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text, Card, Button, ThemeControl } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
@@ -21,35 +27,8 @@ export function SettingsScreen({
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        // Settings are now loaded by ThemeControl component
-      } catch (error) {
-        console.error("Error loading theme settings:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadSettings();
-  }, []);
-
-  if (loading) {
-    return (
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + spacingPatterns.screen },
-        ]}
-      >
-        <Text variant="body">Loading settings...</Text>
-      </ScrollView>
-    );
-  }
-
+  // Show UI shell immediately - settings are loaded by ThemeControl component
   return (
     <View
       style={[
@@ -161,7 +140,9 @@ export function SettingsScreen({
                   const res = await ensureModelPresent(Llama32_1B_Instruct);
                   Alert.alert(
                     "Model ready",
-                    `Model: ${res.ptePath}\nTokenizer: ${res.tokenizerPath ?? "(none)"}`
+                    `Model: ${res.ptePath}\nTokenizer: ${
+                      res.tokenizerPath ?? "(none)"
+                    }`
                   );
                 } catch (e: any) {
                   Alert.alert("Download failed", e?.message ?? "Unknown error");

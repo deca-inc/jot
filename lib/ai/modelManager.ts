@@ -1,4 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { Paths } from "expo-file-system";
 import { Asset } from "expo-asset";
 import { Llama32_1B_Instruct, LlmModelConfig } from "./modelConfig";
 
@@ -14,8 +15,22 @@ function joinPaths(base: string, segment: string): string {
   return `${b}/${s}`;
 }
 
-const baseDir =
-  FileSystem.documentDirectory || FileSystem.cacheDirectory || "/";
+// Use the new Paths API for expo-file-system v19+ (compatible with newer iOS versions)
+// Falls back to legacy API if Paths is not available
+function getBaseDir(): string {
+  try {
+    const documentsDir = Paths.document.uri;
+    if (documentsDir) {
+      return documentsDir;
+    }
+  } catch (e) {
+    console.warn("Paths API not available, falling back to legacy API:", e);
+  }
+  // Fallback to legacy API
+  return FileSystem.documentDirectory || FileSystem.cacheDirectory || "/";
+}
+
+const baseDir = getBaseDir();
 const modelsDir = joinPaths(baseDir, "models");
 
 async function ensureModelsDir(): Promise<void> {
@@ -104,13 +119,15 @@ export async function ensureModelPresent(
 
   // Check document directory first (for already downloaded/copied files)
   const docModelPath = joinPaths(modelsDir, config.pteFileName);
+  console.log(`[ensureModelPresent] Checking for model at: ${docModelPath}`);
+  console.log(`[ensureModelPresent] Base directory: ${baseDir}`);
   const docModelInfo = await FileSystem.getInfoAsync(docModelPath);
 
   if (docModelInfo.exists && docModelInfo.size && docModelInfo.size > 0) {
     // Use already downloaded/cached file
     ptePath = docModelPath;
     console.log(
-      `Using cached model from: ${docModelPath} (${(
+      `[ensureModelPresent] Using cached model from: ${docModelPath} (${(
         docModelInfo.size /
         1024 /
         1024

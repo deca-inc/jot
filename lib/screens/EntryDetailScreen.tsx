@@ -250,20 +250,8 @@ export function EntryDetailScreen({
     return () => clearTimeout(timer);
   }, [entry, animationData, handleTitleLayout, handlePreviewLayout]);
 
-  if (!entry) {
-    return (
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: seasonalTheme.gradient.middle },
-        ]}
-      >
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
-
-  const previewText = extractPreviewText(entry.blocks);
+  // Show UI shell immediately - content loads progressively
+  const previewText = entry ? extractPreviewText(entry.blocks) : null;
 
   // Calculate origami rotation perspective (simulated with scaleX for fold effect)
   // When rotateX is -90, the title appears folded (scaleX close to 0)
@@ -305,7 +293,7 @@ export function EntryDetailScreen({
             color={seasonalTheme.textPrimary}
           />
         </TouchableOpacity>
-        {entry.isFavorite && (
+        {entry?.isFavorite && (
           <View style={styles.favoriteBadge}>
             <Text style={styles.favoriteIcon}>★</Text>
           </View>
@@ -319,215 +307,223 @@ export function EntryDetailScreen({
           { paddingBottom: insets.bottom + spacingPatterns.screen },
         ]}
       >
-        {/* Title with origami animation */}
-        <Animated.View
-          ref={titleRef}
-          collapsable={false}
-          onLayout={handleTitleLayout}
-          style={[
-            styles.titleContainer,
-            {
-              opacity: titleOpacity,
-              transform: [
-                { translateY: titleTranslateY },
-                { scale: titleScale },
-                { scaleX: rotateX },
-              ],
-            },
-          ]}
-        >
-          <Text variant="h1" style={{ color: seasonalTheme.textPrimary }}>
-            {entry.title}
-          </Text>
-          <Text
-            variant="caption"
-            style={[styles.date, { color: seasonalTheme.textSecondary }]}
-          >
-            {formatDate(entry.updatedAt)}
-          </Text>
-        </Animated.View>
-
-        {/* Preview/Intro with animation */}
-        {previewText && (
-          <Animated.View
-            ref={previewRef}
-            collapsable={false}
-            onLayout={handlePreviewLayout}
-            style={[
-              styles.previewContainer,
-              {
-                opacity: previewOpacity,
-                transform: [{ translateY: previewTranslateY }],
-              },
-            ]}
-          >
-            <Text
-              variant="body"
-              style={[styles.preview, { color: seasonalTheme.textSecondary }]}
+        {entry ? (
+          <>
+            {/* Title with origami animation */}
+            <Animated.View
+              ref={titleRef}
+              collapsable={false}
+              onLayout={handleTitleLayout}
+              style={[
+                styles.titleContainer,
+                {
+                  opacity: titleOpacity,
+                  transform: [
+                    { translateY: titleTranslateY },
+                    { scale: titleScale },
+                    { scaleX: rotateX },
+                  ],
+                },
+              ]}
             >
-              {previewText}
-            </Text>
-          </Animated.View>
-        )}
+              <Text variant="h1" style={{ color: seasonalTheme.textPrimary }}>
+                {entry.title}
+              </Text>
+              <Text
+                variant="caption"
+                style={[styles.date, { color: seasonalTheme.textSecondary }]}
+              >
+                {formatDate(entry.updatedAt)}
+              </Text>
+            </Animated.View>
 
-        {/* Full content */}
-        <Animated.View
-          style={[
-            styles.contentContainer,
-            {
-              opacity: contentOpacity,
-            },
-          ]}
-        >
-          {entry.blocks.map((block, index) => {
-            switch (block.type) {
-              case "paragraph":
-                return (
-                  <Text
-                    key={index}
-                    variant="body"
-                    style={[
-                      styles.blockContent,
-                      { color: seasonalTheme.textPrimary },
-                    ]}
-                  >
-                    {block.content}
-                  </Text>
-                );
-              case "heading1":
-                return (
-                  <Text
-                    key={index}
-                    variant="h1"
-                    style={[
-                      styles.blockHeading,
-                      { color: seasonalTheme.textPrimary },
-                    ]}
-                  >
-                    {block.content}
-                  </Text>
-                );
-              case "heading2":
-                return (
-                  <Text
-                    key={index}
-                    variant="h2"
-                    style={[
-                      styles.blockHeading,
-                      { color: seasonalTheme.textPrimary },
-                    ]}
-                  >
-                    {block.content}
-                  </Text>
-                );
-              case "heading3":
-                return (
-                  <Text
-                    key={index}
-                    variant="h3"
-                    style={[
-                      styles.blockHeading,
-                      { color: seasonalTheme.textPrimary },
-                    ]}
-                  >
-                    {block.content}
-                  </Text>
-                );
-              case "markdown":
-                return (
-                  <Text
-                    key={index}
-                    variant="body"
-                    style={[
-                      styles.blockContent,
-                      { color: seasonalTheme.textPrimary },
-                    ]}
-                  >
-                    {block.content}
-                  </Text>
-                );
-              case "quote":
-                return (
-                  <View
-                    key={index}
-                    style={[
-                      styles.quoteContainer,
-                      {
-                        backgroundColor: seasonalTheme.cardBg,
-                        borderLeftColor: seasonalTheme.textSecondary + "40",
-                      },
-                    ]}
-                  >
-                    <Text
-                      variant="body"
-                      style={[
-                        styles.quoteText,
-                        { color: seasonalTheme.textPrimary },
-                      ]}
-                    >
-                      {block.content}
-                    </Text>
-                  </View>
-                );
-              case "list":
-                return (
-                  <View key={index} style={styles.listContainer}>
-                    {block.items.map((item, itemIndex) => (
-                      <View key={itemIndex} style={styles.listItem}>
-                        <Text
-                          style={[
-                            styles.listBullet,
-                            { color: seasonalTheme.textSecondary },
-                          ]}
-                        >
-                          {block.ordered ? `${itemIndex + 1}.` : "•"}
-                        </Text>
+            {/* Preview/Intro with animation */}
+            {previewText && (
+              <Animated.View
+                ref={previewRef}
+                collapsable={false}
+                onLayout={handlePreviewLayout}
+                style={[
+                  styles.previewContainer,
+                  {
+                    opacity: previewOpacity,
+                    transform: [{ translateY: previewTranslateY }],
+                  },
+                ]}
+              >
+                <Text
+                  variant="body"
+                  style={[
+                    styles.preview,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  {previewText}
+                </Text>
+              </Animated.View>
+            )}
+
+            {/* Full content */}
+            <Animated.View
+              style={[
+                styles.contentContainer,
+                {
+                  opacity: contentOpacity,
+                },
+              ]}
+            >
+              {entry.blocks.map((block, index) => {
+                switch (block.type) {
+                  case "paragraph":
+                    return (
+                      <Text
+                        key={index}
+                        variant="body"
+                        style={[
+                          styles.blockContent,
+                          { color: seasonalTheme.textPrimary },
+                        ]}
+                      >
+                        {block.content}
+                      </Text>
+                    );
+                  case "heading1":
+                    return (
+                      <Text
+                        key={index}
+                        variant="h1"
+                        style={[
+                          styles.blockHeading,
+                          { color: seasonalTheme.textPrimary },
+                        ]}
+                      >
+                        {block.content}
+                      </Text>
+                    );
+                  case "heading2":
+                    return (
+                      <Text
+                        key={index}
+                        variant="h2"
+                        style={[
+                          styles.blockHeading,
+                          { color: seasonalTheme.textPrimary },
+                        ]}
+                      >
+                        {block.content}
+                      </Text>
+                    );
+                  case "heading3":
+                    return (
+                      <Text
+                        key={index}
+                        variant="h3"
+                        style={[
+                          styles.blockHeading,
+                          { color: seasonalTheme.textPrimary },
+                        ]}
+                      >
+                        {block.content}
+                      </Text>
+                    );
+                  case "markdown":
+                    return (
+                      <Text
+                        key={index}
+                        variant="body"
+                        style={[
+                          styles.blockContent,
+                          { color: seasonalTheme.textPrimary },
+                        ]}
+                      >
+                        {block.content}
+                      </Text>
+                    );
+                  case "quote":
+                    return (
+                      <View
+                        key={index}
+                        style={[
+                          styles.quoteContainer,
+                          {
+                            backgroundColor: seasonalTheme.cardBg,
+                            borderLeftColor: seasonalTheme.textSecondary + "40",
+                          },
+                        ]}
+                      >
                         <Text
                           variant="body"
                           style={[
-                            styles.listItemText,
+                            styles.quoteText,
                             { color: seasonalTheme.textPrimary },
                           ]}
                         >
-                          {item}
+                          {block.content}
                         </Text>
                       </View>
-                    ))}
-                  </View>
-                );
-              default:
-                return null;
-            }
-          })}
+                    );
+                  case "list":
+                    return (
+                      <View key={index} style={styles.listContainer}>
+                        {block.items.map((item, itemIndex) => (
+                          <View key={itemIndex} style={styles.listItem}>
+                            <Text
+                              style={[
+                                styles.listBullet,
+                                { color: seasonalTheme.textSecondary },
+                              ]}
+                            >
+                              {block.ordered ? `${itemIndex + 1}.` : "•"}
+                            </Text>
+                            <Text
+                              variant="body"
+                              style={[
+                                styles.listItemText,
+                                { color: seasonalTheme.textPrimary },
+                              ]}
+                            >
+                              {item}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  default:
+                    return null;
+                }
+              })}
 
-          {/* Tags */}
-          {entry.tags.length > 0 && (
-            <View style={styles.tagsContainer}>
-              {entry.tags.map((tag, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.tag,
-                    {
-                      backgroundColor:
-                        seasonalTheme.chipBg || "rgba(0, 0, 0, 0.1)",
-                    },
-                  ]}
-                >
-                  <Text
-                    variant="caption"
-                    style={{
-                      color:
-                        seasonalTheme.chipText || seasonalTheme.textSecondary,
-                    }}
-                  >
-                    {tag}
-                  </Text>
+              {/* Tags */}
+              {entry.tags.length > 0 && (
+                <View style={styles.tagsContainer}>
+                  {entry.tags.map((tag, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.tag,
+                        {
+                          backgroundColor:
+                            seasonalTheme.chipBg || "rgba(0, 0, 0, 0.1)",
+                        },
+                      ]}
+                    >
+                      <Text
+                        variant="caption"
+                        style={{
+                          color:
+                            seasonalTheme.chipText ||
+                            seasonalTheme.textSecondary,
+                        }}
+                      >
+                        {tag}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
-          )}
-        </Animated.View>
+              )}
+            </Animated.View>
+          </>
+        ) : null}
       </ScrollView>
     </Animated.View>
   );

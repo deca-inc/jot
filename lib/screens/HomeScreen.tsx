@@ -8,9 +8,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   TouchableOpacity,
-  Dimensions,
-  ActivityIndicator,
-  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,7 +16,6 @@ import {
   EntryListItem,
   BottomComposer,
   Button,
-  AnimatedBlob,
   type ComposerMode,
 } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
@@ -317,10 +313,6 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
   const groupedEntries = groupEntriesByDay(entries);
 
-  if (isLoading) {
-    return <LoadingState seasonalTheme={seasonalTheme} />;
-  }
-
   return (
     <View
       style={[
@@ -382,12 +374,12 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           ]}
           refreshControl={
             <RefreshControl
-              refreshing={isRefreshing}
+              refreshing={isRefreshing || isLoading}
               onRefresh={handleRefresh}
             />
           }
         >
-          {entries.length === 0 ? (
+          {entries.length === 0 && !isLoading ? (
             <View style={styles.emptyState}>
               <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
                 No entries yet
@@ -458,114 +450,12 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   );
 }
 
-function LoadingState({
-  seasonalTheme,
-}: {
-  seasonalTheme: ReturnType<typeof useSeasonalTheme>;
-}) {
-  const [dimensions, setDimensions] = useState(() => {
-    const { width, height } = Dimensions.get("window");
-    return { width, height };
-  });
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-
-  useEffect(() => {
-    const subscription = Dimensions.addEventListener("change", ({ window }) => {
-      setDimensions({ width: window.width, height: window.height });
-    });
-
-    // Fade in animation
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 200,
-        friction: 20,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    return () => {
-      subscription?.remove();
-    };
-  }, [fadeAnim, scaleAnim]);
-
-  // Get a subtle color from the theme for the blob
-  const blobColor =
-    seasonalTheme.subtleGlow.shadowColor || seasonalTheme.chipText;
-
-  return (
-    <View
-      style={[
-        styles.gradient,
-        { backgroundColor: seasonalTheme.gradient.middle },
-      ]}
-    >
-      <AnimatedBlob
-        width={dimensions.width}
-        height={dimensions.height}
-        color={blobColor}
-        opacity={0.15}
-      />
-      <View style={styles.loadingContainer}>
-        <Animated.View
-          style={[
-            styles.loadingContent,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }],
-            },
-          ]}
-        >
-          <View style={styles.loadingIndicatorWrapper}>
-            <ActivityIndicator
-              size="large"
-              color={seasonalTheme.textSecondary}
-              style={styles.activityIndicator}
-            />
-          </View>
-          <Text
-            variant="body"
-            style={[styles.loadingText, { color: seasonalTheme.textSecondary }]}
-          >
-            Loading entries...
-          </Text>
-        </Animated.View>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
   },
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingContent: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingIndicatorWrapper: {
-    marginBottom: spacingPatterns.md,
-  },
-  activityIndicator: {
-    opacity: 0.8,
-  },
-  loadingText: {
-    fontSize: 16,
-    opacity: 0.7,
   },
   header: {
     padding: spacingPatterns.screen,

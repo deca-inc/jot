@@ -19,7 +19,7 @@ import { spacingPatterns, borderRadius } from "../theme";
 import { typography } from "../theme/typography";
 import { Block } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useLLMForConvo } from "../ai/ModelProvider";
+import { useLLMForConvo, llmManager } from "../ai/ModelProvider";
 import {
   useEntry,
   useCreateEntry,
@@ -92,10 +92,24 @@ export function AIChatComposer({
   // Track last synced blocks to prevent infinite loops
   const lastSyncedBlocksRef = useRef<string>("");
 
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Sync chatMessages with entry.blocks when entry updates from React Query
   // This handles streaming updates - when tokens arrive, hook updates DB and cache,
   // which triggers this effect to sync local state
   useEffect(() => {
+    // Guard: Don't update state if component is unmounted
+    if (!isMountedRef.current) {
+      return;
+    }
+
     // Skip entirely if we just created the entry - don't overwrite what user added
     if (justCreatedEntryRef.current) {
       justCreatedEntryRef.current = false; // Reset flag
@@ -103,7 +117,7 @@ export function AIChatComposer({
     }
 
     if (!entry) {
-      // Entry not loaded yet
+      // Entry not loaded yet or entry was deleted
       if (!entryId && chatMessages.length === 0) {
         // New entry - use initial values
         setTitle(initialTitle);
@@ -293,16 +307,31 @@ export function AIChatComposer({
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            deleteEntry.mutate(entryId, {
-              onSuccess: () => {
-                onDelete?.(entryId);
-                onCancel?.();
-              },
-              onError: (error) => {
-                console.error("Error deleting entry:", error);
-                Alert.alert("Error", "Failed to delete entry");
-              },
-            });
+            // CRITICAL: Clean up LLM instance BEFORE deleting entry to free memory
+            // LLM models can be 100+ MB - must be deleted to prevent OOM
+            const convoId = `entry-${entryId}`;
+            try {
+              llmManager.delete(convoId);
+            } catch (e) {
+              console.error(
+                `[AIChatComposer] Failed to cleanup LLM on delete:`,
+                e
+              );
+            }
+
+            // Small delay to ensure LLM cleanup completes before database deletion
+            setTimeout(() => {
+              deleteEntry.mutate(entryId, {
+                onSuccess: () => {
+                  onDelete?.(entryId);
+                  onCancel?.();
+                },
+                onError: (error) => {
+                  console.error("Error deleting entry:", error);
+                  Alert.alert("Error", "Failed to delete entry");
+                },
+              });
+            }, 100);
           },
         },
       ]
@@ -402,18 +431,7 @@ export function AIChatComposer({
     generateAIResponse,
   ]);
 
-  // Show loading state only for entry loading (not model loading)
-  // Model loads asynchronously in background - UI renders immediately
-  if (isLoading) {
-    return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
-
+  // Show UI shell immediately - content will load progressively
   return (
     <KeyboardAvoidingView
       style={[

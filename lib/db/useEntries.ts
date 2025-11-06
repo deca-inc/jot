@@ -28,10 +28,21 @@ export function useEntry(id: number | undefined) {
     queryKey: entryKeys.detail(id!),
     queryFn: async () => {
       if (!id) return null;
-      const entry = await entryRepository.getById(id);
-      return entry;
+      try {
+        const entry = await entryRepository.getById(id);
+        return entry;
+      } catch (error) {
+        // If entry doesn't exist (e.g., deleted), return null instead of throwing
+        // This prevents crashes when entry is deleted while component is still mounted
+        console.warn(`[useEntry] Entry ${id} not found:`, error);
+        return null;
+      }
     },
     enabled: !!id,
+    // Retry disabled for deleted entries - if entry is gone, it's gone
+    retry: false,
+    // Don't refetch on window focus if entry might be deleted
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -115,10 +126,27 @@ export function useDeleteEntry() {
       await entryRepository.delete(id);
     },
     onSuccess: (_, id) => {
-      // Remove from cache
+      // Remove from cache first to prevent components from accessing deleted entry
+      // CRITICAL: Remove queries to free memory - React Query cache can accumulate
       queryClient.removeQueries({ queryKey: entryKeys.detail(id) });
-      // Invalidate lists
-      queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
+
+      // Invalidate lists after a small delay to ensure cache removal completes
+      // This prevents race conditions where components try to access deleted entries
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
+      }, 0);
+
+      // Aggressively garbage collect unused queries to free memory
+      // Don't clear all cache - just remove unused entries
+      setTimeout(() => {
+        const cache = queryClient.getQueryCache();
+        cache.getAll().forEach((query) => {
+          // Remove queries that are not being observed (no active components using them)
+          if (!query.getObserversCount() && query.state.dataUpdateCount > 0) {
+            cache.remove(query);
+          }
+        });
+      }, 500);
     },
   });
 }
