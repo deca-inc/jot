@@ -5,9 +5,18 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  '@tanstack/react-query':
+    specifier: ^5.90.6
+    version: 5.90.6(react@19.1.0)
   expo:
     specifier: ~54.0.20
     version: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+  expo-background-fetch:
+    specifier: ^14.0.7
+    version: 14.0.7(expo@54.0.21)(react-native@0.81.5)
+  expo-background-task:
+    specifier: ^1.0.8
+    version: 1.0.8(expo@54.0.21)(react-native@0.81.5)
   expo-blur:
     specifier: ~15.0.7
     version: 15.0.7(expo@54.0.21)(react-native@0.81.5)(react@19.1.0)
@@ -26,6 +35,9 @@ dependencies:
   expo-status-bar:
     specifier: ~3.0.8
     version: 3.0.8(react-native@0.81.5)(react@19.1.0)
+  expo-task-manager:
+    specifier: ^14.0.8
+    version: 14.0.8(expo@54.0.21)(react-native@0.81.5)
   react:
     specifier: 19.1.0
     version: 19.1.0
@@ -1915,7 +1927,7 @@ packages:
       react: '*'
       react-native: '*'
     dependencies:
-      expo-font: 13.3.2(expo@53.0.23)(react@19.1.0)
+      expo-font: 13.3.2(expo@54.0.21)(react@19.1.0)
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
     dev: false
@@ -2400,6 +2412,19 @@ packages:
     resolution: {integrity: sha512-V4BG07kuYSUkTCSBHG8G8TNhM+F19jXFWnQtzj+we8DrkpSBCee9Z3Ms8yiGer/dlmhe35/Xdgyo3/0rQKg7YA==}
     dependencies:
       '@sinonjs/commons': 3.0.1
+    dev: false
+
+  /@tanstack/query-core@5.90.6:
+    resolution: {integrity: sha512-AnZSLF26R8uX+tqb/ivdrwbVdGemdEDm1Q19qM6pry6eOZ6bEYiY7mWhzXT1YDIPTNEVcZ5kYP9nWjoxDLiIVw==}
+    dev: false
+
+  /@tanstack/react-query@5.90.6(react@19.1.0):
+    resolution: {integrity: sha512-gB1sljYjcobZKxjPbKSa31FUTyr+ROaBdoH+wSSs9Dk+yDCmMs+TkTV3PybRRVLC7ax7q0erJ9LvRWnMktnRAw==}
+    peerDependencies:
+      react: ^18 || ^19
+    dependencies:
+      '@tanstack/query-core': 5.90.6
+      react: 19.1.0
     dev: false
 
   /@types/babel__core@7.20.5:
@@ -3565,6 +3590,28 @@ packages:
       - supports-color
     dev: false
 
+  /expo-background-fetch@14.0.7(expo@54.0.21)(react-native@0.81.5):
+    resolution: {integrity: sha512-vq/2w/I9OYkYbKn2YmMTzWEZm+Ddl8ObRtKR8s5kpfyGEIHz4rsIuHF1kpqHXuxI/DNZEhAN8fIO2nh+jNW5uQ==}
+    peerDependencies:
+      expo: '*'
+    dependencies:
+      expo: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+      expo-task-manager: 14.0.8(expo@54.0.21)(react-native@0.81.5)
+    transitivePeerDependencies:
+      - react-native
+    dev: false
+
+  /expo-background-task@1.0.8(expo@54.0.21)(react-native@0.81.5):
+    resolution: {integrity: sha512-G6WnljBhO0K9j0ntmytF5rZLtYUpwh8n2+hcgmxM1ISPAVVZSPHZhkF9YjBOKpdPWZxmukBgEwejfcGckb8TQQ==}
+    peerDependencies:
+      expo: '*'
+    dependencies:
+      expo: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+      expo-task-manager: 14.0.8(expo@54.0.21)(react-native@0.81.5)
+    transitivePeerDependencies:
+      - react-native
+    dev: false
+
   /expo-blur@15.0.7(expo@54.0.21)(react-native@0.81.5)(react@19.1.0):
     resolution: {integrity: sha512-SugQQbQd+zRPy8z2G5qDD4NqhcD7srBF7fN7O7yq6q7ZFK59VWvpDxtMoUkmSfdxgqONsrBN/rLdk00USADrMg==}
     peerDependencies:
@@ -3634,13 +3681,13 @@ packages:
       react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
     dev: false
 
-  /expo-font@13.3.2(expo@53.0.23)(react@19.1.0):
+  /expo-font@13.3.2(expo@54.0.21)(react@19.1.0):
     resolution: {integrity: sha512-wUlMdpqURmQ/CNKK/+BIHkDA5nGjMqNlYmW0pJFXY/KE/OG80Qcavdu2sHsL4efAIiNGvYdBS10WztuQYU4X0A==}
     peerDependencies:
       expo: '*'
       react: '*'
     dependencies:
-      expo: 53.0.23(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+      expo: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
       fontfaceobserver: 2.3.0
       react: 19.1.0
     dev: false
@@ -3757,6 +3804,17 @@ packages:
       react-native-is-edge-to-edge: 1.2.1(react-native@0.81.5)(react@19.1.0)
     dev: false
 
+  /expo-task-manager@14.0.8(expo@54.0.21)(react-native@0.81.5):
+    resolution: {integrity: sha512-HxhyvmulM8px+LQvqIKS85KVx2UodZf5RO+FE2ltpC4mQ5IFkX/ESqiK0grzDa4pVFLyxvs8LjuUKsfB5c39PQ==}
+    peerDependencies:
+      expo: '*'
+      react-native: '*'
+    dependencies:
+      expo: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+      react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
+      unimodules-app-loader: 6.0.7
+    dev: false
+
   /expo@53.0.23(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0):
     resolution: {integrity: sha512-6TOLuNCP3AsSkXBJA5W6U/7wpZUop3Q6BxHMtRD2OOgT7CCPvnYgJdnTzqU+gD1hMfcryD8Ejq9RdHbLduXohg==}
     hasBin: true
@@ -3785,7 +3843,7 @@ packages:
       expo-asset: 11.1.7(expo@53.0.23)(react-native@0.81.5)(react@19.1.0)
       expo-constants: 17.1.7(expo@53.0.23)(react-native@0.81.5)
       expo-file-system: 18.1.11(expo@53.0.23)(react-native@0.81.5)
-      expo-font: 13.3.2(expo@53.0.23)(react@19.1.0)
+      expo-font: 13.3.2(expo@54.0.21)(react@19.1.0)
       expo-keep-awake: 14.1.4(expo@53.0.23)(react@19.1.0)
       expo-modules-autolinking: 2.1.14
       expo-modules-core: 2.5.0
@@ -6474,6 +6532,10 @@ packages:
   /unicode-property-aliases-ecmascript@2.2.0:
     resolution: {integrity: sha512-hpbDzxUY9BFwX+UeBnxv3Sh1q7HFxj48DTmXchNgRa46lO8uj3/1iEn3MiNUYTg1g9ctIqXCCERn8gYZhHC5lQ==}
     engines: {node: '>=4'}
+    dev: false
+
+  /unimodules-app-loader@6.0.7:
+    resolution: {integrity: sha512-23iwxmh6/y54PRGJt/xjsOpPK8vlfusBisi3yaVSK22pxg5DmiL/+IHCtbb/crHC+gqdItcy1OoRsZQHfNSBaw==}
     dev: false
 
   /unique-string@2.0.0:

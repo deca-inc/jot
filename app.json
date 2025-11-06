@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pkfireee.journal"
+      "bundleIdentifier": "com.pkfireee.journal",
+      "infoPlist": {
+        "UIBackgroundModes": ["fetch", "processing"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +26,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.pkfireee.journal"
+      "package": "com.pkfireee.journal",
+      "permissions": ["RECEIVE_BOOT_COMPLETED", "WAKE_LOCK"]
     },
     "web": {
       "favicon": "./assets/favicon.png"

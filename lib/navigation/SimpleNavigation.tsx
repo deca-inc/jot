@@ -246,7 +246,6 @@ export function SimpleNavigation() {
       case "home":
         return (
           <HomeScreen
-            onNewEntry={handleOpenComposer}
             refreshKey={homeRefreshKey}
             onOpenFullEditor={handleOpenFullEditor}
             onOpenSettings={handleOpenSettings}
@@ -309,7 +308,6 @@ export function SimpleNavigation() {
       default:
         return (
           <HomeScreen
-            onNewEntry={handleOpenComposer}
             refreshKey={homeRefreshKey}
             onOpenFullEditor={handleOpenFullEditor}
             onOpenSettings={handleOpenSettings}

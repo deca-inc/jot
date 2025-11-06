@@ -17,13 +17,17 @@
     "download:models": "tsx scripts/downloadModels.ts"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.6",
     "expo": "~54.0.20",
+    "expo-background-fetch": "^14.0.7",
+    "expo-background-task": "^1.0.8",
     "expo-blur": "~15.0.7",
     "expo-crypto": "~15.0.7",
     "expo-file-system": "^19.0.17",
     "expo-secure-store": "~15.0.7",
     "expo-sqlite": "~16.0.8",
     "expo-status-bar": "~3.0.8",
+    "expo-task-manager": "^14.0.8",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-argon2": "^3.0.0",

@@ -8,6 +8,9 @@ import {
   TextInput,
   KeyboardAvoidingView,
   TouchableOpacity,
+  Dimensions,
+  ActivityIndicator,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +19,7 @@ import {
   EntryListItem,
   BottomComposer,
   Button,
+  AnimatedBlob,
   type ComposerMode,
 } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
@@ -23,11 +27,12 @@ import { spacingPatterns, borderRadius } from "../theme";
 import { useEntryRepository, Entry, EntryType } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { getSeason, getTimeOfDay } from "../theme/seasonalTheme";
+import { llmManager } from "../ai/ModelProvider";
+import { Llama32_1B_Instruct } from "../ai/modelConfig";
 
 type Filter = "all" | "journal" | "ai_chat" | "favorites";
 
 export interface HomeScreenProps {
-  onNewEntry?: (type?: "journal" | "ai_chat") => void;
   refreshKey?: number;
   onOpenFullEditor?: (initialText?: string) => void;
   onOpenSettings?: () => void;
@@ -35,14 +40,8 @@ export interface HomeScreenProps {
 }
 
 export function HomeScreen(props: HomeScreenProps = {}) {
-  const {
-    onNewEntry,
-    refreshKey,
-    onOpenFullEditor,
-    onOpenSettings,
-    onOpenEntryEditor,
-  } = props;
-  const theme = useTheme();
+  const { refreshKey, onOpenFullEditor, onOpenSettings, onOpenEntryEditor } =
+    props;
   const seasonalTheme = useSeasonalTheme();
   const entryRepository = useEntryRepository();
   const insets = useSafeAreaInsets();
@@ -165,6 +164,88 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             attachments: [],
             isFavorite: false,
           });
+
+          // Kick off background generation immediately
+          // Use llmManager directly - don't block UI, generation happens in background
+          const convoId = `entry-${entry.id}`;
+
+          // Create listeners for DB writes (hook will add its own listeners when chat screen opens)
+          let lastFullResponse = "";
+          const listeners = {
+            onToken: async (token: string) => {
+              // Accumulate tokens for debounced DB write
+              lastFullResponse += token;
+
+              // Debounce: write every 100 chars to avoid too many DB writes
+              if (lastFullResponse.length % 100 === 0) {
+                try {
+                  const updatedBlocks = [
+                    ...entry.blocks,
+                    {
+                      type: "markdown" as const,
+                      content: lastFullResponse,
+                      role: "assistant" as const,
+                    },
+                  ];
+                  await entryRepository.update(entry.id, {
+                    blocks: updatedBlocks,
+                  });
+                } catch (e) {
+                  console.warn("[HomeScreen] Failed to stream update:", e);
+                }
+              }
+            },
+            onMessageHistoryUpdate: async (messages: any[]) => {
+              // Final write when generation completes
+              try {
+                const updatedBlocks = messages
+                  .filter((m) => m.role !== "system")
+                  .map((m) => ({
+                    type: "markdown" as const,
+                    content: m.content,
+                    role: m.role as "user" | "assistant",
+                  }));
+                await entryRepository.update(entry.id, {
+                  blocks: updatedBlocks,
+                });
+                // Refresh entries list to show updated content
+                loadEntries();
+              } catch (e) {
+                console.warn(
+                  "[HomeScreen] Failed to write message history:",
+                  e
+                );
+              }
+            },
+          };
+
+          // Don't pass initialBlocks - we'll use generate() with full context
+          // This avoids duplication since generate() is stateless
+          llmManager
+            .getOrCreate(
+              convoId,
+              Llama32_1B_Instruct,
+              listeners, // Register listeners for DB writes
+              undefined // Don't configure with blocks - we'll use generate() instead
+            )
+            .then((llmForConvo) => {
+              // Convert blocks to LLM messages for generate()
+              // This includes the user message we just created
+              const { blocksToLlmMessages } = require("../ai/ModelProvider");
+              const messages = blocksToLlmMessages(
+                entry.blocks,
+                "You are a helpful AI assistant."
+              );
+
+              // Use generate() instead of sendMessage() since we already have the full history
+              // This avoids duplication and properly handles the initial message
+              llmForConvo.generate(messages).catch((e: any) => {
+                console.error("[HomeScreen] Background generation failed:", e);
+              });
+            })
+            .catch((e) => {
+              console.error("[HomeScreen] Failed to initialize LLM:", e);
+            });
           // Navigate to the newly created AI chat entry
           if (onOpenEntryEditor) {
             onOpenEntryEditor(entry.id);
@@ -234,36 +315,10 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     });
   };
 
-  const now = new Date();
-  const dayLabel = now.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
-  const season = getSeason(now);
-  const timeOfDay = getTimeOfDay(now);
-  const seasonName = season.charAt(0).toUpperCase() + season.slice(1);
-  const isNight = timeOfDay === "night";
-
   const groupedEntries = groupEntriesByDay(entries);
 
   if (isLoading) {
-    return (
-      <View
-        style={[
-          styles.gradient,
-          { backgroundColor: seasonalTheme.gradient.middle },
-        ]}
-      >
-        <View style={styles.container}>
-          <Text variant="body" style={{ color: seasonalTheme.textSecondary }}>
-            Loading entries...
-          </Text>
-        </View>
-      </View>
-    );
+    return <LoadingState seasonalTheme={seasonalTheme} />;
   }
 
   return (
@@ -403,12 +458,114 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   );
 }
 
+function LoadingState({
+  seasonalTheme,
+}: {
+  seasonalTheme: ReturnType<typeof useSeasonalTheme>;
+}) {
+  const [dimensions, setDimensions] = useState(() => {
+    const { width, height } = Dimensions.get("window");
+    return { width, height };
+  });
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener("change", ({ window }) => {
+      setDimensions({ width: window.width, height: window.height });
+    });
+
+    // Fade in animation
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 200,
+        friction: 20,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [fadeAnim, scaleAnim]);
+
+  // Get a subtle color from the theme for the blob
+  const blobColor =
+    seasonalTheme.subtleGlow.shadowColor || seasonalTheme.chipText;
+
+  return (
+    <View
+      style={[
+        styles.gradient,
+        { backgroundColor: seasonalTheme.gradient.middle },
+      ]}
+    >
+      <AnimatedBlob
+        width={dimensions.width}
+        height={dimensions.height}
+        color={blobColor}
+        opacity={0.15}
+      />
+      <View style={styles.loadingContainer}>
+        <Animated.View
+          style={[
+            styles.loadingContent,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }],
+            },
+          ]}
+        >
+          <View style={styles.loadingIndicatorWrapper}>
+            <ActivityIndicator
+              size="large"
+              color={seasonalTheme.textSecondary}
+              style={styles.activityIndicator}
+            />
+          </View>
+          <Text
+            variant="body"
+            style={[styles.loadingText, { color: seasonalTheme.textSecondary }]}
+          >
+            Loading entries...
+          </Text>
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
   },
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingContent: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingIndicatorWrapper: {
+    marginBottom: spacingPatterns.md,
+  },
+  activityIndicator: {
+    opacity: 0.8,
+  },
+  loadingText: {
+    fontSize: 16,
+    opacity: 0.7,
   },
   header: {
     padding: spacingPatterns.screen,

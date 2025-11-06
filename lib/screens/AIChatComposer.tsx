@@ -17,11 +17,15 @@ import { Text } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { typography } from "../theme/typography";
-import { useEntryRepository, Block } from "../db/entries";
+import { Block } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { ensureModelPresent } from "../ai/modelManager";
-import { Llama32_1B_Instruct } from "../ai/modelConfig";
-import { useLLM, Message as LlmMessage } from "react-native-executorch";
+import { useLLMForConvo } from "../ai/ModelProvider";
+import {
+  useEntry,
+  useCreateEntry,
+  useUpdateEntry,
+  useDeleteEntry,
+} from "../db/useEntries";
 
 export interface AIChatComposerProps {
   entryId?: number;
@@ -32,147 +36,113 @@ export interface AIChatComposerProps {
   onDelete?: (entryId: number) => void;
 }
 
-// Internal component that requires model paths to be ready
-function AIChatComposerInternal({
+export function AIChatComposer({
   entryId,
   initialTitle = "",
   initialBlocks = [],
   onSave,
   onCancel,
   onDelete,
-  modelPaths,
-}: AIChatComposerProps & {
-  modelPaths: {
-    ptePath: string;
-    tokenizerPath?: string;
-    tokenizerConfigPath?: string;
-  };
-}) {
+}: AIChatComposerProps) {
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
-  const entryRepository = useEntryRepository();
+
+  // React Query hooks - load entry first
+  const { data: entry, isLoading } = useEntry(entryId);
+
+  // Use new LLM hook - pass entryId as convoId and for DB writes
+  // When AIChatComposer mounts, it attaches to existing LLM instance if generation is already running
+  const convoId = entryId ? `entry-${entryId}` : `new-${Date.now()}`;
+  const {
+    llm,
+    isLoading: isLLMLoading,
+    error: llmError,
+  } = useLLMForConvo(
+    convoId,
+    entryId,
+    entry?.blocks // Initialize with existing blocks if loading entry
+  );
+
+  const createEntry = useCreateEntry();
+  const updateEntry = useUpdateEntry();
+  const deleteEntry = useDeleteEntry();
+
   const [title, setTitle] = useState(initialTitle);
   const [chatMessages, setChatMessages] = useState<Block[]>(initialBlocks);
   const [newMessage, setNewMessage] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(!!entryId);
   const [showMenu, setShowMenu] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const titleInputRef = useRef<TextInput>(null);
+  const chatInputRef = useRef<TextInput>(null);
   const hasTriggeredInitialResponse = useRef(false);
   const isGeneratingRef = useRef(false);
   const generatingMessageIndexRef = useRef<number | null>(null);
-  const capturedResponseRef = useRef<string | null>(null);
-
-  // Initialize LLM with model paths
-  const llm = useLLM({
-    model: {
-      modelSource: modelPaths.ptePath,
-      tokenizerSource: modelPaths.tokenizerPath || "",
-      tokenizerConfigSource: modelPaths.tokenizerConfigPath || "",
-    },
-  });
+  const entryLoadedRef = useRef<number | undefined>(undefined);
+  const justCreatedEntryRef = useRef<boolean>(false);
 
   // Watch for LLM errors
   useEffect(() => {
-    if (llm.error) {
-      console.error("LLM error:", llm.error);
-      Alert.alert("Model Error", `LLM error: ${llm.error}`);
+    if (llmError) {
+      console.error("[AIChatComposer] LLM error:", llmError);
+      Alert.alert("AI Error", llmError);
     }
-  }, [llm.error]);
+  }, [llmError]);
 
-  // Helper function to update assistant message with response
-  const updateAssistantMessage = useCallback((response: string) => {
-    setChatMessages((prev) => {
-      let lastAssistantIndex = -1;
-      for (let i = prev.length - 1; i >= 0; i--) {
-        if (prev[i].role === "assistant") {
-          lastAssistantIndex = i;
-          break;
-        }
-      }
+  // Track last synced blocks to prevent infinite loops
+  const lastSyncedBlocksRef = useRef<string>("");
 
-      if (lastAssistantIndex >= 0) {
-        const updated = [...prev];
-        const lastMessage = updated[lastAssistantIndex];
-        if (lastMessage.type === "markdown") {
-          updated[lastAssistantIndex] = {
-            ...lastMessage,
-            content: response.trim(),
-          };
-        }
-        return updated;
-      } else {
-        return [
-          ...prev,
-          {
-            type: "markdown" as const,
-            content: response.trim(),
-            role: "assistant" as const,
-          },
-        ];
-      }
-    });
-  }, []);
-
-  // Watch for response updates during generation and capture them
+  // Sync chatMessages with entry.blocks when entry updates from React Query
+  // This handles streaming updates - when tokens arrive, hook updates DB and cache,
+  // which triggers this effect to sync local state
   useEffect(() => {
-    if (
-      generatingMessageIndexRef.current !== null &&
-      llm.response &&
-      llm.response.length > 0
-    ) {
-      capturedResponseRef.current = llm.response;
-      updateAssistantMessage(llm.response);
-    }
-  }, [llm.response, updateAssistantMessage]);
-
-  // Load existing entry if entryId is provided
-  useEffect(() => {
-    if (!entryId) {
-      setIsLoading(false);
-      setChatMessages([]);
+    // Skip entirely if we just created the entry - don't overwrite what user added
+    if (justCreatedEntryRef.current) {
+      justCreatedEntryRef.current = false; // Reset flag
       return;
     }
 
-    const loadEntry = async () => {
-      try {
-        const entry = await entryRepository.getById(entryId);
-        if (entry) {
-          setTitle(entry.title);
-          if (entry.type === "ai_chat") {
-            setChatMessages(entry.blocks);
-            setNewMessage("");
-          }
-        }
-      } catch (error) {
-        console.error("Error loading entry:", error);
-      } finally {
-        setIsLoading(false);
+    if (!entry) {
+      // Entry not loaded yet
+      if (!entryId && chatMessages.length === 0) {
+        // New entry - use initial values
+        setTitle(initialTitle);
+        setChatMessages(initialBlocks);
+        lastSyncedBlocksRef.current = JSON.stringify(initialBlocks);
       }
-    };
-
-    loadEntry();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entryId]);
-
-  // Configure LLM once model is ready
-  useEffect(() => {
-    if (llm.configure && llm.isReady) {
-      try {
-        llm.configure({
-          chatConfig: {
-            initialMessageHistory: [],
-            systemPrompt: "You are a helpful AI assistant.",
-          },
-          generationConfig: {},
-        });
-      } catch (configError) {
-        console.error("Error configuring LLM:", configError);
-      }
+      return;
     }
-  }, [llm.isReady, llm.configure]);
+
+    // Only sync if this is the correct entry
+    if (entry.id !== entryId) {
+      return;
+    }
+
+    // Update title if it changed
+    if (entry.title !== title) {
+      setTitle(entry.title);
+    }
+
+    // Sync blocks - only update if blocks actually changed (by string comparison)
+    // Use ref to track last synced state to prevent loops
+    const entryBlocksStr = JSON.stringify(entry.blocks);
+
+    if (
+      entryBlocksStr !== lastSyncedBlocksRef.current &&
+      entry.type === "ai_chat"
+    ) {
+      setChatMessages(entry.blocks);
+      lastSyncedBlocksRef.current = entryBlocksStr;
+
+      // Auto-scroll to bottom when new content arrives
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [entry, entryId, title, initialTitle, initialBlocks]);
+
+  // Configure model service once it's ready (optional - can be done at provider level)
+  // Configuration is already done in ModelProvider, but we can override if needed
 
   // Reset trigger flag when entry changes
   useEffect(() => {
@@ -181,143 +151,93 @@ function AIChatComposerInternal({
   }, [entryId]);
 
   // Helper function to generate AI response
-  const generateAIResponse = useCallback(
-    async (messagesOverride?: Block[]) => {
-      try {
-        // Get messages to use (override or from state)
-        let currentMessagesForLLM: Block[] = [];
+  // Uses generate() with full context from chatMessages to ensure proper context handling
+  const generateAIResponse = useCallback(async () => {
+    if (!llm) {
+      console.warn("[AIChatComposer] LLM not ready yet");
+      return;
+    }
+
+    try {
+      isGeneratingRef.current = true;
+
+      // Get current messages using functional update to ensure we have latest state
+      let currentMessages: Block[] = [];
+      setChatMessages((prev) => {
+        currentMessages = prev;
+
+        // Add placeholder assistant message for UI
         const placeholderAssistantMessage: Block = {
           type: "markdown",
           content: "",
           role: "assistant",
         };
+        generatingMessageIndexRef.current = prev.length;
+        return [...prev, placeholderAssistantMessage];
+      });
 
-        if (messagesOverride !== undefined) {
-          currentMessagesForLLM = [...messagesOverride];
-          generatingMessageIndexRef.current = currentMessagesForLLM.length;
-          setChatMessages((prev) => [...prev, placeholderAssistantMessage]);
-        } else {
-          setChatMessages((prev) => {
-            currentMessagesForLLM = [...prev];
-            generatingMessageIndexRef.current = prev.length;
-            return [...prev, placeholderAssistantMessage];
-          });
-        }
+      // Use generate() with full context from current messages
+      // This includes all messages (user + assistant) in the correct order
+      const { blocksToLlmMessages } = require("../ai/ModelProvider");
+      const messages = blocksToLlmMessages(
+        currentMessages,
+        "You are a helpful AI assistant."
+      );
 
-        // Convert to LLM message format
-        const chat: LlmMessage[] = [
-          { role: "system", content: "You are a helpful AI assistant." },
-          ...currentMessagesForLLM
-            .filter((m) => m.type === "markdown")
-            .map((m) => ({
-              role: (m.role as any) || "user",
-              content: m.content,
-            })),
-        ];
+      await llm.generate(messages);
 
-        if (llm.error) {
-          throw new Error(`LLM error: ${llm.error}`);
-        }
-
-        // Generate response - useEffect will capture it as it streams in
-        await llm.generate(chat);
-
-        // Wait for generation to complete
-        let attempts = 0;
-        while (llm.isGenerating && attempts < 50) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          attempts++;
-          if (llm.error) {
-            throw new Error(`LLM error: ${llm.error}`);
-          }
-        }
-
-        // Brief wait for final state updates
-        await new Promise((resolve) => setTimeout(resolve, 200));
-
-        if (llm.error) {
-          throw new Error(`LLM error: ${llm.error}`);
-        }
-
-        // Get response - use captured response (from useEffect) or llm.response
-        const finalResponse =
-          capturedResponseRef.current?.trim() || llm.response?.trim() || "";
-
-        if (finalResponse) {
-          // Response was captured via useEffect and UI is already updated, just save to DB
-          const finalTitle = title.trim() || "AI Conversation";
-          setChatMessages((prev) => {
-            const toSave = prev;
-            if (entryId) {
-              entryRepository
-                .update(entryId, {
-                  title: finalTitle,
-                  blocks: toSave,
-                })
-                .then(() => onSave?.(entryId))
-                .catch(console.error);
-            } else {
-              entryRepository
-                .create({
-                  type: "ai_chat",
-                  title: finalTitle,
-                  blocks: toSave,
-                  tags: [],
-                  attachments: [],
-                  isFavorite: false,
-                })
-                .then((entry) => onSave?.(entry.id))
-                .catch(console.error);
-            }
-            return toSave;
-          });
-
-          setTimeout(() => {
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-          }, 100);
-        } else {
-          // Remove placeholder message on empty response
-          setChatMessages((prev) => prev.slice(0, -1));
-          Alert.alert(
-            "AI Response",
-            "The model generated an empty response. Please try again."
-          );
-        }
-      } catch (e) {
-        console.error("Error generating AI response:", e);
-        setChatMessages((prev) => prev.slice(0, -1));
-        Alert.alert(
-          "AI Error",
-          `Failed to generate a response: ${
-            e instanceof Error ? e.message : String(e)
-          }`
-        );
-      } finally {
-        generatingMessageIndexRef.current = null;
-        capturedResponseRef.current = null;
-      }
-    },
-    [llm, title, entryId, entryRepository, onSave]
-  );
+      // Scroll to bottom after response
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (e) {
+      console.error("[AIChatComposer] Error generating AI response:", e);
+      // Remove placeholder on error
+      setChatMessages((prev) => prev.slice(0, -1));
+      Alert.alert(
+        "AI Error",
+        `Failed to generate a response: ${
+          e instanceof Error ? e.message : String(e)
+        }`
+      );
+    } finally {
+      isGeneratingRef.current = false;
+      generatingMessageIndexRef.current = null;
+    }
+  }, [llm]);
 
   // Trigger AI response for initial prompt if needed
+  // Wait for LLM to be ready
   useEffect(() => {
     if (
       !isLoading &&
-      llm.isReady &&
+      !isLLMLoading &&
+      llm &&
       !hasTriggeredInitialResponse.current &&
       !isGeneratingRef.current &&
       chatMessages.length === 1 &&
       chatMessages[0]?.role === "user"
     ) {
       hasTriggeredInitialResponse.current = true;
-      isGeneratingRef.current = true;
+      // Use generate() with full context instead of sendMessage() to avoid duplication
+      // and ensure full context is passed
+      const { blocksToLlmMessages } = require("../ai/ModelProvider");
+      const messages = blocksToLlmMessages(
+        chatMessages,
+        "You are a helpful AI assistant."
+      );
 
-      generateAIResponse(chatMessages).finally(() => {
-        isGeneratingRef.current = false;
+      llm.generate(messages).catch((e) => {
+        console.error("[AIChatComposer] Initial generation failed:", e);
+        Alert.alert(
+          "AI Error",
+          `Failed to generate initial response: ${
+            e instanceof Error ? e.message : String(e)
+          }`
+        );
       });
     }
-  }, [isLoading, llm.isReady, chatMessages, generateAIResponse]);
+  }, [isLoading, isLLMLoading, llm, chatMessages]);
 
   const handleTitleFocus = useCallback(() => {
     setTimeout(() => {
@@ -331,26 +251,31 @@ function AIChatComposerInternal({
     setTitle(newTitle);
   }, []);
 
-  const handleTitleBlur = useCallback(async () => {
+  const handleTitleBlur = useCallback(() => {
     if (!entryId) return;
 
     const newTitle = title.trim();
-    setIsSaving(true);
-    try {
-      await entryRepository.update(entryId, {
-        title: newTitle || undefined,
-      });
-      onSave?.(entryId);
-    } catch (error) {
-      console.error("Error updating title:", error);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [title, entryId, entryRepository, onSave]);
+    updateEntry.mutate(
+      {
+        id: entryId,
+        input: {
+          title: newTitle || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          onSave?.(entryId);
+        },
+        onError: (error) => {
+          console.error("Error updating title:", error);
+        },
+      }
+    );
+  }, [title, entryId, updateEntry, onSave]);
 
-  const handleTitleSubmit = useCallback(async () => {
+  const handleTitleSubmit = useCallback(() => {
     titleInputRef.current?.blur();
-    await handleTitleBlur();
+    handleTitleBlur();
   }, [handleTitleBlur]);
 
   const handleDelete = useCallback(() => {
@@ -367,96 +292,118 @@ function AIChatComposerInternal({
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
-            try {
-              await entryRepository.delete(entryId);
-              onDelete?.(entryId);
-              onCancel?.();
-            } catch (error) {
-              console.error("Error deleting entry:", error);
-              Alert.alert("Error", "Failed to delete entry");
-            }
+          onPress: () => {
+            deleteEntry.mutate(entryId, {
+              onSuccess: () => {
+                onDelete?.(entryId);
+                onCancel?.();
+              },
+              onError: (error) => {
+                console.error("Error deleting entry:", error);
+                Alert.alert("Error", "Failed to delete entry");
+              },
+            });
           },
         },
       ]
     );
-  }, [entryId, entryRepository, onDelete, onCancel]);
+  }, [entryId, deleteEntry, onDelete, onCancel]);
 
   const handleSendMessage = useCallback(async () => {
     if (!newMessage.trim()) return;
 
-    if (!llm.isReady) {
-      Alert.alert(
-        "Model Not Ready",
-        "The AI model is still loading. Please wait a moment and try again."
-      );
-      return;
-    }
-
+    // ModelProvider's generate() will automatically wait for model to be ready
     const userMessage: Block = {
       type: "markdown",
       content: newMessage.trim(),
       role: "user",
     };
 
-    // Add user message to chat
+    // Add user message to chat immediately
+    // Use functional update to ensure we get the latest state
     let updatedMessages: Block[] = [];
     setChatMessages((prev) => {
       updatedMessages = [...prev, userMessage];
-
-      // Save the user message immediately
-      const finalTitle = title.trim() || "AI Conversation";
-      setIsSaving(true);
-      (async () => {
-        try {
-          if (entryId) {
-            await entryRepository.update(entryId, {
-              title: finalTitle,
-              blocks: updatedMessages,
-            });
-            onSave?.(entryId);
-          } else {
-            const entry = await entryRepository.create({
-              type: "ai_chat",
-              title: finalTitle,
-              blocks: updatedMessages,
-              tags: [],
-              attachments: [],
-              isFavorite: false,
-            });
-            onSave?.(entry.id);
-          }
-        } catch (error) {
-          console.error("Error saving message:", error);
-        } finally {
-          setIsSaving(false);
-        }
-      })();
-
       return updatedMessages;
     });
 
+    // Ensure state is updated before proceeding
+    // The state update is async, but we have updatedMessages for the mutation
+
+    // Save the user message immediately
+    const finalTitle = title.trim() || "AI Conversation";
+    if (entryId) {
+      updateEntry.mutate(
+        {
+          id: entryId,
+          input: {
+            title: finalTitle,
+            blocks: updatedMessages,
+          },
+        },
+        {
+          onSuccess: () => {
+            onSave?.(entryId);
+          },
+          onError: (error) => {
+            console.error("Error saving message:", error);
+          },
+        }
+      );
+    } else {
+      // Mark that we're creating an entry so the loading effect doesn't overwrite
+      justCreatedEntryRef.current = true;
+
+      createEntry.mutate(
+        {
+          type: "ai_chat",
+          title: finalTitle,
+          blocks: updatedMessages,
+          tags: [],
+          attachments: [],
+          isFavorite: false,
+        },
+        {
+          onSuccess: (entry) => {
+            // Delay onSave slightly to let state update render first
+            setTimeout(() => {
+              onSave?.(entry.id);
+            }, 100);
+          },
+          onError: (error) => {
+            justCreatedEntryRef.current = false; // Reset on error
+            console.error("Error saving message:", error);
+          },
+        }
+      );
+    }
+
     setNewMessage("");
 
-    // Scroll to bottom
+    // Scroll to bottom and refocus input
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
+      // Refocus input after sending message
+      chatInputRef.current?.focus();
     }, 100);
 
-    // Generate AI response
+    // Generate AI response with full context (including the new user message)
+    // Use generate() which takes full context to avoid duplication
     setTimeout(() => {
-      generateAIResponse(updatedMessages);
+      generateAIResponse();
     }, 0);
   }, [
     newMessage,
     title,
     entryId,
-    entryRepository,
+    createEntry,
+    updateEntry,
     onSave,
-    llm.isReady,
     generateAIResponse,
   ]);
 
+  // Show loading state only for entry loading (not model loading)
+  // Model loads asynchronously in background - UI renders immediately
   if (isLoading) {
     return (
       <View
@@ -481,7 +428,7 @@ function AIChatComposerInternal({
         <TouchableOpacity
           onPress={onCancel}
           style={styles.backButton}
-          disabled={isSaving}
+          disabled={createEntry.isPending || updateEntry.isPending}
         >
           <Ionicons
             name="arrow-back"
@@ -515,7 +462,7 @@ function AIChatComposerInternal({
           <TouchableOpacity
             onPress={() => setShowMenu(true)}
             style={styles.menuButton}
-            disabled={isSaving}
+            disabled={createEntry.isPending || updateEntry.isPending}
           >
             <Ionicons
               name="ellipsis-vertical"
@@ -593,7 +540,7 @@ function AIChatComposerInternal({
             const isGenerating =
               !isUser &&
               isEmpty &&
-              (llm.isGenerating || generatingMessageIndexRef.current === index);
+              (isLLMLoading || generatingMessageIndexRef.current === index);
 
             return (
               <View
@@ -653,6 +600,7 @@ function AIChatComposerInternal({
         ]}
       >
         <TextInput
+          ref={chatInputRef}
           style={[
             styles.chatInput,
             {
@@ -665,17 +613,23 @@ function AIChatComposerInternal({
           value={newMessage}
           onChangeText={setNewMessage}
           multiline
+          editable={true}
           onSubmitEditing={handleSendMessage}
           returnKeyType="send"
+          blurOnSubmit={false}
         />
         <TouchableOpacity
           onPress={handleSendMessage}
-          disabled={!newMessage.trim() || isSaving}
+          disabled={
+            !newMessage.trim() || createEntry.isPending || updateEntry.isPending
+          }
           style={[
             styles.sendButton,
             {
               backgroundColor:
-                newMessage.trim() && !isSaving
+                newMessage.trim() &&
+                !createEntry.isPending &&
+                !updateEntry.isPending
                   ? seasonalTheme.chipBg
                   : seasonalTheme.textSecondary + "20",
             },
@@ -685,7 +639,9 @@ function AIChatComposerInternal({
             name="send"
             size={20}
             color={
-              newMessage.trim() && !isSaving
+              newMessage.trim() &&
+              !createEntry.isPending &&
+              !updateEntry.isPending
                 ? seasonalTheme.chipText || seasonalTheme.textPrimary
                 : seasonalTheme.textSecondary + "80"
             }
@@ -694,121 +650,6 @@ function AIChatComposerInternal({
       </View>
     </KeyboardAvoidingView>
   );
-}
-
-// Export wrapper that ensures model before rendering
-export function AIChatComposer(props: AIChatComposerProps) {
-  const theme = useTheme();
-  const [modelPaths, setModelPaths] = useState<{
-    ptePath: string;
-    tokenizerPath?: string;
-    tokenizerConfigPath?: string;
-  } | null>(null);
-  const [isEnsuringModel, setIsEnsuringModel] = useState(true);
-
-  // Ensure model files once on mount
-  useEffect(() => {
-    let mounted = true;
-    let timeoutId: NodeJS.Timeout | undefined;
-
-    (async () => {
-      try {
-        const config = Llama32_1B_Instruct;
-        const isPlaceholder =
-          config.pteSource.kind === "remote" &&
-          config.pteSource.url.includes("YOUR_HOST");
-
-        if (isPlaceholder) {
-          if (mounted) {
-            Alert.alert(
-              "Model Not Configured",
-              "AI model URLs are not configured. Please set up model URLs in Settings or configure them in lib/ai/modelConfig.ts",
-              [
-                {
-                  text: "OK",
-                  onPress: () => {
-                    if (mounted) {
-                      setIsEnsuringModel(false);
-                    }
-                  },
-                },
-              ]
-            );
-          }
-          return;
-        }
-
-        const timeoutPromise = new Promise((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(new Error("Model download timed out after 30 seconds"));
-          }, 30000);
-        });
-
-        const ensured = (await Promise.race([
-          ensureModelPresent(Llama32_1B_Instruct),
-          timeoutPromise,
-        ])) as any;
-
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-
-        if (!mounted) return;
-        setModelPaths(ensured);
-      } catch (e: any) {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-        console.error("Error ensuring model:", e);
-        const errorMessage = e?.message || "Unknown error";
-        if (mounted) {
-          Alert.alert(
-            "Model Error",
-            `Failed to load AI model: ${errorMessage}\n\nPlease check your model URLs in Settings or ensure models are properly configured.`,
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  if (mounted) {
-                    setIsEnsuringModel(false);
-                  }
-                },
-              },
-            ]
-          );
-        }
-      } finally {
-        if (mounted) {
-          setIsEnsuringModel(false);
-        }
-      }
-    })();
-    return () => {
-      mounted = false;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, []);
-
-  // Show loading state while ensuring model
-  if (isEnsuringModel || !modelPaths) {
-    return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Text>Loading AI model...</Text>
-        <Text style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-          {isEnsuringModel
-            ? "Downloading model files..."
-            : "Model not available"}
-        </Text>
-      </View>
-    );
-  }
-
-  // Render internal component once model paths are ready
-  return <AIChatComposerInternal {...props} modelPaths={modelPaths} />;
 }
 
 const styles = StyleSheet.create({

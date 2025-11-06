@@ -1,11 +1,22 @@
 import { useState, useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DatabaseProvider } from "./lib/db/DatabaseProvider";
 import { ThemeProvider } from "./lib/theme/ThemeProvider";
 import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
 import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
+
+// Create a query client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+    },
+  },
+});
 
 export default function App() {
   const [encryptionKey, setEncryptionKey] = useState<string | null>(null);
@@ -36,14 +47,16 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <DatabaseProvider encryptionKey={encryptionKey}>
-        <ThemeProvider>
-          <SeasonalThemeProvider>
-            <StatusBar style="auto" />
-            <SimpleNavigation />
-          </SeasonalThemeProvider>
-        </ThemeProvider>
-      </DatabaseProvider>
+      <QueryClientProvider client={queryClient}>
+        <DatabaseProvider encryptionKey={encryptionKey}>
+          <ThemeProvider>
+            <SeasonalThemeProvider>
+              <StatusBar style="auto" />
+              <SimpleNavigation />
+            </SeasonalThemeProvider>
+          </ThemeProvider>
+        </DatabaseProvider>
+      </QueryClientProvider>
     </SafeAreaProvider>
   );
 }

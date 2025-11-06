@@ -128,7 +128,7 @@ export async function ensureModelPresent(
       console.warn("Bundled model not available, falling back to remote:", e);
       // Use the default remote URL from config
       const fallbackUrl =
-        "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2/resolve/v0.5.0/llama-3.2-1B/original/llama3_2_bf16.pte";
+        "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2/resolve/v0.5.0/llama-3.2-1B/spinquant/llama3_2_spinquant.pte";
       ptePath = await ensureFromRemote(fallbackUrl, config.pteFileName);
     }
   } else {

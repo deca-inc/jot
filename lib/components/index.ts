@@ -5,3 +5,4 @@ export * from "./EntryListItem";
 export * from "./BottomComposer";
 export * from "./ThemeControl";
 export * from "./ComposerInput";
+export * from "./AnimatedBlob";

@@ -1,5 +1,5 @@
 // Central config for on-device LLM assets
-// Llama 3.2 1B Instruct (quantized) via ExecuTorch .pte + tokenizer
+// Llama 3.2 1B Instruct (SpinQuant quantized) via ExecuTorch .pte + tokenizer
 
 export type ModelSource =
   | { kind: "bundled"; requireId: any }
@@ -14,8 +14,8 @@ export interface LlmModelConfig {
   tokenizerConfigFileName?: string; // e.g., tokenizer.json
   // Choose one of: bundled require() or a remote URL to download
   pteSource: ModelSource;
-  tokenizerSource?: ModelSource;
-  tokenizerConfigSource?: ModelSource;
+  tokenizerSource: ModelSource;
+  tokenizerConfigSource: ModelSource;
 }
 
 // NOTE: For local development, run `pnpm download:models` to download models to assets/models/
@@ -29,13 +29,13 @@ export interface LlmModelConfig {
 export const Llama32_1B_Instruct: LlmModelConfig = {
   modelId: "llama-3.2-1b-instruct",
   displayName: "Llama 3.2 1B Instruct",
-  pteFileName: "llama3_2_bf16.pte",
+  pteFileName: "llama3_2_spinquant.pte",
   tokenizerFileName: "tokenizer.json",
   tokenizerConfigFileName: "tokenizer_config.json",
   // Default to remote - modelManager will check for local files first
   pteSource: {
     kind: "remote",
-    url: "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2/resolve/v0.5.0/llama-3.2-1B/original/llama3_2_bf16.pte",
+    url: "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2/resolve/v0.5.0/llama-3.2-1B/spinquant/llama3_2_spinquant.pte",
   },
   tokenizerSource: {
     kind: "remote",
