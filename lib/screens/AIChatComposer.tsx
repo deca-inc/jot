@@ -1,15 +1,22 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+} from "react";
 import {
   View,
   StyleSheet,
   TextInput,
-  ScrollView,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
   Alert,
   Modal,
   Pressable,
+  ListRenderItem,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -72,14 +79,15 @@ export function AIChatComposer({
   const [chatMessages, setChatMessages] = useState<Block[]>(initialBlocks);
   const [newMessage, setNewMessage] = useState("");
   const [showMenu, setShowMenu] = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const flatListRef = useRef<FlatList<Block>>(null);
   const titleInputRef = useRef<TextInput>(null);
   const chatInputRef = useRef<TextInput>(null);
   const hasTriggeredInitialResponse = useRef(false);
   const isGeneratingRef = useRef(false);
   const generatingMessageIndexRef = useRef<number | null>(null);
-  const entryLoadedRef = useRef<number | undefined>(undefined);
   const justCreatedEntryRef = useRef<boolean>(false);
+  const hasScrolledToBottomRef = useRef(false);
+  const isDeletingRef = useRef(false); // Track deletion state to prevent race conditions
 
   // Watch for LLM errors
   useEffect(() => {
@@ -150,7 +158,7 @@ export function AIChatComposer({
 
       // Auto-scroll to bottom when new content arrives
       setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
+        flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
   }, [entry, entryId, title, initialTitle, initialBlocks]);
@@ -162,7 +170,19 @@ export function AIChatComposer({
   useEffect(() => {
     hasTriggeredInitialResponse.current = false;
     isGeneratingRef.current = false;
+    hasScrolledToBottomRef.current = false;
   }, [entryId]);
+
+  // Scroll to bottom on initial load when messages are present
+  useEffect(() => {
+    if (chatMessages.length > 0 && !hasScrolledToBottomRef.current) {
+      // Use a longer timeout to ensure FlatList has rendered
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+        hasScrolledToBottomRef.current = true;
+      }, 300);
+    }
+  }, [chatMessages.length]);
 
   // Helper function to generate AI response
   // Uses generate() with full context from chatMessages to ensure proper context handling
@@ -202,7 +222,7 @@ export function AIChatComposer({
 
       // Scroll to bottom after response
       setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
+        flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (e) {
       console.error("[AIChatComposer] Error generating AI response:", e);
@@ -307,6 +327,9 @@ export function AIChatComposer({
           text: "Delete",
           style: "destructive",
           onPress: () => {
+            // Mark as deleting to prevent any operations
+            isDeletingRef.current = true;
+
             // CRITICAL: Clean up LLM instance BEFORE deleting entry to free memory
             // LLM models can be 100+ MB - must be deleted to prevent OOM
             const convoId = `entry-${entryId}`;
@@ -319,19 +342,22 @@ export function AIChatComposer({
               );
             }
 
-            // Small delay to ensure LLM cleanup completes before database deletion
-            setTimeout(() => {
-              deleteEntry.mutate(entryId, {
-                onSuccess: () => {
+            // Delete entry and navigate back
+            deleteEntry.mutate(entryId, {
+              onSuccess: () => {
+                // Navigate immediately - cache is already cleared optimistically
+                onCancel?.();
+                // Notify parent after navigation
+                setTimeout(() => {
                   onDelete?.(entryId);
-                  onCancel?.();
-                },
-                onError: (error) => {
-                  console.error("Error deleting entry:", error);
-                  Alert.alert("Error", "Failed to delete entry");
-                },
-              });
-            }, 100);
+                }, 0);
+              },
+              onError: (error) => {
+                console.error("Error deleting entry:", error);
+                Alert.alert("Error", "Failed to delete entry");
+                isDeletingRef.current = false;
+              },
+            });
           },
         },
       ]
@@ -411,7 +437,9 @@ export function AIChatComposer({
 
     // Scroll to bottom and refocus input
     setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
+      if (chatMessages.length > 0) {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }
       // Refocus input after sending message
       chatInputRef.current?.focus();
     }, 100);
@@ -430,6 +458,78 @@ export function AIChatComposer({
     onSave,
     generateAIResponse,
   ]);
+
+  // Render item for FlatList
+  const renderMessage: ListRenderItem<Block> = useCallback(
+    ({ item: message, index }) => {
+      const isUser = message.role === "user";
+      const messageContent = message.type === "markdown" ? message.content : "";
+      const isEmpty = !messageContent || messageContent.trim().length === 0;
+      const isGenerating =
+        !isUser &&
+        isEmpty &&
+        (isLLMLoading || generatingMessageIndexRef.current === index);
+
+      return (
+        <View
+          style={[
+            styles.messageBubble,
+            isUser ? styles.userMessage : styles.assistantMessage,
+          ]}
+        >
+          <View
+            style={[
+              styles.messageContent,
+              {
+                backgroundColor: isUser
+                  ? seasonalTheme.chipBg || "rgba(0, 0, 0, 0.1)"
+                  : seasonalTheme.cardBg || "rgba(255, 255, 255, 0.1)",
+              },
+            ]}
+          >
+            {isGenerating ? (
+              <Text
+                variant="body"
+                style={{
+                  color: seasonalTheme.textSecondary,
+                  fontStyle: "italic",
+                }}
+              >
+                Thinking...
+              </Text>
+            ) : (
+              <Text
+                variant="body"
+                style={{
+                  color: isUser
+                    ? seasonalTheme.chipText || seasonalTheme.textPrimary
+                    : seasonalTheme.textPrimary,
+                }}
+              >
+                {messageContent || " "}
+              </Text>
+            )}
+          </View>
+        </View>
+      );
+    },
+    [isLLMLoading, seasonalTheme]
+  );
+
+  const keyExtractor = useCallback((item: Block, index: number) => {
+    const content = "content" in item ? item.content : "";
+    return `${index}-${content?.length || 0}`;
+  }, []);
+
+  const ListEmptyComponent = useCallback(() => {
+    return (
+      <View style={styles.emptyChat}>
+        <Text variant="body" style={{ color: seasonalTheme.textSecondary }}>
+          Start a conversation with your AI assistant...
+        </Text>
+      </View>
+    );
+  }, [seasonalTheme]);
 
   // Show UI shell immediately - content will load progressively
   return (
@@ -532,80 +632,40 @@ export function AIChatComposer({
         </Modal>
       )}
 
-      {/* Messages */}
-      <ScrollView
-        ref={scrollViewRef}
+      {/* Messages with FlatList for better performance */}
+      <FlatList
+        ref={flatListRef}
+        data={chatMessages}
+        renderItem={renderMessage}
+        keyExtractor={keyExtractor}
+        ListEmptyComponent={ListEmptyComponent}
         style={styles.chatMessages}
         contentContainerStyle={[
           styles.chatMessagesContent,
           { paddingBottom: insets.bottom + spacingPatterns.md },
         ]}
         keyboardShouldPersistTaps="handled"
-      >
-        {chatMessages.length === 0 ? (
-          <View style={styles.emptyChat}>
-            <Text variant="body" style={{ color: seasonalTheme.textSecondary }}>
-              Start a conversation with your AI assistant...
-            </Text>
-          </View>
-        ) : (
-          chatMessages.map((message, index) => {
-            const isUser = message.role === "user";
-            const messageContent =
-              message.type === "markdown" ? message.content : "";
-            const isEmpty =
-              !messageContent || messageContent.trim().length === 0;
-            const isGenerating =
-              !isUser &&
-              isEmpty &&
-              (isLLMLoading || generatingMessageIndexRef.current === index);
-
-            return (
-              <View
-                key={`${index}-${messageContent.length}`}
-                style={[
-                  styles.messageBubble,
-                  isUser ? styles.userMessage : styles.assistantMessage,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.messageContent,
-                    {
-                      backgroundColor: isUser
-                        ? seasonalTheme.chipBg || "rgba(0, 0, 0, 0.1)"
-                        : seasonalTheme.cardBg || "rgba(255, 255, 255, 0.1)",
-                    },
-                  ]}
-                >
-                  {isGenerating ? (
-                    <Text
-                      variant="body"
-                      style={{
-                        color: seasonalTheme.textSecondary,
-                        fontStyle: "italic",
-                      }}
-                    >
-                      Thinking...
-                    </Text>
-                  ) : (
-                    <Text
-                      variant="body"
-                      style={{
-                        color: isUser
-                          ? seasonalTheme.chipText || seasonalTheme.textPrimary
-                          : seasonalTheme.textPrimary,
-                      }}
-                    >
-                      {messageContent || " "}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={20}
+        windowSize={21}
+        onContentSizeChange={() => {
+          // Auto-scroll to bottom when new messages are added (but not on initial load)
+          if (chatMessages.length > 0 && hasScrolledToBottomRef.current) {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }
+        }}
+        onLayout={() => {
+          // Scroll to bottom when FlatList first lays out with existing messages
+          if (chatMessages.length > 0 && !hasScrolledToBottomRef.current) {
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: false });
+              hasScrolledToBottomRef.current = true;
+            }, 100);
+          }
+        }}
+      />
 
       {/* Input */}
       <View

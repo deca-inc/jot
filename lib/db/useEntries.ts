@@ -1,4 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  useInfiniteQuery,
+} from "@tanstack/react-query";
+import { Alert } from "react-native";
 import {
   useEntryRepository,
   Entry,
@@ -12,8 +18,18 @@ import {
 export const entryKeys = {
   all: ["entries"] as const,
   lists: () => [...entryKeys.all, "list"] as const,
-  list: (filters?: { type?: string; isFavorite?: boolean; tag?: string }) =>
-    [...entryKeys.lists(), filters] as const,
+  list: (filters?: {
+    type?: string;
+    isFavorite?: boolean;
+    tag?: string;
+    limit?: number;
+  }) => [...entryKeys.lists(), filters] as const,
+  infinite: (filters?: {
+    type?: string;
+    isFavorite?: boolean;
+    tag?: string;
+    limit?: number;
+  }) => [...entryKeys.lists(), "infinite", filters] as const,
   details: () => [...entryKeys.all, "detail"] as const,
   detail: (id: number) => [...entryKeys.details(), id] as const,
 };
@@ -69,6 +85,39 @@ export function useEntries(options?: {
 }
 
 /**
+ * Hook to fetch entries with infinite scroll/pagination
+ */
+export function useInfiniteEntries(options?: {
+  type?: "journal" | "ai_chat";
+  isFavorite?: boolean;
+  tag?: string;
+  limit?: number;
+  orderBy?: "createdAt" | "updatedAt";
+  order?: "ASC" | "DESC";
+}) {
+  const entryRepository = useEntryRepository();
+  const pageSize = options?.limit || 20;
+
+  return useInfiniteQuery({
+    queryKey: entryKeys.infinite(options),
+    queryFn: async ({ pageParam = 0 }) => {
+      const entries = await entryRepository.getAll({
+        ...options,
+        limit: pageSize,
+        offset: pageParam,
+      });
+      return {
+        entries,
+        nextOffset:
+          entries.length === pageSize ? pageParam + pageSize : undefined,
+      };
+    },
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    initialPageParam: 0,
+  });
+}
+
+/**
  * Hook to create a new entry
  */
 export function useCreateEntry() {
@@ -80,10 +129,35 @@ export function useCreateEntry() {
       return entryRepository.create(input);
     },
     onSuccess: (entry) => {
-      // Invalidate and refetch entries list
-      queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
-      // Add the new entry to cache
+      // Add to detail cache
       queryClient.setQueryData(entryKeys.detail(entry.id), entry);
+
+      // Update ALL infinite query caches directly
+      queryClient.setQueriesData(
+        { queryKey: entryKeys.lists() },
+        (oldData: any) => {
+          if (!oldData) return oldData;
+
+          // Check if this is an infinite query
+          if (oldData.pages && Array.isArray(oldData.pages)) {
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page: any, index: number) => {
+                // Add to first page
+                if (index === 0) {
+                  return {
+                    ...page,
+                    entries: [entry, ...page.entries],
+                  };
+                }
+                return page;
+              }),
+            };
+          }
+
+          return oldData;
+        }
+      );
     },
   });
 }
@@ -106,10 +180,31 @@ export function useUpdateEntry() {
       return entryRepository.update(id, input);
     },
     onSuccess: (entry) => {
-      // Update the entry in cache
+      // Update detail cache
       queryClient.setQueryData(entryKeys.detail(entry.id), entry);
-      // Invalidate lists to ensure they're up to date
-      queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
+
+      // Update ALL infinite query caches directly
+      queryClient.setQueriesData(
+        { queryKey: entryKeys.lists() },
+        (oldData: any) => {
+          if (!oldData) return oldData;
+
+          // Check if this is an infinite query
+          if (oldData.pages && Array.isArray(oldData.pages)) {
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page: any) => ({
+                ...page,
+                entries: page.entries.map((e: Entry) =>
+                  e.id === entry.id ? entry : e
+                ),
+              })),
+            };
+          }
+
+          return oldData;
+        }
+      );
     },
   });
 }
@@ -124,29 +219,32 @@ export function useDeleteEntry() {
   return useMutation({
     mutationFn: async (id: number) => {
       await entryRepository.delete(id);
+      return id;
     },
-    onSuccess: (_, id) => {
-      // Remove from cache first to prevent components from accessing deleted entry
-      // CRITICAL: Remove queries to free memory - React Query cache can accumulate
+    onSuccess: (id) => {
+      // Remove from detail cache immediately
       queryClient.removeQueries({ queryKey: entryKeys.detail(id) });
 
-      // Invalidate lists after a small delay to ensure cache removal completes
-      // This prevents race conditions where components try to access deleted entries
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
-      }, 0);
+      // Update ALL infinite query caches directly
+      queryClient.setQueriesData(
+        { queryKey: entryKeys.lists() },
+        (oldData: any) => {
+          if (!oldData) return oldData;
 
-      // Aggressively garbage collect unused queries to free memory
-      // Don't clear all cache - just remove unused entries
-      setTimeout(() => {
-        const cache = queryClient.getQueryCache();
-        cache.getAll().forEach((query) => {
-          // Remove queries that are not being observed (no active components using them)
-          if (!query.getObserversCount() && query.state.dataUpdateCount > 0) {
-            cache.remove(query);
+          // Check if this is an infinite query
+          if (oldData.pages && Array.isArray(oldData.pages)) {
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page: any) => ({
+                ...page,
+                entries: page.entries.filter((entry: Entry) => entry.id !== id),
+              })),
+            };
           }
-        });
-      }, 500);
+
+          return oldData;
+        }
+      );
     },
   });
 }
@@ -163,10 +261,31 @@ export function useToggleFavorite() {
       return entryRepository.toggleFavorite(id);
     },
     onSuccess: (entry) => {
-      // Update the entry in cache
+      // Update detail cache
       queryClient.setQueryData(entryKeys.detail(entry.id), entry);
-      // Invalidate lists
-      queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
+
+      // Update ALL infinite query caches directly
+      queryClient.setQueriesData(
+        { queryKey: entryKeys.lists() },
+        (oldData: any) => {
+          if (!oldData) return oldData;
+
+          // Check if this is an infinite query
+          if (oldData.pages && Array.isArray(oldData.pages)) {
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page: any) => ({
+                ...page,
+                entries: page.entries.map((e: Entry) =>
+                  e.id === entry.id ? entry : e
+                ),
+              })),
+            };
+          }
+
+          return oldData;
+        }
+      );
     },
   });
 }

@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useMemo } from "react";
 import {
   View,
   StyleSheet,
-  ScrollView,
-  RefreshControl,
+  FlatList,
   Platform,
   TextInput,
   KeyboardAvoidingView,
   TouchableOpacity,
+  ListRenderItem,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,11 +20,16 @@ import {
 } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
-import { useEntryRepository, Entry, EntryType } from "../db/entries";
+import { Entry } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { getSeason, getTimeOfDay } from "../theme/seasonalTheme";
 import { llmManager } from "../ai/ModelProvider";
 import { Llama32_1B_Instruct } from "../ai/modelConfig";
+import {
+  useInfiniteEntries,
+  useCreateEntry,
+  useToggleFavorite,
+  useUpdateEntry,
+} from "../db/useEntries";
 
 type Filter = "all" | "journal" | "ai_chat" | "favorites";
 
@@ -36,70 +41,74 @@ export interface HomeScreenProps {
 }
 
 export function HomeScreen(props: HomeScreenProps = {}) {
-  const { refreshKey, onOpenFullEditor, onOpenSettings, onOpenEntryEditor } =
-    props;
+  const { onOpenFullEditor, onOpenSettings, onOpenEntryEditor } = props;
   const seasonalTheme = useSeasonalTheme();
-  const entryRepository = useEntryRepository();
   const insets = useSafeAreaInsets();
-  const [entries, setEntries] = useState<Entry[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
   const [composerMode, setComposerMode] = useState<ComposerMode>("journal");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [composerHeight, setComposerHeight] = useState(120); // Default height
+  const [composerHeight, setComposerHeight] = useState(120);
   const composerRef = useRef<View>(null);
 
-  const loadEntries = useCallback(async () => {
-    try {
-      const options: {
-        type?: EntryType;
-        isFavorite?: boolean;
-        orderBy?: "createdAt" | "updatedAt";
-        order?: "ASC" | "DESC";
-      } = {
-        orderBy: "updatedAt",
-        order: "DESC",
-      };
+  // Build query options based on filter
+  const queryOptions = useMemo(() => {
+    const options: {
+      type?: "journal" | "ai_chat";
+      isFavorite?: boolean;
+      orderBy?: "createdAt" | "updatedAt";
+      order?: "ASC" | "DESC";
+      limit?: number;
+    } = {
+      orderBy: "updatedAt",
+      order: "DESC",
+      limit: 20, // Paginate 20 items at a time
+    };
 
-      if (filter === "journal") {
-        options.type = "journal";
-      } else if (filter === "ai_chat") {
-        options.type = "ai_chat";
-      } else if (filter === "favorites") {
-        options.isFavorite = true;
-      }
-
-      const loadedEntries = await entryRepository.getAll(options);
-      setEntries(loadedEntries);
-    } catch (error) {
-      console.error("Error loading entries:", error);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+    if (filter === "journal") {
+      options.type = "journal";
+    } else if (filter === "ai_chat") {
+      options.type = "ai_chat";
+    } else if (filter === "favorites") {
+      options.isFavorite = true;
     }
-  }, [entryRepository, filter]);
 
-  useEffect(() => {
-    loadEntries();
-  }, [loadEntries, refreshKey]);
+    return options;
+  }, [filter]);
+
+  // Use infinite query for pagination
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = useInfiniteEntries(queryOptions);
+
+  // Flatten pages into single array
+  const entries = useMemo(() => {
+    return data?.pages.flatMap((page) => page.entries) ?? [];
+  }, [data]);
+
+  // React Query mutations
+  const createEntry = useCreateEntry();
+  const toggleFavoriteMutation = useToggleFavorite();
+  const updateEntry = useUpdateEntry();
 
   const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    loadEntries();
-  }, [loadEntries]);
+    refetch();
+  }, [refetch]);
+
+  const handleLoadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleToggleFavorite = useCallback(
-    async (entry: Entry) => {
-      try {
-        const updated = await entryRepository.toggleFavorite(entry.id);
-        setEntries((prev) =>
-          prev.map((e) => (e.id === entry.id ? updated : e))
-        );
-      } catch (error) {
-        console.error("Error toggling favorite:", error);
-      }
+    (entry: Entry) => {
+      toggleFavoriteMutation.mutate(entry.id);
     },
-    [entryRepository]
+    [toggleFavoriteMutation]
   );
 
   const handleEntryPress = useCallback(
@@ -127,8 +136,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
       try {
         if (composerMode === "journal") {
-          // Create journal entry
-          await entryRepository.create({
+          // Create journal entry using mutation - cache updates automatically
+          await createEntry.mutateAsync({
             type: "journal",
             title: text.slice(0, 50) + (text.length > 50 ? "..." : ""),
             blocks: text
@@ -142,11 +151,9 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             attachments: [],
             isFavorite: false,
           });
-          // Refresh entries
-          loadEntries();
         } else {
-          // Create AI chat entry and navigate to it
-          const entry = await entryRepository.create({
+          // Create AI chat entry using mutation - cache updates automatically
+          const entry = await createEntry.mutateAsync({
             type: "ai_chat",
             title: "AI Conversation",
             blocks: [
@@ -161,18 +168,12 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             isFavorite: false,
           });
 
-          // Kick off background generation immediately
-          // Use llmManager directly - don't block UI, generation happens in background
+          // Kick off background generation
           const convoId = `entry-${entry.id}`;
-
-          // Create listeners for DB writes (hook will add its own listeners when chat screen opens)
           let lastFullResponse = "";
           const listeners = {
             onToken: async (token: string) => {
-              // Accumulate tokens for debounced DB write
               lastFullResponse += token;
-
-              // Debounce: write every 100 chars to avoid too many DB writes
               if (lastFullResponse.length % 100 === 0) {
                 try {
                   const updatedBlocks = [
@@ -183,8 +184,9 @@ export function HomeScreen(props: HomeScreenProps = {}) {
                       role: "assistant" as const,
                     },
                   ];
-                  await entryRepository.update(entry.id, {
-                    blocks: updatedBlocks,
+                  updateEntry.mutate({
+                    id: entry.id,
+                    input: { blocks: updatedBlocks },
                   });
                 } catch (e) {
                   console.warn("[HomeScreen] Failed to stream update:", e);
@@ -192,7 +194,6 @@ export function HomeScreen(props: HomeScreenProps = {}) {
               }
             },
             onMessageHistoryUpdate: async (messages: any[]) => {
-              // Final write when generation completes
               try {
                 const updatedBlocks = messages
                   .filter((m) => m.role !== "system")
@@ -201,11 +202,10 @@ export function HomeScreen(props: HomeScreenProps = {}) {
                     content: m.content,
                     role: m.role as "user" | "assistant",
                   }));
-                await entryRepository.update(entry.id, {
-                  blocks: updatedBlocks,
+                updateEntry.mutate({
+                  id: entry.id,
+                  input: { blocks: updatedBlocks },
                 });
-                // Refresh entries list to show updated content
-                loadEntries();
               } catch (e) {
                 console.warn(
                   "[HomeScreen] Failed to write message history:",
@@ -215,26 +215,14 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             },
           };
 
-          // Don't pass initialBlocks - we'll use generate() with full context
-          // This avoids duplication since generate() is stateless
           llmManager
-            .getOrCreate(
-              convoId,
-              Llama32_1B_Instruct,
-              listeners, // Register listeners for DB writes
-              undefined // Don't configure with blocks - we'll use generate() instead
-            )
+            .getOrCreate(convoId, Llama32_1B_Instruct, listeners, undefined)
             .then((llmForConvo) => {
-              // Convert blocks to LLM messages for generate()
-              // This includes the user message we just created
               const { blocksToLlmMessages } = require("../ai/ModelProvider");
               const messages = blocksToLlmMessages(
                 entry.blocks,
                 "You are a helpful AI assistant."
               );
-
-              // Use generate() instead of sendMessage() since we already have the full history
-              // This avoids duplication and properly handles the initial message
               llmForConvo.generate(messages).catch((e: any) => {
                 console.error("[HomeScreen] Background generation failed:", e);
               });
@@ -242,21 +230,20 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             .catch((e) => {
               console.error("[HomeScreen] Failed to initialize LLM:", e);
             });
-          // Navigate to the newly created AI chat entry
+
           if (onOpenEntryEditor) {
             onOpenEntryEditor(entry.id);
           }
-          // Refresh entries
-          loadEntries();
         }
       } catch (error) {
         console.error("Error creating entry:", error);
       }
     },
-    [composerMode, entryRepository, loadEntries, onOpenEntryEditor]
+    [composerMode, createEntry, updateEntry, onOpenEntryEditor]
   );
 
-  const groupEntriesByDay = (entries: Entry[]): Map<string, Entry[]> => {
+  // Group entries by day for section headers
+  const groupedData = useMemo(() => {
     const grouped = new Map<string, Entry[]>();
 
     entries.forEach((entry) => {
@@ -273,10 +260,23 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       grouped.get(dateKey)!.push(entry);
     });
 
-    return grouped;
-  };
+    // Convert to flat list with headers
+    const flatData: Array<
+      { type: "header"; dateKey: string } | { type: "entry"; entry: Entry }
+    > = [];
+    Array.from(grouped.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .forEach(([dateKey, dayEntries]) => {
+        flatData.push({ type: "header", dateKey });
+        dayEntries.forEach((entry) => {
+          flatData.push({ type: "entry", entry });
+        });
+      });
 
-  const formatDateHeader = (dateKey: string): string => {
+    return flatData;
+  }, [entries]);
+
+  const formatDateHeader = useCallback((dateKey: string): string => {
     const date = new Date(dateKey);
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -309,9 +309,93 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       day: "numeric",
       year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
     });
-  };
+  }, []);
 
-  const groupedEntries = groupEntriesByDay(entries);
+  // Render item for FlatList
+  const renderItem: ListRenderItem<
+    { type: "header"; dateKey: string } | { type: "entry"; entry: Entry }
+  > = useCallback(
+    ({ item }) => {
+      if (item.type === "header") {
+        return (
+          <Text
+            variant="h2"
+            style={{
+              color: seasonalTheme.textPrimary,
+              marginBottom: spacingPatterns.md,
+              marginTop: spacingPatterns.lg,
+            }}
+          >
+            {formatDateHeader(item.dateKey)}
+          </Text>
+        );
+      }
+
+      return (
+        <EntryListItem
+          entry={item.entry}
+          onPress={handleEntryPress}
+          onToggleFavorite={handleToggleFavorite}
+          seasonalTheme={seasonalTheme}
+        />
+      );
+    },
+    [seasonalTheme, formatDateHeader, handleEntryPress, handleToggleFavorite]
+  );
+
+  const keyExtractor = useCallback(
+    (
+      item:
+        | { type: "header"; dateKey: string }
+        | { type: "entry"; entry: Entry },
+      index: number
+    ) => {
+      if (item.type === "header") {
+        return `header-${item.dateKey}`;
+      }
+      return `entry-${item.entry.id}`;
+    },
+    []
+  );
+
+  const ListEmptyComponent = useCallback(() => {
+    if (isLoading) return null;
+
+    return (
+      <View style={styles.emptyState}>
+        <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
+          No entries yet
+        </Text>
+        <Text
+          variant="body"
+          style={{
+            color: seasonalTheme.textSecondary,
+            marginTop: spacingPatterns.sm,
+          }}
+        >
+          {filter === "favorites"
+            ? "You haven't favorited any entries yet"
+            : "Create your first entry to get started"}
+        </Text>
+      </View>
+    );
+  }, [isLoading, seasonalTheme, filter]);
+
+  const ListFooterComponent = useCallback(() => {
+    if (isFetchingNextPage) {
+      return (
+        <View style={{ padding: spacingPatterns.lg }}>
+          <Text
+            variant="body"
+            style={{ color: seasonalTheme.textSecondary, textAlign: "center" }}
+          >
+            Loading more...
+          </Text>
+        </View>
+      );
+    }
+    return <View style={{ height: composerHeight }} />;
+  }, [isFetchingNextPage, composerHeight, seasonalTheme]);
 
   return (
     <View
@@ -365,64 +449,24 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           </View>
         </View>
 
-        {/* Content area */}
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: composerHeight },
-          ]}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing || isLoading}
-              onRefresh={handleRefresh}
-            />
-          }
-        >
-          {entries.length === 0 && !isLoading ? (
-            <View style={styles.emptyState}>
-              <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
-                No entries yet
-              </Text>
-              <Text
-                variant="body"
-                style={{
-                  color: seasonalTheme.textSecondary,
-                  marginTop: spacingPatterns.sm,
-                }}
-              >
-                {filter === "favorites"
-                  ? "You haven't favorited any entries yet"
-                  : "Create your first entry to get started"}
-              </Text>
-            </View>
-          ) : (
-            Array.from(groupedEntries.entries())
-              .sort((a, b) => b[0].localeCompare(a[0]))
-              .map(([dateKey, dayEntries]) => (
-                <View key={dateKey} style={styles.daySection}>
-                  <Text
-                    variant="h2"
-                    style={{
-                      color: seasonalTheme.textPrimary,
-                      marginBottom: spacingPatterns.md,
-                    }}
-                  >
-                    {formatDateHeader(dateKey)}
-                  </Text>
-                  {dayEntries.map((entry) => (
-                    <EntryListItem
-                      key={entry.id}
-                      entry={entry}
-                      onPress={handleEntryPress}
-                      onToggleFavorite={handleToggleFavorite}
-                      seasonalTheme={seasonalTheme}
-                    />
-                  ))}
-                </View>
-              ))
-          )}
-        </ScrollView>
+        {/* Content area with FlatList for better performance */}
+        <FlatList
+          data={groupedData}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          ListEmptyComponent={ListEmptyComponent}
+          ListFooterComponent={ListFooterComponent}
+          contentContainerStyle={styles.content}
+          refreshing={isLoading}
+          onRefresh={handleRefresh}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={50}
+          initialNumToRender={20}
+          windowSize={21}
+        />
 
         {/* Bottom Composer with Safe Area */}
         <KeyboardAvoidingView
@@ -490,14 +534,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  scrollView: {
-    flex: 1,
-  },
   content: {
     padding: spacingPatterns.screen,
-  },
-  daySection: {
-    marginBottom: spacingPatterns.xl,
   },
   emptyState: {
     alignItems: "center",

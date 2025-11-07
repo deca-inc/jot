@@ -19,7 +19,7 @@ import {
   ComposerScreen,
 } from "../screens";
 import { isComponentPlaygroundEnabled } from "../utils/isDev";
-import { useEntryRepository } from "../db/entries";
+import { useCreateEntry } from "../db/useEntries";
 
 type Screen =
   | "home"
@@ -42,7 +42,7 @@ export function SimpleNavigation() {
   );
   const [homeRefreshKey, setHomeRefreshKey] = useState(0);
   const theme = useTheme();
-  const entryRepository = useEntryRepository();
+  const createEntry = useCreateEntry();
   const swipeX = useRef(new Animated.Value(0)).current;
   const screenWidth = useRef(0);
 
@@ -163,8 +163,8 @@ export function SimpleNavigation() {
   };
 
   const handleComposerSave = (entryId: number) => {
-    // Navigate back to home after saving and refresh
-    setHomeRefreshKey((prev) => prev + 1);
+    // Navigate back to home after saving
+    // React Query cache handles the update automatically
     setCurrentScreen("home");
     setComposerEntryType(undefined);
   };
@@ -195,7 +195,7 @@ export function SimpleNavigation() {
           ];
 
     try {
-      const entry = await entryRepository.create({
+      const entry = await createEntry.mutateAsync({
         type: "journal",
         title: "untitled note",
         blocks,
@@ -204,20 +204,17 @@ export function SimpleNavigation() {
         isFavorite: false,
       });
 
-      console.log("Created entry", entry.id, "with", blocks.length, "blocks");
       setFullEditorEntryId(entry.id);
       setCurrentScreen("fullEditor");
-      setHomeRefreshKey((prev) => prev + 1);
     } catch (error) {
-      console.error("Error creating entry:", error);
       // Still navigate even if creation fails - ComposerScreen can handle it
       setCurrentScreen("fullEditor");
     }
   };
 
   const handleFullEditorSave = (entryId: number) => {
-    setHomeRefreshKey((prev) => prev + 1);
     // Don't navigate away - let user continue writing (auto-save handles saving)
+    // React Query cache handles the update automatically
   };
 
   // handleFullEditorCancel is now defined inline in renderScreen
@@ -228,15 +225,15 @@ export function SimpleNavigation() {
   };
 
   const handleEntryEditorSave = (entryId: number) => {
-    setHomeRefreshKey((prev) => prev + 1);
     // Don't navigate away on save for journal entries (they auto-save)
     // Only navigate for AI chat or if explicitly closing
+    // React Query cache handles the update automatically
   };
 
   // handleEntryEditorCancel is now defined inline in renderScreen
 
   const handleEntryEditorDelete = (entryId: number) => {
-    setHomeRefreshKey((prev) => prev + 1);
+    // React Query cache handles the deletion automatically
     setCurrentScreen("home");
     setEditingEntryId(undefined);
   };
@@ -275,7 +272,7 @@ export function SimpleNavigation() {
         );
       case "fullEditor": {
         const cancelHandler = async () => {
-          setHomeRefreshKey((prev) => prev + 1);
+          // React Query cache handles any updates automatically
           setCurrentScreen("home");
           setFullEditorEntryId(undefined);
         };
@@ -291,7 +288,7 @@ export function SimpleNavigation() {
       }
       case "entryEditor": {
         const cancelHandler = async () => {
-          setHomeRefreshKey((prev) => prev + 1);
+          // React Query cache handles any updates automatically
           setCurrentScreen("home");
           setEditingEntryId(undefined);
         };

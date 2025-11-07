@@ -16,9 +16,10 @@ import { Text } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { typography } from "../theme/typography";
-import { useEntryRepository, Block } from "../db/entries";
+import { Block } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { blocksToContent } from "./composerUtils";
+import { useEntry, useUpdateEntry, useDeleteEntry } from "../db/useEntries";
 
 export interface JournalComposerProps {
   entryId: number;
@@ -44,7 +45,12 @@ export function JournalComposer({
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
-  const entryRepository = useEntryRepository();
+
+  // Use react-query hooks
+  const { data: entry, isLoading: isLoadingEntry } = useEntry(entryId);
+  const updateEntryMutation = useUpdateEntry();
+  const deleteEntryMutation = useDeleteEntry();
+
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -54,59 +60,40 @@ export function JournalComposer({
   const contentInputRef = useRef<TextInput>(null);
   const shouldAutoFocusRef = useRef(true);
   const performSaveRef = useRef<typeof performSave | null>(null);
+  const isDeletingRef = useRef(false); // Track deletion state to prevent race conditions
 
-  // Load entry content
+  // Load entry content from react-query cache
   useEffect(() => {
-    const loadEntry = async () => {
-      try {
-        const entry = await entryRepository.getById(entryId);
-        if (entry) {
-          console.log(
-            "Loaded entry",
-            entryId,
-            "type:",
-            entry.type,
-            "blocks:",
-            entry.blocks.length
-          );
-          setTitle(entry.title);
-          const entryContent = blocksToContent(entry.blocks, entry.type);
-          console.log(
-            "Entry content loaded, length:",
-            entryContent?.length || 0
-          );
-          setContent(entryContent || "");
+    if (entry) {
+      setTitle(entry.title);
+      const entryContent = blocksToContent(entry.blocks, entry.type);
+      setContent(entryContent || "");
 
-          // Focus the input and position cursor at end after content loads
-          if (shouldAutoFocusRef.current) {
-            setTimeout(() => {
-              contentInputRef.current?.focus();
-              if (entryContent && entryContent.length > 0) {
-                // Position cursor at the end if there's content
-                contentInputRef.current?.setNativeProps({
-                  selection: {
-                    start: entryContent.length,
-                    end: entryContent.length,
-                  },
-                });
-              }
-            }, 100);
-            shouldAutoFocusRef.current = false; // Only autofocus once
+      // Focus the input and position cursor at end after content loads
+      if (shouldAutoFocusRef.current) {
+        setTimeout(() => {
+          contentInputRef.current?.focus();
+          if (entryContent && entryContent.length > 0) {
+            // Position cursor at the end if there's content
+            contentInputRef.current?.setNativeProps({
+              selection: {
+                start: entryContent.length,
+                end: entryContent.length,
+              },
+            });
           }
-        } else {
-          console.error("Entry not found:", entryId);
-        }
-      } catch (error) {
-        console.error("Error loading entry:", error);
+        }, 100);
+        shouldAutoFocusRef.current = false; // Only autofocus once
       }
-    };
-
-    loadEntry();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entryId]);
+    }
+  }, [entry, entryId]);
 
   const performSave = useCallback(
     async (contentToSave: string) => {
+      // Skip if we're in the middle of deleting
+      if (isDeletingRef.current) {
+        return;
+      }
       if (!contentToSave.trim()) {
         return;
       }
@@ -135,18 +122,14 @@ export function JournalComposer({
             (contentToSave.length > 50 ? "..." : "") ||
           "Untitled";
 
-        // Always update existing entry
-        await entryRepository.update(entryId, {
-          title: finalTitle,
-          blocks,
+        // Always update existing entry using react-query mutation
+        await updateEntryMutation.mutateAsync({
+          id: entryId,
+          input: {
+            title: finalTitle,
+            blocks,
+          },
         });
-        console.log(
-          "Auto-saved entry",
-          entryId,
-          "with",
-          blocks.length,
-          "blocks"
-        );
         onSave?.(entryId);
       } catch (error) {
         console.error("Error saving entry:", error);
@@ -155,7 +138,7 @@ export function JournalComposer({
         setIsSaving(false);
       }
     },
-    [title, entryId, entryRepository, onSave]
+    [title, entryId, updateEntryMutation, onSave]
   );
 
   // Keep ref up to date
@@ -182,7 +165,6 @@ export function JournalComposer({
     // Set new timeout for auto-save (1 second debounce)
     saveTimeoutRef.current = setTimeout(async () => {
       if (performSaveRef.current) {
-        console.log("Auto-save executing for entry", entryId);
         await performSaveRef.current(content);
       }
     }, 1000);
@@ -209,11 +191,19 @@ export function JournalComposer({
   }, []);
 
   const handleTitleBlur = useCallback(async () => {
+    // Skip if we're in the middle of deleting
+    if (isDeletingRef.current) {
+      return;
+    }
+
     const newTitle = title.trim();
     setIsSaving(true);
     try {
-      await entryRepository.update(entryId, {
-        title: newTitle || undefined,
+      await updateEntryMutation.mutateAsync({
+        id: entryId,
+        input: {
+          title: newTitle || undefined,
+        },
       });
       onSave?.(entryId);
     } catch (error) {
@@ -221,14 +211,14 @@ export function JournalComposer({
     } finally {
       setIsSaving(false);
     }
-  }, [title, entryId, entryRepository, onSave]);
+  }, [title, entryId, updateEntryMutation, onSave]);
 
   const handleTitleSubmit = useCallback(async () => {
     titleInputRef.current?.blur();
     await handleTitleBlur();
   }, [handleTitleBlur]);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback(async () => {
     Alert.alert(
       "Delete Entry",
       "Are you sure you want to delete this entry? This action cannot be undone.",
@@ -242,29 +232,31 @@ export function JournalComposer({
           style: "destructive",
           onPress: async () => {
             try {
-              // Use React Query mutation for proper cache cleanup
-              // This ensures cache invalidation happens before navigation
-              await entryRepository.delete(entryId);
+              // Mark as deleting to prevent save operations
+              isDeletingRef.current = true;
 
-              // Small delay to ensure database and cache operations complete
-              // before navigation to prevent crashes
-              await new Promise((resolve) => setTimeout(resolve, 50));
+              // Clear any pending saves
+              if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+                saveTimeoutRef.current = null;
+              }
+
+              // Delete using react-query mutation
+              await deleteEntryMutation.mutateAsync(entryId);
 
               onDelete?.(entryId);
-              // Navigate away after deletion completes
-              // Use setTimeout to ensure state updates happen before navigation
-              setTimeout(() => {
-                onCancel?.();
-              }, 0);
+              // Navigate away immediately
+              onCancel?.();
             } catch (error) {
               console.error("Error deleting entry:", error);
               Alert.alert("Error", "Failed to delete entry");
+              isDeletingRef.current = false;
             }
           },
         },
       ]
     );
-  }, [entryId, entryRepository, onDelete, onCancel]);
+  }, [entryId, deleteEntryMutation, onDelete, onCancel]);
 
   // Force save immediately (clears timeout and saves)
   const forceSave = useCallback(async (): Promise<void> => {
@@ -276,7 +268,6 @@ export function JournalComposer({
 
     // Save immediately if there's content
     if (content.trim() && performSaveRef.current) {
-      console.log("Force saving entry", entryId, "before navigation");
       await performSaveRef.current(content);
     }
   }, [content, entryId]);

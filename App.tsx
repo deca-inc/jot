@@ -8,15 +8,18 @@ import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
 import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
 
-// Create a query client with aggressive memory management
-// CRITICAL: Reduce cache times to prevent OOM crashes
+// Create a query client with optimized cache settings for better performance
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 30, // 30 seconds - entries can be refreshed quickly
-      gcTime: 1000 * 60 * 2, // 2 minutes - much shorter to free memory faster
-      refetchOnWindowFocus: false, // Don't refetch on focus to save memory
+      staleTime: 1000 * 60 * 30, // 30 minutes - entries don't change that often
+      gcTime: 1000 * 60 * 60, // 1 hour - keep in cache longer for better navigation
+      refetchOnWindowFocus: false, // Don't refetch on app focus
       refetchOnReconnect: false, // Don't refetch on reconnect
+      retry: 1, // Only retry once on failure
+    },
+    mutations: {
+      retry: 1, // Only retry once on mutation failure
     },
   },
 });
