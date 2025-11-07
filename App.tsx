@@ -2,11 +2,21 @@ import { useState, useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { LogBox } from "react-native";
 import { DatabaseProvider } from "./lib/db/DatabaseProvider";
 import { ThemeProvider } from "./lib/theme/ThemeProvider";
 import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
 import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
+
+// Suppress harmless iOS system warnings
+LogBox.ignoreLogs([
+  "CHHapticPattern", // CoreHaptics warnings in iOS simulator
+  "Error creating CHHapticPattern", // UIKitCore haptic feedback errors
+  "_UIKBFeedbackGenerator", // Keyboard feedback generator warnings
+  "TextInputUI", // TextInput accumulator timing warnings
+  "Background tasks are not supported on iOS simulators", // Expected simulator limitation
+]);
 
 // Create a query client with optimized cache settings for better performance
 const queryClient = new QueryClient({
