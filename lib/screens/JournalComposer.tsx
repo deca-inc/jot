@@ -9,10 +9,22 @@ import {
   Alert,
   Modal,
   Pressable,
+  Keyboard,
+  Animated,
+  useColorScheme,
+  ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../components";
+import { Text as RNText } from "react-native";
+import { GlassView } from "expo-glass-effect";
+import {
+  EnrichedTextInput,
+  type EnrichedTextInputInstance,
+  type OnChangeStateEvent,
+} from "react-native-enriched";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { typography } from "../theme/typography";
@@ -20,6 +32,55 @@ import { Block } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { blocksToContent } from "./composerUtils";
 import { useEntry, useUpdateEntry, useDeleteEntry } from "../db/useEntries";
+
+/**
+ * Repairs and sanitizes HTML from the editor
+ * Fixes common issues like malformed tags, improper nesting, etc.
+ */
+function repairHtml(html: string): string {
+  let cleaned = html.trim();
+
+  // Remove outer <html> tags if present
+  cleaned = cleaned.replace(/^<html>\s*/i, "").replace(/\s*<\/html>$/i, "");
+
+  // Fix: Remove <p> tags that are wrapping block-level elements
+  // This fixes the bug where every tag gets wrapped in <p>
+  cleaned = cleaned.replace(/<p>\s*(<h[1-6]>)/gi, "$1");
+  cleaned = cleaned.replace(/<p>\s*(<\/h[1-6]>)/gi, "$1");
+  cleaned = cleaned.replace(/<p>\s*(<ul>)/gi, "$1");
+  cleaned = cleaned.replace(/<p>\s*(<ol>)/gi, "$1");
+  cleaned = cleaned.replace(/<p>\s*(<li>)/gi, "$1");
+  cleaned = cleaned.replace(/<p>\s*(<\/li>)/gi, "$1");
+  cleaned = cleaned.replace(/(<\/ul>)\s*<\/p>/gi, "$1");
+  cleaned = cleaned.replace(/(<\/ol>)\s*<\/p>/gi, "$1");
+  cleaned = cleaned.replace(/(<\/h[1-6]>)\s*<\/p>/gi, "$1");
+
+  // Remove empty <p></p> tags
+  cleaned = cleaned.replace(/<p>\s*<\/p>/gi, "");
+
+  // Ensure proper list item structure: empty lines should be <li><br></li>
+  cleaned = cleaned.replace(/<li>\s*<\/li>/gi, "<li><br></li>");
+
+  // Remove list items with only empty headings (rendering bug)
+  cleaned = cleaned.replace(
+    /<li>\s*<h[1-6]>\s*<\/h[1-6]>\s*<\/li>/gi,
+    "<li><br></li>"
+  );
+
+  // Clean up empty lists
+  cleaned = cleaned.replace(/<ul>\s*<\/ul>/gi, "");
+  cleaned = cleaned.replace(/<ol>\s*<\/ol>/gi, "");
+
+  // Fix multiple consecutive <br> tags (limit to 2)
+  cleaned = cleaned.replace(/(<br\s*\/?>){3,}/gi, "<br><br>");
+
+  // Fix: if content ends with a list, append empty paragraph to prevent rendering bugs
+  if (cleaned.match(/<\/(ul|ol)>\s*$/i)) {
+    cleaned = cleaned + "<p><br></p>";
+  }
+
+  return cleaned;
+}
 
 export interface JournalComposerProps {
   entryId: number;
@@ -44,7 +105,14 @@ export function JournalComposer({
 }: JournalComposerProps) {
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
+  const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+
+  // Responsive sizing based on screen width
+  const isSmallScreen = screenWidth < 375;
+  const iconSize = isSmallScreen ? 17 : 19;
+  const fontSize = isSmallScreen ? 14 : 15;
 
   // Use react-query hooks
   const { data: entry, isLoading: isLoadingEntry } = useEntry(entryId);
@@ -52,74 +120,114 @@ export function JournalComposer({
   const deleteEntryMutation = useDeleteEntry();
 
   const [title, setTitle] = useState(initialTitle);
-  const [content, setContent] = useState("");
+  const [htmlContent, setHtmlContent] = useState("");
+  const [initialContent, setInitialContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [editorState, setEditorState] = useState<OnChangeStateEvent | null>(
+    null
+  );
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const titleInputRef = useRef<TextInput>(null);
-  const contentInputRef = useRef<TextInput>(null);
+  const editorRef = useRef<EnrichedTextInputInstance>(null);
   const shouldAutoFocusRef = useRef(true);
   const performSaveRef = useRef<typeof performSave | null>(null);
   const isDeletingRef = useRef(false); // Track deletion state to prevent race conditions
+  const lastLoadedEntryId = useRef<number | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const toolbarAnimation = useRef(new Animated.Value(0)).current;
 
   // Load entry content from react-query cache
   useEffect(() => {
-    if (entry) {
+    // Only reload if we're loading a different entry
+    if (entry && lastLoadedEntryId.current !== entry.id) {
+      lastLoadedEntryId.current = entry.id;
       setTitle(entry.title);
-      const entryContent = blocksToContent(entry.blocks, entry.type);
-      setContent(entryContent || "");
 
-      // Focus the input and position cursor at end after content loads
+      // Check if content is already HTML (new format)
+      const markdownBlock = entry.blocks.find((b) => b.type === "markdown");
+      let content: string;
+
+      if (markdownBlock && markdownBlock.content.includes("<")) {
+        // Already HTML from enriched editor - repair it in case it's malformed
+        const repairedHtml = repairHtml(markdownBlock.content);
+        // Wrap in <html> tags for the editor
+        content = `<html>${repairedHtml}</html>`;
+        console.log(
+          "Loading HTML content (after repair):",
+          content.substring(0, 200)
+        );
+      } else {
+        // Legacy format - convert blocks to plain text and let editor handle it
+        content = blocksToContent(entry.blocks, entry.type);
+        console.log("Loading plain text content:", content.substring(0, 200));
+      }
+
+      setInitialContent(content);
+      setHtmlContent(content);
+
+      // Focus editor after content loads
       if (shouldAutoFocusRef.current) {
         setTimeout(() => {
-          contentInputRef.current?.focus();
-          if (entryContent && entryContent.length > 0) {
-            // Position cursor at the end if there's content
-            contentInputRef.current?.setNativeProps({
-              selection: {
-                start: entryContent.length,
-                end: entryContent.length,
-              },
-            });
-          }
+          editorRef.current?.focus();
         }, 100);
-        shouldAutoFocusRef.current = false; // Only autofocus once
+        shouldAutoFocusRef.current = false;
       }
+    } else if (
+      initialBlocks.length > 0 &&
+      !entry &&
+      lastLoadedEntryId.current !== entryId
+    ) {
+      // Load initial blocks from props (when creating new entry from BottomComposer)
+      // Just pass plain text directly - editor will format it
+      lastLoadedEntryId.current = entryId;
+      const text = blocksToContent(initialBlocks, "journal");
+      setInitialContent(text);
+      setHtmlContent(text);
     }
-  }, [entry, entryId]);
+  }, [entry, entryId, initialBlocks]);
 
   const performSave = useCallback(
-    async (contentToSave: string) => {
+    async (htmlToSave: string) => {
       // Skip if we're in the middle of deleting
       if (isDeletingRef.current) {
         return;
       }
-      if (!contentToSave.trim()) {
+
+      // Strip HTML to check if there's actual content
+      const textContent = htmlToSave.replace(/<[^>]*>/g, "").trim();
+      if (!textContent) {
         return;
       }
 
       setIsSaving(true);
       try {
-        const blocks: Block[] = [];
+        // Ensure HTML has proper structure for rendering
+        let htmlContent = htmlToSave.trim();
 
-        if (contentToSave.trim()) {
-          // For journal entries, create paragraph blocks from content
-          const paragraphs = contentToSave
-            .split("\n\n")
-            .filter((p) => p.trim())
-            .map((p) => ({
-              type: "paragraph" as const,
-              content: p.trim(),
-            }));
-
-          blocks.push(...paragraphs);
+        // If content doesn't have HTML tags, wrap it in a paragraph
+        if (!htmlContent.includes("<")) {
+          htmlContent = `<p>${htmlContent.replace(/\n/g, "<br>")}</p>`;
         }
+
+        // Repair and sanitize HTML
+        htmlContent = repairHtml(htmlContent);
+
+        console.log("Saving HTML (after repair):", htmlContent);
+
+        // Store HTML as single markdown block
+        const blocks: Block[] = [
+          {
+            type: "markdown",
+            content: htmlContent,
+          },
+        ];
 
         // Use title if set, otherwise use content preview
         const finalTitle =
           title.trim() ||
-          contentToSave.trim().slice(0, 50) +
-            (contentToSave.length > 50 ? "..." : "") ||
+          textContent.slice(0, 50) + (textContent.length > 50 ? "..." : "") ||
           "Untitled";
 
         // Always update existing entry using react-query mutation
@@ -146,14 +254,44 @@ export function JournalComposer({
     performSaveRef.current = performSave;
   }, [performSave]);
 
+  // Keyboard listeners
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        setIsKeyboardVisible(true);
+        Animated.timing(toolbarAnimation, {
+          toValue: 1,
+          duration: Platform.OS === "ios" ? 250 : 200,
+          useNativeDriver: true,
+        }).start();
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setIsKeyboardVisible(false);
+        Animated.timing(toolbarAnimation, {
+          toValue: 0,
+          duration: Platform.OS === "ios" ? 250 : 200,
+          useNativeDriver: true,
+        }).start(() => {
+          setKeyboardHeight(0);
+        });
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, [toolbarAnimation]);
+
   // Auto-save with debounce
   useEffect(() => {
-    if (!entryId) {
-      return;
-    }
-
-    // Don't save empty content
-    if (!content.trim()) {
+    if (!entryId || !htmlContent.trim()) {
       return;
     }
 
@@ -165,7 +303,7 @@ export function JournalComposer({
     // Set new timeout for auto-save (1 second debounce)
     saveTimeoutRef.current = setTimeout(async () => {
       if (performSaveRef.current) {
-        await performSaveRef.current(content);
+        await performSaveRef.current(htmlContent);
       }
     }, 1000);
 
@@ -175,7 +313,7 @@ export function JournalComposer({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, entryId]);
+  }, [htmlContent, entryId]);
 
   const handleTitleFocus = useCallback(() => {
     // Select all text when focusing
@@ -266,11 +404,11 @@ export function JournalComposer({
       saveTimeoutRef.current = null;
     }
 
-    // Save immediately if there's content
-    if (content.trim() && performSaveRef.current) {
-      await performSaveRef.current(content);
+    // Save immediately
+    if (htmlContent && performSaveRef.current) {
+      await performSaveRef.current(htmlContent);
     }
-  }, [content, entryId]);
+  }, [htmlContent, entryId]);
 
   // Store forceSave in ref for parent access
   const internalForceSaveRef = useRef<typeof forceSave | null>(null);
@@ -329,12 +467,7 @@ export function JournalComposer({
               onFocus={handleTitleFocus}
               onBlur={handleTitleBlur}
               onSubmitEditing={handleTitleSubmit}
-              placeholder={
-                content.trim()
-                  ? content.trim().slice(0, 50) +
-                    (content.length > 50 ? "..." : "")
-                  : "Entry title"
-              }
+              placeholder="Entry title"
               placeholderTextColor={seasonalTheme.textSecondary}
               editable={true}
               {...(Platform.OS === "android" && {
@@ -396,22 +529,508 @@ export function JournalComposer({
           </Pressable>
         </Modal>
       )}
-      <TextInput
-        ref={contentInputRef}
+
+      {/* Enriched Editor */}
+      <View
         style={[
-          styles.fullScreenInput,
-          {
-            color: seasonalTheme.textPrimary,
-            paddingBottom: insets.bottom,
+          styles.editorContainer,
+          isKeyboardVisible && {
+            marginBottom: 60, // Make room for toolbar
           },
         ]}
-        placeholder="Start writing..."
-        placeholderTextColor={seasonalTheme.textSecondary}
-        value={content}
-        onChangeText={setContent}
-        multiline
-        textAlignVertical="top"
-      />
+      >
+        <EnrichedTextInput
+          key={`editor-${entryId}-${initialContent.substring(0, 20)}`}
+          ref={editorRef}
+          defaultValue={initialContent}
+          onChangeHtml={(e) => {
+            const newHtml = e.nativeEvent.value;
+            console.log("Raw HTML from editor:", newHtml);
+            setHtmlContent(newHtml);
+          }}
+          onChangeState={(e) => setEditorState(e.nativeEvent)}
+          style={{
+            fontSize: 18,
+            flex: 1,
+            color: seasonalTheme.textPrimary,
+          }}
+          htmlStyle={{
+            h1: {
+              fontSize: 32,
+              bold: true,
+            },
+            h2: {
+              fontSize: 26,
+              bold: true,
+            },
+            h3: {
+              fontSize: 22,
+              bold: true,
+            },
+            ul: {
+              bulletColor: seasonalTheme.textSecondary,
+              bulletSize: 5,
+              marginLeft: 20,
+              gapWidth: 10,
+            },
+            ol: {
+              markerColor: seasonalTheme.textSecondary,
+              markerFontWeight: "normal",
+              marginLeft: 20,
+              gapWidth: 10,
+            },
+          }}
+          placeholder="Start writing..."
+          placeholderTextColor={seasonalTheme.textSecondary}
+          autoFocus={shouldAutoFocusRef.current}
+        />
+      </View>
+
+      {/* Floating Formatting Toolbar - appears above keyboard */}
+      {isKeyboardVisible && (
+        <Animated.View
+          style={[
+            styles.floatingToolbar,
+            {
+              bottom: keyboardHeight,
+              opacity: toolbarAnimation,
+              transform: [
+                {
+                  translateY: toolbarAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [50, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          {Platform.OS === "ios" ? (
+            <GlassView
+              glassEffectStyle="regular"
+              tintColor={seasonalTheme.cardBg}
+              style={[styles.glassToolbar, styles.floatingToolbarIOS]}
+            >
+              <View
+                style={[
+                  styles.toolbarContent,
+                  { backgroundColor: seasonalTheme.cardBg + "F0" },
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleBold()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isBold && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <RNText
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontWeight: "bold",
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    B
+                  </RNText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleItalic()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isItalic && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <RNText
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontStyle: "italic",
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    I
+                  </RNText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleUnderline()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isUnderline && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <RNText
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        textDecorationLine: "underline",
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    U
+                  </RNText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleStrikeThrough()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isStrikeThrough && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <RNText
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        textDecorationLine: "line-through",
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    S
+                  </RNText>
+                </TouchableOpacity>
+                <View style={styles.toolbarSeparator} />
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleH1()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isH1 && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <RNText
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    H1
+                  </RNText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleH2()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isH2 && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <RNText
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    H2
+                  </RNText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleH3()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isH3 && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <RNText
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    H3
+                  </RNText>
+                </TouchableOpacity>
+                <View style={styles.toolbarSeparator} />
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleUnorderedList()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isUnorderedList && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="list"
+                    size={iconSize}
+                    color={seasonalTheme.textPrimary}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleOrderedList()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isOrderedList && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <RNText
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontSize: fontSize - 1,
+                        fontWeight: "600",
+                      },
+                    ]}
+                  >
+                    123
+                  </RNText>
+                </TouchableOpacity>
+              </View>
+            </GlassView>
+          ) : (
+            <View
+              style={[
+                styles.androidToolbar,
+                styles.floatingToolbarAndroid,
+                { backgroundColor: seasonalTheme.cardBg },
+              ]}
+            >
+              <View style={styles.toolbarContent}>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleBold()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isBold && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontWeight: "bold",
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    B
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleItalic()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isItalic && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontStyle: "italic",
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    I
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleUnderline()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isUnderline && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        textDecorationLine: "underline",
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    U
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleStrikeThrough()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isStrikeThrough && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        textDecorationLine: "line-through",
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    S
+                  </Text>
+                </TouchableOpacity>
+                <View style={styles.toolbarSeparator} />
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleH1()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isH1 && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    H1
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleH2()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isH2 && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    H2
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleH3()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isH3 && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontSize,
+                      },
+                    ]}
+                  >
+                    H3
+                  </Text>
+                </TouchableOpacity>
+                <View style={styles.toolbarSeparator} />
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleUnorderedList()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isUnorderedList && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="list"
+                    size={iconSize}
+                    color={seasonalTheme.textPrimary}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleOrderedList()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isOrderedList && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.toolbarButtonText,
+                      {
+                        color: seasonalTheme.textPrimary,
+                        fontSize: fontSize - 1,
+                        fontWeight: "600",
+                      },
+                    ]}
+                  >
+                    123
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </Animated.View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -497,11 +1116,71 @@ const styles = StyleSheet.create({
   menuIcon: {
     marginRight: spacingPatterns.sm,
   },
-  fullScreenInput: {
+  floatingToolbar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+  },
+  glassToolbar: {
+    overflow: "hidden",
+  },
+  floatingToolbarIOS: {
+    marginHorizontal: spacingPatterns.md + 4,
+    marginBottom: spacingPatterns.xs,
+    borderRadius: 100,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  androidToolbar: {
+    // Android gets a solid background
+  },
+  floatingToolbarAndroid: {
+    borderTopLeftRadius: 100,
+    borderTopRightRadius: 100,
+    elevation: 8,
+  },
+  toolbarContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacingPatterns.xs,
+    paddingVertical: spacingPatterns.xs,
+    minHeight: 44,
+    gap: spacingPatterns.xxs,
+  },
+  toolbarButton: {
+    paddingHorizontal: spacingPatterns.xxs + 2,
+    paddingVertical: spacingPatterns.xs,
+    minWidth: 26,
+    minHeight: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toolbarButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    lineHeight: 18,
+    includeFontPadding: false,
+  },
+  toolbarSeparator: {
+    width: 1,
+    height: 18,
+    backgroundColor: "#888",
+    opacity: 0.3,
+    marginHorizontal: spacingPatterns.xxs,
+  },
+  editorContainer: {
+    flex: 1,
+    padding: spacingPatterns.screen,
+  },
+  richEditor: {
     flex: 1,
     fontSize: 18,
     lineHeight: 28,
-    padding: spacingPatterns.screen,
-    paddingTop: spacingPatterns.md,
   },
 });

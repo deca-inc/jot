@@ -103,8 +103,12 @@ export function extractPreviewText(blocks: Block[]): string {
       }
     } else if (block.type === "markdown") {
       if (block.content.trim()) {
-        // Strip markdown syntax for preview
-        return block.content.replace(/[#*_`\[\]()]/g, "").trim();
+        // Strip HTML tags for preview
+        const strippedHtml = block.content
+          .replace(/<[^>]*>/g, " ") // Remove HTML tags
+          .replace(/\s+/g, " ") // Normalize whitespace
+          .trim();
+        return strippedHtml;
       }
     }
   }

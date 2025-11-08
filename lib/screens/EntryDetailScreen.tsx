@@ -6,14 +6,19 @@ import {
   Animated,
   TouchableOpacity,
   Dimensions,
+  Text as RNText,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import RenderHtml from "react-native-render-html";
 import { Text } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius, springPresets } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { Entry, extractPreviewText, useEntryRepository } from "../db/entries";
+
+// No inline formatting - just render plain text
 
 export interface EntryDetailScreenProps {
   entryId: number;
@@ -33,6 +38,7 @@ export function EntryDetailScreen({
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const [entry, setEntry] = React.useState<Entry | null>(null);
   const entryRepository = useEntryRepository();
 
@@ -376,57 +382,168 @@ export function EntryDetailScreen({
                 switch (block.type) {
                   case "paragraph":
                     return (
-                      <Text
+                      <RNText
                         key={index}
-                        variant="body"
                         style={[
                           styles.blockContent,
-                          { color: seasonalTheme.textPrimary },
+                          {
+                            color: seasonalTheme.textPrimary,
+                            fontSize: 18,
+                            lineHeight: 26,
+                          },
                         ]}
                       >
                         {block.content}
-                      </Text>
+                      </RNText>
                     );
                   case "heading1":
                     return (
-                      <Text
+                      <RNText
                         key={index}
-                        variant="h1"
                         style={[
                           styles.blockHeading,
-                          { color: seasonalTheme.textPrimary },
+                          {
+                            color: seasonalTheme.textPrimary,
+                            fontSize: 32,
+                            fontWeight: "bold",
+                          },
                         ]}
                       >
                         {block.content}
-                      </Text>
+                      </RNText>
                     );
                   case "heading2":
                     return (
-                      <Text
+                      <RNText
                         key={index}
-                        variant="h2"
                         style={[
                           styles.blockHeading,
-                          { color: seasonalTheme.textPrimary },
+                          {
+                            color: seasonalTheme.textPrimary,
+                            fontSize: 26,
+                            fontWeight: "bold",
+                          },
                         ]}
                       >
                         {block.content}
-                      </Text>
+                      </RNText>
                     );
                   case "heading3":
                     return (
-                      <Text
+                      <RNText
                         key={index}
-                        variant="h3"
                         style={[
                           styles.blockHeading,
-                          { color: seasonalTheme.textPrimary },
+                          {
+                            color: seasonalTheme.textPrimary,
+                            fontSize: 22,
+                            fontWeight: "bold",
+                          },
                         ]}
                       >
                         {block.content}
-                      </Text>
+                      </RNText>
                     );
                   case "markdown":
+                    // Check if content is HTML (from enriched editor)
+                    if (block.content.includes("<")) {
+                      return (
+                        <RenderHtml
+                          key={index}
+                          contentWidth={width - spacingPatterns.screen * 2}
+                          source={{ html: block.content }}
+                          tagsStyles={{
+                            body: {
+                              color: seasonalTheme.textPrimary,
+                              fontSize: 18,
+                              lineHeight: 28,
+                            },
+                            h1: {
+                              color: seasonalTheme.textPrimary,
+                              fontSize: 32,
+                              fontWeight: "bold",
+                              lineHeight: 40,
+                              marginTop: 8,
+                              marginBottom: 12,
+                            },
+                            h2: {
+                              color: seasonalTheme.textPrimary,
+                              fontSize: 26,
+                              fontWeight: "bold",
+                              lineHeight: 34,
+                              marginTop: 8,
+                              marginBottom: 10,
+                            },
+                            h3: {
+                              color: seasonalTheme.textPrimary,
+                              fontSize: 22,
+                              fontWeight: "bold",
+                              lineHeight: 30,
+                              marginTop: 8,
+                              marginBottom: 8,
+                            },
+                            p: {
+                              color: seasonalTheme.textPrimary,
+                              fontSize: 18,
+                              lineHeight: 28,
+                              marginBottom: 12,
+                            },
+                            ul: {
+                              color: seasonalTheme.textPrimary,
+                              marginLeft: 0,
+                              paddingLeft: 20,
+                              marginBottom: 12,
+                            },
+                            ol: {
+                              color: seasonalTheme.textPrimary,
+                              marginLeft: 0,
+                              paddingLeft: 20,
+                              marginBottom: 12,
+                            },
+                            li: {
+                              color: seasonalTheme.textPrimary,
+                              fontSize: 18,
+                              lineHeight: 28,
+                              marginBottom: 4,
+                              paddingLeft: 4,
+                            },
+                            b: {
+                              color: seasonalTheme.textPrimary,
+                              fontWeight: "bold",
+                            },
+                            strong: {
+                              color: seasonalTheme.textPrimary,
+                              fontWeight: "bold",
+                            },
+                            i: {
+                              color: seasonalTheme.textPrimary,
+                              fontStyle: "italic",
+                            },
+                            em: {
+                              color: seasonalTheme.textPrimary,
+                              fontStyle: "italic",
+                            },
+                            u: {
+                              color: seasonalTheme.textPrimary,
+                              textDecorationLine: "underline",
+                            },
+                            s: {
+                              color: seasonalTheme.textPrimary,
+                              textDecorationLine: "line-through",
+                            },
+                            del: {
+                              color: seasonalTheme.textPrimary,
+                              textDecorationLine: "line-through",
+                            },
+                            strike: {
+                              color: seasonalTheme.textPrimary,
+                              textDecorationLine: "line-through",
+                            },
+                          }}
+                        />
+                      );
+                    }
+                    // Legacy plain text
                     return (
                       <Text
                         key={index}
@@ -467,23 +584,25 @@ export function EntryDetailScreen({
                       <View key={index} style={styles.listContainer}>
                         {block.items.map((item, itemIndex) => (
                           <View key={itemIndex} style={styles.listItem}>
-                            <Text
+                            <RNText
                               style={[
                                 styles.listBullet,
                                 { color: seasonalTheme.textSecondary },
                               ]}
                             >
                               {block.ordered ? `${itemIndex + 1}.` : "•"}
-                            </Text>
-                            <Text
-                              variant="body"
+                            </RNText>
+                            <RNText
                               style={[
                                 styles.listItemText,
-                                { color: seasonalTheme.textPrimary },
+                                {
+                                  color: seasonalTheme.textPrimary,
+                                  fontSize: 18,
+                                },
                               ]}
                             >
                               {item}
-                            </Text>
+                            </RNText>
                           </View>
                         ))}
                       </View>
