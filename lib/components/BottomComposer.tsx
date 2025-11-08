@@ -66,6 +66,7 @@ export function BottomComposer({
     // In journal mode, start typing triggers full-screen
     if (mode === "journal" && text.length > 0 && onStartTyping) {
       onStartTyping(text);
+      setInputText(""); // Clear input after triggering full editor
     }
   };
 

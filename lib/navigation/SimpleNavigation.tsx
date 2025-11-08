@@ -166,29 +166,24 @@ export function SimpleNavigation() {
   };
 
   const handleOpenFullEditor = async (initialText?: string) => {
-    // Create entry immediately with the initial text
+    // Create entry immediately with the initial text in an H1
     const content = (initialText || "").trim();
-    // If content is empty, still create an entry with one empty paragraph block
-    const blocks =
-      content.length > 0
-        ? content
-            .split("\n\n")
-            .filter((p) => p.trim())
-            .map((p) => ({
-              type: "paragraph" as const,
-              content: p.trim(),
-            }))
-        : [
-            {
-              type: "paragraph" as const,
-              content: "",
-            },
-          ];
+
+    // Create HTML block with H1 for the first letter/text
+    const htmlContent =
+      content.length > 0 ? `<h1>${content}</h1>` : "<h1></h1>"; // Empty H1 to start
+
+    const blocks = [
+      {
+        type: "markdown" as const,
+        content: htmlContent,
+      },
+    ];
 
     try {
       const entry = await createEntry.mutateAsync({
         type: "journal",
-        title: "untitled note",
+        title: content.slice(0, 50) || "Untitled",
         blocks,
         tags: [],
         attachments: [],
