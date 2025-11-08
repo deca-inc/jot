@@ -55,28 +55,25 @@ function repairHtml(html: string): string {
   cleaned = cleaned.replace(/(<\/ol>)\s*<\/p>/gi, "$1");
   cleaned = cleaned.replace(/(<\/h[1-6]>)\s*<\/p>/gi, "$1");
 
+  // Remove ALL <br> tags - they cause rendering issues
+  cleaned = cleaned.replace(/<br\s*\/?>/gi, "");
+
   // Remove empty <p></p> tags
   cleaned = cleaned.replace(/<p>\s*<\/p>/gi, "");
-
-  // Ensure proper list item structure: empty lines should be <li><br></li>
-  cleaned = cleaned.replace(/<li>\s*<\/li>/gi, "<li><br></li>");
 
   // Remove list items with only empty headings (rendering bug)
   cleaned = cleaned.replace(
     /<li>\s*<h[1-6]>\s*<\/h[1-6]>\s*<\/li>/gi,
-    "<li><br></li>"
+    "<li></li>"
   );
 
   // Clean up empty lists
   cleaned = cleaned.replace(/<ul>\s*<\/ul>/gi, "");
   cleaned = cleaned.replace(/<ol>\s*<\/ol>/gi, "");
 
-  // Fix multiple consecutive <br> tags (limit to 2)
-  cleaned = cleaned.replace(/(<br\s*\/?>){3,}/gi, "<br><br>");
-
   // Fix: if content ends with a list, append empty paragraph to prevent rendering bugs
   if (cleaned.match(/<\/(ul|ol)>\s*$/i)) {
-    cleaned = cleaned + "<p><br></p>";
+    cleaned = cleaned + "<p></p>";
   }
 
   return cleaned;
@@ -150,18 +147,12 @@ export function JournalComposer({
       let content: string;
 
       if (markdownBlock && markdownBlock.content.includes("<")) {
-        // Already HTML from enriched editor - repair it in case it's malformed
-        const repairedHtml = repairHtml(markdownBlock.content);
-        // Wrap in <html> tags for the editor
-        content = `<html>${repairedHtml}</html>`;
-        console.log(
-          "Loading HTML content (after repair):",
-          content.substring(0, 200)
-        );
+        // Already HTML from enriched editor - wrap in <html> tags for the editor
+        // Note: We don't repair here to avoid double-repairing (only repair on save)
+        content = `<html>${markdownBlock.content}</html>`;
       } else {
         // Legacy format - convert blocks to plain text and let editor handle it
         content = blocksToContent(entry.blocks, entry.type);
-        console.log("Loading plain text content:", content.substring(0, 200));
       }
 
       setInitialContent(content);
@@ -213,8 +204,6 @@ export function JournalComposer({
 
         // Repair and sanitize HTML
         htmlContent = repairHtml(htmlContent);
-
-        console.log("Saving HTML (after repair):", htmlContent);
 
         // Store HTML as single markdown block
         const blocks: Block[] = [
@@ -545,7 +534,6 @@ export function JournalComposer({
           defaultValue={initialContent}
           onChangeHtml={(e) => {
             const newHtml = e.nativeEvent.value;
-            console.log("Raw HTML from editor:", newHtml);
             setHtmlContent(newHtml);
           }}
           onChangeState={(e) => setEditorState(e.nativeEvent)}
