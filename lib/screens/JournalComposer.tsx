@@ -1,4 +1,10 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+} from "react";
 import {
   View,
   StyleSheet,
@@ -32,6 +38,7 @@ import { Block } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { blocksToContent } from "./composerUtils";
 import { useEntry, useUpdateEntry, useDeleteEntry } from "../db/useEntries";
+import { debounce } from "../utils/debounce";
 
 /**
  * Repairs and sanitizes HTML from the editor
@@ -124,7 +131,6 @@ export function JournalComposer({
   const [editorState, setEditorState] = useState<OnChangeStateEvent | null>(
     null
   );
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const titleInputRef = useRef<TextInput>(null);
   const editorRef = useRef<EnrichedTextInputInstance>(null);
   const shouldAutoFocusRef = useRef(true);
@@ -243,6 +249,25 @@ export function JournalComposer({
     performSaveRef.current = performSave;
   }, [performSave]);
 
+  // Create debounced save function (event-based, not reactive)
+  const debouncedSave = useMemo(
+    () =>
+      debounce((content: string) => {
+        if (!entryId || !content.trim()) return;
+        if (performSaveRef.current) {
+          performSaveRef.current(content);
+        }
+      }, 1000),
+    [entryId]
+  );
+
+  // Clean up debounced function on unmount
+  useEffect(() => {
+    return () => {
+      (debouncedSave as any).cancel();
+    };
+  }, [debouncedSave]);
+
   // Keyboard listeners
   useEffect(() => {
     const keyboardWillShow = Keyboard.addListener(
@@ -278,31 +303,8 @@ export function JournalComposer({
     };
   }, [toolbarAnimation]);
 
-  // Auto-save with debounce
-  useEffect(() => {
-    if (!entryId || !htmlContent.trim()) {
-      return;
-    }
-
-    // Clear existing timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    // Set new timeout for auto-save (1 second debounce)
-    saveTimeoutRef.current = setTimeout(async () => {
-      if (performSaveRef.current) {
-        await performSaveRef.current(htmlContent);
-      }
-    }, 1000);
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [htmlContent, entryId]);
+  // Note: Auto-save is now event-based via debouncedSave in onChange handler
+  // No reactive useEffect needed!
 
   const handleTitleFocus = useCallback(() => {
     // Select all text when focusing
@@ -362,11 +364,8 @@ export function JournalComposer({
               // Mark as deleting to prevent save operations
               isDeletingRef.current = true;
 
-              // Clear any pending saves
-              if (saveTimeoutRef.current) {
-                clearTimeout(saveTimeoutRef.current);
-                saveTimeoutRef.current = null;
-              }
+              // Cancel any pending debounced saves
+              (debouncedSave as any).cancel();
 
               // Delete using react-query mutation
               await deleteEntryMutation.mutateAsync(entryId);
@@ -383,21 +382,18 @@ export function JournalComposer({
         },
       ]
     );
-  }, [entryId, deleteEntryMutation, onDelete, onCancel]);
+  }, [entryId, deleteEntryMutation, onDelete, onCancel, debouncedSave]);
 
-  // Force save immediately (clears timeout and saves)
+  // Force save immediately (flushes debounced save)
   const forceSave = useCallback(async (): Promise<void> => {
-    // Clear any pending timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = null;
+    // Flush any pending debounced save immediately
+    if (htmlContent) {
+      (debouncedSave as any).cancel(); // Cancel pending
+      if (performSaveRef.current) {
+        await performSaveRef.current(htmlContent);
+      }
     }
-
-    // Save immediately
-    if (htmlContent && performSaveRef.current) {
-      await performSaveRef.current(htmlContent);
-    }
-  }, [htmlContent, entryId]);
+  }, [htmlContent, debouncedSave]);
 
   // Store forceSave in ref for parent access
   const internalForceSaveRef = useRef<typeof forceSave | null>(null);
@@ -535,6 +531,8 @@ export function JournalComposer({
           onChangeHtml={(e) => {
             const newHtml = e.nativeEvent.value;
             setHtmlContent(newHtml);
+            // Event-based auto-save: directly call debounced function
+            debouncedSave(newHtml);
           }}
           onChangeState={(e) => setEditorState(e.nativeEvent)}
           style={{
