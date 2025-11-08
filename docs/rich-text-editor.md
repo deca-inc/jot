@@ -63,11 +63,10 @@ The formatting toolbar provides quick access to all formatting options:
 
 ### Viewing Saved Entries
 
-1. `EntryDetailScreen` reads blocks from database
-2. Detects HTML content (contains `<` tags)
-3. Uses `react-native-render-html` to display formatted content
-4. All formatting (bold, italic, headings, lists) is preserved
-5. Themed to match app's seasonal theme
+1. Detects HTML content (contains `<` tags)
+2. Uses `react-native-render-html` to display formatted content
+3. All formatting (bold, italic, headings, lists) is preserved
+4. Themed to match app's seasonal theme
 
 ## Architecture
 
@@ -79,12 +78,6 @@ JournalComposer.tsx
     ├── Handles editing
     ├── Applies formatting
     └── Returns HTML
-
-EntryDetailScreen.tsx
-└── RenderHtml
-    ├── Parses HTML
-    ├── Applies theme styles
-    └── Displays formatted content
 ```
 
 ## Technical Details

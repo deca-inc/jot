@@ -1,9 +1,13 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   useWindowDimensions,
+  Alert,
+  Modal,
+  Pressable,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -14,6 +18,12 @@ import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { Entry, extractPreviewText } from "../db/entries";
 import { type SeasonalTheme } from "../theme/seasonalTheme";
+import { useDeleteEntry, useUpdateEntry } from "../db/useEntries";
+import {
+  renameEntry,
+  deleteEntryWithConfirmation,
+  type EntryActionContext,
+} from "../screens/entryActions";
 
 export interface EntryListItemProps {
   entry: Entry;
@@ -31,6 +41,24 @@ export function EntryListItem({
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const previewText = extractPreviewText(entry.blocks);
+
+  // Menu state
+  const [showMenu, setShowMenu] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [renameText, setRenameText] = useState("");
+
+  // Mutations
+  const deleteEntryMutation = useDeleteEntry();
+  const updateEntryMutation = useUpdateEntry();
+
+  // Action context
+  const actionContext = useMemo<EntryActionContext>(
+    () => ({
+      updateEntry: updateEntryMutation,
+      deleteEntry: deleteEntryMutation,
+    }),
+    [updateEntryMutation, deleteEntryMutation]
+  );
 
   // Check if content is HTML
   const markdownBlock = entry.blocks.find((b) => b.type === "markdown");
@@ -213,6 +241,41 @@ export function EntryListItem({
     });
   };
 
+  // Event handler: Delete entry
+  const handleDelete = async () => {
+    try {
+      await deleteEntryWithConfirmation(entry.id, actionContext);
+    } catch (error) {
+      // Error already handled in action (logged and shown to user)
+      if (error instanceof Error && error.message !== "Deletion cancelled") {
+        Alert.alert("Error", "Failed to delete entry");
+      }
+    }
+  };
+
+  // Event handler: Rename entry (AI chat only)
+  const handleRename = () => {
+    setRenameText(entry.title);
+    setShowRenameDialog(true);
+  };
+
+  // Event handler: Submit rename
+  const handleRenameSubmit = async () => {
+    if (!renameText.trim()) {
+      Alert.alert("Error", "Title cannot be empty");
+      return;
+    }
+
+    try {
+      await renameEntry(entry.id, renameText.trim(), actionContext);
+      setShowRenameDialog(false);
+      setRenameText("");
+    } catch (error) {
+      console.error("[EntryListItem] Error renaming entry:", error);
+      Alert.alert("Error", "Failed to rename entry");
+    }
+  };
+
   return (
     <TouchableOpacity
       onPress={() => onPress?.(entry)}
@@ -230,172 +293,365 @@ export function EntryListItem({
           },
         ]}
       >
-        <View style={styles.cardContent}>
-          {/* Floating icons on the right */}
-          <View style={styles.floatingIcons}>
-            <View style={styles.iconsRow}>
-              <View
+        {/* Floating icon in top-left corner - outside content wrapper for true floating */}
+        <View style={styles.floatingIconLeft}>
+          <View
+            style={[
+              styles.badgeSmall,
+              styles.floatingBadge,
+              {
+                backgroundColor: itemTheme.cardBg,
+                borderColor: itemTheme.textSecondary + "20",
+              },
+            ]}
+          >
+            <Ionicons
+              name={
+                entry.type === "journal"
+                  ? "book-outline"
+                  : "chatbubble-ellipses-outline"
+              }
+              size={16}
+              color={itemTheme.textPrimary}
+            />
+          </View>
+        </View>
+
+        {/* Floating icons cluster in top-right corner - outside content for proper z-index */}
+        <View style={styles.floatingIconsRight}>
+          <View style={styles.iconsRow}>
+            {onToggleFavorite && (
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onToggleFavorite(entry);
+                }}
                 style={[
                   styles.badge,
                   {
-                    backgroundColor: itemTheme.cardBg,
-                    borderColor: itemTheme.textSecondary + "20",
+                    backgroundColor: entry.isFavorite
+                      ? itemTheme.textSecondary + "15"
+                      : itemTheme.cardBg,
+                    borderColor: entry.isFavorite
+                      ? itemTheme.textSecondary + "40"
+                      : itemTheme.textSecondary + "20",
                   },
                 ]}
               >
                 <Ionicons
-                  name={
-                    entry.type === "journal"
-                      ? "book-outline"
-                      : "chatbubble-ellipses-outline"
-                  }
+                  name={entry.isFavorite ? "star" : "star-outline"}
                   size={18}
-                  color={itemTheme.textPrimary}
+                  color={entry.isFavorite ? "#FFA500" : itemTheme.textPrimary}
                 />
-              </View>
-              {onToggleFavorite && (
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite(entry);
-                  }}
-                  style={[
-                    styles.badge,
-                    {
-                      backgroundColor: entry.isFavorite
-                        ? itemTheme.textSecondary + "15"
-                        : itemTheme.cardBg,
-                      borderColor: entry.isFavorite
-                        ? itemTheme.textSecondary + "40"
-                        : itemTheme.textSecondary + "20",
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={entry.isFavorite ? "star" : "star-outline"}
-                    size={18}
-                    color={entry.isFavorite ? "#FFA500" : itemTheme.textPrimary}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-            {/* Date badge below icons */}
-            <View
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                setShowMenu(true);
+              }}
               style={[
-                styles.dateBadge,
+                styles.badge,
                 {
                   backgroundColor: itemTheme.cardBg,
                   borderColor: itemTheme.textSecondary + "20",
                 },
               ]}
             >
-              <Text
-                variant="caption"
-                style={[styles.dateBadgeText, { color: itemTheme.textPrimary }]}
-              >
-                {formatDate(entry.updatedAt)}
-              </Text>
-            </View>
+              <Ionicons
+                name="ellipsis-vertical"
+                size={18}
+                color={itemTheme.textPrimary}
+              />
+            </TouchableOpacity>
           </View>
 
-          {/* Title for non-journal entries */}
-          {entry.type !== "journal" && (
+          {/* Date badge below icon cluster */}
+          <View
+            style={[
+              styles.dateBadge,
+              {
+                backgroundColor: itemTheme.cardBg,
+                borderColor: itemTheme.textSecondary + "20",
+              },
+            ]}
+          >
             <Text
-              variant="h3"
-              numberOfLines={1}
-              style={[
-                styles.title,
-                { color: itemTheme.textPrimary, paddingRight: 80 },
-              ]}
+              variant="caption"
+              style={[styles.dateBadgeText, { color: itemTheme.textPrimary }]}
             >
-              {entry.title}
+              {formatDate(entry.updatedAt)}
             </Text>
-          )}
-
-          {previewText || isHtmlContent ? (
-            <View style={styles.previewContainer}>
-              {isHtmlContent && markdownBlock ? (
-                <RenderHtml
-                  contentWidth={htmlContentWidth}
-                  source={{ html: markdownBlock.content }}
-                  tagsStyles={htmlTagsStyles}
-                />
-              ) : (
-                <Text
-                  variant="body"
-                  numberOfLines={4}
-                  style={[styles.preview, { color: itemTheme.textPrimary }]}
-                >
-                  {previewText}
-                </Text>
-              )}
-            </View>
-          ) : null}
-
-          {entry.tags.length > 0 && (
-            <View style={styles.tagsContainer}>
-              {entry.tags.slice(0, 3).map((tag, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.tag,
-                    {
-                      backgroundColor:
-                        seasonalTheme?.chipBg || "rgba(0, 0, 0, 0.1)",
-                    },
-                  ]}
-                >
-                  <Text
-                    variant="caption"
-                    style={{
-                      color: seasonalTheme?.chipText || itemTheme.textSecondary,
-                    }}
-                  >
-                    {tag}
-                  </Text>
-                </View>
-              ))}
-              {entry.tags.length > 3 && (
-                <Text
-                  variant="caption"
-                  style={{ color: itemTheme.textSecondary }}
-                >
-                  +{entry.tags.length - 3}
-                </Text>
-              )}
-            </View>
-          )}
+          </View>
         </View>
 
+        {/* Fade overlay - positioned above content, below icons */}
         <LinearGradient
           colors={gradientColors}
           locations={[0, 0.3, 0.7, 1]}
           style={styles.fadeOverlay}
           pointerEvents="none"
         />
+
+        <View style={styles.cardContent}>
+          <View style={styles.contentInner}>
+            {/* Title for non-journal entries */}
+            {entry.type !== "journal" && (
+              <Text
+                variant="body"
+                numberOfLines={1}
+                style={[
+                  styles.title,
+                  styles.conversationTitle,
+                  {
+                    color: itemTheme.textPrimary,
+                    paddingRight: 70, // Space for icons on right
+                  },
+                ]}
+              >
+                {entry.title}
+              </Text>
+            )}
+
+            {previewText || isHtmlContent ? (
+              <View style={styles.previewContainer}>
+                {isHtmlContent && markdownBlock ? (
+                  <RenderHtml
+                    contentWidth={htmlContentWidth}
+                    source={{ html: markdownBlock.content }}
+                    tagsStyles={htmlTagsStyles}
+                  />
+                ) : (
+                  <Text
+                    variant="body"
+                    numberOfLines={4}
+                    style={[styles.preview, { color: itemTheme.textPrimary }]}
+                  >
+                    {previewText}
+                  </Text>
+                )}
+              </View>
+            ) : null}
+
+            {entry.tags.length > 0 && (
+              <View style={styles.tagsContainer}>
+                {entry.tags.slice(0, 3).map((tag, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.tag,
+                      {
+                        backgroundColor:
+                          seasonalTheme?.chipBg || "rgba(0, 0, 0, 0.1)",
+                      },
+                    ]}
+                  >
+                    <Text
+                      variant="caption"
+                      style={{
+                        color:
+                          seasonalTheme?.chipText || itemTheme.textSecondary,
+                      }}
+                    >
+                      {tag}
+                    </Text>
+                  </View>
+                ))}
+                {entry.tags.length > 3 && (
+                  <Text
+                    variant="caption"
+                    style={{ color: itemTheme.textSecondary }}
+                  >
+                    +{entry.tags.length - 3}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
       </Card>
+
+      {/* Menu Modal */}
+      {showMenu && (
+        <Modal
+          visible={showMenu}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowMenu(false)}
+        >
+          <Pressable
+            style={styles.menuOverlay}
+            onPress={() => setShowMenu(false)}
+          >
+            <View
+              style={[
+                styles.menuContainer,
+                {
+                  backgroundColor: itemTheme.cardBg,
+                  shadowColor: itemTheme.subtleGlow.shadowColor,
+                },
+              ]}
+            >
+              {entry.type === "ai_chat" && (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setShowMenu(false);
+                    handleRename();
+                  }}
+                >
+                  <Ionicons
+                    name="pencil-outline"
+                    size={20}
+                    color={itemTheme.textPrimary}
+                    style={styles.menuIcon}
+                  />
+                  <Text style={{ color: itemTheme.textPrimary }}>Rename</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowMenu(false);
+                  handleDelete();
+                }}
+              >
+                <Ionicons
+                  name="trash-outline"
+                  size={20}
+                  color="#FF3B30"
+                  style={styles.menuIcon}
+                />
+                <Text style={{ color: "#FF3B30" }}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* Rename Dialog Modal */}
+      {showRenameDialog && (
+        <Modal
+          visible={showRenameDialog}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowRenameDialog(false)}
+        >
+          <Pressable
+            style={styles.menuOverlay}
+            onPress={() => setShowRenameDialog(false)}
+          >
+            <Pressable
+              style={[
+                styles.renameDialog,
+                {
+                  backgroundColor: itemTheme.cardBg,
+                  shadowColor: itemTheme.subtleGlow.shadowColor,
+                },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text
+                variant="h3"
+                style={{
+                  color: itemTheme.textPrimary,
+                  marginBottom: spacingPatterns.md,
+                }}
+              >
+                Rename Entry
+              </Text>
+              <TextInput
+                style={[
+                  styles.renameInput,
+                  {
+                    color: itemTheme.textPrimary,
+                    borderColor: itemTheme.textSecondary + "40",
+                    backgroundColor: itemTheme.cardBg,
+                  },
+                ]}
+                placeholder="Enter new title..."
+                placeholderTextColor={itemTheme.textSecondary}
+                value={renameText}
+                onChangeText={setRenameText}
+                autoFocus
+                onSubmitEditing={handleRenameSubmit}
+              />
+              <View style={styles.renameButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.renameButton,
+                    {
+                      backgroundColor: itemTheme.textSecondary + "20",
+                    },
+                  ]}
+                  onPress={() => {
+                    setShowRenameDialog(false);
+                    setRenameText("");
+                  }}
+                >
+                  <Text style={{ color: itemTheme.textPrimary }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.renameButton,
+                    {
+                      backgroundColor: itemTheme.textPrimary,
+                    },
+                  ]}
+                  onPress={handleRenameSubmit}
+                  disabled={!renameText.trim()}
+                >
+                  <Text
+                    style={{
+                      color: itemTheme.cardBg,
+                      opacity: !renameText.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    Save
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacingPatterns.sm,
+    marginBottom: spacingPatterns.md, // Increased margin between cards
   },
   card: {
     padding: spacingPatterns.md,
     position: "relative",
-    overflow: "hidden",
-    minHeight: 100,
-    maxHeight: 180,
+    overflow: "visible", // Changed to visible to allow floating icon to extend beyond card edge
+    borderRadius: borderRadius.lg, // Ensure rounded corners
   },
   cardContent: {
     position: "relative",
+    overflow: "hidden",
+    borderRadius: borderRadius.lg, // Match card border radius for clipping
+    minHeight: 76,
+    maxHeight: 180, // Reduced for more compact entries
+    // No z-index - allows children to participate in parent stacking context
   },
-  floatingIcons: {
+  contentInner: {
+    position: "relative",
+    maxHeight: 140, // Reduced for more compact entries
+    zIndex: 1, // Base content layer, below fade (5) and icons (10)
+  },
+  floatingIconLeft: {
     position: "absolute",
-    top: 0,
-    right: 0,
+    top: -6, // Negative offset to float on the corner (adjusted for smaller icon)
+    left: -6, // Negative offset to float on the corner (adjusted for smaller icon)
+    zIndex: 10,
+  },
+  floatingIconsRight: {
+    position: "absolute",
+    top: spacingPatterns.xs,
+    right: spacingPatterns.xs,
     flexDirection: "column",
     alignItems: "flex-end",
     gap: spacingPatterns.xs,
@@ -409,6 +665,11 @@ const styles = StyleSheet.create({
   title: {
     marginBottom: spacingPatterns.xs,
   },
+  conversationTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    lineHeight: 20,
+  },
   badge: {
     borderRadius: borderRadius.md,
     borderWidth: 1,
@@ -416,6 +677,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 32,
     height: 32,
+  },
+  badgeSmall: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    width: 28,
+    height: 28,
+  },
+  floatingBadge: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   dateBadge: {
     borderRadius: borderRadius.md,
@@ -432,7 +708,7 @@ const styles = StyleSheet.create({
   previewContainer: {
     marginTop: spacingPatterns.xs,
     marginBottom: spacingPatterns.xs,
-    paddingRight: 80, // Space for icons on right
+    paddingRight: 70, // Space for icons on right (reduced from 80)
   },
   preview: {
     lineHeight: 18,
@@ -443,7 +719,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 80,
+    height: 55, // Reduced by ~1/3rd (from 80)
+    borderBottomLeftRadius: borderRadius.lg, // Match card border radius
+    borderBottomRightRadius: borderRadius.lg, // Match card border radius
+    zIndex: 5, // Above content (z-index 1), below icons (z-index 10)
     pointerEvents: "none",
   },
   tagsContainer: {
@@ -457,5 +736,58 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingPatterns.xs,
     paddingVertical: spacingPatterns.xxs,
     borderRadius: borderRadius.sm,
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuContainer: {
+    minWidth: 200,
+    borderRadius: borderRadius.lg,
+    padding: spacingPatterns.xs,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacingPatterns.md,
+    borderRadius: borderRadius.md,
+  },
+  menuIcon: {
+    marginRight: spacingPatterns.sm,
+  },
+  renameDialog: {
+    width: "80%",
+    maxWidth: 400,
+    borderRadius: borderRadius.lg,
+    padding: spacingPatterns.lg,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  renameInput: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacingPatterns.md,
+    paddingVertical: spacingPatterns.sm,
+    fontSize: 16,
+    marginBottom: spacingPatterns.md,
+  },
+  renameButtons: {
+    flexDirection: "row",
+    gap: spacingPatterns.sm,
+  },
+  renameButton: {
+    flex: 1,
+    paddingVertical: spacingPatterns.sm,
+    paddingHorizontal: spacingPatterns.md,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
   },
 });

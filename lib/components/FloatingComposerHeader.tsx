@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -14,6 +14,7 @@ import { Text } from "./Text";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useDeleteEntry } from "../db/useEntries";
+import { deleteEntry, type EntryActionContext } from "../screens/entryActions";
 
 export interface FloatingComposerHeaderProps {
   entryId?: number;
@@ -36,34 +37,34 @@ export function FloatingComposerHeader({
   const [showMenu, setShowMenu] = useState(false);
   const deleteEntryMutation = useDeleteEntry();
 
-  const handleDelete = () => {
+  // Action context
+  const actionContext = useMemo<EntryActionContext>(
+    () => ({
+      updateEntry: null as any, // Not used for delete
+      deleteEntry: deleteEntryMutation,
+      onNavigateBack: onBack,
+    }),
+    [deleteEntryMutation, onBack]
+  );
+
+  const handleDelete = async () => {
     if (!entryId) return;
 
-    Alert.alert(deleteConfirmTitle, deleteConfirmMessage, [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            // Call optional cleanup before deleting
-            onBeforeDelete?.(entryId);
+    try {
+      // Call optional cleanup before deleting
+      onBeforeDelete?.(entryId);
 
-            // Delete the entry
-            await deleteEntryMutation.mutateAsync(entryId);
-
-            // Navigate back
-            onBack();
-          } catch (error) {
-            console.error("Error deleting entry:", error);
-            Alert.alert("Error", "Failed to delete entry");
-          }
-        },
-      },
-    ]);
+      // Delete using action
+      await deleteEntry(entryId, actionContext, {
+        confirmTitle: deleteConfirmTitle,
+        confirmMessage: deleteConfirmMessage,
+      });
+    } catch (error) {
+      // Error already handled in action (logged and shown to user)
+      if (error instanceof Error && error.message !== "Deletion cancelled") {
+        Alert.alert("Error", "Failed to delete entry");
+      }
+    }
   };
 
   const ButtonWrapper = Platform.OS === "ios" ? GlassView : View;
