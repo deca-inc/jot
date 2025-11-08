@@ -19,7 +19,7 @@ export interface AIChatActionContext {
   createEntry?: any; // Optional - not needed for all actions
   updateEntry: any;
 
-  // State setters (local input state only)
+  // State setters (no-op in practice - React Query handles updates)
   setTitle: (title: string) => void;
 
   // LLM instance
@@ -430,9 +430,8 @@ Title:`;
 
     if (cleanTitle.length > 0) {
       console.log("[AIChat Action] Generated title:", cleanTitle);
-      setTitle(cleanTitle);
 
-      // Save to database
+      // Save to database (React Query will update the cache automatically)
       await new Promise<void>((resolve, reject) => {
         updateEntry.mutate(
           {

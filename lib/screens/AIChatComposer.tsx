@@ -8,19 +8,15 @@ import {
   Platform,
   TouchableOpacity,
   Alert,
-  Modal,
-  Pressable,
   ListRenderItem,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Text } from "../components";
-import { useTheme } from "../theme/ThemeProvider";
+import { Text, FloatingComposerHeader } from "../components";
 import { spacingPatterns, borderRadius } from "../theme";
-import { typography } from "../theme/typography";
 import { Block } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useLLMForConvo, llmManager } from "../ai/ModelProvider";
+import { useLLMForConvo } from "../ai/ModelProvider";
 import {
   useEntry,
   useCreateEntry,
@@ -28,7 +24,6 @@ import {
   useDeleteEntry,
 } from "../db/useEntries";
 import {
-  initializeAIConversation,
   sendMessageWithResponse,
   type AIChatActionContext,
 } from "./aiChatActions";
@@ -39,7 +34,6 @@ export interface AIChatComposerProps {
   initialBlocks?: Block[];
   onSave?: (entryId: number) => void;
   onCancel?: () => void;
-  onDelete?: (entryId: number) => void;
 }
 
 export function AIChatComposer({
@@ -48,9 +42,7 @@ export function AIChatComposer({
   initialBlocks = [],
   onSave,
   onCancel,
-  onDelete,
 }: AIChatComposerProps) {
-  const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
 
@@ -75,15 +67,11 @@ export function AIChatComposer({
   const deleteEntry = useDeleteEntry();
 
   // Local state for input only
-  const [titleInput, setTitleInput] = useState(initialTitle);
   const [newMessage, setNewMessage] = useState("");
-  const [showMenu, setShowMenu] = useState(false);
 
   // Refs for UI only
   const flatListRef = useRef<FlatList<Block>>(null);
-  const titleInputRef = useRef<TextInput>(null);
   const chatInputRef = useRef<TextInput>(null);
-  const hasQueuedInitialWork = useRef(false);
 
   // Derive displayed data from entry or fallback to initial props
   const displayedTitle = entry?.title ?? initialTitle;
@@ -107,7 +95,7 @@ export function AIChatComposer({
     () => ({
       createEntry,
       updateEntry,
-      setTitle: setTitleInput, // Update local input state
+      setTitle: () => {}, // No-op - React Query handles title updates automatically
       llm,
       onSave: (id: number) => {
         scrollToBottom();
@@ -117,121 +105,15 @@ export function AIChatComposer({
     [createEntry, updateEntry, llm, onSave, scrollToBottom]
   );
 
-  // Queue initial work if we have initial blocks and this is a new conversation
-  // This would only happen if someone passed initialBlocks without an entryId
-  // (which doesn't happen in practice - HomeScreen creates the entry first)
-  if (
-    !entryId &&
-    !hasQueuedInitialWork.current &&
-    initialBlocks.length === 1 &&
-    initialBlocks[0]?.role === "user" &&
-    llm &&
-    !isLLMLoading
-  ) {
-    hasQueuedInitialWork.current = true;
-    const initialMessage = initialBlocks[0];
+  // Note: All initial work is now handled by BottomComposer via aiChatActions
+  // before navigating to this composer. No need to queue work here.
 
-    // Queue work in background - don't block render
-    Promise.resolve().then(() => {
-      initializeAIConversation(
-        { initialMessage, title: initialTitle || "AI Conversation" },
-        actionContext
-      ).catch((error) => {
-        console.error("[AIChatComposer] Initial conversation failed:", error);
-        Alert.alert(
-          "AI Error",
-          `Failed to initialize conversation: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-      });
-    });
-  }
-
-  const handleTitleFocus = useCallback(() => {
-    const currentTitle = entry?.title ?? titleInput;
-    setTimeout(() => {
-      titleInputRef.current?.setNativeProps({
-        selection: { start: 0, end: currentTitle.length },
-      });
-    }, 100);
-  }, [entry?.title, titleInput]);
-
-  const handleTitleChange = useCallback((newTitle: string) => {
-    setTitleInput(newTitle);
-  }, []);
-
-  const handleTitleBlur = useCallback(() => {
+  const handleBeforeDelete = useCallback(() => {
     if (!entryId) return;
 
-    const newTitle = titleInput.trim();
-    updateEntry.mutate(
-      {
-        id: entryId,
-        input: {
-          title: newTitle || undefined,
-        },
-      },
-      {
-        onSuccess: () => {
-          onSave?.(entryId);
-        },
-        onError: (error) => {
-          console.error("Error updating title:", error);
-        },
-      }
-    );
-  }, [titleInput, entryId, updateEntry, onSave]);
-
-  const handleTitleSubmit = useCallback(() => {
-    titleInputRef.current?.blur();
-    handleTitleBlur();
-  }, [handleTitleBlur]);
-
-  const handleDelete = useCallback(() => {
-    if (!entryId) return;
-
-    Alert.alert(
-      "Delete Entry",
-      "Are you sure you want to delete this entry? This action cannot be undone.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            // CRITICAL: Clean up LLM instance BEFORE deleting entry to free memory
-            const convoId = `entry-${entryId}`;
-            try {
-              llmManager.delete(convoId);
-            } catch (e) {
-              console.error(
-                `[AIChatComposer] Failed to cleanup LLM on delete:`,
-                e
-              );
-            }
-
-            // Delete entry and navigate back
-            deleteEntry.mutate(entryId, {
-              onSuccess: () => {
-                onCancel?.();
-                setTimeout(() => {
-                  onDelete?.(entryId);
-                }, 0);
-              },
-              onError: (error) => {
-                console.error("Error deleting entry:", error);
-                Alert.alert("Error", "Failed to delete entry");
-              },
-            });
-          },
-        },
-      ]
-    );
-  }, [entryId, deleteEntry, onDelete, onCancel]);
+    // Note: We no longer delete the LLM instance - the queue system will handle cleanup
+    // The LLM will naturally finish any pending work or be garbage collected when needed
+  }, [entryId]);
 
   const handleSendMessage = useCallback(async () => {
     if (!newMessage.trim() || !llm) return;
@@ -354,96 +236,15 @@ export function AIChatComposer({
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
     >
-      {/* Standardized Header */}
-      <View style={styles.standardHeader}>
-        <TouchableOpacity
-          onPress={onCancel}
-          style={styles.backButton}
-          disabled={createEntry.isPending || updateEntry.isPending}
-        >
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={seasonalTheme.textPrimary}
-          />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <View style={styles.headerTitleInputWrapper}>
-            <TextInput
-              ref={titleInputRef}
-              style={[
-                styles.headerTitleInput,
-                { color: seasonalTheme.textPrimary },
-              ]}
-              value={titleInput || displayedTitle}
-              onChangeText={handleTitleChange}
-              onFocus={handleTitleFocus}
-              onBlur={handleTitleBlur}
-              onSubmitEditing={handleTitleSubmit}
-              placeholder="AI Conversation"
-              placeholderTextColor={seasonalTheme.textSecondary}
-              editable={true}
-              {...(Platform.OS === "android" && {
-                includeFontPadding: false,
-              })}
-            />
-          </View>
-        </View>
-        {entryId && (
-          <TouchableOpacity
-            onPress={() => setShowMenu(true)}
-            style={styles.menuButton}
-            disabled={createEntry.isPending || updateEntry.isPending}
-          >
-            <Ionicons
-              name="ellipsis-vertical"
-              size={24}
-              color={seasonalTheme.textPrimary}
-            />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Settings Menu Modal */}
-      {showMenu && (
-        <Modal
-          visible={showMenu}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowMenu(false)}
-        >
-          <Pressable
-            style={styles.menuOverlay}
-            onPress={() => setShowMenu(false)}
-          >
-            <View
-              style={[
-                styles.menuContainer,
-                {
-                  backgroundColor: seasonalTheme.cardBg,
-                  shadowColor: seasonalTheme.subtleGlow.shadowColor,
-                },
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setShowMenu(false);
-                  handleDelete();
-                }}
-              >
-                <Ionicons
-                  name="trash-outline"
-                  size={20}
-                  color="#FF3B30"
-                  style={styles.menuIcon}
-                />
-                <Text style={{ color: "#FF3B30" }}>Delete Conversation</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Modal>
-      )}
+      {/* Floating Header Buttons */}
+      <FloatingComposerHeader
+        entryId={entryId}
+        onBack={() => onCancel?.()}
+        onBeforeDelete={handleBeforeDelete}
+        disabled={createEntry.isPending || updateEntry.isPending}
+        deleteConfirmTitle="Delete Conversation"
+        deleteConfirmMessage="Are you sure you want to delete this conversation? This action cannot be undone."
+      />
 
       {/* Messages with FlatList for better performance */}
       <FlatList
@@ -455,7 +256,10 @@ export function AIChatComposer({
         style={styles.chatMessages}
         contentContainerStyle={[
           styles.chatMessagesContent,
-          { paddingBottom: insets.bottom + spacingPatterns.md },
+          {
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom + spacingPatterns.md,
+          },
         ]}
         keyboardShouldPersistTaps="handled"
         removeClippedSubviews={true}
@@ -549,89 +353,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  standardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacingPatterns.screen,
-    paddingBottom: spacingPatterns.md,
-    gap: spacingPatterns.sm,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: borderRadius.full,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "flex-start",
-  },
-  headerTitleInputWrapper: {
-    width: "100%",
-    height: 44,
-    justifyContent: "center",
-    alignItems: "flex-start",
-    ...(Platform.OS === "ios" && {
-      paddingTop: 8,
-    }),
-  },
-  headerTitleInput: {
-    width: "100%",
-    fontSize: typography.h3.fontSize,
-    fontWeight: typography.h3.fontWeight,
-    lineHeight: typography.h3.fontSize,
-    height: typography.h3.fontSize * typography.h3.lineHeight,
-    letterSpacing: typography.h3.letterSpacing,
-    paddingHorizontal: 0,
-    margin: 0,
-    backgroundColor: "transparent",
-    borderWidth: 0,
-    ...(Platform.OS === "android" && {
-      textAlignVertical: "center",
-      includeFontPadding: false,
-      paddingVertical: 0,
-    }),
-  },
-  menuButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: borderRadius.full,
-  },
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  menuContainer: {
-    minWidth: 200,
-    borderRadius: borderRadius.lg,
-    padding: spacingPatterns.xs,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacingPatterns.md,
-    borderRadius: borderRadius.md,
-  },
-  menuIcon: {
-    marginRight: spacingPatterns.sm,
-  },
   chatMessages: {
     flex: 1,
   },
   chatMessagesContent: {
-    padding: spacingPatterns.screen,
-    paddingTop: spacingPatterns.md,
+    paddingHorizontal: spacingPatterns.screen,
+    // paddingTop and paddingBottom are dynamic based on safe area insets
   },
   emptyChat: {
     flex: 1,

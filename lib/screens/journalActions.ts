@@ -14,6 +14,52 @@
 
 import { Block } from "../db/entries";
 
+/**
+ * Repairs and sanitizes HTML from the editor
+ * Fixes common issues like malformed tags, improper nesting, etc.
+ */
+export function repairHtml(html: string): string {
+  let cleaned = html.trim();
+
+  // Remove outer <html> tags if present
+  cleaned = cleaned.replace(/^<html>\s*/i, "").replace(/\s*<\/html>$/i, "");
+
+  // Fix: Remove <p> tags that are wrapping block-level elements
+  // This fixes the bug where every tag gets wrapped in <p>
+  cleaned = cleaned.replace(/<p>\s*(<h[1-6]>)/gi, "$1");
+  cleaned = cleaned.replace(/<p>\s*(<\/h[1-6]>)/gi, "$1");
+  cleaned = cleaned.replace(/<p>\s*(<ul>)/gi, "$1");
+  cleaned = cleaned.replace(/<p>\s*(<ol>)/gi, "$1");
+  cleaned = cleaned.replace(/<p>\s*(<li>)/gi, "$1");
+  cleaned = cleaned.replace(/<p>\s*(<\/li>)/gi, "$1");
+  cleaned = cleaned.replace(/(<\/ul>)\s*<\/p>/gi, "$1");
+  cleaned = cleaned.replace(/(<\/ol>)\s*<\/p>/gi, "$1");
+  cleaned = cleaned.replace(/(<\/h[1-6]>)\s*<\/p>/gi, "$1");
+
+  // Remove ALL <br> tags - they cause rendering issues
+  cleaned = cleaned.replace(/<br\s*\/?>/gi, "");
+
+  // Remove empty <p></p> tags
+  cleaned = cleaned.replace(/<p>\s*<\/p>/gi, "");
+
+  // Remove list items with only empty headings (rendering bug)
+  cleaned = cleaned.replace(
+    /<li>\s*<h[1-6]>\s*<\/h[1-6]>\s*<\/li>/gi,
+    "<li></li>"
+  );
+
+  // Clean up empty lists
+  cleaned = cleaned.replace(/<ul>\s*<\/ul>/gi, "");
+  cleaned = cleaned.replace(/<ol>\s*<\/ol>/gi, "");
+
+  // Fix: if content ends with a list, append empty paragraph to prevent rendering bugs
+  if (cleaned.match(/<\/(ul|ol)>\s*$/i)) {
+    cleaned = cleaned + "<p></p>";
+  }
+
+  return cleaned;
+}
+
 export interface JournalActionContext {
   // React Query mutations
   createEntry: any;
@@ -98,6 +144,7 @@ export async function createJournalEntry(
  * Action: Save journal entry content
  *
  * Handles HTML sanitization and block conversion
+ * Note: HTML should be pre-repaired before calling this function
  */
 export async function saveJournalContent(
   entryId: number,
@@ -114,13 +161,8 @@ export async function saveJournalContent(
       return;
     }
 
-    // Ensure HTML has proper structure
+    // HTML is already repaired by caller
     let cleanHtml = htmlContent.trim();
-
-    // If content doesn't have HTML tags, wrap it
-    if (!cleanHtml.includes("<")) {
-      cleanHtml = `<p>${cleanHtml.replace(/\n/g, "<br>")}</p>`;
-    }
 
     // Store HTML as single markdown block
     const blocks: Block[] = [

@@ -8,17 +8,11 @@ import React, {
 import {
   View,
   StyleSheet,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
-  Alert,
-  Modal,
-  Pressable,
   Keyboard,
   Animated,
-  useColorScheme,
-  ScrollView,
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,85 +25,29 @@ import {
   type EnrichedTextInputInstance,
   type OnChangeStateEvent,
 } from "react-native-enriched";
-import { useTheme } from "../theme/ThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
-import { typography } from "../theme/typography";
-import { Block } from "../db/entries";
+import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { blocksToContent } from "./composerUtils";
 import { useEntry, useUpdateEntry, useDeleteEntry } from "../db/useEntries";
 import { debounce } from "../utils/debounce";
-
-/**
- * Repairs and sanitizes HTML from the editor
- * Fixes common issues like malformed tags, improper nesting, etc.
- */
-function repairHtml(html: string): string {
-  let cleaned = html.trim();
-
-  // Remove outer <html> tags if present
-  cleaned = cleaned.replace(/^<html>\s*/i, "").replace(/\s*<\/html>$/i, "");
-
-  // Fix: Remove <p> tags that are wrapping block-level elements
-  // This fixes the bug where every tag gets wrapped in <p>
-  cleaned = cleaned.replace(/<p>\s*(<h[1-6]>)/gi, "$1");
-  cleaned = cleaned.replace(/<p>\s*(<\/h[1-6]>)/gi, "$1");
-  cleaned = cleaned.replace(/<p>\s*(<ul>)/gi, "$1");
-  cleaned = cleaned.replace(/<p>\s*(<ol>)/gi, "$1");
-  cleaned = cleaned.replace(/<p>\s*(<li>)/gi, "$1");
-  cleaned = cleaned.replace(/<p>\s*(<\/li>)/gi, "$1");
-  cleaned = cleaned.replace(/(<\/ul>)\s*<\/p>/gi, "$1");
-  cleaned = cleaned.replace(/(<\/ol>)\s*<\/p>/gi, "$1");
-  cleaned = cleaned.replace(/(<\/h[1-6]>)\s*<\/p>/gi, "$1");
-
-  // Remove ALL <br> tags - they cause rendering issues
-  cleaned = cleaned.replace(/<br\s*\/?>/gi, "");
-
-  // Remove empty <p></p> tags
-  cleaned = cleaned.replace(/<p>\s*<\/p>/gi, "");
-
-  // Remove list items with only empty headings (rendering bug)
-  cleaned = cleaned.replace(
-    /<li>\s*<h[1-6]>\s*<\/h[1-6]>\s*<\/li>/gi,
-    "<li></li>"
-  );
-
-  // Clean up empty lists
-  cleaned = cleaned.replace(/<ul>\s*<\/ul>/gi, "");
-  cleaned = cleaned.replace(/<ol>\s*<\/ol>/gi, "");
-
-  // Fix: if content ends with a list, append empty paragraph to prevent rendering bugs
-  if (cleaned.match(/<\/(ul|ol)>\s*$/i)) {
-    cleaned = cleaned + "<p></p>";
-  }
-
-  return cleaned;
-}
+import { FloatingComposerHeader } from "../components";
+import { saveJournalContent, repairHtml } from "./journalActions";
 
 export interface JournalComposerProps {
   entryId: number;
-  initialTitle?: string;
-  initialBlocks?: Block[];
   onSave?: (entryId: number) => void;
   onCancel?: () => void;
-  onDelete?: (entryId: number) => void;
   onBeforeCancel?: () => Promise<void>; // Called before onCancel - parent can call forceSave
   forceSaveRef?: React.MutableRefObject<(() => Promise<void>) | null>; // Ref to expose forceSave to parent
 }
 
 export function JournalComposer({
   entryId,
-  initialTitle = "",
-  initialBlocks = [],
   onSave,
   onCancel,
-  onDelete,
   onBeforeCancel,
   forceSaveRef: externalForceSaveRef,
 }: JournalComposerProps) {
-  const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
-  const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -121,144 +59,56 @@ export function JournalComposer({
   // Use react-query hooks
   const { data: entry, isLoading: isLoadingEntry } = useEntry(entryId);
   const updateEntryMutation = useUpdateEntry();
-  const deleteEntryMutation = useDeleteEntry();
 
-  const [title, setTitle] = useState(initialTitle);
-  const [htmlContent, setHtmlContent] = useState("");
-  const [initialContent, setInitialContent] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
+  const [htmlContent, setHtmlContent] = useState(""); // Track current editor content for debounced save
   const [editorState, setEditorState] = useState<OnChangeStateEvent | null>(
     null
   );
-  const titleInputRef = useRef<TextInput>(null);
   const editorRef = useRef<EnrichedTextInputInstance>(null);
-  const shouldAutoFocusRef = useRef(true);
-  const performSaveRef = useRef<typeof performSave | null>(null);
   const isDeletingRef = useRef(false); // Track deletion state to prevent race conditions
-  const lastLoadedEntryId = useRef<number | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const toolbarAnimation = useRef(new Animated.Value(0)).current;
 
-  // Load entry content from react-query cache
-  useEffect(() => {
-    // Only reload if we're loading a different entry
-    if (entry && lastLoadedEntryId.current !== entry.id) {
-      lastLoadedEntryId.current = entry.id;
-      setTitle(entry.title);
+  // Derive initial content from entry (single source of truth)
+  const initialContent = useMemo(() => {
+    if (!entry) return "";
 
-      // Check if content is already HTML (new format)
-      const markdownBlock = entry.blocks.find((b) => b.type === "markdown");
-      let content: string;
-
-      if (markdownBlock && markdownBlock.content.includes("<")) {
-        // Already HTML from enriched editor - wrap in <html> tags for the editor
-        // Note: We don't repair here to avoid double-repairing (only repair on save)
-        content = `<html>${markdownBlock.content}</html>`;
-      } else {
-        // Legacy format - convert blocks to plain text and let editor handle it
-        content = blocksToContent(entry.blocks, entry.type);
-      }
-
-      setInitialContent(content);
-      setHtmlContent(content);
-
-      // Focus editor after content loads
-      if (shouldAutoFocusRef.current) {
-        setTimeout(() => {
-          editorRef.current?.focus();
-        }, 100);
-        shouldAutoFocusRef.current = false;
-      }
-    } else if (
-      initialBlocks.length > 0 &&
-      !entry &&
-      lastLoadedEntryId.current !== entryId
-    ) {
-      // Load initial blocks from props (when creating new entry from BottomComposer)
-      // Just pass plain text directly - editor will format it
-      lastLoadedEntryId.current = entryId;
-      const text = blocksToContent(initialBlocks, "journal");
-      setInitialContent(text);
-      setHtmlContent(text);
+    const markdownBlock = entry.blocks.find((b) => b.type === "markdown");
+    if (markdownBlock && markdownBlock.content.includes("<")) {
+      // Already HTML from enriched editor - wrap in <html> tags for the editor
+      return `<html>${markdownBlock.content}</html>`;
     }
-  }, [entry, entryId, initialBlocks]);
 
-  const performSave = useCallback(
-    async (htmlToSave: string) => {
-      // Skip if we're in the middle of deleting
-      if (isDeletingRef.current) {
-        return;
-      }
+    // Empty or no content
+    return "";
+  }, [entry]);
 
-      // Strip HTML to check if there's actual content
-      const textContent = htmlToSave.replace(/<[^>]*>/g, "").trim();
-      if (!textContent) {
-        return;
-      }
-
-      setIsSaving(true);
-      try {
-        // Ensure HTML has proper structure for rendering
-        let htmlContent = htmlToSave.trim();
-
-        // If content doesn't have HTML tags, wrap it in a paragraph
-        if (!htmlContent.includes("<")) {
-          htmlContent = `<p>${htmlContent.replace(/\n/g, "<br>")}</p>`;
-        }
-
-        // Repair and sanitize HTML
-        htmlContent = repairHtml(htmlContent);
-
-        // Store HTML as single markdown block
-        const blocks: Block[] = [
-          {
-            type: "markdown",
-            content: htmlContent,
-          },
-        ];
-
-        // Use title if set, otherwise use content preview
-        const finalTitle =
-          title.trim() ||
-          textContent.slice(0, 50) + (textContent.length > 50 ? "..." : "") ||
-          "Untitled";
-
-        // Always update existing entry using react-query mutation
-        await updateEntryMutation.mutateAsync({
-          id: entryId,
-          input: {
-            title: finalTitle,
-            blocks,
-          },
-        });
-        onSave?.(entryId);
-      } catch (error) {
-        console.error("Error saving entry:", error);
-        // TODO: Show error message to user
-      } finally {
-        setIsSaving(false);
-      }
-    },
-    [title, entryId, updateEntryMutation, onSave]
+  // Create action context for journal operations
+  const actionContext = useMemo(
+    () => ({
+      updateEntry: updateEntryMutation,
+      createEntry: updateEntryMutation, // Not used in save, but required by interface
+      onSave,
+    }),
+    [updateEntryMutation, onSave]
   );
 
-  // Keep ref up to date
-  useEffect(() => {
-    performSaveRef.current = performSave;
-  }, [performSave]);
-
-  // Create debounced save function (event-based, not reactive)
+  // Create debounced save function that calls journalActions
   const debouncedSave = useMemo(
     () =>
-      debounce((content: string) => {
-        if (!entryId || !content.trim()) return;
-        if (performSaveRef.current) {
-          performSaveRef.current(content);
+      debounce(async (htmlToSave: string) => {
+        if (isDeletingRef.current || !entryId || !htmlToSave.trim()) return;
+
+        try {
+          // Repair HTML before saving
+          const repairedHtml = repairHtml(htmlToSave);
+          await saveJournalContent(entryId, repairedHtml, "", actionContext);
+        } catch (error) {
+          console.error("[JournalComposer] Error saving:", error);
         }
       }, 1000),
-    [entryId]
+    [entryId, actionContext]
   );
 
   // Clean up debounced function on unmount
@@ -306,94 +156,28 @@ export function JournalComposer({
   // Note: Auto-save is now event-based via debouncedSave in onChange handler
   // No reactive useEffect needed!
 
-  const handleTitleFocus = useCallback(() => {
-    // Select all text when focusing
-    setTimeout(() => {
-      titleInputRef.current?.setNativeProps({
-        selection: { start: 0, end: title.length },
-      });
-    }, 100);
-  }, [title]);
+  const handleBeforeDelete = useCallback(() => {
+    // Mark as deleting to prevent save operations
+    isDeletingRef.current = true;
 
-  const handleTitleChange = useCallback((newTitle: string) => {
-    setTitle(newTitle);
-  }, []);
-
-  const handleTitleBlur = useCallback(async () => {
-    // Skip if we're in the middle of deleting
-    if (isDeletingRef.current) {
-      return;
-    }
-
-    const newTitle = title.trim();
-    setIsSaving(true);
-    try {
-      await updateEntryMutation.mutateAsync({
-        id: entryId,
-        input: {
-          title: newTitle || undefined,
-        },
-      });
-      onSave?.(entryId);
-    } catch (error) {
-      console.error("Error updating title:", error);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [title, entryId, updateEntryMutation, onSave]);
-
-  const handleTitleSubmit = useCallback(async () => {
-    titleInputRef.current?.blur();
-    await handleTitleBlur();
-  }, [handleTitleBlur]);
-
-  const handleDelete = useCallback(async () => {
-    Alert.alert(
-      "Delete Entry",
-      "Are you sure you want to delete this entry? This action cannot be undone.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // Mark as deleting to prevent save operations
-              isDeletingRef.current = true;
-
-              // Cancel any pending debounced saves
-              (debouncedSave as any).cancel();
-
-              // Delete using react-query mutation
-              await deleteEntryMutation.mutateAsync(entryId);
-
-              onDelete?.(entryId);
-              // Navigate away immediately
-              onCancel?.();
-            } catch (error) {
-              console.error("Error deleting entry:", error);
-              Alert.alert("Error", "Failed to delete entry");
-              isDeletingRef.current = false;
-            }
-          },
-        },
-      ]
-    );
-  }, [entryId, deleteEntryMutation, onDelete, onCancel, debouncedSave]);
+    // Cancel any pending debounced saves
+    (debouncedSave as any).cancel();
+  }, [debouncedSave]);
 
   // Force save immediately (flushes debounced save)
   const forceSave = useCallback(async (): Promise<void> => {
-    // Flush any pending debounced save immediately
-    if (htmlContent) {
-      (debouncedSave as any).cancel(); // Cancel pending
-      if (performSaveRef.current) {
-        await performSaveRef.current(htmlContent);
-      }
+    if (isDeletingRef.current || !htmlContent.trim()) return;
+
+    // Cancel pending debounced save and save immediately
+    (debouncedSave as any).cancel();
+
+    try {
+      const repairedHtml = repairHtml(htmlContent);
+      await saveJournalContent(entryId, repairedHtml, "", actionContext);
+    } catch (error) {
+      console.error("[JournalComposer] Error force saving:", error);
     }
-  }, [htmlContent, debouncedSave]);
+  }, [htmlContent, entryId, actionContext, debouncedSave]);
 
   // Store forceSave in ref for parent access
   const internalForceSaveRef = useRef<typeof forceSave | null>(null);
@@ -426,150 +210,74 @@ export function JournalComposer({
       ]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      {/* Standardized Header */}
-      <View style={styles.standardHeader}>
-        <TouchableOpacity
-          onPress={handleBackPress}
-          style={styles.backButton}
-          disabled={isSaving}
-        >
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={seasonalTheme.textPrimary}
-          />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <View style={styles.headerTitleInputWrapper}>
-            <TextInput
-              ref={titleInputRef}
-              style={[
-                styles.headerTitleInput,
-                { color: seasonalTheme.textPrimary },
-              ]}
-              value={title}
-              onChangeText={handleTitleChange}
-              onFocus={handleTitleFocus}
-              onBlur={handleTitleBlur}
-              onSubmitEditing={handleTitleSubmit}
-              placeholder="Entry title"
-              placeholderTextColor={seasonalTheme.textSecondary}
-              editable={true}
-              {...(Platform.OS === "android" && {
-                includeFontPadding: false,
-              })}
-            />
-          </View>
-        </View>
-        <TouchableOpacity
-          onPress={() => setShowMenu(true)}
-          style={styles.menuButton}
-          disabled={isSaving}
-        >
-          <Ionicons
-            name="ellipsis-vertical"
-            size={24}
-            color={seasonalTheme.textPrimary}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* Settings Menu Modal */}
-      {showMenu && (
-        <Modal
-          visible={showMenu}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowMenu(false)}
-        >
-          <Pressable
-            style={styles.menuOverlay}
-            onPress={() => setShowMenu(false)}
-          >
-            <View
-              style={[
-                styles.menuContainer,
-                {
-                  backgroundColor: seasonalTheme.cardBg,
-                  shadowColor: seasonalTheme.subtleGlow.shadowColor,
-                },
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setShowMenu(false);
-                  handleDelete();
-                }}
-              >
-                <Ionicons
-                  name="trash-outline"
-                  size={20}
-                  color="#FF3B30"
-                  style={styles.menuIcon}
-                />
-                <Text style={{ color: "#FF3B30" }}>Delete Entry</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Modal>
-      )}
+      {/* Floating Header Buttons */}
+      <FloatingComposerHeader
+        entryId={entryId}
+        onBack={handleBackPress}
+        onBeforeDelete={handleBeforeDelete}
+        disabled={updateEntryMutation.isPending}
+      />
 
       {/* Enriched Editor */}
       <View
         style={[
           styles.editorContainer,
+          {
+            paddingTop: insets.top,
+          },
           isKeyboardVisible && {
             marginBottom: 60, // Make room for toolbar
           },
         ]}
       >
-        <EnrichedTextInput
-          key={`editor-${entryId}-${initialContent.substring(0, 20)}`}
-          ref={editorRef}
-          defaultValue={initialContent}
-          onChangeHtml={(e) => {
-            const newHtml = e.nativeEvent.value;
-            setHtmlContent(newHtml);
-            // Event-based auto-save: directly call debounced function
-            debouncedSave(newHtml);
-          }}
-          onChangeState={(e) => setEditorState(e.nativeEvent)}
-          style={{
-            fontSize: 18,
-            flex: 1,
-            color: seasonalTheme.textPrimary,
-          }}
-          htmlStyle={{
-            h1: {
-              fontSize: 32,
-              bold: true,
-            },
-            h2: {
-              fontSize: 26,
-              bold: true,
-            },
-            h3: {
-              fontSize: 22,
-              bold: true,
-            },
-            ul: {
-              bulletColor: seasonalTheme.textSecondary,
-              bulletSize: 5,
-              marginLeft: 20,
-              gapWidth: 10,
-            },
-            ol: {
-              markerColor: seasonalTheme.textSecondary,
-              markerFontWeight: "normal",
-              marginLeft: 20,
-              gapWidth: 10,
-            },
-          }}
-          placeholder="Start writing..."
-          placeholderTextColor={seasonalTheme.textSecondary}
-          autoFocus={shouldAutoFocusRef.current}
-        />
+        {initialContent !== undefined && (
+          <EnrichedTextInput
+            key={`editor-${entryId}`}
+            ref={editorRef}
+            defaultValue={initialContent}
+            onChangeHtml={(e) => {
+              const newHtml = e.nativeEvent.value;
+              setHtmlContent(newHtml);
+              // Event-based auto-save: directly call debounced function
+              debouncedSave(newHtml);
+            }}
+            onChangeState={(e) => setEditorState(e.nativeEvent)}
+            style={{
+              fontSize: 18,
+              flex: 1,
+              color: seasonalTheme.textPrimary,
+            }}
+            htmlStyle={{
+              h1: {
+                fontSize: 32,
+                bold: true,
+              },
+              h2: {
+                fontSize: 26,
+                bold: true,
+              },
+              h3: {
+                fontSize: 22,
+                bold: true,
+              },
+              ul: {
+                bulletColor: seasonalTheme.textSecondary,
+                bulletSize: 5,
+                marginLeft: 20,
+                gapWidth: 10,
+              },
+              ol: {
+                markerColor: seasonalTheme.textSecondary,
+                markerFontWeight: "normal",
+                marginLeft: 20,
+                gapWidth: 10,
+              },
+            }}
+            placeholder="Start writing..."
+            placeholderTextColor={seasonalTheme.textSecondary}
+            autoFocus={true}
+          />
+        )}
       </View>
 
       {/* Floating Formatting Toolbar - appears above keyboard */}
@@ -1025,83 +733,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  standardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacingPatterns.screen,
-    paddingBottom: spacingPatterns.md,
-    gap: spacingPatterns.sm,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: borderRadius.full,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "flex-start",
-  },
-  headerTitleInputWrapper: {
-    width: "100%",
-    height: 44,
-    justifyContent: "center",
-    alignItems: "flex-start",
-    ...(Platform.OS === "ios" && {
-      paddingTop: 8,
-    }),
-  },
-  headerTitleInput: {
-    width: "100%",
-    fontSize: typography.h3.fontSize,
-    fontWeight: typography.h3.fontWeight,
-    lineHeight: typography.h3.fontSize,
-    height: typography.h3.fontSize * typography.h3.lineHeight,
-    letterSpacing: typography.h3.letterSpacing,
-    paddingHorizontal: 0,
-    margin: 0,
-    backgroundColor: "transparent",
-    borderWidth: 0,
-    ...(Platform.OS === "android" && {
-      textAlignVertical: "center",
-      includeFontPadding: false,
-      paddingVertical: 0,
-    }),
-  },
-  menuButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: borderRadius.full,
-  },
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  menuContainer: {
-    minWidth: 200,
-    borderRadius: borderRadius.lg,
-    padding: spacingPatterns.xs,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacingPatterns.md,
-    borderRadius: borderRadius.md,
-  },
-  menuIcon: {
-    marginRight: spacingPatterns.sm,
-  },
   floatingToolbar: {
     position: "absolute",
     left: 0,
@@ -1162,7 +793,9 @@ const styles = StyleSheet.create({
   },
   editorContainer: {
     flex: 1,
-    padding: spacingPatterns.screen,
+    paddingHorizontal: spacingPatterns.screen,
+    paddingBottom: spacingPatterns.screen,
+    // paddingTop is dynamic based on safe area insets
   },
   richEditor: {
     flex: 1,

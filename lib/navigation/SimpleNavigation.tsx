@@ -1,24 +1,15 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import {
-  View,
-  StyleSheet,
-  Platform,
-  PanResponder,
-  Animated,
-} from "react-native";
+import { View, StyleSheet, PanResponder, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Text } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
-import { spacingPatterns, borderRadius, springPresets } from "../theme";
+import { springPresets } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import {
   HomeScreen,
-  type HomeScreenProps,
   SettingsScreen,
   ComponentPlaygroundScreen,
   ComposerScreen,
 } from "../screens";
-import { isComponentPlaygroundEnabled } from "../utils/isDev";
 import { useCreateEntry } from "../db/useEntries";
 
 type Screen =
@@ -232,12 +223,6 @@ export function SimpleNavigation() {
 
   // handleEntryEditorCancel is now defined inline in renderScreen
 
-  const handleEntryEditorDelete = (entryId: number) => {
-    // React Query cache handles the deletion automatically
-    setCurrentScreen("home");
-    setEditingEntryId(undefined);
-  };
-
   const renderScreen = () => {
     switch (currentScreen) {
       case "home":
@@ -298,7 +283,6 @@ export function SimpleNavigation() {
             entryId={editingEntryId}
             onSave={handleEntryEditorSave}
             onCancel={cancelHandler}
-            onDelete={handleEntryEditorDelete}
           />
         );
       }

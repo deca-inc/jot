@@ -9,7 +9,6 @@ import { AIChatComposer } from "./AIChatComposer";
 export interface ComposerScreenProps {
   onSave?: (entryId: number) => void;
   onCancel?: () => void | Promise<void>; // Can be async to allow force save
-  onDelete?: (entryId: number) => void;
   initialType?: EntryType;
   initialContent?: string;
   entryId?: number; // For editing existing entries
@@ -19,7 +18,6 @@ export interface ComposerScreenProps {
 export function ComposerScreen({
   onSave,
   onCancel,
-  onDelete,
   initialType = "journal",
   initialContent = "",
   entryId,
@@ -161,7 +159,6 @@ export function ComposerScreen({
           onSave?.(newEntryId);
         }}
         onCancel={onCancel}
-        onDelete={onDelete}
       />
     );
   }
@@ -176,7 +173,6 @@ export function ComposerScreen({
           entryId={actualEntryId}
           onSave={onSave}
           onCancel={handleJournalCancel}
-          onDelete={onDelete}
           forceSaveRef={journalComposerForceSaveRef}
         />
       );

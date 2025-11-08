@@ -6,3 +6,4 @@ export * from "./BottomComposer";
 export * from "./ThemeControl";
 export * from "./ComposerInput";
 export * from "./AnimatedBlob";
+export * from "./FloatingComposerHeader";
