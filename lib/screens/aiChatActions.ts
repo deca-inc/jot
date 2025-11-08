@@ -16,24 +16,17 @@ import { llmQueue } from "../ai/ModelProvider";
 
 export interface AIChatActionContext {
   // React Query mutations
-  createEntry: any;
+  createEntry?: any; // Optional - not needed for all actions
   updateEntry: any;
 
-  // State setters
+  // State setters (local input state only)
   setTitle: (title: string) => void;
-  setChatMessages: React.Dispatch<React.SetStateAction<Block[]>>;
 
   // LLM instance
   llm: any;
 
   // Callbacks
   onSave?: (entryId: number) => void;
-
-  // Refs for tracking state
-  hasGeneratedTitleRef: { current: boolean };
-  actualEntryIdRef: { current: number | undefined };
-  isGeneratingRef: { current: boolean };
-  generatingMessageIndexRef: { current: number | null };
 }
 
 interface InitialConversationParams {
@@ -41,8 +34,182 @@ interface InitialConversationParams {
   title?: string;
 }
 
+interface CreateConversationParams {
+  userMessage: string;
+  createEntry: any;
+  updateEntry: any;
+  llmManager: any;
+  modelConfig: any;
+}
+
 /**
- * Action: Initialize a new AI conversation
+ * Action: Create a new AI conversation from scratch
+ *
+ * Use this from HomeScreen or anywhere you need to create a new conversation.
+ * This handles the complete flow and returns the entry ID for navigation.
+ *
+ * Flow:
+ * 1. Create entry with user message
+ * 2. Return entry ID immediately for navigation
+ * 3. Queue AI response generation (runs in background)
+ * 4. Generate title after AI response completes
+ *
+ * @returns The created entry ID
+ */
+export async function createConversation(
+  params: CreateConversationParams
+): Promise<number> {
+  const { userMessage, createEntry, updateEntry, llmManager, modelConfig } =
+    params;
+
+  try {
+    console.log("[AIChat Action] Creating new conversation");
+
+    // Step 1: Create entry with user message
+    const entry = await new Promise<any>((resolve, reject) => {
+      createEntry.mutate(
+        {
+          type: "ai_chat",
+          title: "AI Conversation",
+          blocks: [
+            {
+              type: "markdown",
+              content: userMessage.trim(),
+              role: "user",
+            },
+          ],
+          tags: [],
+          attachments: [],
+          isFavorite: false,
+        },
+        {
+          onSuccess: resolve,
+          onError: reject,
+        }
+      );
+    });
+
+    console.log("[AIChat Action] Created entry:", entry.id);
+
+    // Step 2: Queue background work (don't await - let it run async)
+    queueBackgroundGeneration(
+      entry.id,
+      userMessage,
+      entry.blocks,
+      updateEntry,
+      llmManager,
+      modelConfig
+    );
+
+    // Step 3: Return entry ID for immediate navigation
+    return entry.id;
+  } catch (error) {
+    console.error("[AIChat Action] Error creating conversation:", error);
+    throw error;
+  }
+}
+
+/**
+ * Queue AI generation and title generation to run in background
+ */
+async function queueBackgroundGeneration(
+  entryId: number,
+  userMessage: string,
+  blocks: Block[],
+  updateEntry: any,
+  llmManager: any,
+  modelConfig: any
+): Promise<void> {
+  try {
+    const convoId = `entry-${entryId}`;
+
+    // Set up listeners for streaming updates
+    let lastFullResponse = "";
+    const listeners = {
+      onToken: async (token: string) => {
+        lastFullResponse += token;
+        // Debounced writes every 100 chars
+        if (lastFullResponse.length % 100 === 0) {
+          try {
+            const updatedBlocks = [
+              ...blocks,
+              {
+                type: "markdown" as const,
+                content: lastFullResponse,
+                role: "assistant" as const,
+              },
+            ];
+            updateEntry.mutate({
+              id: entryId,
+              input: { blocks: updatedBlocks },
+            });
+          } catch (e) {
+            console.warn("[AIChat Action] Failed to stream update:", e);
+          }
+        }
+      },
+      onMessageHistoryUpdate: async (messages: any[]) => {
+        try {
+          const updatedBlocks = messages
+            .filter((m: any) => m.role !== "system")
+            .map((m: any) => ({
+              type: "markdown" as const,
+              content: m.content,
+              role: m.role as "user" | "assistant",
+            }));
+          updateEntry.mutate({
+            id: entryId,
+            input: { blocks: updatedBlocks },
+          });
+        } catch (e) {
+          console.warn("[AIChat Action] Failed to write message history:", e);
+        }
+      },
+    };
+
+    // Generate AI response
+    const llmForConvo = await llmManager.getOrCreate(
+      convoId,
+      modelConfig,
+      listeners,
+      undefined
+    );
+
+    const { blocksToLlmMessages } = require("../ai/ModelProvider");
+    const messages = blocksToLlmMessages(
+      blocks,
+      "You are a helpful AI assistant."
+    );
+
+    const aiResponse = await llmForConvo.generate(messages);
+    console.log("[AIChat Action] AI response generated for entry:", entryId);
+
+    // Generate title after AI response completes
+    if (userMessage) {
+      await generateTitle(
+        userMessage,
+        entryId,
+        {
+          updateEntry,
+          setTitle: () => {}, // No-op
+          llm: null,
+          onSave: undefined,
+        },
+        aiResponse
+      );
+    }
+
+    console.log(
+      "[AIChat Action] Background generation completed for entry:",
+      entryId
+    );
+  } catch (error) {
+    console.error("[AIChat Action] Background generation failed:", error);
+  }
+}
+
+/**
+ * Action: Initialize a new AI conversation (legacy - used by AIChatComposer)
  *
  * This handles the complete flow:
  * 1. Create entry with initial message
@@ -55,14 +222,14 @@ export async function initializeAIConversation(
   context: AIChatActionContext
 ): Promise<void> {
   const { initialMessage, title = "AI Conversation" } = params;
-  const { createEntry, onSave, actualEntryIdRef } = context;
+  const { createEntry, onSave } = context;
 
   try {
     console.log("[AIChat Action] Initializing new conversation");
 
     // Step 1: Create entry with initial message
     const entry = await new Promise<any>((resolve, reject) => {
-      createEntry.mutate(
+      createEntry!.mutate(
         {
           type: "ai_chat",
           title,
@@ -79,7 +246,6 @@ export async function initializeAIConversation(
     });
 
     console.log("[AIChat Action] Created entry:", entry.id);
-    actualEntryIdRef.current = entry.id;
 
     // Step 2: Trigger navigation early so user sees the conversation
     onSave?.(entry.id);
@@ -88,7 +254,8 @@ export async function initializeAIConversation(
     console.log("[AIChat Action] Generating AI response");
     const aiResponseContent = await generateAIResponse(
       [initialMessage],
-      context
+      context,
+      entry.id
     );
 
     // Step 4: Generate title based on first message and AI response
@@ -113,33 +280,50 @@ export async function initializeAIConversation(
 
 /**
  * Action: Generate AI response for given messages
+ *
+ * This function:
+ * 1. Adds a placeholder assistant message to the entry
+ * 2. Calls llm.generate() which streams tokens and updates the DB
+ * 3. Returns the generated content
+ *
  * @returns The generated AI response content
  */
 export async function generateAIResponse(
   messages: Block[],
-  context: AIChatActionContext
+  context: AIChatActionContext,
+  entryId?: number
 ): Promise<string> {
-  const { llm, isGeneratingRef, generatingMessageIndexRef, setChatMessages } =
-    context;
+  const { llm, updateEntry } = context;
 
   if (!llm) {
     throw new Error("LLM not ready");
   }
 
   try {
-    isGeneratingRef.current = true;
-
-    // Add placeholder assistant message
-    const placeholderIndex = messages.length;
-    generatingMessageIndexRef.current = placeholderIndex;
-
+    // Add placeholder assistant message to the entry
     const placeholderMessage: Block = {
       type: "markdown",
       content: "",
       role: "assistant",
     };
 
-    setChatMessages((prev) => [...prev, placeholderMessage]);
+    if (entryId) {
+      // Add placeholder to entry so UI shows "Thinking..."
+      await new Promise<void>((resolve, reject) => {
+        updateEntry.mutate(
+          {
+            id: entryId,
+            input: {
+              blocks: [...messages, placeholderMessage],
+            },
+          },
+          {
+            onSuccess: () => resolve(),
+            onError: reject,
+          }
+        );
+      });
+    }
 
     // Convert blocks to LLM messages
     const { blocksToLlmMessages } = require("../ai/ModelProvider");
@@ -148,34 +332,16 @@ export async function generateAIResponse(
       "You are a helpful AI assistant."
     );
 
-    // Generate response
-    await llm.generate(llmMessages);
+    // Generate response - this will stream tokens and update the DB
+    // The LLM hook's onToken callback handles database updates during streaming
+    const generatedContent = await llm.generate(llmMessages);
 
     console.log("[AIChat Action] AI response generated");
-
-    // Capture the generated response content from state
-    // After generation, the LLM hook updates the entry and syncs to state
-    let generatedContent = "";
-    setChatMessages((prev) => {
-      const lastMessage = prev[prev.length - 1];
-      if (
-        lastMessage?.role === "assistant" &&
-        lastMessage.type === "markdown"
-      ) {
-        generatedContent = lastMessage.content;
-      }
-      return prev; // Don't modify state, just read
-    });
 
     return generatedContent;
   } catch (error) {
     console.error("[AIChat Action] Error generating AI response:", error);
-    // Remove placeholder on error
-    setChatMessages((prev) => prev.slice(0, -1));
     throw error;
-  } finally {
-    isGeneratingRef.current = false;
-    generatingMessageIndexRef.current = null;
   }
 }
 
@@ -193,19 +359,11 @@ export async function generateTitle(
   context: AIChatActionContext,
   aiResponse?: string
 ): Promise<void> {
-  const { updateEntry, setTitle, hasGeneratedTitleRef, onSave } = context;
+  const { updateEntry, setTitle, onSave } = context;
 
-  // Don't generate if we've already generated a title
-  if (hasGeneratedTitleRef.current) {
-    console.log("[AIChat Action] Title already generated, skipping");
-    return;
-  }
-
-  hasGeneratedTitleRef.current = true;
+  console.log("[AIChat Action] Generating title for entry:", entryId);
 
   try {
-    console.log("[AIChat Action] Generating title for entry:", entryId);
-
     // Create title generation prompt with context
     let promptContent = `Generate a specific, memorable title (3-6 words) that captures the main topic of this conversation. The title should help the user remember what was discussed.
 
@@ -224,6 +382,9 @@ User: "${userMessage}"`;
 - Captures the key topic or subject matter
 - Helps identify this conversation from others
 - 3-6 words max
+- Plain text only (no markdown, no quotes, no formatting)
+
+Respond with ONLY the title text, nothing else.
 
 Title:`;
 
@@ -238,7 +399,7 @@ Title:`;
     const { blocksToLlmMessages } = require("../ai/ModelProvider");
     const messages = blocksToLlmMessages(
       titlePrompt,
-      "You are a helpful AI assistant that generates specific, memorable titles for conversations. Focus on the actual content and key topics discussed."
+      "You are a helpful AI assistant that generates specific, memorable titles for conversations. Return ONLY plain text titles with no markdown formatting, quotes, or special characters."
     );
 
     // Use separate conversation ID for title generation to avoid interfering with main chat
@@ -248,6 +409,11 @@ Title:`;
     // Clean up the title
     let cleanTitle = generatedTitle
       .trim()
+      // Remove markdown formatting
+      .replace(/\*\*/g, "") // Remove bold markers
+      .replace(/\*/g, "") // Remove italic markers
+      .replace(/^#+\s*/g, "") // Remove heading markers
+      .replace(/`/g, "") // Remove code markers
       .replace(/^["']|["']$/g, "") // Remove quotes
       .replace(
         /^(Title|Conversation Title|Chat Title|Response|Here's a title|Here is a title):\s*/i,
@@ -285,14 +451,18 @@ Title:`;
     }
   } catch (error) {
     console.error("[AIChat Action] Error generating title:", error);
-    // Reset flag so we can retry
-    hasGeneratedTitleRef.current = false;
     // Don't throw - title generation is non-critical
   }
 }
 
 /**
  * Action: Send a new message and generate response
+ *
+ * Flow:
+ * 1. Add user message to entry (create or update)
+ * 2. Trigger navigation if new entry
+ * 3. Queue AI response generation (runs in background)
+ * 4. Generate title if first message
  */
 export async function sendMessageWithResponse(
   message: string,
@@ -301,13 +471,7 @@ export async function sendMessageWithResponse(
   currentTitle: string,
   context: AIChatActionContext
 ): Promise<number> {
-  const {
-    createEntry,
-    updateEntry,
-    onSave,
-    actualEntryIdRef,
-    setChatMessages,
-  } = context;
+  const { createEntry, updateEntry, onSave } = context;
 
   const userMessage: Block = {
     type: "markdown",
@@ -316,14 +480,10 @@ export async function sendMessageWithResponse(
   };
 
   const updatedMessages = [...currentMessages, userMessage];
-
-  // Update local state immediately
-  setChatMessages(updatedMessages);
-
   const finalTitle = currentTitle.trim() || "AI Conversation";
   let finalEntryId = entryId;
 
-  // Save the message
+  // Save the user message to the entry
   if (entryId) {
     // Update existing entry
     await new Promise<void>((resolve, reject) => {
@@ -347,7 +507,7 @@ export async function sendMessageWithResponse(
   } else {
     // Create new entry
     const entry = await new Promise<any>((resolve, reject) => {
-      createEntry.mutate(
+      createEntry!.mutate(
         {
           type: "ai_chat",
           title: finalTitle,
@@ -364,15 +524,18 @@ export async function sendMessageWithResponse(
     });
 
     finalEntryId = entry.id;
-    actualEntryIdRef.current = entry.id;
     console.log("[AIChat Action] Created new entry:", entry.id);
 
-    // Trigger navigation
+    // Trigger navigation immediately - generation will happen in background
     onSave?.(entry.id);
   }
 
-  // Generate AI response
-  const aiResponseContent = await generateAIResponse(updatedMessages, context);
+  // Generate AI response in background
+  const aiResponseContent = await generateAIResponse(
+    updatedMessages,
+    context,
+    finalEntryId
+  );
 
   // Generate title if this is the first message
   if (currentMessages.length === 0) {

@@ -1,15 +1,21 @@
 ## Journal App Docs
 
+### Product & Design
 - **Product Principles**: see `product-principles.md` (START HERE)
 - **Product**: see `product.md`
 - **UX**: see `ux.md`
+- **Roadmap**: see `roadmap.md`
+
+### Technical
 - **Architecture**: see `architecture.md`
+- **React Patterns**: see `react-patterns.md` (coding guidelines)
 - **Data Model**: see `data.md`
 - **Security & Encryption**: see `security.md`
 - **AI**: see `ai.md`
 - **Search**: see `search.md`
+
+### Business
 - **Monetization**: see `monetization.md`
-- **Roadmap**: see `roadmap.md`
 
 ### Quick Principles
 - **Writing experience first**: Ultra-low latency, distraction-free focus, excellent typography, flexible components.

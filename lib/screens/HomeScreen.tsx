@@ -152,87 +152,21 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             isFavorite: false,
           });
         } else {
-          // Create AI chat entry using mutation - cache updates automatically
-          const entry = await createEntry.mutateAsync({
-            type: "ai_chat",
-            title: "AI Conversation",
-            blocks: [
-              {
-                type: "markdown" as const,
-                content: text.trim(),
-                role: "user" as const,
-              },
-            ],
-            tags: [],
-            attachments: [],
-            isFavorite: false,
+          // Create AI chat conversation using action system
+          const { createConversation } = require("./aiChatActions");
+
+          const entryId = await createConversation({
+            userMessage: text,
+            createEntry,
+            updateEntry,
+            llmManager,
+            modelConfig: Llama32_1B_Instruct,
           });
 
-          // Kick off background generation
-          const convoId = `entry-${entry.id}`;
-          let lastFullResponse = "";
-          const listeners = {
-            onToken: async (token: string) => {
-              lastFullResponse += token;
-              if (lastFullResponse.length % 100 === 0) {
-                try {
-                  const updatedBlocks = [
-                    ...entry.blocks,
-                    {
-                      type: "markdown" as const,
-                      content: lastFullResponse,
-                      role: "assistant" as const,
-                    },
-                  ];
-                  updateEntry.mutate({
-                    id: entry.id,
-                    input: { blocks: updatedBlocks },
-                  });
-                } catch (e) {
-                  console.warn("[HomeScreen] Failed to stream update:", e);
-                }
-              }
-            },
-            onMessageHistoryUpdate: async (messages: any[]) => {
-              try {
-                const updatedBlocks = messages
-                  .filter((m) => m.role !== "system")
-                  .map((m) => ({
-                    type: "markdown" as const,
-                    content: m.content,
-                    role: m.role as "user" | "assistant",
-                  }));
-                updateEntry.mutate({
-                  id: entry.id,
-                  input: { blocks: updatedBlocks },
-                });
-              } catch (e) {
-                console.warn(
-                  "[HomeScreen] Failed to write message history:",
-                  e
-                );
-              }
-            },
-          };
-
-          llmManager
-            .getOrCreate(convoId, Llama32_1B_Instruct, listeners, undefined)
-            .then((llmForConvo) => {
-              const { blocksToLlmMessages } = require("../ai/ModelProvider");
-              const messages = blocksToLlmMessages(
-                entry.blocks,
-                "You are a helpful AI assistant."
-              );
-              llmForConvo.generate(messages).catch((e: any) => {
-                console.error("[HomeScreen] Background generation failed:", e);
-              });
-            })
-            .catch((e) => {
-              console.error("[HomeScreen] Failed to initialize LLM:", e);
-            });
-
+          // Navigate to the conversation immediately
+          // (AI generation and title generation happen in background)
           if (onOpenEntryEditor) {
-            onOpenEntryEditor(entry.id);
+            onOpenEntryEditor(entryId);
           }
         }
       } catch (error) {

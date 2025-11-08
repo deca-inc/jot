@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-  useMemo,
-} from "react";
+import React, { useState, useCallback, useRef, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -26,7 +20,7 @@ import { spacingPatterns, borderRadius } from "../theme";
 import { typography } from "../theme/typography";
 import { Block } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useLLMForConvo, llmManager, llmQueue } from "../ai/ModelProvider";
+import { useLLMForConvo, llmManager } from "../ai/ModelProvider";
 import {
   useEntry,
   useCreateEntry,
@@ -35,8 +29,6 @@ import {
 } from "../db/useEntries";
 import {
   initializeAIConversation,
-  generateTitle,
-  generateAIResponse,
   sendMessageWithResponse,
   type AIChatActionContext,
 } from "./aiChatActions";
@@ -82,223 +74,97 @@ export function AIChatComposer({
   const updateEntry = useUpdateEntry();
   const deleteEntry = useDeleteEntry();
 
-  const [title, setTitle] = useState(initialTitle);
-  const [chatMessages, setChatMessages] = useState<Block[]>(initialBlocks);
+  // Local state for input only
+  const [titleInput, setTitleInput] = useState(initialTitle);
   const [newMessage, setNewMessage] = useState("");
   const [showMenu, setShowMenu] = useState(false);
+
+  // Refs for UI only
   const flatListRef = useRef<FlatList<Block>>(null);
   const titleInputRef = useRef<TextInput>(null);
   const chatInputRef = useRef<TextInput>(null);
-  const hasTriggeredInitialResponse = useRef(false);
-  const isGeneratingRef = useRef(false);
-  const generatingMessageIndexRef = useRef<number | null>(null);
-  const justCreatedEntryRef = useRef<boolean>(false);
-  const hasScrolledToBottomRef = useRef(false);
-  const isDeletingRef = useRef(false); // Track deletion state to prevent race conditions
-  const hasGeneratedTitleRef = useRef<boolean>(false); // Track if title has been auto-generated
-  const actualEntryIdRef = useRef<number | undefined>(entryId); // Track the actual entry ID (including newly created ones)
+  const hasQueuedInitialWork = useRef(false);
 
-  // Watch for LLM errors
-  useEffect(() => {
-    if (llmError) {
-      console.error("[AIChatComposer] LLM error:", llmError);
-      Alert.alert("AI Error", llmError);
-    }
-  }, [llmError]);
+  // Derive displayed data from entry or fallback to initial props
+  const displayedTitle = entry?.title ?? initialTitle;
+  const displayedBlocks = entry?.blocks ?? initialBlocks;
 
-  // Track last synced blocks to prevent infinite loops
-  const lastSyncedBlocksRef = useRef<string>("");
+  // Show LLM errors
+  if (llmError) {
+    console.error("[AIChatComposer] LLM error:", llmError);
+    Alert.alert("AI Error", llmError);
+  }
 
-  // Track if component is mounted to prevent state updates after unmount
-  const isMountedRef = useRef(true);
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
+  // Scroll to bottom helper
+  const scrollToBottom = useCallback((animated: boolean = true) => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated });
+    }, 100);
   }, []);
-
-  // Sync chatMessages with entry.blocks when entry updates from React Query
-  // This handles streaming updates - when tokens arrive, hook updates DB and cache,
-  // which triggers this effect to sync local state
-  useEffect(() => {
-    // Guard: Don't update state if component is unmounted
-    if (!isMountedRef.current) {
-      return;
-    }
-
-    // Skip entirely if we just created the entry - don't overwrite what user added
-    if (justCreatedEntryRef.current) {
-      justCreatedEntryRef.current = false; // Reset flag
-      return;
-    }
-
-    if (!entry) {
-      // Entry not loaded yet or entry was deleted
-      if (!entryId && chatMessages.length === 0) {
-        // New entry - use initial values
-        setTitle(initialTitle);
-        setChatMessages(initialBlocks);
-        lastSyncedBlocksRef.current = JSON.stringify(initialBlocks);
-      }
-      return;
-    }
-
-    // Only sync if this is the correct entry
-    if (entry.id !== entryId) {
-      return;
-    }
-
-    // Update title if it changed
-    if (entry.title !== title) {
-      setTitle(entry.title);
-    }
-
-    // Sync blocks - only update if blocks actually changed (by string comparison)
-    // Use ref to track last synced state to prevent loops
-    const entryBlocksStr = JSON.stringify(entry.blocks);
-
-    if (
-      entryBlocksStr !== lastSyncedBlocksRef.current &&
-      entry.type === "ai_chat"
-    ) {
-      setChatMessages(entry.blocks);
-      lastSyncedBlocksRef.current = entryBlocksStr;
-
-      // Auto-scroll to bottom when new content arrives
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [entry, entryId, title, initialTitle, initialBlocks]);
-
-  // Configure model service once it's ready (optional - can be done at provider level)
-  // Configuration is already done in ModelProvider, but we can override if needed
-
-  // Reset trigger flag when entry changes
-  useEffect(() => {
-    hasTriggeredInitialResponse.current = false;
-    isGeneratingRef.current = false;
-    hasScrolledToBottomRef.current = false;
-    hasGeneratedTitleRef.current = false;
-    actualEntryIdRef.current = entryId; // Update the actual entry ID ref
-  }, [entryId]);
-
-  // Scroll to bottom on initial load when messages are present
-  useEffect(() => {
-    if (chatMessages.length > 0 && !hasScrolledToBottomRef.current) {
-      // Use a longer timeout to ensure FlatList has rendered
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
-        hasScrolledToBottomRef.current = true;
-      }, 300);
-    }
-  }, [chatMessages.length]);
 
   // Create action context for dispatching actions
   const actionContext = useMemo<AIChatActionContext>(
     () => ({
       createEntry,
       updateEntry,
-      setTitle,
-      setChatMessages,
+      setTitle: setTitleInput, // Update local input state
       llm,
-      onSave,
-      hasGeneratedTitleRef,
-      actualEntryIdRef,
-      isGeneratingRef,
-      generatingMessageIndexRef,
+      onSave: (id: number) => {
+        scrollToBottom();
+        onSave?.(id);
+      },
     }),
-    [createEntry, updateEntry, llm, onSave]
+    [createEntry, updateEntry, llm, onSave, scrollToBottom]
   );
 
-  // Trigger initial conversation setup if we have an initial prompt
-  // This replaces the complex useEffect chain
-  useEffect(() => {
-    if (
-      !isLoading &&
-      !isLLMLoading &&
-      llm &&
-      !hasTriggeredInitialResponse.current &&
-      !isGeneratingRef.current &&
-      chatMessages.length === 1 &&
-      chatMessages[0]?.role === "user"
-    ) {
-      hasTriggeredInitialResponse.current = true;
-      const initialMessage = chatMessages[0];
+  // Queue initial work if we have initial blocks and this is a new conversation
+  // This would only happen if someone passed initialBlocks without an entryId
+  // (which doesn't happen in practice - HomeScreen creates the entry first)
+  if (
+    !entryId &&
+    !hasQueuedInitialWork.current &&
+    initialBlocks.length === 1 &&
+    initialBlocks[0]?.role === "user" &&
+    llm &&
+    !isLLMLoading
+  ) {
+    hasQueuedInitialWork.current = true;
+    const initialMessage = initialBlocks[0];
 
-      // For new conversations, use full initialization flow
-      // For existing entries, just generate response and title
-      if (!entryId) {
-        initializeAIConversation(
-          { initialMessage, title },
-          actionContext
-        ).catch((error) => {
-          console.error("[AIChatComposer] Initial conversation failed:", error);
-          Alert.alert(
-            "AI Error",
-            `Failed to initialize conversation: ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          );
-        });
-      } else {
-        // Existing entry - just generate response and title
-        const firstMessageContent =
-          initialMessage.type === "markdown" ? initialMessage.content : "";
-
-        generateAIResponse([initialMessage], actionContext)
-          .then((aiResponseContent) => {
-            // Generate title after response completes, including AI response context
-            if (firstMessageContent) {
-              return generateTitle(
-                firstMessageContent,
-                entryId,
-                actionContext,
-                aiResponseContent
-              );
-            }
-          })
-          .catch((error) => {
-            console.error(
-              "[AIChatComposer] Initial response generation failed:",
-              error
-            );
-            Alert.alert(
-              "AI Error",
-              `Failed to generate response: ${
-                error instanceof Error ? error.message : String(error)
-              }`
-            );
-          });
-      }
-    }
-  }, [
-    isLoading,
-    isLLMLoading,
-    llm,
-    chatMessages,
-    entryId,
-    title,
-    actionContext,
-  ]);
+    // Queue work in background - don't block render
+    Promise.resolve().then(() => {
+      initializeAIConversation(
+        { initialMessage, title: initialTitle || "AI Conversation" },
+        actionContext
+      ).catch((error) => {
+        console.error("[AIChatComposer] Initial conversation failed:", error);
+        Alert.alert(
+          "AI Error",
+          `Failed to initialize conversation: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      });
+    });
+  }
 
   const handleTitleFocus = useCallback(() => {
+    const currentTitle = entry?.title ?? titleInput;
     setTimeout(() => {
       titleInputRef.current?.setNativeProps({
-        selection: { start: 0, end: title.length },
+        selection: { start: 0, end: currentTitle.length },
       });
     }, 100);
-  }, [title]);
+  }, [entry?.title, titleInput]);
 
   const handleTitleChange = useCallback((newTitle: string) => {
-    setTitle(newTitle);
+    setTitleInput(newTitle);
   }, []);
 
   const handleTitleBlur = useCallback(() => {
     if (!entryId) return;
 
-    const newTitle = title.trim();
+    const newTitle = titleInput.trim();
     updateEntry.mutate(
       {
         id: entryId,
@@ -315,7 +181,7 @@ export function AIChatComposer({
         },
       }
     );
-  }, [title, entryId, updateEntry, onSave]);
+  }, [titleInput, entryId, updateEntry, onSave]);
 
   const handleTitleSubmit = useCallback(() => {
     titleInputRef.current?.blur();
@@ -337,11 +203,7 @@ export function AIChatComposer({
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            // Mark as deleting to prevent any operations
-            isDeletingRef.current = true;
-
             // CRITICAL: Clean up LLM instance BEFORE deleting entry to free memory
-            // LLM models can be 100+ MB - must be deleted to prevent OOM
             const convoId = `entry-${entryId}`;
             try {
               llmManager.delete(convoId);
@@ -355,9 +217,7 @@ export function AIChatComposer({
             // Delete entry and navigate back
             deleteEntry.mutate(entryId, {
               onSuccess: () => {
-                // Navigate immediately - cache is already cleared optimistically
                 onCancel?.();
-                // Notify parent after navigation
                 setTimeout(() => {
                   onDelete?.(entryId);
                 }, 0);
@@ -365,7 +225,6 @@ export function AIChatComposer({
               onError: (error) => {
                 console.error("Error deleting entry:", error);
                 Alert.alert("Error", "Failed to delete entry");
-                isDeletingRef.current = false;
               },
             });
           },
@@ -375,24 +234,24 @@ export function AIChatComposer({
   }, [entryId, deleteEntry, onDelete, onCancel]);
 
   const handleSendMessage = useCallback(async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !llm) return;
 
     const messageText = newMessage.trim();
     setNewMessage("");
 
-    // Use action system to handle the entire flow
+    // Queue work via action system and redirect if needed
     try {
       await sendMessageWithResponse(
         messageText,
         entryId,
-        chatMessages,
-        title,
+        displayedBlocks,
+        displayedTitle,
         actionContext
       );
 
       // Scroll to bottom and refocus input
+      scrollToBottom();
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
         chatInputRef.current?.focus();
       }, 100);
     } catch (error) {
@@ -404,7 +263,15 @@ export function AIChatComposer({
         }`
       );
     }
-  }, [newMessage, entryId, chatMessages, title, actionContext]);
+  }, [
+    newMessage,
+    entryId,
+    displayedBlocks,
+    displayedTitle,
+    actionContext,
+    llm,
+    scrollToBottom,
+  ]);
 
   // Render item for FlatList
   const renderMessage: ListRenderItem<Block> = useCallback(
@@ -412,10 +279,9 @@ export function AIChatComposer({
       const isUser = message.role === "user";
       const messageContent = message.type === "markdown" ? message.content : "";
       const isEmpty = !messageContent || messageContent.trim().length === 0;
-      const isGenerating =
-        !isUser &&
-        isEmpty &&
-        (isLLMLoading || generatingMessageIndexRef.current === index);
+      // Derive: if it's an empty assistant message and it's the last message, it's generating
+      const isLastMessage = index === displayedBlocks.length - 1;
+      const isGenerating = !isUser && isEmpty && isLastMessage && isLLMLoading;
 
       return (
         <View
@@ -460,7 +326,7 @@ export function AIChatComposer({
         </View>
       );
     },
-    [isLLMLoading, seasonalTheme]
+    [isLLMLoading, seasonalTheme, displayedBlocks.length]
   );
 
   const keyExtractor = useCallback((item: Block, index: number) => {
@@ -509,7 +375,7 @@ export function AIChatComposer({
                 styles.headerTitleInput,
                 { color: seasonalTheme.textPrimary },
               ]}
-              value={title}
+              value={titleInput || displayedTitle}
               onChangeText={handleTitleChange}
               onFocus={handleTitleFocus}
               onBlur={handleTitleBlur}
@@ -582,7 +448,7 @@ export function AIChatComposer({
       {/* Messages with FlatList for better performance */}
       <FlatList
         ref={flatListRef}
-        data={chatMessages}
+        data={displayedBlocks}
         renderItem={renderMessage}
         keyExtractor={keyExtractor}
         ListEmptyComponent={ListEmptyComponent}
@@ -598,17 +464,14 @@ export function AIChatComposer({
         initialNumToRender={20}
         windowSize={21}
         onContentSizeChange={() => {
-          // Auto-scroll to bottom when new messages are added (but not on initial load)
-          if (chatMessages.length > 0 && hasScrolledToBottomRef.current) {
-            flatListRef.current?.scrollToEnd({ animated: true });
-          }
+          // Auto-scroll to bottom when content size changes
+          scrollToBottom();
         }}
         onLayout={() => {
-          // Scroll to bottom when FlatList first lays out with existing messages
-          if (chatMessages.length > 0 && !hasScrolledToBottomRef.current) {
+          // Scroll to bottom on initial layout if we have messages
+          if (displayedBlocks.length > 0) {
             setTimeout(() => {
               flatListRef.current?.scrollToEnd({ animated: false });
-              hasScrolledToBottomRef.current = true;
             }, 100);
           }
         }}
@@ -638,7 +501,7 @@ export function AIChatComposer({
           value={newMessage}
           onChangeText={setNewMessage}
           multiline
-          editable={true}
+          editable={!isLLMLoading || !!llm}
           onSubmitEditing={handleSendMessage}
           returnKeyType="send"
           blurOnSubmit={false}
@@ -646,13 +509,17 @@ export function AIChatComposer({
         <TouchableOpacity
           onPress={handleSendMessage}
           disabled={
-            !newMessage.trim() || createEntry.isPending || updateEntry.isPending
+            !newMessage.trim() ||
+            !llm ||
+            createEntry.isPending ||
+            updateEntry.isPending
           }
           style={[
             styles.sendButton,
             {
               backgroundColor:
                 newMessage.trim() &&
+                llm &&
                 !createEntry.isPending &&
                 !updateEntry.isPending
                   ? seasonalTheme.chipBg
@@ -665,6 +532,7 @@ export function AIChatComposer({
             size={20}
             color={
               newMessage.trim() &&
+              llm &&
               !createEntry.isPending &&
               !updateEntry.isPending
                 ? seasonalTheme.chipText || seasonalTheme.textPrimary
