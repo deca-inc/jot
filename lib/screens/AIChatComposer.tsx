@@ -26,13 +26,20 @@ import { spacingPatterns, borderRadius } from "../theme";
 import { typography } from "../theme/typography";
 import { Block } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useLLMForConvo, llmManager } from "../ai/ModelProvider";
+import { useLLMForConvo, llmManager, llmQueue } from "../ai/ModelProvider";
 import {
   useEntry,
   useCreateEntry,
   useUpdateEntry,
   useDeleteEntry,
 } from "../db/useEntries";
+import {
+  initializeAIConversation,
+  generateTitle,
+  generateAIResponse,
+  sendMessageWithResponse,
+  type AIChatActionContext,
+} from "./aiChatActions";
 
 export interface AIChatComposerProps {
   entryId?: number;
@@ -88,6 +95,8 @@ export function AIChatComposer({
   const justCreatedEntryRef = useRef<boolean>(false);
   const hasScrolledToBottomRef = useRef(false);
   const isDeletingRef = useRef(false); // Track deletion state to prevent race conditions
+  const hasGeneratedTitleRef = useRef<boolean>(false); // Track if title has been auto-generated
+  const actualEntryIdRef = useRef<number | undefined>(entryId); // Track the actual entry ID (including newly created ones)
 
   // Watch for LLM errors
   useEffect(() => {
@@ -171,6 +180,8 @@ export function AIChatComposer({
     hasTriggeredInitialResponse.current = false;
     isGeneratingRef.current = false;
     hasScrolledToBottomRef.current = false;
+    hasGeneratedTitleRef.current = false;
+    actualEntryIdRef.current = entryId; // Update the actual entry ID ref
   }, [entryId]);
 
   // Scroll to bottom on initial load when messages are present
@@ -184,64 +195,25 @@ export function AIChatComposer({
     }
   }, [chatMessages.length]);
 
-  // Helper function to generate AI response
-  // Uses generate() with full context from chatMessages to ensure proper context handling
-  const generateAIResponse = useCallback(async () => {
-    if (!llm) {
-      console.warn("[AIChatComposer] LLM not ready yet");
-      return;
-    }
+  // Create action context for dispatching actions
+  const actionContext = useMemo<AIChatActionContext>(
+    () => ({
+      createEntry,
+      updateEntry,
+      setTitle,
+      setChatMessages,
+      llm,
+      onSave,
+      hasGeneratedTitleRef,
+      actualEntryIdRef,
+      isGeneratingRef,
+      generatingMessageIndexRef,
+    }),
+    [createEntry, updateEntry, llm, onSave]
+  );
 
-    try {
-      isGeneratingRef.current = true;
-
-      // Get current messages using functional update to ensure we have latest state
-      let currentMessages: Block[] = [];
-      setChatMessages((prev) => {
-        currentMessages = prev;
-
-        // Add placeholder assistant message for UI
-        const placeholderAssistantMessage: Block = {
-          type: "markdown",
-          content: "",
-          role: "assistant",
-        };
-        generatingMessageIndexRef.current = prev.length;
-        return [...prev, placeholderAssistantMessage];
-      });
-
-      // Use generate() with full context from current messages
-      // This includes all messages (user + assistant) in the correct order
-      const { blocksToLlmMessages } = require("../ai/ModelProvider");
-      const messages = blocksToLlmMessages(
-        currentMessages,
-        "You are a helpful AI assistant."
-      );
-
-      await llm.generate(messages);
-
-      // Scroll to bottom after response
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    } catch (e) {
-      console.error("[AIChatComposer] Error generating AI response:", e);
-      // Remove placeholder on error
-      setChatMessages((prev) => prev.slice(0, -1));
-      Alert.alert(
-        "AI Error",
-        `Failed to generate a response: ${
-          e instanceof Error ? e.message : String(e)
-        }`
-      );
-    } finally {
-      isGeneratingRef.current = false;
-      generatingMessageIndexRef.current = null;
-    }
-  }, [llm]);
-
-  // Trigger AI response for initial prompt if needed
-  // Wait for LLM to be ready
+  // Trigger initial conversation setup if we have an initial prompt
+  // This replaces the complex useEffect chain
   useEffect(() => {
     if (
       !isLoading &&
@@ -253,25 +225,63 @@ export function AIChatComposer({
       chatMessages[0]?.role === "user"
     ) {
       hasTriggeredInitialResponse.current = true;
-      // Use generate() with full context instead of sendMessage() to avoid duplication
-      // and ensure full context is passed
-      const { blocksToLlmMessages } = require("../ai/ModelProvider");
-      const messages = blocksToLlmMessages(
-        chatMessages,
-        "You are a helpful AI assistant."
-      );
+      const initialMessage = chatMessages[0];
 
-      llm.generate(messages).catch((e) => {
-        console.error("[AIChatComposer] Initial generation failed:", e);
-        Alert.alert(
-          "AI Error",
-          `Failed to generate initial response: ${
-            e instanceof Error ? e.message : String(e)
-          }`
-        );
-      });
+      // For new conversations, use full initialization flow
+      // For existing entries, just generate response and title
+      if (!entryId) {
+        initializeAIConversation(
+          { initialMessage, title },
+          actionContext
+        ).catch((error) => {
+          console.error("[AIChatComposer] Initial conversation failed:", error);
+          Alert.alert(
+            "AI Error",
+            `Failed to initialize conversation: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        });
+      } else {
+        // Existing entry - just generate response and title
+        const firstMessageContent =
+          initialMessage.type === "markdown" ? initialMessage.content : "";
+
+        generateAIResponse([initialMessage], actionContext)
+          .then((aiResponseContent) => {
+            // Generate title after response completes, including AI response context
+            if (firstMessageContent) {
+              return generateTitle(
+                firstMessageContent,
+                entryId,
+                actionContext,
+                aiResponseContent
+              );
+            }
+          })
+          .catch((error) => {
+            console.error(
+              "[AIChatComposer] Initial response generation failed:",
+              error
+            );
+            Alert.alert(
+              "AI Error",
+              `Failed to generate response: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            );
+          });
+      }
     }
-  }, [isLoading, isLLMLoading, llm, chatMessages]);
+  }, [
+    isLoading,
+    isLLMLoading,
+    llm,
+    chatMessages,
+    entryId,
+    title,
+    actionContext,
+  ]);
 
   const handleTitleFocus = useCallback(() => {
     setTimeout(() => {
@@ -367,97 +377,34 @@ export function AIChatComposer({
   const handleSendMessage = useCallback(async () => {
     if (!newMessage.trim()) return;
 
-    // ModelProvider's generate() will automatically wait for model to be ready
-    const userMessage: Block = {
-      type: "markdown",
-      content: newMessage.trim(),
-      role: "user",
-    };
-
-    // Add user message to chat immediately
-    // Use functional update to ensure we get the latest state
-    let updatedMessages: Block[] = [];
-    setChatMessages((prev) => {
-      updatedMessages = [...prev, userMessage];
-      return updatedMessages;
-    });
-
-    // Ensure state is updated before proceeding
-    // The state update is async, but we have updatedMessages for the mutation
-
-    // Save the user message immediately
-    const finalTitle = title.trim() || "AI Conversation";
-    if (entryId) {
-      updateEntry.mutate(
-        {
-          id: entryId,
-          input: {
-            title: finalTitle,
-            blocks: updatedMessages,
-          },
-        },
-        {
-          onSuccess: () => {
-            onSave?.(entryId);
-          },
-          onError: (error) => {
-            console.error("Error saving message:", error);
-          },
-        }
-      );
-    } else {
-      // Mark that we're creating an entry so the loading effect doesn't overwrite
-      justCreatedEntryRef.current = true;
-
-      createEntry.mutate(
-        {
-          type: "ai_chat",
-          title: finalTitle,
-          blocks: updatedMessages,
-          tags: [],
-          attachments: [],
-          isFavorite: false,
-        },
-        {
-          onSuccess: (entry) => {
-            // Delay onSave slightly to let state update render first
-            setTimeout(() => {
-              onSave?.(entry.id);
-            }, 100);
-          },
-          onError: (error) => {
-            justCreatedEntryRef.current = false; // Reset on error
-            console.error("Error saving message:", error);
-          },
-        }
-      );
-    }
-
+    const messageText = newMessage.trim();
     setNewMessage("");
 
-    // Scroll to bottom and refocus input
-    setTimeout(() => {
-      if (chatMessages.length > 0) {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }
-      // Refocus input after sending message
-      chatInputRef.current?.focus();
-    }, 100);
+    // Use action system to handle the entire flow
+    try {
+      await sendMessageWithResponse(
+        messageText,
+        entryId,
+        chatMessages,
+        title,
+        actionContext
+      );
 
-    // Generate AI response with full context (including the new user message)
-    // Use generate() which takes full context to avoid duplication
-    setTimeout(() => {
-      generateAIResponse();
-    }, 0);
-  }, [
-    newMessage,
-    title,
-    entryId,
-    createEntry,
-    updateEntry,
-    onSave,
-    generateAIResponse,
-  ]);
+      // Scroll to bottom and refocus input
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+        chatInputRef.current?.focus();
+      }, 100);
+    } catch (error) {
+      console.error("[AIChatComposer] Error sending message:", error);
+      Alert.alert(
+        "Error",
+        `Failed to send message: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }, [newMessage, entryId, chatMessages, title, actionContext]);
 
   // Render item for FlatList
   const renderMessage: ListRenderItem<Block> = useCallback(
