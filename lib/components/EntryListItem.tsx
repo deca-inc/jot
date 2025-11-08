@@ -47,6 +47,37 @@ export function EntryListItem({
     [seasonalTheme, theme.colors.textPrimary, theme.colors.textSecondary]
   );
 
+  // Extract RGB values from cardBg for gradient (works with rgba, rgb, and hex)
+  const gradientColors = React.useMemo(() => {
+    const cardBg = itemTheme.cardBg;
+
+    // Extract RGB values from rgba/rgb string or hex
+    let r = 255,
+      g = 255,
+      b = 255;
+
+    if (cardBg.startsWith("rgba") || cardBg.startsWith("rgb")) {
+      const match = cardBg.match(/\d+/g);
+      if (match && match.length >= 3) {
+        r = parseInt(match[0]);
+        g = parseInt(match[1]);
+        b = parseInt(match[2]);
+      }
+    } else if (cardBg.startsWith("#")) {
+      const hex = cardBg.replace("#", "");
+      r = parseInt(hex.substring(0, 2), 16);
+      g = parseInt(hex.substring(2, 4), 16);
+      b = parseInt(hex.substring(4, 6), 16);
+    }
+
+    return [
+      `rgba(${r}, ${g}, ${b}, 0)`, // Fully transparent
+      `rgba(${r}, ${g}, ${b}, 0.7)`, // 70% opaque
+      `rgba(${r}, ${g}, ${b}, 0.95)`, // 95% opaque
+      `rgba(${r}, ${g}, ${b}, 1)`, // Fully opaque
+    ] as const;
+  }, [itemTheme.cardBg]);
+
   // Memoize RenderHtml props to prevent re-renders
   const htmlTagsStyles = React.useMemo(
     () => ({
@@ -337,8 +368,8 @@ export function EntryListItem({
         </View>
 
         <LinearGradient
-          colors={["transparent", itemTheme.cardBg]}
-          locations={[0, 1]}
+          colors={gradientColors}
+          locations={[0, 0.3, 0.7, 1]}
           style={styles.fadeOverlay}
           pointerEvents="none"
         />
