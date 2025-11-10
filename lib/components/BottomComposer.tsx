@@ -6,7 +6,6 @@ import {
   Animated,
   Easing,
   useColorScheme,
-  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
@@ -15,7 +14,6 @@ import { Text } from "./Text";
 import { ComposerInput } from "./ComposerInput";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { AnimatedBlob } from "./AnimatedBlob";
 
 export type ComposerMode = "journal" | "ai";
 
@@ -188,33 +186,12 @@ export function BottomComposer({
     </View>
   );
 
-  const screenWidth = Dimensions.get("window").width;
-  const blobHeight = 140;
   const peekHeight = 16; // How much the glow peeks up above the composer edge
 
   return (
     <View style={[styles.outerWrapper, { paddingTop: peekHeight }]}>
       {/* Animated blob glow positioned to peek up over the composer */}
       {/* Positioned at top of outerWrapper to peek above */}
-      <View
-        style={[
-          styles.blobContainer,
-          {
-            height: blobHeight,
-            width: screenWidth,
-            position: "absolute",
-            top: -peekHeight, // Extend above by peekHeight
-          },
-        ]}
-      >
-        <AnimatedBlob
-          width={screenWidth}
-          height={blobHeight}
-          color={seasonalTheme.subtleGlow.shadowColor}
-          opacity={Math.max(0.6, seasonalTheme.subtleGlow.shadowOpacity * 2.5)}
-        />
-      </View>
-
       <Animated.View
         style={[
           styles.wrapper,
@@ -258,12 +235,6 @@ const styles = StyleSheet.create({
     position: "relative",
     zIndex: 1,
     overflow: "hidden", // Enable overflow hidden as requested
-  },
-  blobContainer: {
-    position: "absolute",
-    left: 0,
-    zIndex: 0,
-    pointerEvents: "none", // Don't block touches
   },
   wrapper: {
     borderTopLeftRadius: borderRadius.xl,

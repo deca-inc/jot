@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode } from "react";
+import React, { createContext, useContext, ReactNode, useMemo } from "react";
 import { useColorScheme, Platform } from "react-native";
 import { theme, Theme } from "./index";
 
@@ -23,11 +23,14 @@ export function ThemeProvider({
 
   // For now, we only support light mode
   // Dark mode can be added later by extending the theme
-  const contextValue: ThemeContextValue = {
-    ...theme,
-    isDark: false, // Always light mode for now
-    isHighContrast: highContrast,
-  };
+  const contextValue: ThemeContextValue = useMemo(
+    () => ({
+      ...theme,
+      isDark: false, // Always light mode for now
+      isHighContrast: highContrast,
+    }),
+    [highContrast]
+  );
 
   return (
     <ThemeContext.Provider value={contextValue}>

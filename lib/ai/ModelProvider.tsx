@@ -279,9 +279,37 @@ async function createLLMForConvo(
 class LLMManager {
   private listeners = new Map<string, Set<LLMListeners>>();
   private isLoaded = false;
+  private currentConfig: LlmModelConfig = Llama32_1B_Instruct;
 
   constructor() {
     // Initialize on first use
+  }
+
+  /**
+   * Reload the LLM with a new model configuration
+   */
+  async reloadWithConfig(config: LlmModelConfig): Promise<void> {
+    console.log(`[LLMManager] Reloading with model: ${config.modelId}`);
+    
+    // Unload current model
+    await llmQueue.unload();
+    this.isLoaded = false;
+    
+    // Update config
+    this.currentConfig = config;
+    
+    // Load new model
+    await llmQueue.load(config);
+    this.isLoaded = true;
+    
+    console.log(`[LLMManager] Successfully reloaded with ${config.modelId}`);
+  }
+
+  /**
+   * Get current model configuration
+   */
+  getCurrentConfig(): LlmModelConfig {
+    return this.currentConfig;
   }
 
   /**
@@ -423,6 +451,43 @@ class LLMManager {
 
 // Singleton instance
 export const llmManager = new LLMManager();
+
+// Context for model management
+interface ModelContextValue {
+  reloadModel: (config: LlmModelConfig) => Promise<void>;
+  currentConfig: LlmModelConfig;
+}
+
+const ModelContext = createContext<ModelContextValue | null>(null);
+
+export function useModel(): ModelContextValue {
+  const context = useContext(ModelContext);
+  if (!context) {
+    throw new Error("useModel must be used within ModelProvider");
+  }
+  return context;
+}
+
+// Provider component to wrap app
+export function ModelProvider({ children }: { children: React.ReactNode }) {
+  const [currentConfig, setCurrentConfig] = useState<LlmModelConfig>(
+    Llama32_1B_Instruct
+  );
+
+  const reloadModel = useCallback(async (config: LlmModelConfig) => {
+    await llmManager.reloadWithConfig(config);
+    setCurrentConfig(config);
+  }, []);
+
+  const value: ModelContextValue = {
+    reloadModel,
+    currentConfig,
+  };
+
+  return (
+    <ModelContext.Provider value={value}>{children}</ModelContext.Provider>
+  );
+}
 
 export function useLLMForConvo(
   convoId: string,

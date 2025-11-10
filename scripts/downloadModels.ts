@@ -1,7 +1,12 @@
 #!/usr/bin/env tsx
 /**
- * Script to download Llama 3.2 1B Instruct model files for local development
- * Downloads quantized (SpinQuant) models to assets/models/ directory for bundling with the app
+ * Script to download AI model files for local development
+ * Downloads quantized models to assets/models/{model-name}/ directory for bundling with the app
+ *
+ * Usage:
+ *   pnpm download:models              # Download default model (Llama 3.2 1B)
+ *   pnpm download:models --all        # Download all available models
+ *   pnpm download:models --model glm-4-9b-chat  # Download specific model
  */
 
 import * as fs from "fs";
@@ -9,24 +14,143 @@ import * as path from "path";
 import * as https from "https";
 
 const MODELS_DIR = path.join(__dirname, "../assets/models");
-const BASE_URL =
-  "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2/resolve/v0.5.0";
 
-const FILES_TO_DOWNLOAD = [
+// Model download configurations
+interface ModelDownloadConfig {
+  modelId: string;
+  displayName: string;
+  folderName: string;
+  available: boolean;
+  files: Array<{
+    url: string;
+    filename: string;
+    description: string;
+  }>;
+}
+
+// Using commit hashes instead of 'main' for stable, permanent URLs
+const LLAMA_BASE_URL =
+  "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2/resolve/76ab87fe4ceb2e00c19a24b18326e9c1506f3f20";
+const QWEN_BASE_URL =
+  "https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/ae11f6fb40b8168952970e4dd84285697b5ac069";
+
+const MODEL_CONFIGS: ModelDownloadConfig[] = [
+  // Llama 3.2 models
   {
-    url: `${BASE_URL}/llama-3.2-1B/spinquant/llama3_2_spinquant.pte`,
-    filename: "llama3_2_spinquant.pte",
-    description: "Llama 3.2 1B Model (SpinQuant quantized, ~800MB)",
+    modelId: "llama-3.2-1b-instruct",
+    displayName: "Llama 3.2 1B Instruct",
+    folderName: "llama-3.2-1b-instruct",
+    available: true,
+    files: [
+      {
+        url: `${LLAMA_BASE_URL}/llama-3.2-1B/spinquant/llama3_2_spinquant.pte`,
+        filename: "llama3_2_spinquant.pte",
+        description: "Model PTE (~1.1GB)",
+      },
+      {
+        url: `${LLAMA_BASE_URL}/tokenizer.json`,
+        filename: "tokenizer.json",
+        description: "Tokenizer (~10MB)",
+      },
+      {
+        url: `${LLAMA_BASE_URL}/tokenizer_config.json`,
+        filename: "tokenizer_config.json",
+        description: "Tokenizer Config (~55KB)",
+      },
+    ],
   },
   {
-    url: `${BASE_URL}/tokenizer.json`,
-    filename: "tokenizer.json",
-    description: "Tokenizer (~1MB)",
+    modelId: "llama-3.2-3b-instruct",
+    displayName: "Llama 3.2 3B Instruct",
+    folderName: "llama-3.2-3b-instruct",
+    available: true,
+    files: [
+      {
+        url: `${LLAMA_BASE_URL}/llama-3.2-3B/spinquant/llama3_2_3B_spinquant.pte`,
+        filename: "llama3_2_3B_spinquant.pte",
+        description: "Model PTE (~2.4GB)",
+      },
+      {
+        url: `${LLAMA_BASE_URL}/tokenizer.json`,
+        filename: "tokenizer.json",
+        description: "Tokenizer (~10MB)",
+      },
+      {
+        url: `${LLAMA_BASE_URL}/tokenizer_config.json`,
+        filename: "tokenizer_config.json",
+        description: "Tokenizer Config (~55KB)",
+      },
+    ],
+  },
+  // Qwen 3 models
+  {
+    modelId: "qwen-3-0.6b",
+    displayName: "Qwen 3 0.6B",
+    folderName: "qwen-3-0.6b",
+    available: true,
+    files: [
+      {
+        url: `${QWEN_BASE_URL}/qwen-3-0.6B/quantized/qwen3_0_6b_8da4w.pte`,
+        filename: "qwen3_0_6b_8da4w.pte",
+        description: "Model PTE (~900MB)",
+      },
+      {
+        url: `${QWEN_BASE_URL}/tokenizer.json`,
+        filename: "tokenizer.json",
+        description: "Tokenizer (~11MB)",
+      },
+      {
+        url: `${QWEN_BASE_URL}/tokenizer_config.json`,
+        filename: "tokenizer_config.json",
+        description: "Tokenizer Config (~10KB)",
+      },
+    ],
   },
   {
-    url: `${BASE_URL}/tokenizer_config.json`,
-    filename: "tokenizer_config.json",
-    description: "Tokenizer Config (~5KB)",
+    modelId: "qwen-3-1.7b",
+    displayName: "Qwen 3 1.7B",
+    folderName: "qwen-3-1.7b",
+    available: true,
+    files: [
+      {
+        url: `${QWEN_BASE_URL}/qwen-3-1.7B/quantized/qwen3_1_7b_8da4w.pte`,
+        filename: "qwen3_1_7b_8da4w.pte",
+        description: "Model PTE (~2.0GB)",
+      },
+      {
+        url: `${QWEN_BASE_URL}/tokenizer.json`,
+        filename: "tokenizer.json",
+        description: "Tokenizer (~11MB)",
+      },
+      {
+        url: `${QWEN_BASE_URL}/tokenizer_config.json`,
+        filename: "tokenizer_config.json",
+        description: "Tokenizer Config (~10KB)",
+      },
+    ],
+  },
+  {
+    modelId: "qwen-3-4b",
+    displayName: "Qwen 3 4B",
+    folderName: "qwen-3-4b",
+    available: true,
+    files: [
+      {
+        url: `${QWEN_BASE_URL}/qwen-3-4B/quantized/qwen3_4b_8da4w.pte`,
+        filename: "qwen3_4b_8da4w.pte",
+        description: "Model PTE (~3.5GB)",
+      },
+      {
+        url: `${QWEN_BASE_URL}/tokenizer.json`,
+        filename: "tokenizer.json",
+        description: "Tokenizer (~11MB)",
+      },
+      {
+        url: `${QWEN_BASE_URL}/tokenizer_config.json`,
+        filename: "tokenizer_config.json",
+        description: "Tokenizer Config (~10KB)",
+      },
+    ],
   },
 ];
 
@@ -137,19 +261,28 @@ function downloadFile(
   });
 }
 
-async function main() {
-  console.log(
-    "Downloading Llama 3.2 1B Instruct models (SpinQuant quantized)...\n"
-  );
+async function downloadModel(config: ModelDownloadConfig): Promise<void> {
+  console.log(`\n${"=".repeat(80)}`);
+  console.log(`Downloading ${config.displayName}...`);
+  console.log(`${"=".repeat(80)}\n`);
 
-  // Create models directory if it doesn't exist
-  if (!fs.existsSync(MODELS_DIR)) {
-    fs.mkdirSync(MODELS_DIR, { recursive: true });
-    console.log(`Created directory: ${MODELS_DIR}\n`);
+  if (!config.available) {
+    console.log(`⚠️  ${config.displayName} is not yet available for download.`);
+    console.log(
+      `   ExecuTorch PTE files are not ready. Check the model page for updates.\n`
+    );
+    return;
   }
 
-  for (const file of FILES_TO_DOWNLOAD) {
-    const destPath = path.join(MODELS_DIR, file.filename);
+  // Create model-specific directory
+  const modelDir = path.join(MODELS_DIR, config.folderName);
+  if (!fs.existsSync(modelDir)) {
+    fs.mkdirSync(modelDir, { recursive: true });
+    console.log(`Created directory: ${modelDir}\n`);
+  }
+
+  for (const file of config.files) {
+    const destPath = path.join(modelDir, file.filename);
 
     // Check if file already exists
     if (fs.existsSync(destPath)) {
@@ -180,15 +313,85 @@ async function main() {
       );
     } catch (error) {
       console.error(`✗ Failed to download ${file.description}:`, error);
-      process.exit(1);
+      throw error;
     }
   }
 
-  console.log("All models downloaded successfully!");
+  console.log(`✓ ${config.displayName} downloaded successfully!\n`);
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const downloadAll = args.includes("--all");
+  const modelFlag = args.indexOf("--model");
+  const specificModel = modelFlag !== -1 ? args[modelFlag + 1] : null;
+
+  console.log("AI Model Downloader");
+  console.log(`${"=".repeat(80)}\n`);
+
+  // Create models directory if it doesn't exist
+  if (!fs.existsSync(MODELS_DIR)) {
+    fs.mkdirSync(MODELS_DIR, { recursive: true });
+    console.log(`Created directory: ${MODELS_DIR}\n`);
+  }
+
+  // Determine which models to download
+  let modelsToDownload: ModelDownloadConfig[];
+
+  if (specificModel) {
+    const config = MODEL_CONFIGS.find((m) => m.modelId === specificModel);
+    if (!config) {
+      console.error(`✗ Model "${specificModel}" not found.`);
+      console.log("\nAvailable models:");
+      MODEL_CONFIGS.forEach((m) => {
+        console.log(
+          `  - ${m.modelId} (${
+            m.available ? "Available" : "Not available yet"
+          })`
+        );
+      });
+      process.exit(1);
+    }
+    modelsToDownload = [config];
+  } else if (downloadAll) {
+    modelsToDownload = MODEL_CONFIGS;
+  } else {
+    // Default: download only Llama model
+    modelsToDownload = MODEL_CONFIGS.filter(
+      (m) => m.modelId === "llama-3.2-1b-instruct"
+    );
+  }
+
+  // Download models
+  for (const config of modelsToDownload) {
+    try {
+      await downloadModel(config);
+    } catch (error) {
+      console.error(`✗ Failed to download ${config.displayName}`);
+      if (!downloadAll) {
+        process.exit(1);
+      }
+    }
+  }
+
+  console.log("\n" + "=".repeat(80));
+  console.log("Download complete!");
+  console.log("=".repeat(80));
   console.log(`\nModels are located in: ${MODELS_DIR}`);
   console.log("\nNext steps:");
-  console.log("1. Update lib/ai/modelConfig.ts to use bundled sources");
-  console.log("2. Restart Metro bundler");
+  console.log("1. Restart Metro bundler to pick up new files");
+  console.log("2. Go to Settings > AI Model to select a model");
+  console.log("\nAvailable commands:");
+  console.log("  pnpm download:models              - Download default model");
+  console.log(
+    "  pnpm download:models --all        - Download all available models"
+  );
+  console.log(
+    "  pnpm download:models --model <id> - Download specific model\n"
+  );
+
+  // Explicitly exit to close any lingering network connections
+  process.exit(0);
 }
 
 main().catch((error) => {

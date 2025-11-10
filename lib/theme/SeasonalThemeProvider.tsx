@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useMemo,
 } from "react";
 import { useColorScheme } from "react-native";
 import { type ThemeSettings, useThemeSettings } from "../db/themeSettings";
@@ -38,69 +39,88 @@ export function SeasonalThemeProvider({
   const [settings, setSettings] = useState<ThemeSettings | null>(null);
   const [theme, setTheme] = useState<SeasonalTheme | null>(null);
 
-  const calculateTheme = useCallback(
-    (currentSettings: ThemeSettings) => {
-      const now = new Date();
-      let season: Season;
-      let timeOfDay: TimeOfDay;
+  // Use a stable function that doesn't need to be memoized
+  const calculateThemeInternal = (
+    currentSettings: ThemeSettings,
+    scheme: string | null | undefined
+  ) => {
+    const now = new Date();
+    let season: Season;
+    let timeOfDay: TimeOfDay;
 
-      if (currentSettings.mode === "manual" && currentSettings.season) {
-        season = currentSettings.season;
+    if (currentSettings.mode === "manual" && currentSettings.season) {
+      season = currentSettings.season;
 
-        // Handle timeOfDay: can be "system", TimeOfDay, or undefined
-        if (
-          currentSettings.timeOfDay === "system" ||
-          currentSettings.useSystemTimeOfDay
-        ) {
-          // Use system color scheme to determine time of day
-          timeOfDay = colorScheme === "dark" ? "night" : "day";
-        } else if (currentSettings.timeOfDay) {
-          // In this branch, timeOfDay cannot be "system" due to the previous check
-          timeOfDay = currentSettings.timeOfDay as TimeOfDay;
-        } else {
-          timeOfDay = getTimeOfDay(now);
-        }
+      // Handle timeOfDay: can be "system", TimeOfDay, or undefined
+      if (
+        currentSettings.timeOfDay === "system" ||
+        currentSettings.useSystemTimeOfDay
+      ) {
+        // Use system color scheme to determine time of day
+        timeOfDay = scheme === "dark" ? "night" : "day";
+      } else if (currentSettings.timeOfDay) {
+        // In this branch, timeOfDay cannot be "system" due to the previous check
+        timeOfDay = currentSettings.timeOfDay as TimeOfDay;
       } else {
-        // Auto mode: season rotates automatically
-        season = getSeason(now);
-
-        // Handle timeOfDay: can respect manual selection even in auto mode
-        if (
-          currentSettings.timeOfDay === "system" ||
-          currentSettings.useSystemTimeOfDay
-        ) {
-          // Use system color scheme to determine time of day
-          timeOfDay = colorScheme === "dark" ? "night" : "day";
-        } else if (currentSettings.timeOfDay) {
-          // In this branch, timeOfDay cannot be "system" due to the previous check
-          // Respect manual timeOfDay selection even in auto mode
-          timeOfDay = currentSettings.timeOfDay as TimeOfDay;
-        } else {
-          // Fall back to time-based calculation
-          timeOfDay = getTimeOfDay(now);
-        }
+        timeOfDay = getTimeOfDay(now);
       }
+    } else {
+      // Auto mode: season rotates automatically
+      season = getSeason(now);
 
-      return getSeasonalTheme(season, timeOfDay);
-    },
-    [colorScheme]
-  );
+      // Handle timeOfDay: can respect manual selection even in auto mode
+      if (
+        currentSettings.timeOfDay === "system" ||
+        currentSettings.useSystemTimeOfDay
+      ) {
+        // Use system color scheme to determine time of day
+        timeOfDay = scheme === "dark" ? "night" : "day";
+      } else if (currentSettings.timeOfDay) {
+        // In this branch, timeOfDay cannot be "system" due to the previous check
+        // Respect manual timeOfDay selection even in auto mode
+        timeOfDay = currentSettings.timeOfDay as TimeOfDay;
+      } else {
+        // Fall back to time-based calculation
+        timeOfDay = getTimeOfDay(now);
+      }
+    }
+
+    return getSeasonalTheme(season, timeOfDay);
+  };
 
   const refreshTheme = useCallback(async () => {
     try {
       const currentSettings = await getSettings();
-      setSettings(currentSettings);
-      const newTheme = calculateTheme(currentSettings);
-      setTheme(newTheme);
+      const newTheme = calculateThemeInternal(currentSettings, colorScheme);
+
+      // Only update state if theme reference actually changed (thanks to caching)
+      setTheme((prevTheme) => {
+        if (prevTheme === newTheme) {
+          return prevTheme;
+        }
+        return newTheme;
+      });
+
+      setSettings((prevSettings) => {
+        // Simple comparison - only update if mode or season changed
+        if (
+          prevSettings?.mode === currentSettings.mode &&
+          prevSettings?.season === currentSettings.season &&
+          prevSettings?.timeOfDay === currentSettings.timeOfDay
+        ) {
+          return prevSettings;
+        }
+        return currentSettings;
+      });
     } catch (error) {
       console.error("Error loading theme settings:", error);
       // Default to auto mode on error
       const defaultSettings = { mode: "auto" as const };
       setSettings(defaultSettings);
-      const defaultTheme = calculateTheme(defaultSettings);
+      const defaultTheme = calculateThemeInternal(defaultSettings, colorScheme);
       setTheme(defaultTheme);
     }
-  }, [getSettings, calculateTheme]);
+  }, [getSettings, colorScheme]);
 
   useEffect(() => {
     refreshTheme();
@@ -135,30 +155,17 @@ export function SeasonalThemeProvider({
     return () => clearInterval(interval);
   }, [settings, refreshTheme, colorScheme]);
 
-  if (!theme) {
-    // Return default theme while loading
-    const defaultTheme = calculateTheme({ mode: "auto" });
-    return (
-      <SeasonalThemeContext.Provider
-        value={{
-          theme: defaultTheme,
-          settings: null,
-          refreshTheme,
-        }}
-      >
-        {children}
-      </SeasonalThemeContext.Provider>
-    );
-  }
+  const contextValue = useMemo(
+    () => ({
+      theme: theme || calculateThemeInternal({ mode: "auto" }, colorScheme),
+      settings,
+      refreshTheme,
+    }),
+    [theme, settings, refreshTheme, colorScheme]
+  );
 
   return (
-    <SeasonalThemeContext.Provider
-      value={{
-        theme,
-        settings,
-        refreshTheme,
-      }}
-    >
+    <SeasonalThemeContext.Provider value={contextValue}>
       {children}
     </SeasonalThemeContext.Provider>
   );

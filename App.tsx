@@ -8,6 +8,7 @@ import { ThemeProvider } from "./lib/theme/ThemeProvider";
 import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
 import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
+import { ModelProvider } from "./lib/ai/ModelProvider";
 
 // Suppress harmless iOS system warnings
 LogBox.ignoreLogs([
@@ -65,12 +66,14 @@ export default function App() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <DatabaseProvider encryptionKey={encryptionKey}>
-          <ThemeProvider>
-            <SeasonalThemeProvider>
-              <StatusBar style="auto" />
-              <SimpleNavigation />
-            </SeasonalThemeProvider>
-          </ThemeProvider>
+          <ModelProvider>
+            <ThemeProvider>
+              <SeasonalThemeProvider>
+                <StatusBar style="auto" />
+                <SimpleNavigation />
+              </SeasonalThemeProvider>
+            </ThemeProvider>
+          </ModelProvider>
         </DatabaseProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

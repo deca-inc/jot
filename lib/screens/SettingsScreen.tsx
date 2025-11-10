@@ -7,13 +7,17 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Text, Card, Button, ThemeControl } from "../components";
+import {
+  Text,
+  Card,
+  Button,
+  ThemeControl,
+  ModelManagement,
+} from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { isComponentPlaygroundEnabled } from "../utils/isDev";
-import { ensureModelPresent } from "../ai/modelManager";
-import { Llama32_1B_Instruct } from "../ai/modelConfig";
 
 interface SettingsScreenProps {
   onNavigateToPlayground?: () => void;
@@ -111,47 +115,23 @@ export function SettingsScreen({
             },
           ]}
         >
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionText}>
-              <Text
-                variant="h3"
-                style={[
-                  styles.sectionTitle,
-                  { color: seasonalTheme.textPrimary },
-                ]}
-              >
-                AI Model
-              </Text>
-              <Text
-                variant="body"
-                style={[
-                  styles.sectionDescription,
-                  { color: seasonalTheme.textSecondary },
-                ]}
-              >
-                Download or verify the on-device LLM (Llama 3.2 1B Instruct)
-              </Text>
-            </View>
-            <Button
-              variant="secondary"
-              size="sm"
-              onPress={async () => {
-                try {
-                  const res = await ensureModelPresent(Llama32_1B_Instruct);
-                  Alert.alert(
-                    "Model ready",
-                    `Model: ${res.ptePath}\nTokenizer: ${
-                      res.tokenizerPath ?? "(none)"
-                    }`
-                  );
-                } catch (e: any) {
-                  Alert.alert("Download failed", e?.message ?? "Unknown error");
-                }
-              }}
-            >
-              Download / Verify
-            </Button>
-          </View>
+          <Text
+            variant="h3"
+            style={[styles.sectionTitle, { color: seasonalTheme.textPrimary }]}
+          >
+            AI Models
+          </Text>
+          <Text
+            variant="body"
+            style={[
+              styles.sectionDescription,
+              { color: seasonalTheme.textSecondary },
+            ]}
+          >
+            Manage on-device AI models
+          </Text>
+
+          <ModelManagement />
         </Card>
 
         <Card
@@ -343,7 +323,7 @@ const styles = StyleSheet.create({
   },
   sectionDescription: {
     marginTop: spacingPatterns.xs,
-    marginBottom: spacingPatterns.md,
+    marginBottom: spacingPatterns.xxs,
   },
   subsectionTitle: {
     marginTop: spacingPatterns.md,

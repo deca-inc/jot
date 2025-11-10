@@ -9,10 +9,16 @@ export interface EnsureResult {
   tokenizerConfigPath?: string;
 }
 
-function joinPaths(base: string, segment: string): string {
-  const b = base.endsWith("/") ? base.slice(0, -1) : base;
-  const s = segment.startsWith("/") ? segment.slice(1) : segment;
-  return `${b}/${s}`;
+function joinPaths(...segments: string[]): string {
+  return segments
+    .map((seg, index) => {
+      if (index === 0) {
+        return seg.endsWith("/") ? seg.slice(0, -1) : seg;
+      }
+      const s = seg.startsWith("/") ? seg.slice(1) : seg;
+      return s.endsWith("/") ? s.slice(0, -1) : s;
+    })
+    .join("/");
 }
 
 // Use the new Paths API for expo-file-system v19+ (compatible with newer iOS versions)
@@ -33,11 +39,13 @@ function getBaseDir(): string {
 const baseDir = getBaseDir();
 const modelsDir = joinPaths(baseDir, "models");
 
-async function ensureModelsDir(): Promise<void> {
-  const info = await FileSystem.getInfoAsync(modelsDir);
+async function ensureModelsDir(subDir?: string): Promise<string> {
+  const targetDir = subDir ? joinPaths(modelsDir, subDir) : modelsDir;
+  const info = await FileSystem.getInfoAsync(targetDir);
   if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(modelsDir, { intermediates: true });
+    await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true });
   }
+  return targetDir;
 }
 
 async function ensureFromBundled(
@@ -110,6 +118,34 @@ async function ensureFromRemote(
   }
 }
 
+async function ensureFromRemoteToFolder(
+  url: string,
+  folderName: string,
+  fileName: string
+): Promise<string> {
+  const modelDir = await ensureModelsDir(folderName);
+  const dest = joinPaths(modelDir, fileName);
+  const existing = await FileSystem.getInfoAsync(dest);
+  if (existing.exists && existing.size && existing.size > 0) {
+    return dest;
+  }
+  const tmp = dest + ".download";
+  try {
+    const res = await FileSystem.downloadAsync(url, tmp);
+    if (res.status !== 200) {
+      throw new Error(`Download failed with status ${res.status}`);
+    }
+    await FileSystem.moveAsync({ from: tmp, to: dest });
+    return dest;
+  } catch (e) {
+    // Cleanup partial
+    try {
+      await FileSystem.deleteAsync(tmp, { idempotent: true });
+    } catch {}
+    throw e;
+  }
+}
+
 export async function ensureModelPresent(
   config: LlmModelConfig = Llama32_1B_Instruct
 ): Promise<EnsureResult> {
@@ -117,8 +153,9 @@ export async function ensureModelPresent(
 
   await ensureModelsDir();
 
-  // Check document directory first (for already downloaded/copied files)
-  const docModelPath = joinPaths(modelsDir, config.pteFileName);
+  // Check model-specific directory first (for already downloaded/copied files)
+  const modelDir = await ensureModelsDir(config.folderName);
+  const docModelPath = joinPaths(modelDir, config.pteFileName);
   console.log(`[ensureModelPresent] Checking for model at: ${docModelPath}`);
   console.log(`[ensureModelPresent] Base directory: ${baseDir}`);
   const docModelInfo = await FileSystem.getInfoAsync(docModelPath);
@@ -133,6 +170,10 @@ export async function ensureModelPresent(
         1024
       ).toFixed(2)}MB)`
     );
+  } else if (config.pteSource.kind === "unavailable") {
+    throw new Error(
+      `Model not available: ${config.pteSource.reason}`
+    );
   } else if (config.pteSource.kind === "bundled") {
     // Try bundled asset (for small files)
     try {
@@ -141,29 +182,36 @@ export async function ensureModelPresent(
         config.pteFileName
       );
     } catch (e) {
-      // Fall back to remote if bundled fails
-      console.warn("Bundled model not available, falling back to remote:", e);
-      // Use the default remote URL from config
-      const fallbackUrl =
-        "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2/resolve/v0.5.0/llama-3.2-1B/spinquant/llama3_2_spinquant.pte";
-      ptePath = await ensureFromRemote(fallbackUrl, config.pteFileName);
+      throw new Error(
+        `Bundled model not available. Run 'pnpm download:models --model ${config.modelId}' to download.`
+      );
     }
   } else {
-    // Download from remote
+    // Download from remote to model-specific folder
     console.log(`Downloading model from remote: ${config.pteSource.url}`);
-    ptePath = await ensureFromRemote(config.pteSource.url, config.pteFileName);
+    ptePath = await ensureFromRemoteToFolder(
+      config.pteSource.url,
+      config.folderName,
+      config.pteFileName
+    );
   }
 
   let tokenizerPath: string | undefined;
   if (config.tokenizerSource) {
-    if (config.tokenizerSource.kind === "bundled") {
+    if (config.tokenizerSource.kind === "unavailable") {
+      // Skip tokenizer if unavailable
+      console.warn(
+        `[ensureModelPresent] Tokenizer not available for ${config.modelId}`
+      );
+    } else if (config.tokenizerSource.kind === "bundled") {
       tokenizerPath = await ensureFromBundled(
         config.tokenizerSource.requireId,
         config.tokenizerFileName || "tokenizer.bin"
       );
     } else {
-      tokenizerPath = await ensureFromRemote(
+      tokenizerPath = await ensureFromRemoteToFolder(
         config.tokenizerSource.url,
+        config.folderName,
         config.tokenizerFileName || "tokenizer.bin"
       );
     }
@@ -171,18 +219,67 @@ export async function ensureModelPresent(
 
   let tokenizerConfigPath: string | undefined;
   if (config.tokenizerConfigSource) {
-    if ((config.tokenizerConfigSource as any).kind === "bundled") {
+    if (config.tokenizerConfigSource.kind === "unavailable") {
+      // Skip tokenizer config if unavailable
+      console.warn(
+        `[ensureModelPresent] Tokenizer config not available for ${config.modelId}`
+      );
+    } else if (config.tokenizerConfigSource.kind === "bundled") {
       tokenizerConfigPath = await ensureFromBundled(
-        (config.tokenizerConfigSource as any).requireId,
+        config.tokenizerConfigSource.requireId,
         config.tokenizerConfigFileName || "tokenizer.json"
       );
     } else {
-      tokenizerConfigPath = await ensureFromRemote(
-        (config.tokenizerConfigSource as any).url,
+      tokenizerConfigPath = await ensureFromRemoteToFolder(
+        config.tokenizerConfigSource.url,
+        config.folderName,
         config.tokenizerConfigFileName || "tokenizer.json"
       );
     }
   }
 
   return { ptePath, tokenizerPath, tokenizerConfigPath };
+}
+
+/**
+ * Delete a downloaded model from the device
+ */
+export async function deleteModel(config: LlmModelConfig): Promise<void> {
+  const modelDir = joinPaths(modelsDir, config.folderName);
+  const info = await FileSystem.getInfoAsync(modelDir);
+  if (info.exists) {
+    await FileSystem.deleteAsync(modelDir, { idempotent: true });
+    console.log(`[deleteModel] Deleted model directory: ${modelDir}`);
+  }
+}
+
+/**
+ * Get the size of a downloaded model in bytes
+ */
+export async function getModelSize(config: LlmModelConfig): Promise<number> {
+  const modelDir = joinPaths(modelsDir, config.folderName);
+  const info = await FileSystem.getInfoAsync(modelDir);
+  
+  if (!info.exists) {
+    return 0;
+  }
+
+  // Sum up all files in the directory
+  try {
+    const files = await FileSystem.readDirectoryAsync(modelDir);
+    let totalSize = 0;
+    
+    for (const file of files) {
+      const filePath = joinPaths(modelDir, file);
+      const fileInfo = await FileSystem.getInfoAsync(filePath);
+      if (fileInfo.exists && fileInfo.size) {
+        totalSize += fileInfo.size;
+      }
+    }
+    
+    return totalSize;
+  } catch (e) {
+    console.error(`[getModelSize] Error calculating size:`, e);
+    return 0;
+  }
 }

@@ -44,18 +44,29 @@ export function getTimeOfDay(date: Date = new Date()): TimeOfDay {
   return hour >= 6 && hour < 20 ? "day" : "night";
 }
 
+// Cache for theme objects to prevent unnecessary re-renders
+const themeCache = new Map<string, SeasonalTheme>();
+
 /**
- * Get seasonal theme colors
+ * Get seasonal theme colors (memoized)
  */
 export function getSeasonalTheme(
   season: Season,
   timeOfDay: TimeOfDay
 ): SeasonalTheme {
+  const cacheKey = `${season}-${timeOfDay}`;
+  const cached = themeCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const isNight = timeOfDay === "night";
+
+  let theme: SeasonalTheme;
 
   switch (season) {
     case "spring":
-      return {
+      theme = {
         gradient: isNight
           ? { start: "#0f172a", middle: "#1e293b", end: "#0f172a" }
           : { start: "#ecfdf5", middle: "#d1fae5", end: "#f0fdf4" },
@@ -73,9 +84,10 @@ export function getSeasonalTheme(
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
       };
+      break;
 
     case "summer":
-      return {
+      theme = {
         gradient: isNight
           ? { start: "#0f172a", middle: "#1e293b", end: "#0c4a6e" }
           : { start: "#f0f9ff", middle: "#e0f2fe", end: "#bae6fd" },
@@ -93,9 +105,10 @@ export function getSeasonalTheme(
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
       };
+      break;
 
     case "autumn":
-      return {
+      theme = {
         gradient: isNight
           ? { start: "#1c1917", middle: "#292524", end: "#1c1917" }
           : { start: "#faf8f3", middle: "#f5f1e8", end: "#ede7d6" },
@@ -113,10 +126,11 @@ export function getSeasonalTheme(
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
       };
+      break;
 
     case "winter":
     default:
-      return {
+      theme = {
         gradient: isNight
           ? { start: "#0f172a", middle: "#1e293b", end: "#312e81" }
           : { start: "#f8fafc", middle: "#e2e8f0", end: "#cbd5e1" },
@@ -134,7 +148,12 @@ export function getSeasonalTheme(
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
       };
+      break;
   }
+
+  // Cache the theme before returning
+  themeCache.set(cacheKey, theme);
+  return theme;
 }
 
 // Note: useSeasonalTheme is now re-exported from SeasonalThemeProvider

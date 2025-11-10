@@ -1,4 +1,10 @@
-import React, { useState, useCallback, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+  useEffect,
+} from "react";
 import {
   View,
   StyleSheet,
@@ -45,13 +51,18 @@ marked.use(
   markedHighlight({
     langPrefix: "hljs language-",
     highlight(code, lang) {
-      const language = hljs.getLanguage(lang) ? lang : "plaintext";
-      try {
-        return hljs.highlight(code, { language }).value;
-      } catch (err) {
-        console.error("Error highlighting code:", err);
-        return code;
+      // Only highlight if the language is registered, otherwise return plain text
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          return hljs.highlight(code, { language: lang }).value;
+        } catch (err) {
+          console.error("Error highlighting code:", err);
+          // Return plain code without styling on error
+          return code;
+        }
       }
+      // Return plain code for unknown languages - let the default code/pre styles handle it
+      return code;
     },
   })
 );
@@ -85,10 +96,13 @@ export interface AIChatComposerProps {
   onCancel?: () => void;
 }
 
+// Stable empty arrays to avoid re-renders
+const EMPTY_BLOCKS: Block[] = [];
+
 export function AIChatComposer({
   entryId,
   initialTitle = "",
-  initialBlocks = [],
+  initialBlocks = EMPTY_BLOCKS,
   onSave,
   onCancel,
 }: AIChatComposerProps) {
@@ -97,11 +111,13 @@ export function AIChatComposer({
   const { width } = useWindowDimensions();
 
   // React Query hooks - load entry first
-  const { data: entry, isLoading } = useEntry(entryId);
+  const { data: entry } = useEntry(entryId);
 
   // Use new LLM hook - pass entryId as convoId and for DB writes
   // When AIChatComposer mounts, it attaches to existing LLM instance if generation is already running
-  const convoId = entryId ? `entry-${entryId}` : `new-${Date.now()}`;
+  // Use useRef to ensure convoId is stable across renders when there's no entryId
+  const convoIdRef = useRef(entryId ? `entry-${entryId}` : `new-${Date.now()}`);
+  const convoId = entryId ? `entry-${entryId}` : convoIdRef.current;
   const {
     llm,
     isLoading: isLLMLoading,
@@ -114,7 +130,6 @@ export function AIChatComposer({
 
   const createEntry = useCreateEntry();
   const updateEntry = useUpdateEntry();
-  const deleteEntry = useDeleteEntry();
 
   // Local state for input only
   const [newMessage, setNewMessage] = useState("");
@@ -293,16 +308,72 @@ export function AIChatComposer({
         color: seasonalTheme.textPrimary,
       },
       // Language-specific classes (language-python, language-javascript, etc.)
-      "language-javascript": { backgroundColor: "transparent" },
-      "language-typescript": { backgroundColor: "transparent" },
-      "language-python": { backgroundColor: "transparent" },
-      "language-java": { backgroundColor: "transparent" },
-      "language-cpp": { backgroundColor: "transparent" },
-      "language-c++": { backgroundColor: "transparent" },
-      "language-json": { backgroundColor: "transparent" },
-      "language-xml": { backgroundColor: "transparent" },
-      "language-html": { backgroundColor: "transparent" },
-      "language-css": { backgroundColor: "transparent" },
+      "language-javascript": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+      },
+      "language-typescript": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+      },
+      "language-python": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+      },
+      "language-java": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+      },
+      "language-cpp": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+      },
+      "language-c++": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+      },
+      "language-json": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+      },
+      "language-xml": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+      },
+      "language-html": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+      },
+      "language-css": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+      },
+      // Catch-all for unknown languages
+      "language-bash": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      },
+      "language-shell": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      },
+      "language-plaintext": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      },
+      "language-text": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      },
+      "language-": {
+        backgroundColor: "transparent",
+        color: seasonalTheme.textPrimary,
+        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      },
       // Keywords (if, else, function, const, let, var, etc.)
       "hljs-keyword": { color: "#CF8E6D" },
       "hljs-built_in": { color: "#CF8E6D" },
@@ -431,17 +502,15 @@ export function AIChatComposer({
     scrollToBottom,
   ]);
 
-  // Render item for FlatList
-  const renderMessage: ListRenderItem<Block> = useCallback(
-    ({ item: message, index }) => {
-      const isUser = message.role === "user";
-      const messageContent = message.type === "markdown" ? message.content : "";
+  // Pre-parse markdown to HTML outside of render callback
+  const parsedMessages = useMemo(() => {
+    return displayedBlocks.map((block, index) => {
+      const isUser = block.role === "user";
+      const messageContent = block.type === "markdown" ? block.content : "";
       const isEmpty = !messageContent || messageContent.trim().length === 0;
-      // Derive: if it's an empty assistant message and it's the last message, it's generating
       const isLastMessage = index === displayedBlocks.length - 1;
       const isGenerating = !isUser && isEmpty && isLastMessage && isLLMLoading;
 
-      // Convert markdown to HTML for assistant messages
       let htmlContent: string | null = null;
       if (!isUser && messageContent && !isGenerating) {
         try {
@@ -451,6 +520,20 @@ export function AIChatComposer({
           htmlContent = null;
         }
       }
+
+      return { htmlContent, isGenerating };
+    });
+  }, [displayedBlocks, isLLMLoading]);
+
+  // Render item for FlatList
+  const renderMessage: ListRenderItem<Block> = useCallback(
+    ({ item: message, index }) => {
+      const isUser = message.role === "user";
+      const messageContent = message.type === "markdown" ? message.content : "";
+      const { htmlContent, isGenerating } = parsedMessages[index] || {
+        htmlContent: null,
+        isGenerating: false,
+      };
 
       // User messages get a bubble, AI messages are full width
       if (isUser) {
@@ -514,9 +597,8 @@ export function AIChatComposer({
       );
     },
     [
-      isLLMLoading,
+      parsedMessages,
       seasonalTheme,
-      displayedBlocks.length,
       htmlContentWidth,
       htmlTagsStyles,
       htmlBaseStyle,

@@ -140,32 +140,36 @@ export function SimpleNavigation() {
     });
   }, [canGoBack, handleGoBack, swipeX]);
 
-  const handleOpenSettings = () => {
+  const handleOpenSettings = useCallback(() => {
     setCurrentScreen("settings");
-  };
+  }, []);
 
-  const handleNavigateToPlayground = () => {
+  const handleNavigateToPlayground = useCallback(() => {
     setCurrentScreen("playground");
-  };
+  }, []);
 
-  const handleOpenComposer = (type?: "journal" | "ai_chat") => {
+  const handleOpenComposer = useCallback((type?: "journal" | "ai_chat") => {
     setComposerEntryType(type);
     setCurrentScreen("composer");
-  };
+  }, []);
 
-  const handleComposerSave = (entryId: number) => {
+  const handleComposerSave = useCallback((entryId: number) => {
     // Navigate back to home after saving
     // React Query cache handles the update automatically
     setCurrentScreen("home");
     setComposerEntryType(undefined);
-  };
+  }, []);
 
-  const handleComposerCancel = () => {
+  const handleComposerCancel = useCallback(() => {
     setCurrentScreen("home");
     setComposerEntryType(undefined);
-  };
+  }, []);
 
-  const handleOpenFullEditor = async (initialText?: string) => {
+  // Use ref to avoid re-creating callback when createEntry changes
+  const createEntryRef = useRef(createEntry);
+  createEntryRef.current = createEntry;
+
+  const handleOpenFullEditor = useCallback(async (initialText?: string) => {
     // Create entry immediately with the initial text in an H1
     const content = (initialText || "").trim();
 
@@ -181,7 +185,7 @@ export function SimpleNavigation() {
     ];
 
     try {
-      const entry = await createEntry.mutateAsync({
+      const entry = await createEntryRef.current.mutateAsync({
         type: "journal",
         title: content.slice(0, 50) || "Untitled",
         blocks,
@@ -196,27 +200,43 @@ export function SimpleNavigation() {
       // Still navigate even if creation fails - ComposerScreen can handle it
       setCurrentScreen("fullEditor");
     }
-  };
+  }, []);
 
-  const handleFullEditorSave = (entryId: number) => {
+  const handleFullEditorSave = useCallback((entryId: number) => {
     // Don't navigate away - let user continue writing (auto-save handles saving)
     // React Query cache handles the update automatically
-  };
+  }, []);
 
-  // handleFullEditorCancel is now defined inline in renderScreen
+  const handleFullEditorCancel = useCallback(async () => {
+    // React Query cache handles any updates automatically
+    setCurrentScreen("home");
+    setFullEditorEntryId(undefined);
+  }, []);
 
-  const handleOpenEntryEditor = (entryId: number) => {
+  const handleOpenEntryEditor = useCallback((entryId: number) => {
     setEditingEntryId(entryId);
     setCurrentScreen("entryEditor");
-  };
+  }, []);
 
-  const handleEntryEditorSave = (entryId: number) => {
+  const handleEntryEditorSave = useCallback((entryId: number) => {
     // Don't navigate away on save for journal entries (they auto-save)
     // Only navigate for AI chat or if explicitly closing
     // React Query cache handles the update automatically
-  };
+  }, []);
 
-  // handleEntryEditorCancel is now defined inline in renderScreen
+  const handleEntryEditorCancel = useCallback(async () => {
+    // React Query cache handles any updates automatically
+    setCurrentScreen("home");
+    setEditingEntryId(undefined);
+  }, []);
+
+  const handleSettingsBack = useCallback(() => {
+    setCurrentScreen("home");
+  }, []);
+
+  const handlePlaygroundBack = useCallback(() => {
+    setCurrentScreen("settings");
+  }, []);
 
   const renderScreen = () => {
     switch (currentScreen) {
@@ -233,15 +253,11 @@ export function SimpleNavigation() {
         return (
           <SettingsScreen
             onNavigateToPlayground={handleNavigateToPlayground}
-            onBack={() => setCurrentScreen("home")}
+            onBack={handleSettingsBack}
           />
         );
       case "playground":
-        return (
-          <ComponentPlaygroundScreen
-            onBack={() => setCurrentScreen("settings")}
-          />
-        );
+        return <ComponentPlaygroundScreen onBack={handlePlaygroundBack} />;
       case "composer":
         return (
           <ComposerScreen
@@ -250,37 +266,25 @@ export function SimpleNavigation() {
             onCancel={handleComposerCancel}
           />
         );
-      case "fullEditor": {
-        const cancelHandler = async () => {
-          // React Query cache handles any updates automatically
-          setCurrentScreen("home");
-          setFullEditorEntryId(undefined);
-        };
-        fullEditorOnCancelRef.current = cancelHandler;
+      case "fullEditor":
+        fullEditorOnCancelRef.current = handleFullEditorCancel;
         return (
           <ComposerScreen
             entryId={fullEditorEntryId}
             onSave={handleFullEditorSave}
-            onCancel={cancelHandler}
+            onCancel={handleFullEditorCancel}
             fullScreen={true}
           />
         );
-      }
-      case "entryEditor": {
-        const cancelHandler = async () => {
-          // React Query cache handles any updates automatically
-          setCurrentScreen("home");
-          setEditingEntryId(undefined);
-        };
-        entryEditorOnCancelRef.current = cancelHandler;
+      case "entryEditor":
+        entryEditorOnCancelRef.current = handleEntryEditorCancel;
         return (
           <ComposerScreen
             entryId={editingEntryId}
             onSave={handleEntryEditorSave}
-            onCancel={cancelHandler}
+            onCancel={handleEntryEditorCancel}
           />
         );
-      }
       default:
         return (
           <HomeScreen

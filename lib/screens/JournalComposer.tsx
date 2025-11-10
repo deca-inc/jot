@@ -60,6 +60,19 @@ export function JournalComposer({
   const { data: entry, isLoading: isLoadingEntry } = useEntry(entryId);
   const updateEntryMutation = useUpdateEntry();
 
+  // Stabilize mutation and callbacks with refs
+  const updateEntryMutationRef = useRef(updateEntryMutation);
+  updateEntryMutationRef.current = updateEntryMutation;
+
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
+  const onBeforeCancelRef = useRef(onBeforeCancel);
+  onBeforeCancelRef.current = onBeforeCancel;
+
   const [htmlContent, setHtmlContent] = useState(""); // Track current editor content for debounced save
   const [editorState, setEditorState] = useState<OnChangeStateEvent | null>(
     null
@@ -84,14 +97,20 @@ export function JournalComposer({
     return "";
   }, [entry]);
 
-  // Create action context for journal operations
+  // Create action context for journal operations (stable object that accesses current refs)
   const actionContext = useMemo(
     () => ({
-      updateEntry: updateEntryMutation,
-      createEntry: updateEntryMutation, // Not used in save, but required by interface
-      onSave,
+      get updateEntry() {
+        return updateEntryMutationRef.current;
+      },
+      get createEntry() {
+        return updateEntryMutationRef.current;
+      },
+      get onSave() {
+        return onSaveRef.current;
+      },
     }),
-    [updateEntryMutation, onSave]
+    [] // Now stable!
   );
 
   // Create debounced save function that calls journalActions
@@ -192,14 +211,14 @@ export function JournalComposer({
   // Handle back button - force save before canceling
   const handleBackPress = useCallback(async () => {
     // If parent provided onBeforeCancel, call it (it will use our forceSave)
-    if (onBeforeCancel) {
-      await onBeforeCancel();
+    if (onBeforeCancelRef.current) {
+      await onBeforeCancelRef.current();
     } else {
       // Otherwise, force save directly
       await forceSave();
     }
-    onCancel?.();
-  }, [forceSave, onCancel, onBeforeCancel]);
+    onCancelRef.current?.();
+  }, [forceSave]); // Only depends on forceSave now
 
   // Show UI shell immediately - content loads progressively
   return (

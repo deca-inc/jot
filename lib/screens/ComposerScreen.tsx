@@ -137,6 +137,17 @@ export function ComposerScreen({
     await onCancel?.();
   }, [onCancel]);
 
+  // Memoize onSave handler for AI chat to prevent re-renders
+  const handleAIChatSave = useCallback(
+    (newEntryId: number) => {
+      if (!actualEntryId) {
+        setActualEntryId(newEntryId);
+      }
+      onSave?.(newEntryId);
+    },
+    [actualEntryId, onSave]
+  );
+
   // Show UI shell immediately
   // If we have an entryId, show the appropriate composer immediately
   // The composer will handle loading the entry content in the background
@@ -152,12 +163,7 @@ export function ComposerScreen({
       <AIChatComposer
         key={`ai-chat-${actualEntryId || "new"}`} // Force remount when entry changes
         entryId={actualEntryId}
-        onSave={(newEntryId) => {
-          if (!actualEntryId) {
-            setActualEntryId(newEntryId);
-          }
-          onSave?.(newEntryId);
-        }}
+        onSave={handleAIChatSave}
         onCancel={onCancel}
       />
     );

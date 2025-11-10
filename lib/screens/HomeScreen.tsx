@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   TouchableOpacity,
   ListRenderItem,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,6 +31,7 @@ import {
   useToggleFavorite,
   useUpdateEntry,
 } from "../db/useEntries";
+import { useModel } from "../ai/ModelProvider";
 
 type Filter = "all" | "journal" | "ai_chat" | "favorites";
 
@@ -42,12 +44,14 @@ export interface HomeScreenProps {
 
 export function HomeScreen(props: HomeScreenProps = {}) {
   const { onOpenFullEditor, onOpenSettings, onOpenEntryEditor } = props;
+  const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<Filter>("all");
   const [composerMode, setComposerMode] = useState<ComposerMode>("journal");
   const [composerHeight, setComposerHeight] = useState(120);
   const composerRef = useRef<View>(null);
+  const { currentConfig } = useModel();
 
   // Build query options based on filter
   const queryOptions = useMemo(() => {
@@ -104,20 +108,56 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const handleToggleFavorite = useCallback(
-    (entry: Entry) => {
-      toggleFavoriteMutation.mutate(entry.id);
-    },
-    [toggleFavoriteMutation]
-  );
+  // Use refs to stabilize mutation callbacks
+  const toggleFavoriteMutationRef = useRef(toggleFavoriteMutation);
+  toggleFavoriteMutationRef.current = toggleFavoriteMutation;
 
-  const handleEntryPress = useCallback(
-    (entry: Entry) => {
-      if (onOpenEntryEditor) {
-        onOpenEntryEditor(entry.id);
+  const createEntryRef = useRef(createEntry);
+  createEntryRef.current = createEntry;
+
+  const updateEntryRef = useRef(updateEntry);
+  updateEntryRef.current = updateEntry;
+
+  const onOpenEntryEditorRef = useRef(onOpenEntryEditor);
+  onOpenEntryEditorRef.current = onOpenEntryEditor;
+
+  const handleToggleFavorite = useCallback((entry: Entry) => {
+    toggleFavoriteMutationRef.current.mutate(entry.id);
+  }, []);
+
+  const handleEntryPress = useCallback((entry: Entry) => {
+    if (onOpenEntryEditorRef.current) {
+      onOpenEntryEditorRef.current(entry.id);
+    }
+  }, []);
+
+  const handleModeChange = useCallback(
+    (newMode: ComposerMode) => {
+      // Check if switching to AI mode without a model selected
+      if (newMode === "ai" && !currentConfig) {
+        Alert.alert(
+          "No AI Model Selected",
+          "To use AI features, please go to Settings and download an AI model first. We recommend starting with Qwen 3 0.6B (900MB) for the best balance of speed and quality.",
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+            },
+            {
+              text: "Go to Settings",
+              onPress: () => {
+                if (onOpenSettings) {
+                  onOpenSettings();
+                }
+              },
+            },
+          ]
+        );
+        return;
       }
+      setComposerMode(newMode);
     },
-    [onOpenEntryEditor]
+    [currentConfig, onOpenSettings]
   );
 
   const handleStartTyping = useCallback(
@@ -137,7 +177,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       try {
         if (composerMode === "journal") {
           // Create journal entry using mutation - cache updates automatically
-          await createEntry.mutateAsync({
+          await createEntryRef.current.mutateAsync({
             type: "journal",
             title: text.slice(0, 50) + (text.length > 50 ? "..." : ""),
             blocks: text
@@ -157,23 +197,31 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
           const entryId = await createConversation({
             userMessage: text,
-            createEntry,
-            updateEntry,
+            createEntry: createEntryRef.current,
+            updateEntry: updateEntryRef.current,
             llmManager,
             modelConfig: Llama32_1B_Instruct,
           });
 
           // Navigate to the conversation immediately
           // (AI generation and title generation happen in background)
-          if (onOpenEntryEditor) {
-            onOpenEntryEditor(entryId);
+          if (onOpenEntryEditorRef.current) {
+            onOpenEntryEditorRef.current(entryId);
           }
         }
       } catch (error) {
         console.error("Error creating entry:", error);
       }
     },
-    [composerMode, createEntry, updateEntry, onOpenEntryEditor]
+    [composerMode]
+  );
+
+  const handleComposerLayout = useCallback(
+    (event: any) => {
+      const { height } = event.nativeEvent.layout;
+      setComposerHeight(height + insets.bottom);
+    },
+    [insets.bottom]
   );
 
   // Group entries by day for section headers
@@ -408,16 +456,10 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           style={styles.bottomComposerContainer}
           keyboardVerticalOffset={0}
         >
-          <View
-            ref={composerRef}
-            onLayout={(event) => {
-              const { height } = event.nativeEvent.layout;
-              setComposerHeight(height + insets.bottom);
-            }}
-          >
+          <View ref={composerRef} onLayout={handleComposerLayout}>
             <BottomComposer
               mode={composerMode}
-              onModeChange={setComposerMode}
+              onModeChange={handleModeChange}
               onStartTyping={handleStartTyping}
               onSubmit={handleComposerSubmit}
             />
