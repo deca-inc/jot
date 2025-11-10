@@ -290,18 +290,18 @@ class LLMManager {
    */
   async reloadWithConfig(config: LlmModelConfig): Promise<void> {
     console.log(`[LLMManager] Reloading with model: ${config.modelId}`);
-    
+
     // Unload current model
     await llmQueue.unload();
     this.isLoaded = false;
-    
+
     // Update config
     this.currentConfig = config;
-    
+
     // Load new model
     await llmQueue.load(config);
     this.isLoaded = true;
-    
+
     console.log(`[LLMManager] Successfully reloaded with ${config.modelId}`);
   }
 
@@ -470,9 +470,8 @@ export function useModel(): ModelContextValue {
 
 // Provider component to wrap app
 export function ModelProvider({ children }: { children: React.ReactNode }) {
-  const [currentConfig, setCurrentConfig] = useState<LlmModelConfig>(
-    Llama32_1B_Instruct
-  );
+  const [currentConfig, setCurrentConfig] =
+    useState<LlmModelConfig>(Llama32_1B_Instruct);
 
   const reloadModel = useCallback(async (config: LlmModelConfig) => {
     await llmManager.reloadWithConfig(config);

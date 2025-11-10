@@ -171,9 +171,7 @@ export async function ensureModelPresent(
       ).toFixed(2)}MB)`
     );
   } else if (config.pteSource.kind === "unavailable") {
-    throw new Error(
-      `Model not available: ${config.pteSource.reason}`
-    );
+    throw new Error(`Model not available: ${config.pteSource.reason}`);
   } else if (config.pteSource.kind === "bundled") {
     // Try bundled asset (for small files)
     try {
@@ -259,7 +257,7 @@ export async function deleteModel(config: LlmModelConfig): Promise<void> {
 export async function getModelSize(config: LlmModelConfig): Promise<number> {
   const modelDir = joinPaths(modelsDir, config.folderName);
   const info = await FileSystem.getInfoAsync(modelDir);
-  
+
   if (!info.exists) {
     return 0;
   }
@@ -268,7 +266,7 @@ export async function getModelSize(config: LlmModelConfig): Promise<number> {
   try {
     const files = await FileSystem.readDirectoryAsync(modelDir);
     let totalSize = 0;
-    
+
     for (const file of files) {
       const filePath = joinPaths(modelDir, file);
       const fileInfo = await FileSystem.getInfoAsync(filePath);
@@ -276,7 +274,7 @@ export async function getModelSize(config: LlmModelConfig): Promise<number> {
         totalSize += fileInfo.size;
       }
     }
-    
+
     return totalSize;
   } catch (e) {
     console.error(`[getModelSize] Error calculating size:`, e);
