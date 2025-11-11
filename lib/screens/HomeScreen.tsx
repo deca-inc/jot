@@ -338,8 +338,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             variant="h2"
             style={{
               color: seasonalTheme.textPrimary,
-              marginBottom: spacingPatterns.md,
-              marginTop: spacingPatterns.lg,
+              marginBottom: spacingPatterns.lg,
             }}
           >
             {formatDateHeader(item.dateKey)}
@@ -520,7 +519,7 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: spacingPatterns.screen,
-    paddingBottom: spacingPatterns.md,
+    paddingBottom: spacingPatterns.xs,
   },
   headerTop: {
     flexDirection: "row",
