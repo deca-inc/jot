@@ -1,5 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { View, StyleSheet, PanResponder, Animated } from "react-native";
+import {
+  View,
+  StyleSheet,
+  PanResponder,
+  Animated,
+  BackHandler,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../theme/ThemeProvider";
 import { springPresets } from "../theme";
@@ -139,6 +145,22 @@ export function SimpleNavigation() {
       },
     });
   }, [canGoBack, handleGoBack, swipeX]);
+
+  // Handle hardware back button (Android) and system back gestures
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        if (canGoBack) {
+          handleGoBack();
+          return true; // Prevent default behavior (exiting app)
+        }
+        return false; // Allow default behavior (exit app) when on home screen
+      }
+    );
+
+    return () => backHandler.remove();
+  }, [canGoBack, handleGoBack]);
 
   const handleOpenSettings = useCallback(() => {
     setCurrentScreen("settings");
