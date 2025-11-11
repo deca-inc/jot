@@ -235,7 +235,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     getLastUsedMode().then((mode) => {
       setComposerMode(mode);
     });
-  }, [getLastUsedMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Track keyboard height for both platforms
   useEffect(() => {

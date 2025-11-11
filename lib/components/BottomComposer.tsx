@@ -157,7 +157,7 @@ export function BottomComposer({
           }
           value={inputText}
           onChangeText={handleTextChange}
-          multiline={mode === "ai"} // Only multiline for AI mode
+          multiline={true} // Always multiline for consistent height
           onSubmitEditing={mode === "ai" ? handleSubmit : undefined}
           returnKeyType={mode === "ai" ? "send" : "default"}
         />
