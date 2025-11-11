@@ -5,12 +5,11 @@ import {
   TouchableOpacity,
   Platform,
   Alert,
-  Modal,
-  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassView } from "expo-glass-effect";
-import { Text } from "./Text";
+import { Dialog } from "./Dialog";
+import { MenuItem } from "./MenuItem";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useDeleteEntry } from "../db/useEntries";
@@ -130,45 +129,17 @@ export function FloatingComposerHeader({
       )}
 
       {/* Settings Menu Modal */}
-      {showMenu && (
-        <Modal
-          visible={showMenu}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowMenu(false)}
-        >
-          <Pressable
-            style={styles.menuOverlay}
-            onPress={() => setShowMenu(false)}
-          >
-            <View
-              style={[
-                styles.menuContainer,
-                {
-                  backgroundColor: seasonalTheme.cardBg,
-                  shadowColor: seasonalTheme.subtleGlow.shadowColor,
-                },
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setShowMenu(false);
-                  handleDelete();
-                }}
-              >
-                <Ionicons
-                  name="trash-outline"
-                  size={20}
-                  color="#FF3B30"
-                  style={styles.menuIcon}
-                />
-                <Text style={{ color: "#FF3B30" }}>Delete Entry</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Modal>
-      )}
+      <Dialog visible={showMenu} onRequestClose={() => setShowMenu(false)}>
+        <MenuItem
+          icon="trash-outline"
+          label="Delete Entry"
+          variant="destructive"
+          onPress={() => {
+            setShowMenu(false);
+            handleDelete();
+          }}
+        />
+      </Dialog>
     </>
   );
 }
@@ -205,29 +176,5 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: "center",
     justifyContent: "center",
-  },
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  menuContainer: {
-    minWidth: 200,
-    borderRadius: borderRadius.lg,
-    padding: spacingPatterns.xs,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacingPatterns.md,
-    borderRadius: borderRadius.md,
-  },
-  menuIcon: {
-    marginRight: spacingPatterns.sm,
   },
 });

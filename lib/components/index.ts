@@ -7,3 +7,5 @@ export * from "./ThemeControl";
 export * from "./ComposerInput";
 export * from "./FloatingComposerHeader";
 export * from "./ModelManagement";
+export * from "./Dialog";
+export * from "./MenuItem";

@@ -5,15 +5,16 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   Alert,
-  Modal,
-  Pressable,
   TextInput,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import RenderHtml from "react-native-render-html";
 import { Text } from "./Text";
 import { Card } from "./Card";
+import { Dialog } from "./Dialog";
+import { MenuItem } from "./MenuItem";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { Entry, extractPreviewText } from "../db/entries";
@@ -506,149 +507,101 @@ export function EntryListItem({
       </Card>
 
       {/* Menu Modal */}
-      {showMenu && (
-        <Modal
-          visible={showMenu}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowMenu(false)}
-        >
-          <Pressable
-            style={styles.menuOverlay}
-            onPress={() => setShowMenu(false)}
-          >
-            <View
-              style={[
-                styles.menuContainer,
-                {
-                  backgroundColor: itemTheme.cardBg,
-                  shadowColor: itemTheme.subtleGlow.shadowColor,
-                },
-              ]}
-            >
-              {entry.type === "ai_chat" && (
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setShowMenu(false);
-                    handleRename();
-                  }}
-                >
-                  <Ionicons
-                    name="pencil-outline"
-                    size={20}
-                    color={itemTheme.textPrimary}
-                    style={styles.menuIcon}
-                  />
-                  <Text style={{ color: itemTheme.textPrimary }}>Rename</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setShowMenu(false);
-                  handleDelete();
-                }}
-              >
-                <Ionicons
-                  name="trash-outline"
-                  size={20}
-                  color="#FF3B30"
-                  style={styles.menuIcon}
-                />
-                <Text style={{ color: "#FF3B30" }}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Modal>
-      )}
+      <Dialog visible={showMenu} onRequestClose={() => setShowMenu(false)}>
+        {entry.type === "ai_chat" && (
+          <MenuItem
+            icon="pencil-outline"
+            label="Rename"
+            onPress={() => {
+              setShowMenu(false);
+              handleRename();
+            }}
+          />
+        )}
+        <MenuItem
+          icon="trash-outline"
+          label="Delete"
+          variant="destructive"
+          onPress={() => {
+            setShowMenu(false);
+            handleDelete();
+          }}
+        />
+      </Dialog>
 
       {/* Rename Dialog Modal */}
-      {showRenameDialog && (
-        <Modal
-          visible={showRenameDialog}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowRenameDialog(false)}
+      <Dialog
+        visible={showRenameDialog}
+        onRequestClose={() => setShowRenameDialog(false)}
+        containerStyle={styles.renameDialog}
+      >
+        <Text
+          variant="h3"
+          style={{
+            color: itemTheme.textPrimary,
+            marginBottom: spacingPatterns.md,
+          }}
         >
-          <Pressable
-            style={styles.menuOverlay}
-            onPress={() => setShowRenameDialog(false)}
+          Rename Entry
+        </Text>
+        <TextInput
+          style={[
+            styles.renameInput,
+            {
+              color: itemTheme.textPrimary,
+              borderColor: itemTheme.textSecondary + "40",
+              backgroundColor:
+                Platform.OS === "android"
+                  ? "transparent"
+                  : itemTheme.cardBg + "80",
+            },
+          ]}
+          placeholder="Enter new title..."
+          placeholderTextColor={itemTheme.textSecondary}
+          value={renameText}
+          onChangeText={setRenameText}
+          autoFocus
+          onSubmitEditing={handleRenameSubmit}
+        />
+        <View style={styles.renameButtons}>
+          <TouchableOpacity
+            style={[
+              styles.renameButton,
+              {
+                backgroundColor: itemTheme.textSecondary + "20",
+              },
+            ]}
+            onPress={() => {
+              setShowRenameDialog(false);
+              setRenameText("");
+            }}
           >
-            <Pressable
-              style={[
-                styles.renameDialog,
-                {
-                  backgroundColor: itemTheme.cardBg,
-                  shadowColor: itemTheme.subtleGlow.shadowColor,
-                },
-              ]}
-              onPress={(e) => e.stopPropagation()}
+            <Text style={{ color: itemTheme.textPrimary }}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.renameButton,
+              {
+                backgroundColor: itemTheme.textPrimary,
+              },
+            ]}
+            onPress={handleRenameSubmit}
+            disabled={!renameText.trim()}
+          >
+            <Text
+              style={{
+                color:
+                  Platform.OS === "android"
+                    ? seasonalTheme?.gradient.middle || itemTheme.cardBg
+                    : itemTheme.cardBg,
+                opacity: !renameText.trim() ? 0.5 : 1,
+              }}
             >
-              <Text
-                variant="h3"
-                style={{
-                  color: itemTheme.textPrimary,
-                  marginBottom: spacingPatterns.md,
-                }}
-              >
-                Rename Entry
-              </Text>
-              <TextInput
-                style={[
-                  styles.renameInput,
-                  {
-                    color: itemTheme.textPrimary,
-                    borderColor: itemTheme.textSecondary + "40",
-                    backgroundColor: itemTheme.cardBg,
-                  },
-                ]}
-                placeholder="Enter new title..."
-                placeholderTextColor={itemTheme.textSecondary}
-                value={renameText}
-                onChangeText={setRenameText}
-                autoFocus
-                onSubmitEditing={handleRenameSubmit}
-              />
-              <View style={styles.renameButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.renameButton,
-                    {
-                      backgroundColor: itemTheme.textSecondary + "20",
-                    },
-                  ]}
-                  onPress={() => {
-                    setShowRenameDialog(false);
-                    setRenameText("");
-                  }}
-                >
-                  <Text style={{ color: itemTheme.textPrimary }}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.renameButton,
-                    {
-                      backgroundColor: itemTheme.textPrimary,
-                    },
-                  ]}
-                  onPress={handleRenameSubmit}
-                  disabled={!renameText.trim()}
-                >
-                  <Text
-                    style={{
-                      color: itemTheme.cardBg,
-                      opacity: !renameText.trim() ? 0.5 : 1,
-                    }}
-                  >
-                    Save
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </Pressable>
-          </Pressable>
-        </Modal>
-      )}
+              Save
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Dialog>
     </TouchableOpacity>
   );
 }
@@ -771,39 +724,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacingPatterns.xxs,
     borderRadius: borderRadius.sm,
   },
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  menuContainer: {
-    minWidth: 200,
-    borderRadius: borderRadius.lg,
-    padding: spacingPatterns.xs,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacingPatterns.md,
-    borderRadius: borderRadius.md,
-  },
-  menuIcon: {
-    marginRight: spacingPatterns.sm,
-  },
   renameDialog: {
     width: "80%",
     maxWidth: 400,
-    borderRadius: borderRadius.lg,
     padding: spacingPatterns.lg,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
   },
   renameInput: {
     borderWidth: 1,

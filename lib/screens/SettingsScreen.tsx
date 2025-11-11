@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Text,
   Card,
@@ -112,15 +113,11 @@ export function SettingsScreen({
           <View style={styles.headerTop}>
             {onBack && (
               <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                <Text
-                  variant="label"
-                  style={[
-                    styles.backButtonText,
-                    { color: seasonalTheme.textPrimary },
-                  ]}
-                >
-                  ← Back
-                </Text>
+                <Ionicons
+                  name="arrow-back"
+                  size={24}
+                  color={seasonalTheme.textPrimary}
+                />
               </TouchableOpacity>
             )}
             <Text
@@ -420,11 +417,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backButton: {
-    paddingVertical: spacingPatterns.xs,
-    paddingHorizontal: spacingPatterns.sm,
-  },
-  backButtonText: {
-    fontSize: 16,
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacingPatterns.xs,
   },
   section: {
     marginBottom: spacingPatterns.md,
