@@ -471,7 +471,12 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           keyExtractor={keyExtractor}
           ListEmptyComponent={ListEmptyComponent}
           ListFooterComponent={ListFooterComponent}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            keyboardHeight > 0 && {
+              paddingBottom: keyboardHeight,
+            },
+          ]}
           refreshing={isLoading}
           onRefresh={handleRefresh}
           onEndReached={handleLoadMore}
