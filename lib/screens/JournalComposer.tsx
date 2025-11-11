@@ -227,8 +227,8 @@ export function JournalComposer({
         styles.container,
         { backgroundColor: seasonalTheme.gradient.middle },
       ]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={0}
     >
       {/* Floating Header Buttons */}
       <FloatingComposerHeader
@@ -244,9 +244,13 @@ export function JournalComposer({
           styles.editorContainer,
           {
             paddingTop: insets.top,
-          },
-          isKeyboardVisible && {
-            marginBottom: 60, // Make room for toolbar
+            paddingBottom: !isKeyboardVisible ? spacingPatterns.screen : 0,
+            // Shrink container by keyboard height on Android only
+            // iOS: container keeps full height, toolbar just floats
+            marginBottom:
+              Platform.OS === "android" && isKeyboardVisible
+                ? keyboardHeight + insets.bottom
+                : 0,
           },
         ]}
       >
@@ -266,6 +270,11 @@ export function JournalComposer({
               fontSize: 18,
               flex: 1,
               color: seasonalTheme.textPrimary,
+              paddingBottom: isKeyboardVisible
+                ? Platform.OS === "android"
+                  ? 62 // Just toolbar (~60) + 2px margin
+                  : 120 // not sure, just looks good?
+                : spacingPatterns.screen,
             }}
             htmlStyle={{
               h1: {
@@ -306,7 +315,10 @@ export function JournalComposer({
           style={[
             styles.floatingToolbar,
             {
-              bottom: keyboardHeight,
+              bottom:
+                Platform.OS === "android"
+                  ? keyboardHeight + insets.bottom // Android needs insets
+                  : keyboardHeight + 4, // iOS: add 4px margin from keyboard
               opacity: toolbarAnimation,
               transform: [
                 {
@@ -774,12 +786,17 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   androidToolbar: {
-    // Android gets a solid background
+    // Android gets a solid background with rounded pill shape
   },
   floatingToolbarAndroid: {
-    borderTopLeftRadius: 100,
-    borderTopRightRadius: 100,
+    borderRadius: 100, // Full pill shape
+    marginHorizontal: spacingPatterns.md + 4,
+    marginBottom: spacingPatterns.xs,
     elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
   },
   toolbarContent: {
     flexDirection: "row",

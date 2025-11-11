@@ -15,8 +15,7 @@ import { Text } from "./Text";
 import { ComposerInput } from "./ComposerInput";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-
-export type ComposerMode = "journal" | "ai";
+import { type ComposerMode } from "../db/composerSettings";
 
 export interface BottomComposerProps {
   mode: ComposerMode;

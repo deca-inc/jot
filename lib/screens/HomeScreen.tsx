@@ -19,13 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  Text,
-  EntryListItem,
-  BottomComposer,
-  Button,
-  type ComposerMode,
-} from "../components";
+import { Text, EntryListItem, BottomComposer, Button } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { Entry } from "../db/entries";
@@ -39,6 +33,7 @@ import {
   useUpdateEntry,
 } from "../db/useEntries";
 import { useModel } from "../ai/ModelProvider";
+import { useComposerSettings, type ComposerMode } from "../db/composerSettings";
 
 type Filter = "all" | "journal" | "ai_chat" | "favorites";
 
@@ -60,6 +55,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const composerRef = useRef<View>(null);
   const { currentConfig } = useModel();
+  const { getLastUsedMode, setLastUsedMode } = useComposerSettings();
 
   // Build query options based on filter
   const queryOptions = useMemo(() => {
@@ -164,8 +160,10 @@ export function HomeScreen(props: HomeScreenProps = {}) {
         return;
       }
       setComposerMode(newMode);
+      // Save the selected mode for next time
+      setLastUsedMode(newMode);
     },
-    [currentConfig, onOpenSettings]
+    [currentConfig, onOpenSettings, setLastUsedMode]
   );
 
   const handleStartTyping = useCallback(
@@ -231,6 +229,13 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     },
     [insets.bottom]
   );
+
+  // Load the last used composer mode on mount
+  useEffect(() => {
+    getLastUsedMode().then((mode) => {
+      setComposerMode(mode);
+    });
+  }, [getLastUsedMode]);
 
   // Track keyboard height for both platforms
   useEffect(() => {
