@@ -25,7 +25,7 @@ export interface LlmModelConfig {
   // Additional metadata
   huggingFaceUrl?: string; // Link to model card
   available: boolean; // Whether PTE files are available for download
-  isDefault?: boolean; // If true, bundled with app and cannot be removed
+  isDefault?: boolean; // If true, recommended as the default model for new users
 }
 
 // NOTE: For local development, run `pnpm download:models` to download models to assets/models/

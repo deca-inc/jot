@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -18,6 +19,9 @@ import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { isComponentPlaygroundEnabled } from "../utils/isDev";
+import { deleteModel } from "../ai/modelManager";
+import { useModelSettings } from "../db/modelSettings";
+import { ALL_MODELS, type LlmModelConfig } from "../ai/modelConfig";
 
 interface SettingsScreenProps {
   onNavigateToPlayground?: () => void;
@@ -31,6 +35,63 @@ export function SettingsScreen({
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
+  const modelSettings = useModelSettings();
+  const [isRemovingAllModels, setIsRemovingAllModels] = useState(false);
+
+  const handleRemoveAllModels = async () => {
+    Alert.alert(
+      "Remove All Models?",
+      "This will delete all downloaded AI models from your device. You will need to re-download them to use AI features. This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Remove All",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsRemovingAllModels(true);
+
+              // Get all downloaded models
+              const downloadedModels =
+                await modelSettings.getDownloadedModels();
+
+              // Delete each model
+              for (const downloadedModel of downloadedModels) {
+                const modelConfig = ALL_MODELS.find(
+                  (m: LlmModelConfig) => m.modelId === downloadedModel.modelId
+                );
+                if (modelConfig) {
+                  await deleteModel(modelConfig);
+                  await modelSettings.removeDownloadedModel(
+                    modelConfig.modelId
+                  );
+                }
+              }
+
+              setIsRemovingAllModels(false);
+
+              Alert.alert(
+                "Success",
+                `Removed ${downloadedModels.length} model(s) successfully.`,
+                [{ text: "OK" }]
+              );
+            } catch (error) {
+              setIsRemovingAllModels(false);
+              console.error("Error removing all models:", error);
+              Alert.alert(
+                "Error",
+                "Failed to remove all models. Please try again or remove them individually.",
+                [{ text: "OK" }]
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Show UI shell immediately - settings are loaded by ThemeControl component
   return (
@@ -162,50 +223,6 @@ export function SettingsScreen({
           </Text>
         </Card>
 
-        {isComponentPlaygroundEnabled() && (
-          <Card
-            variant="borderless"
-            style={[
-              styles.section,
-              {
-                backgroundColor: seasonalTheme.cardBg,
-                shadowColor: seasonalTheme.subtleGlow.shadowColor,
-                shadowOpacity: seasonalTheme.subtleGlow.shadowOpacity,
-              },
-            ]}
-          >
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionText}>
-                <Text
-                  variant="h3"
-                  style={[
-                    styles.sectionTitle,
-                    { color: seasonalTheme.textPrimary },
-                  ]}
-                >
-                  Component Playground
-                </Text>
-                <Text
-                  variant="body"
-                  style={[
-                    styles.sectionDescription,
-                    { color: seasonalTheme.textSecondary },
-                  ]}
-                >
-                  Test and iterate on UI components in isolation (Dev Only)
-                </Text>
-              </View>
-              <Button
-                variant="secondary"
-                size="sm"
-                onPress={onNavigateToPlayground}
-              >
-                Open
-              </Button>
-            </View>
-          </Card>
-        )}
-
         <Card
           variant="borderless"
           style={[
@@ -273,6 +290,109 @@ export function SettingsScreen({
             Coming soon
           </Text>
         </Card>
+
+        {/* Admin Section - Dev Only */}
+        {isComponentPlaygroundEnabled() && (
+          <Card
+            variant="borderless"
+            style={[
+              styles.section,
+              styles.adminSection,
+              {
+                backgroundColor: seasonalTheme.cardBg,
+                shadowColor: seasonalTheme.subtleGlow.shadowColor,
+                shadowOpacity: seasonalTheme.subtleGlow.shadowOpacity,
+                borderColor: "#FF6B6B40",
+              },
+            ]}
+          >
+            <Text
+              variant="h3"
+              style={[
+                styles.sectionTitle,
+                { color: seasonalTheme.textPrimary },
+              ]}
+            >
+              🔧 Admin (Dev Only)
+            </Text>
+            <Text
+              variant="body"
+              style={[
+                styles.sectionDescription,
+                { color: seasonalTheme.textSecondary },
+              ]}
+            >
+              Developer tools and utilities
+            </Text>
+
+            {/* Component Playground */}
+            <View style={[styles.adminItem, styles.adminItemFirst]}>
+              <View style={styles.sectionText}>
+                <Text
+                  variant="body"
+                  style={[
+                    styles.adminItemTitle,
+                    { color: seasonalTheme.textPrimary },
+                  ]}
+                >
+                  Component Playground
+                </Text>
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.adminItemDescription,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  Test UI components in isolation
+                </Text>
+              </View>
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={onNavigateToPlayground}
+              >
+                Open
+              </Button>
+            </View>
+
+            {/* Remove All Models */}
+            <View style={styles.adminItem}>
+              <View style={styles.sectionText}>
+                <Text
+                  variant="body"
+                  style={[
+                    styles.adminItemTitle,
+                    { color: seasonalTheme.textPrimary },
+                  ]}
+                >
+                  Remove All Models
+                </Text>
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.adminItemDescription,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  Delete all downloaded AI models
+                </Text>
+              </View>
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={handleRemoveAllModels}
+                disabled={isRemovingAllModels}
+              >
+                {isRemovingAllModels ? (
+                  <ActivityIndicator size="small" color={theme.colors.accent} />
+                ) : (
+                  "Remove All"
+                )}
+              </Button>
+            </View>
+          </Card>
+        )}
       </ScrollView>
     </View>
   );
@@ -334,5 +454,27 @@ const styles = StyleSheet.create({
   comingSoon: {
     marginTop: spacingPatterns.sm,
     fontStyle: "italic",
+  },
+  adminSection: {
+    borderWidth: 2,
+    borderStyle: "dashed",
+  },
+  adminItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: spacingPatterns.md,
+    borderTopWidth: 1,
+    borderTopColor: "#00000010",
+  },
+  adminItemFirst: {
+    marginTop: spacingPatterns.md,
+  },
+  adminItemTitle: {
+    fontWeight: "500",
+    marginBottom: spacingPatterns.xxs,
+  },
+  adminItemDescription: {
+    fontSize: 12,
   },
 });

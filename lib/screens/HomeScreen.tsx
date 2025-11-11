@@ -1,4 +1,10 @@
-import React, { useState, useCallback, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+  useEffect,
+} from "react";
 import {
   View,
   StyleSheet,
@@ -9,6 +15,7 @@ import {
   TouchableOpacity,
   ListRenderItem,
   Alert,
+  Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -50,6 +57,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const [filter, setFilter] = useState<Filter>("all");
   const [composerMode, setComposerMode] = useState<ComposerMode>("journal");
   const [composerHeight, setComposerHeight] = useState(120);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const composerRef = useRef<View>(null);
   const { currentConfig } = useModel();
 
@@ -223,6 +231,27 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     },
     [insets.bottom]
   );
+
+  // Track keyboard height for both platforms
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const keyboardWillShow = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+
+    const keyboardWillHide = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
   // Group entries by day for section headers
   const groupedData = useMemo(() => {
@@ -451,10 +480,16 @@ export function HomeScreen(props: HomeScreenProps = {}) {
         />
 
         {/* Bottom Composer with Safe Area */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.bottomComposerContainer}
-          keyboardVerticalOffset={0}
+        <View
+          style={[
+            styles.bottomComposerContainer,
+            keyboardHeight > 0 && {
+              bottom:
+                Platform.OS === "android"
+                  ? keyboardHeight + insets.bottom // Android needs insets
+                  : keyboardHeight, // iOS keyboard height already accounts for safe area
+            },
+          ]}
         >
           <View ref={composerRef} onLayout={handleComposerLayout}>
             <BottomComposer
@@ -462,9 +497,10 @@ export function HomeScreen(props: HomeScreenProps = {}) {
               onModeChange={handleModeChange}
               onStartTyping={handleStartTyping}
               onSubmit={handleComposerSubmit}
+              isKeyboardVisible={keyboardHeight > 0}
             />
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </View>
   );

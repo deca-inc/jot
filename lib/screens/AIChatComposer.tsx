@@ -16,6 +16,7 @@ import {
   Alert,
   ListRenderItem,
   useWindowDimensions,
+  Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -137,6 +138,8 @@ export function AIChatComposer({
   // Refs for UI only
   const flatListRef = useRef<FlatList<Block>>(null);
   const chatInputRef = useRef<TextInput>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Derive displayed data from entry or fallback to initial props
   const displayedTitle = entry?.title ?? initialTitle;
@@ -153,6 +156,29 @@ export function AIChatComposer({
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated });
     }, 100);
+  }, []);
+
+  // Track keyboard visibility and height on both platforms
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const keyboardDidShow = Keyboard.addListener(showEvent, (e) => {
+      setIsKeyboardVisible(true);
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+
+    const keyboardDidHide = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      keyboardDidShow.remove();
+      keyboardDidHide.remove();
+    };
   }, []);
 
   // HTML rendering styles - memoized for performance
@@ -623,13 +649,11 @@ export function AIChatComposer({
 
   // Show UI shell immediately - content will load progressively
   return (
-    <KeyboardAvoidingView
+    <View
       style={[
         styles.container,
         { backgroundColor: seasonalTheme.gradient.middle },
       ]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
     >
       {/* Floating Header Buttons */}
       <FloatingComposerHeader
@@ -682,10 +706,31 @@ export function AIChatComposer({
           styles.chatInputContainer,
           {
             backgroundColor: seasonalTheme.cardBg,
-            paddingBottom: insets.bottom || spacingPatterns.sm,
+            paddingBottom: isKeyboardVisible
+              ? spacingPatterns.sm
+              : insets.bottom || spacingPatterns.sm,
+            marginBottom:
+              keyboardHeight > 0
+                ? Platform.OS === "android"
+                  ? keyboardHeight + insets.bottom // Android needs insets
+                  : keyboardHeight // iOS keyboard height already accounts for safe area
+                : 0,
           },
         ]}
       >
+        {/* iOS: Filler element to cover gap between input and keyboard */}
+        {Platform.OS === "ios" && (
+          <View
+            style={{
+              position: "absolute",
+              bottom: -200, // Extend well below the input
+              left: 0,
+              right: 0,
+              height: 200,
+              backgroundColor: seasonalTheme.cardBg,
+            }}
+          />
+        )}
         <TextInput
           ref={chatInputRef}
           style={[
@@ -740,7 +785,7 @@ export function AIChatComposer({
           />
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

@@ -6,6 +6,7 @@ import {
   Animated,
   Easing,
   useColorScheme,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
@@ -22,6 +23,7 @@ export interface BottomComposerProps {
   onModeChange: (mode: ComposerMode) => void;
   onStartTyping?: (text: string) => void;
   onSubmit?: (text: string) => void;
+  isKeyboardVisible?: boolean;
 }
 
 export function BottomComposer({
@@ -29,6 +31,7 @@ export function BottomComposer({
   onModeChange,
   onStartTyping,
   onSubmit,
+  isKeyboardVisible = false,
 }: BottomComposerProps) {
   const seasonalTheme = useSeasonalTheme();
   const colorScheme = useColorScheme();
@@ -189,7 +192,14 @@ export function BottomComposer({
   const peekHeight = 16; // How much the glow peeks up above the composer edge
 
   return (
-    <View style={[styles.outerWrapper, { paddingTop: peekHeight }]}>
+    <View
+      style={[
+        styles.outerWrapper,
+        { paddingTop: peekHeight },
+        // Remove overflow hidden on iOS to allow filler to extend
+        Platform.OS === "ios" && { overflow: "visible" },
+      ]}
+    >
       {/* Animated blob glow positioned to peek up over the composer */}
       {/* Positioned at top of outerWrapper to peek above */}
       <Animated.View
@@ -210,21 +220,104 @@ export function BottomComposer({
             }),
             shadowOffset: { width: 0, height: -4 },
           },
+          // Remove overflow hidden on iOS to allow filler to extend
+          Platform.OS === "ios" && { overflow: "visible" },
         ]}
       >
-        <BlurView
-          intensity={colorScheme === "dark" ? 50 : 70}
-          tint={colorScheme === "dark" ? "dark" : "light"}
-          style={[
-            styles.blurContainer,
-            {
-              paddingBottom:
-                insets.bottom > 0 ? insets.bottom : spacingPatterns.xxs,
-            },
-          ]}
-        >
-          {content}
-        </BlurView>
+        {Platform.OS === "ios" ? (
+          // iOS: BlurView with liquid glass effect
+          <BlurView
+            intensity={100}
+            tint={colorScheme === "dark" ? "dark" : "light"}
+            style={[
+              styles.blurContainer,
+              {
+                paddingBottom:
+                  isKeyboardVisible
+                    ? spacingPatterns.sm
+                    : insets.bottom > 0
+                      ? insets.bottom
+                      : spacingPatterns.xxs,
+              },
+            ]}
+          >
+            {/* iOS: Liquid Glass effect with frosted glass appearance */}
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor:
+                    colorScheme === "dark"
+                      ? "rgba(30, 30, 30, 0.65)"
+                      : "rgba(255, 255, 255, 0.65)",
+                  borderTopLeftRadius: borderRadius.xl,
+                  borderTopRightRadius: borderRadius.xl,
+                },
+              ]}
+            />
+            {/* Subtle border for glass effect */}
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  borderTopWidth: 0.5,
+                  borderTopColor:
+                    colorScheme === "dark"
+                      ? "rgba(255, 255, 255, 0.15)"
+                      : "rgba(0, 0, 0, 0.1)",
+                  borderTopLeftRadius: borderRadius.xl,
+                  borderTopRightRadius: borderRadius.xl,
+                },
+              ]}
+            />
+            {/* Filler element to cover gap between composer and rounded keyboard */}
+            <View
+              style={{
+                position: "absolute",
+                bottom: -200, // Extend well below the composer
+                left: 0,
+                right: 0,
+                height: 200,
+                backgroundColor:
+                  colorScheme === "dark"
+                    ? "rgba(30, 30, 30, 0.65)"
+                    : "rgba(255, 255, 255, 0.65)",
+              }}
+            />
+            <View style={{ zIndex: 1 }}>{content}</View>
+          </BlurView>
+        ) : (
+          // Android: Solid background (BlurView doesn't work well)
+          <View
+            style={[
+              styles.blurContainer,
+              {
+                paddingBottom:
+                  isKeyboardVisible
+                    ? spacingPatterns.xxs
+                    : insets.bottom > 0
+                      ? insets.bottom
+                      : spacingPatterns.xxs,
+              },
+            ]}
+          >
+            {/* Solid opaque background layer */}
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor:
+                    colorScheme === "dark"
+                      ? "#1C1C1E" // iOS dark gray
+                      : "#FFFFFF", // Pure white
+                  borderTopLeftRadius: borderRadius.xl,
+                  borderTopRightRadius: borderRadius.xl,
+                },
+              ]}
+            />
+            <View style={{ zIndex: 1 }}>{content}</View>
+          </View>
+        )}
       </Animated.View>
     </View>
   );

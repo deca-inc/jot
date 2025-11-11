@@ -228,6 +228,7 @@ export function JournalComposer({
         { backgroundColor: seasonalTheme.gradient.middle },
       ]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >
       {/* Floating Header Buttons */}
       <FloatingComposerHeader

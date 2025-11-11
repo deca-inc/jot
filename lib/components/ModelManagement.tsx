@@ -77,7 +77,6 @@ function ModelCard({
 
   const estimatedSize = MODEL_SIZES[model.modelId] || 0;
   const description = MODEL_DESCRIPTIONS[model.modelId] || model.description;
-  const isDefaultModel = model.modelId === "qwen-3-0.6b";
 
   const renderActionButton = () => {
     if (isDownloading) {
@@ -105,29 +104,24 @@ function ModelCard({
       );
     }
 
-    if (!isDefaultModel) {
-      return (
-        <Button
-          variant="secondary"
-          size="sm"
-          onPress={onRemove}
-          disabled={isSelected}
-          style={styles.iconButton}
-        >
-          <Ionicons
-            name="trash-outline"
-            size={16}
-            color={
-              isSelected
-                ? theme.colors.textTertiary
-                : seasonalTheme.textSecondary
-            }
-          />
-        </Button>
-      );
-    }
-
-    return null;
+    // Show delete button for all downloaded models
+    return (
+      <Button
+        variant="secondary"
+        size="sm"
+        onPress={onRemove}
+        disabled={isSelected}
+        style={styles.iconButton}
+      >
+        <Ionicons
+          name="trash-outline"
+          size={16}
+          color={
+            isSelected ? theme.colors.textTertiary : seasonalTheme.textSecondary
+          }
+        />
+      </Button>
+    );
   };
 
   return (

@@ -83,10 +83,9 @@ export class ModelSettingsRepository {
       (m) => m.modelId !== modelId
     );
 
-    // If we removed the selected model, switch to another one or default to bundled model
+    // If we removed the selected model, switch to another downloaded model (or empty if none)
     if (settings.selectedModelId === modelId) {
-      settings.selectedModelId =
-        settings.downloadedModels[0]?.modelId ?? "qwen-3-0.6b"; // Default bundled model
+      settings.selectedModelId = settings.downloadedModels[0]?.modelId ?? "";
     }
 
     await this.set(settings);

@@ -34,7 +34,7 @@ export function ComposerInput({
 const styles = StyleSheet.create({
   input: {
     flex: 1,
-    borderRadius: borderRadius.full,
+    borderRadius: borderRadius.lg,
     paddingHorizontal: spacingPatterns.sm,
     paddingVertical: 10,
     fontSize: 16,
@@ -44,7 +44,8 @@ const styles = StyleSheet.create({
     maxHeight: 100,
   },
   inputMultiline: {
-    textAlignVertical: "center",
+    textAlignVertical: "top",
+    paddingTop: spacingPatterns.sm,
   },
 });
 
