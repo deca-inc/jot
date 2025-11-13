@@ -80,8 +80,10 @@ export function JournalComposer({
   const editorRef = useRef<EnrichedTextInputInstance>(null);
   const isDeletingRef = useRef(false); // Track deletion state to prevent race conditions
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const toolbarAnimation = useRef(new Animated.Value(0)).current;
+  // Initialize keyboard as visible since we use autoFocus={true} on the input
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(true);
+  // Initialize animation to 1 so toolbar appears immediately when keyboard is already visible
+  const toolbarAnimation = useRef(new Animated.Value(1)).current;
 
   // Derive initial content from entry (single source of truth)
   const initialContent = useMemo(() => {
@@ -139,6 +141,20 @@ export function JournalComposer({
 
   // Keyboard listeners
   useEffect(() => {
+    // Check if keyboard is already visible on mount (for when navigating to this screen)
+    const checkInitialKeyboardState = () => {
+      // On iOS, metrics() returns the current keyboard frame
+      const metrics = Keyboard.metrics();
+      if (metrics && metrics.height > 0) {
+        setKeyboardHeight(metrics.height);
+        // Already initialized to visible, but ensure animation is at 1
+        toolbarAnimation.setValue(1);
+      }
+    };
+
+    // Small delay to ensure keyboard has time to render if autoFocus triggers it
+    const timer = setTimeout(checkInitialKeyboardState, 100);
+
     const keyboardWillShow = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       (e) => {
@@ -167,6 +183,7 @@ export function JournalComposer({
     );
 
     return () => {
+      clearTimeout(timer);
       keyboardWillShow.remove();
       keyboardWillHide.remove();
     };
