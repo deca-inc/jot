@@ -8,6 +8,21 @@
 export type Season = "spring" | "summer" | "autumn" | "winter";
 export type TimeOfDay = "day" | "night";
 
+/**
+ * Seasonal theme object with all color values and theme state
+ * 
+ * @property isDark - Convenient boolean for checking if dark mode is active
+ * @property timeOfDay - The underlying time of day value ("day" | "night")
+ * 
+ * @example
+ * const seasonalTheme = useSeasonalTheme();
+ * 
+ * // Use isDark for conditional styling
+ * const backgroundColor = seasonalTheme.isDark ? "#1e293b" : "#ffffff";
+ * 
+ * // Or use theme colors directly (recommended)
+ * const backgroundColor = seasonalTheme.cardBg;
+ */
 export interface SeasonalTheme {
   gradient: {
     start: string;
@@ -23,6 +38,8 @@ export interface SeasonalTheme {
   cardBg: string;
   textPrimary: string;
   textSecondary: string;
+  timeOfDay: TimeOfDay;
+  isDark: boolean;
 }
 
 /**
@@ -45,6 +62,8 @@ export function getTimeOfDay(date: Date = new Date()): TimeOfDay {
 }
 
 // Cache for theme objects to prevent unnecessary re-renders
+// Version 2: Added isDark property
+const CACHE_VERSION = 2;
 const themeCache = new Map<string, SeasonalTheme>();
 
 /**
@@ -54,7 +73,7 @@ export function getSeasonalTheme(
   season: Season,
   timeOfDay: TimeOfDay
 ): SeasonalTheme {
-  const cacheKey = `${season}-${timeOfDay}`;
+  const cacheKey = `v${CACHE_VERSION}:${season}-${timeOfDay}`;
   const cached = themeCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -83,6 +102,8 @@ export function getSeasonalTheme(
           : "rgba(255, 255, 255, 0.55)",
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
+        timeOfDay,
+        isDark: isNight,
       };
       break;
 
@@ -104,6 +125,8 @@ export function getSeasonalTheme(
           : "rgba(255, 255, 255, 0.55)",
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
+        timeOfDay,
+        isDark: isNight,
       };
       break;
 
@@ -125,6 +148,8 @@ export function getSeasonalTheme(
           : "rgba(255, 255, 255, 0.55)",
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
+        timeOfDay,
+        isDark: isNight,
       };
       break;
 
@@ -147,6 +172,8 @@ export function getSeasonalTheme(
           : "rgba(255, 255, 255, 0.55)",
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
+        timeOfDay,
+        isDark: isNight,
       };
       break;
   }

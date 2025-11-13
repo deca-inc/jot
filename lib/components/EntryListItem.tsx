@@ -78,37 +78,23 @@ export function EntryListItem({
 
   // Extract RGB values from cardBg for gradient (works with rgba, rgb, and hex)
   const gradientColors = React.useMemo(() => {
-    // Determine if we're in dark mode by checking text brightness
-    const textColor = itemTheme.textPrimary;
-    let isDarkMode = false;
-
-    if (textColor.startsWith("#")) {
-      const hex = textColor.replace("#", "");
-      const r = parseInt(hex.substring(0, 2), 16);
-      const g = parseInt(hex.substring(2, 4), 16);
-      const b = parseInt(hex.substring(4, 6), 16);
-      // Calculate relative luminance
-      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-      isDarkMode = luminance > 0.5; // Light text = dark mode
-    } else if (textColor.startsWith("rgb")) {
-      const match = textColor.match(/\d+/g);
-      if (match && match.length >= 3) {
-        const r = parseInt(match[0]);
-        const g = parseInt(match[1]);
-        const b = parseInt(match[2]);
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-        isDarkMode = luminance > 0.5; // Light text = dark mode
-      }
-    }
-
     const cardBg = itemTheme.cardBg;
 
-    // Extract RGB values from rgba/rgb string or hex
+    // Extract RGB and alpha values from rgba/rgb string or hex
     let r = 255,
       g = 255,
-      b = 255;
+      b = 255,
+      a = 1;
 
-    if (cardBg.startsWith("rgba") || cardBg.startsWith("rgb")) {
+    if (cardBg.startsWith("rgba")) {
+      const match = cardBg.match(/[\d.]+/g);
+      if (match && match.length >= 4) {
+        r = parseInt(match[0]);
+        g = parseInt(match[1]);
+        b = parseInt(match[2]);
+        a = parseFloat(match[3]);
+      }
+    } else if (cardBg.startsWith("rgb")) {
       const match = cardBg.match(/\d+/g);
       if (match && match.length >= 3) {
         r = parseInt(match[0]);
@@ -122,24 +108,14 @@ export function EntryListItem({
       b = parseInt(hex.substring(4, 6), 16);
     }
 
-    // In dark mode, use dark gradient; in light mode, use light gradient
-    if (isDarkMode) {
-      // Use black with softer opacity to blend gently with dark backgrounds
-      return [
-        `rgba(0, 0, 0, 0)`, // Fully transparent
-        `rgba(0, 0, 0, 0.25)`, // 25% opaque black - softer
-        `rgba(0, 0, 0, 0.5)`, // 50% opaque black - softer
-        `rgba(0, 0, 0, 0.7)`, // 70% opaque black - softer
-      ] as const;
-    }
-
+    // Fade from transparent (top) to card color at its actual opacity (bottom)
     return [
-      `rgba(${r}, ${g}, ${b}, 0)`, // Fully transparent
-      `rgba(${r}, ${g}, ${b}, 0.7)`, // 70% opaque
-      `rgba(${r}, ${g}, ${b}, 0.95)`, // 95% opaque
-      `rgba(${r}, ${g}, ${b}, 1)`, // Fully opaque
+      `rgba(${r}, ${g}, ${b}, 0)`, // Top: fully transparent
+      `rgba(${r}, ${g}, ${b}, ${a * 0.5})`, // Lightly opaque (50% of card opacity)
+      `rgba(${r}, ${g}, ${b}, ${a * 0.85})`, // More opaque (85% of card opacity)
+      `rgba(${r}, ${g}, ${b}, ${a})`, // Bottom: exactly match card's actual color/opacity
     ] as const;
-  }, [itemTheme.cardBg, itemTheme.textPrimary]);
+  }, [itemTheme.cardBg]);
 
   // Memoize RenderHtml props to prevent re-renders
   const htmlTagsStyles = React.useMemo(

@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
-  useColorScheme,
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,8 +32,8 @@ export function BottomComposer({
   isKeyboardVisible = false,
 }: BottomComposerProps) {
   const seasonalTheme = useSeasonalTheme();
-  const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
+  const isDark = seasonalTheme.isDark;
   const [inputText, setInputText] = useState("");
   const glowAnimation = useRef(new Animated.Value(0)).current;
 
@@ -227,7 +226,7 @@ export function BottomComposer({
           // iOS: BlurView with liquid glass effect
           <BlurView
             intensity={100}
-            tint={colorScheme === "dark" ? "dark" : "light"}
+            tint={isDark ? "dark" : "light"}
             style={[
               styles.blurContainer,
               {
@@ -245,10 +244,9 @@ export function BottomComposer({
               style={[
                 StyleSheet.absoluteFill,
                 {
-                  backgroundColor:
-                    colorScheme === "dark"
-                      ? "rgba(30, 30, 30, 0.65)"
-                      : "rgba(255, 255, 255, 0.65)",
+                  backgroundColor: isDark
+                    ? "rgba(30, 30, 30, 0.65)"
+                    : "rgba(255, 255, 255, 0.65)",
                   borderTopLeftRadius: borderRadius.xl,
                   borderTopRightRadius: borderRadius.xl,
                 },
@@ -260,10 +258,9 @@ export function BottomComposer({
                 StyleSheet.absoluteFill,
                 {
                   borderTopWidth: 0.5,
-                  borderTopColor:
-                    colorScheme === "dark"
-                      ? "rgba(255, 255, 255, 0.15)"
-                      : "rgba(0, 0, 0, 0.1)",
+                  borderTopColor: isDark
+                    ? "rgba(255, 255, 255, 0.15)"
+                    : "rgba(0, 0, 0, 0.1)",
                   borderTopLeftRadius: borderRadius.xl,
                   borderTopRightRadius: borderRadius.xl,
                 },
@@ -277,10 +274,9 @@ export function BottomComposer({
                 left: 0,
                 right: 0,
                 height: 200,
-                backgroundColor:
-                  colorScheme === "dark"
-                    ? "rgba(30, 30, 30, 0.65)"
-                    : "rgba(255, 255, 255, 0.65)",
+                backgroundColor: isDark
+                  ? "rgba(30, 30, 30, 0.65)"
+                  : "rgba(255, 255, 255, 0.65)",
               }}
             />
             <View style={{ zIndex: 1 }}>{content}</View>
@@ -305,10 +301,9 @@ export function BottomComposer({
               style={[
                 StyleSheet.absoluteFill,
                 {
-                  backgroundColor:
-                    colorScheme === "dark"
-                      ? "#1C1C1E" // iOS dark gray
-                      : "#FFFFFF", // Pure white
+                  backgroundColor: isDark
+                    ? "#1C1C1E" // iOS dark gray
+                    : "#FFFFFF", // Pure white
                   borderTopLeftRadius: borderRadius.xl,
                   borderTopRightRadius: borderRadius.xl,
                 },

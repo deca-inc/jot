@@ -40,16 +40,13 @@ export function MenuItem({
   const finalIconColor = iconColor || (isDestructive ? "#FF3B30" : seasonalTheme.textPrimary);
   const textColor = isDestructive ? "#FF3B30" : seasonalTheme.textPrimary;
 
-  // Determine if we're in dark mode
-  const isDarkMode = seasonalTheme.textPrimary === "#f1f5f9";
-
   return (
     <TouchableOpacity
       style={[
         styles.menuItem,
         isDestructive &&
           Platform.OS === "android" && {
-            backgroundColor: isDarkMode
+            backgroundColor: seasonalTheme.isDark
               ? "rgba(255, 59, 48, 0.15)" // Dark mode - more visible
               : "rgba(255, 59, 48, 0.08)", // Light mode - subtle
           },
