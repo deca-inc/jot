@@ -80,7 +80,7 @@ export function FloatingComposerHeader({
           style={[
             styles.buttonGlass,
             Platform.OS === "android" && {
-              backgroundColor: seasonalTheme.cardBg + "F0",
+              backgroundColor: seasonalTheme.cardBg,
             },
           ]}
         >
@@ -109,7 +109,7 @@ export function FloatingComposerHeader({
             style={[
               styles.buttonGlass,
               Platform.OS === "android" && {
-                backgroundColor: seasonalTheme.cardBg + "F0",
+                backgroundColor: seasonalTheme.cardBg,
               },
             ]}
           >
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
       },
       android: {
-        elevation: 4,
+        // No elevation - it causes transparency issues
       },
     }),
   },
