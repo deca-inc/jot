@@ -57,6 +57,9 @@ export function useEntry(id: number | undefined) {
     enabled: !!id,
     // Retry disabled for deleted entries - if entry is gone, it's gone
     retry: false,
+    // Always refetch on mount to get latest saved version when navigating back to entry
+    // Use 'always' instead of true because we skip cache updates during editing
+    refetchOnMount: 'always',
     // Don't refetch on window focus if entry might be deleted
     refetchOnWindowFocus: false,
   });
@@ -81,6 +84,8 @@ export function useEntries(options?: {
     queryFn: async () => {
       return entryRepository.getAll(options);
     },
+    // Always refetch on mount to get latest entries when navigating back to list
+    refetchOnMount: 'always',
   });
 }
 
@@ -114,6 +119,8 @@ export function useInfiniteEntries(options?: {
     },
     getNextPageParam: (lastPage) => lastPage.nextOffset,
     initialPageParam: 0,
+    // Always refetch on mount to get latest entries when navigating back to list
+    refetchOnMount: 'always',
   });
 }
 
@@ -173,13 +180,20 @@ export function useUpdateEntry() {
     mutationFn: async ({
       id,
       input,
+      skipCacheUpdate,
     }: {
       id: number;
       input: UpdateEntryInput;
+      skipCacheUpdate?: boolean;
     }) => {
       return entryRepository.update(id, input);
     },
-    onSuccess: (entry) => {
+    onSuccess: (entry, variables) => {
+      // Skip cache update if requested (e.g., during active editing to prevent HTML escaping)
+      if (variables.skipCacheUpdate) {
+        return;
+      }
+
       // Update detail cache
       queryClient.setQueryData(entryKeys.detail(entry.id), entry);
 

@@ -27,7 +27,7 @@ import {
 } from "react-native-enriched";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useEntry, useUpdateEntry, useDeleteEntry } from "../db/useEntries";
+import { useEntry, useUpdateEntry } from "../db/useEntries";
 import { debounce } from "../utils/debounce";
 import { FloatingComposerHeader } from "../components";
 import { saveJournalContent, repairHtml } from "./journalActions";
@@ -79,6 +79,8 @@ export function JournalComposer({
   );
   const editorRef = useRef<EnrichedTextInputInstance>(null);
   const isDeletingRef = useRef(false); // Track deletion state to prevent race conditions
+  const lastLoadTimeRef = useRef<number>(0); // Track when we last loaded content
+  const [editorKey, setEditorKey] = useState(() => Date.now()); // Force fresh editor on each mount
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   // Initialize keyboard as visible since we use autoFocus={true} on the input
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(true);
@@ -91,8 +93,22 @@ export function JournalComposer({
 
     const markdownBlock = entry.blocks.find((b) => b.type === "markdown");
     if (markdownBlock && markdownBlock.content.includes("<")) {
-      // Already HTML from enriched editor - wrap in <html> tags for the editor
-      return `<html>${markdownBlock.content}</html>`;
+      // Already HTML from enriched editor
+      let content = markdownBlock.content;
+
+      // Fix corrupted data: If HTML is escaped, unescape it
+      if (content.includes("&lt;") || content.includes("&gt;")) {
+        content = content
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'");
+      }
+
+      // Mark that we just loaded content - used to detect editor normalization
+      lastLoadTimeRef.current = Date.now();
+      return content;
     }
 
     // Empty or no content
@@ -273,11 +289,21 @@ export function JournalComposer({
       >
         {initialContent !== undefined && (
           <EnrichedTextInput
-            key={`editor-${entryId}`}
+            key={`editor-${entryId}-${entry?.updatedAt || editorKey}`}
             ref={editorRef}
             defaultValue={initialContent}
             onChangeHtml={(e) => {
               const newHtml = e.nativeEvent.value;
+
+              // Detect if this is the editor's internal normalization right after loading
+              // The library strips trailing <br> and <p></p> tags - this is intentional library behavior
+              // Ignore these changes to prevent overwriting DB with normalized version
+              const timeSinceLoad = Date.now() - lastLoadTimeRef.current;
+              if (timeSinceLoad < 250) {
+                setHtmlContent(newHtml);
+                return; // Don't trigger save for editor normalization
+              }
+
               setHtmlContent(newHtml);
               // Event-based auto-save: directly call debounced function
               debouncedSave(newHtml);
@@ -287,6 +313,7 @@ export function JournalComposer({
               fontSize: 18,
               flex: 1,
               color: seasonalTheme.textPrimary,
+              lineHeight: 28, // Better vertical rhythm
               paddingBottom: isKeyboardVisible
                 ? Platform.OS === "android"
                   ? 62 // Just toolbar (~60) + 2px margin
@@ -307,16 +334,16 @@ export function JournalComposer({
                 bold: true,
               },
               ul: {
-                bulletColor: seasonalTheme.textSecondary,
-                bulletSize: 5,
-                marginLeft: 20,
-                gapWidth: 10,
+                bulletColor: seasonalTheme.textPrimary,
+                bulletSize: 4,
+                marginLeft: 12,
+                gapWidth: 12,
               },
               ol: {
-                markerColor: seasonalTheme.textSecondary,
+                markerColor: seasonalTheme.textPrimary,
                 markerFontWeight: "normal",
-                marginLeft: 20,
-                gapWidth: 10,
+                marginLeft: 12,
+                gapWidth: 12,
               },
             }}
             placeholder="Start writing..."

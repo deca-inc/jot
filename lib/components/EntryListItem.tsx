@@ -123,16 +123,16 @@ export function EntryListItem({
       body: {
         color: itemTheme.textPrimary,
         fontSize: 14,
-        lineHeight: 18,
+        lineHeight: 18, // Compact for previews
         margin: 0,
         padding: 0,
       },
       p: {
         color: itemTheme.textPrimary,
         fontSize: 14,
-        lineHeight: 18,
+        lineHeight: 18, // Compact for previews
         marginTop: 0,
-        marginBottom: 3,
+        marginBottom: 2, // Minimal spacing for compact previews
       },
       b: { color: itemTheme.textPrimary, fontWeight: "bold" as const },
       strong: {
@@ -163,7 +163,7 @@ export function EntryListItem({
         lineHeight: 20,
         fontWeight: "bold" as const,
         marginTop: 0,
-        marginBottom: 3,
+        marginBottom: 2, // Minimal spacing for compact previews
       },
       h2: {
         color: itemTheme.textPrimary,
@@ -171,7 +171,7 @@ export function EntryListItem({
         lineHeight: 19,
         fontWeight: "bold" as const,
         marginTop: 0,
-        marginBottom: 3,
+        marginBottom: 2, // Minimal spacing for compact previews
       },
       h3: {
         color: itemTheme.textPrimary,
@@ -179,28 +179,28 @@ export function EntryListItem({
         lineHeight: 18,
         fontWeight: "bold" as const,
         marginTop: 0,
-        marginBottom: 3,
+        marginBottom: 2, // Minimal spacing for compact previews
       },
       ul: {
         color: itemTheme.textPrimary,
         marginLeft: 0,
-        paddingLeft: 14,
+        paddingLeft: 10, // Reduced indentation
         marginTop: 0,
-        marginBottom: 3,
+        marginBottom: 2, // Minimal spacing for compact previews
       },
       ol: {
         color: itemTheme.textPrimary,
         marginLeft: 0,
-        paddingLeft: 14,
+        paddingLeft: 10, // Reduced indentation
         marginTop: 0,
-        marginBottom: 3,
+        marginBottom: 2, // Minimal spacing for compact previews
       },
       li: {
         color: itemTheme.textPrimary,
         fontSize: 14,
-        lineHeight: 18,
-        marginBottom: 2,
-        paddingLeft: 4,
+        lineHeight: 18, // Compact for previews
+        marginBottom: 1, // Minimal spacing for compact previews
+        paddingLeft: 6, // Better gap between bullet/number and text
       },
     }),
     [itemTheme.textPrimary]

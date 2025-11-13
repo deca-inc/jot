@@ -196,8 +196,11 @@ export function SimpleNavigation() {
     const content = (initialText || "").trim();
 
     // Create HTML block with H1 for the first letter/text
+    // MUST wrap in <html> tags - editor needs them to render properly
     const htmlContent =
-      content.length > 0 ? `<h1>${content}</h1>` : "<h1></h1>"; // Empty H1 to start
+      content.length > 0
+        ? `<html><h1>${content}</h1></html>`
+        : "<html><h1></h1></html>"; // Empty H1 to start
 
     const blocks = [
       {

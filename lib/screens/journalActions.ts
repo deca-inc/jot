@@ -21,8 +21,8 @@ import { Block } from "../db/entries";
 export function repairHtml(html: string): string {
   let cleaned = html.trim();
 
-  // Remove outer <html> tags if present
-  cleaned = cleaned.replace(/^<html>\s*/i, "").replace(/\s*<\/html>$/i, "");
+  // DON'T strip <html> wrapper - keep it throughout the flow
+  // Editor outputs it and needs it back on input
 
   // Fix: Remove <p> tags that are wrapping block-level elements
   // This fixes the bug where every tag gets wrapped in <p>
@@ -36,17 +36,15 @@ export function repairHtml(html: string): string {
   cleaned = cleaned.replace(/(<\/ol>)\s*<\/p>/gi, "$1");
   cleaned = cleaned.replace(/(<\/h[1-6]>)\s*<\/p>/gi, "$1");
 
-  // Remove ALL <br> tags - they cause rendering issues
-  cleaned = cleaned.replace(/<br\s*\/?>/gi, "");
-
-  // Remove empty <p></p> tags
-  cleaned = cleaned.replace(/<p>\s*<\/p>/gi, "");
+  // Don't remove <br> tags - they represent intentional blank lines
+  // Also don't remove empty <p></p> tags for the same reason
+  // The editor uses these for spacing
 
   // Remove list items with only empty headings (rendering bug)
-  cleaned = cleaned.replace(
-    /<li>\s*<h[1-6]>\s*<\/h[1-6]>\s*<\/li>/gi,
-    "<li></li>"
-  );
+  cleaned = cleaned.replace(/<li>\s*<h[1-6]>\s*<\/h[1-6]>\s*<\/li>/gi, "");
+
+  // CRITICAL: Remove empty <li></li> tags - they cause editor to escape ALL HTML on reload!
+  cleaned = cleaned.replace(/<li>\s*<\/li>/gi, "");
 
   // Clean up empty lists
   cleaned = cleaned.replace(/<ul>\s*<\/ul>/gi, "");
@@ -103,10 +101,13 @@ export async function createJournalEntry(
           content: initialContent,
         });
       } else {
-        // Plain text - wrap in paragraph
+        // Plain text - wrap in paragraph and <html> tags as editor expects
         blocks.push({
           type: "markdown",
-          content: `<p>${initialContent.replace(/\n/g, "<br>")}</p>`,
+          content: `<html><h1>${initialContent.replace(
+            /\n/g,
+            "<br>"
+          )}</h1></html>`,
         });
       }
     }
@@ -186,18 +187,18 @@ export async function saveJournalContent(
             title: finalTitle,
             blocks,
           },
+          skipCacheUpdate: true, // Don't update cache to prevent HTML escaping in editor
         },
         {
           onSuccess: () => {
-            onSave?.(entryId);
+            // DON'T call onSave - it triggers a reload which causes the editor to escape HTML
+            // The DB is local, trust our editor state
             resolve();
           },
           onError: reject,
         }
       );
     });
-
-    console.log("[Journal Action] Saved entry:", entryId);
   } catch (error) {
     console.error("[Journal Action] Error saving entry:", error);
     throw error;

@@ -355,11 +355,13 @@ export class EntryRepository {
     createdAt: number;
     updatedAt: number;
   }): Entry {
+    const parsedBlocks = JSON.parse(row.blocks) as Block[];
+
     return {
       id: row.id,
       type: row.type,
       title: row.title,
-      blocks: JSON.parse(row.blocks) as Block[],
+      blocks: parsedBlocks,
       tags: JSON.parse(row.tags) as string[],
       attachments: JSON.parse(row.attachments) as string[],
       isFavorite: row.isFavorite === 1,
