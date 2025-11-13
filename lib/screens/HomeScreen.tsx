@@ -5,6 +5,7 @@ import React, {
   useMemo,
   useEffect,
 } from "react";
+import { useDebounce } from "../utils/debounce";
 import {
   View,
   StyleSheet,
@@ -28,6 +29,7 @@ import { llmManager } from "../ai/ModelProvider";
 import { Llama32_1B_Instruct } from "../ai/modelConfig";
 import {
   useInfiniteEntries,
+  useSearchEntries,
   useCreateEntry,
   useToggleFavorite,
   useUpdateEntry,
@@ -53,9 +55,40 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const [composerMode, setComposerMode] = useState<ComposerMode>("journal");
   const [composerHeight, setComposerHeight] = useState(120);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [dateFilter, setDateFilter] = useState<
+    "all" | "today" | "week" | "month"
+  >("all");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const composerRef = useRef<View>(null);
   const { currentConfig } = useModel();
   const { getLastUsedMode, setLastUsedMode } = useComposerSettings();
+
+  // Debounce search query to prevent excessive re-renders
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Calculate date range for filter
+  const dateRange = useMemo(() => {
+    const now = Date.now();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    switch (dateFilter) {
+      case "today":
+        return { dateFrom: today.getTime(), dateTo: now };
+      case "week":
+        const weekAgo = new Date(today);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        return { dateFrom: weekAgo.getTime(), dateTo: now };
+      case "month":
+        const monthAgo = new Date(today);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        return { dateFrom: monthAgo.getTime(), dateTo: now };
+      default:
+        return { dateFrom: undefined, dateTo: undefined };
+    }
+  }, [dateFilter]);
 
   // Build query options based on filter
   const queryOptions = useMemo(() => {
@@ -65,6 +98,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       orderBy?: "createdAt" | "updatedAt";
       order?: "ASC" | "DESC";
       limit?: number;
+      dateFrom?: number;
+      dateTo?: number;
     } = {
       orderBy: "updatedAt",
       order: "DESC",
@@ -79,10 +114,49 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       options.isFavorite = true;
     }
 
-    return options;
-  }, [filter]);
+    // Apply favorites filter
+    if (favoritesOnly) {
+      options.isFavorite = true;
+    }
 
-  // Use infinite query for pagination
+    // Apply date range filter
+    if (dateRange.dateFrom !== undefined) {
+      options.dateFrom = dateRange.dateFrom;
+    }
+    if (dateRange.dateTo !== undefined) {
+      options.dateTo = dateRange.dateTo;
+    }
+
+    return options;
+  }, [filter, favoritesOnly, dateRange]);
+
+  // Build search options
+  const searchOptions = useMemo(() => {
+    return {
+      query: debouncedSearchQuery,
+      type:
+        filter === "journal"
+          ? ("journal" as const)
+          : filter === "ai_chat"
+          ? ("ai_chat" as const)
+          : undefined,
+      isFavorite: favoritesOnly
+        ? true
+        : filter === "favorites"
+        ? true
+        : undefined,
+      dateFrom: dateRange.dateFrom,
+      dateTo: dateRange.dateTo,
+      limit: 20,
+    };
+  }, [debouncedSearchQuery, filter, favoritesOnly, dateRange]);
+
+  // Use search query when search text is present, otherwise use regular query
+  const isSearching = debouncedSearchQuery.trim().length > 0;
+
+  const regularQuery = useInfiniteEntries(queryOptions);
+  const searchQueryResult = useSearchEntries(searchOptions);
+
   const {
     data,
     isLoading,
@@ -90,7 +164,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     hasNextPage,
     fetchNextPage,
     refetch,
-  } = useInfiniteEntries(queryOptions);
+  } = isSearching ? searchQueryResult : regularQuery;
 
   // Flatten pages into single array
   const entries = useMemo(() => {
@@ -374,13 +448,19 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     []
   );
 
-  const ListEmptyComponent = useCallback(() => {
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery("");
+    setDateFilter("all");
+    setFavoritesOnly(false);
+  }, []);
+
+  const ListEmptyComponent = useMemo(() => {
     if (isLoading) return null;
 
     return (
       <View style={styles.emptyState}>
         <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
-          No entries yet
+          {isSearching ? "No results found" : "No entries yet"}
         </Text>
         <Text
           variant="body"
@@ -389,13 +469,15 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             marginTop: spacingPatterns.sm,
           }}
         >
-          {filter === "favorites"
+          {isSearching
+            ? "Try adjusting your search or filters"
+            : filter === "favorites"
             ? "You haven't favorited any entries yet"
             : "Create your first entry to get started"}
         </Text>
       </View>
     );
-  }, [isLoading, seasonalTheme, filter]);
+  }, [isLoading, seasonalTheme, filter, isSearching]);
 
   const ListFooterComponent = useCallback(() => {
     if (isFetchingNextPage) {
@@ -446,10 +528,42 @@ export function HomeScreen(props: HomeScreenProps = {}) {
                     color: seasonalTheme.textPrimary,
                   },
                 ]}
-                placeholder=""
+                placeholder="Search"
                 placeholderTextColor={seasonalTheme.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
               />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={handleClearSearch}
+                  style={styles.clearButton}
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color={seasonalTheme.textSecondary}
+                  />
+                </TouchableOpacity>
+              )}
             </View>
+            <TouchableOpacity
+              onPress={() => setShowFilters(!showFilters)}
+              style={[
+                styles.filterButton,
+                {
+                  backgroundColor:
+                    showFilters || dateFilter !== "all" || favoritesOnly
+                      ? seasonalTheme.textPrimary + "15"
+                      : "transparent",
+                },
+              ]}
+            >
+              <Ionicons
+                name="filter-outline"
+                size={24}
+                color={seasonalTheme.textSecondary}
+              />
+            </TouchableOpacity>
             {onOpenSettings && (
               <TouchableOpacity
                 onPress={onOpenSettings}
@@ -463,6 +577,104 @@ export function HomeScreen(props: HomeScreenProps = {}) {
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Filters */}
+          {showFilters && (
+            <View style={styles.filtersContainer}>
+              {/* Date Filter */}
+              <View style={styles.filterSection}>
+                <Text
+                  variant="caption"
+                  style={{
+                    color: seasonalTheme.textSecondary,
+                    marginBottom: spacingPatterns.xs,
+                  }}
+                >
+                  Date Range
+                </Text>
+                <View style={styles.filterChips}>
+                  {(["all", "today", "week", "month"] as const).map((date) => (
+                    <TouchableOpacity
+                      key={date}
+                      onPress={() => setDateFilter(date)}
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor:
+                            dateFilter === date
+                              ? seasonalTheme.textPrimary + "15"
+                              : "transparent",
+                          borderColor:
+                            dateFilter === date
+                              ? seasonalTheme.textPrimary
+                              : seasonalTheme.textSecondary + "30",
+                        },
+                      ]}
+                    >
+                      <Text
+                        variant="caption"
+                        style={{
+                          color: seasonalTheme.textPrimary,
+                          fontWeight: dateFilter === date ? "600" : "400",
+                        }}
+                      >
+                        {date === "all"
+                          ? "All Time"
+                          : date === "today"
+                          ? "Today"
+                          : date === "week"
+                          ? "This Week"
+                          : "This Month"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Favorites Toggle */}
+              <TouchableOpacity
+                onPress={() => setFavoritesOnly(!favoritesOnly)}
+                style={styles.favoritesToggle}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    {
+                      backgroundColor: favoritesOnly
+                        ? seasonalTheme.textPrimary + "15"
+                        : "transparent",
+                      borderColor: favoritesOnly
+                        ? seasonalTheme.textPrimary
+                        : seasonalTheme.textSecondary + "30",
+                    },
+                  ]}
+                >
+                  {favoritesOnly && (
+                    <Ionicons
+                      name="checkmark-sharp"
+                      size={18}
+                      color={seasonalTheme.textPrimary}
+                      style={{ fontWeight: "bold" }}
+                    />
+                  )}
+                </View>
+                <View style={styles.favoritesLabel}>
+                  <Ionicons
+                    name="star"
+                    size={16}
+                    color="#FFA500"
+                    style={{ marginRight: spacingPatterns.xs }}
+                  />
+                  <Text
+                    variant="body"
+                    style={{ color: seasonalTheme.textPrimary }}
+                  >
+                    Favorites only
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Content area with FlatList for better performance */}
@@ -473,12 +685,12 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           ListEmptyComponent={ListEmptyComponent}
           ListFooterComponent={ListFooterComponent}
           contentContainerStyle={[
-            styles.content,
+            groupedData.length > 0 ? styles.content : styles.contentEmpty,
             keyboardHeight > 0 && {
               paddingBottom: keyboardHeight,
             },
           ]}
-          refreshing={isLoading}
+          refreshing={false}
           onRefresh={handleRefresh}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
@@ -487,6 +699,14 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           updateCellsBatchingPeriod={50}
           initialNumToRender={20}
           windowSize={21}
+          maintainVisibleContentPosition={
+            isSearching
+              ? {
+                  minIndexForVisible: 0,
+                  autoscrollToTopThreshold: 100,
+                }
+              : undefined
+          }
         />
 
         {/* Bottom Composer with Safe Area */}
@@ -549,6 +769,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacingPatterns.sm,
     fontSize: 16,
   },
+  clearButton: {
+    padding: spacingPatterns.xs,
+  },
+  filterButton: {
+    borderRadius: borderRadius.full,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   settingsButton: {
     borderRadius: borderRadius.full,
     width: 44,
@@ -556,10 +786,51 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  filtersContainer: {
+    marginTop: spacingPatterns.md,
+    gap: spacingPatterns.md,
+  },
+  filterSection: {
+    gap: spacingPatterns.xs,
+  },
+  filterChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacingPatterns.xs,
+  },
+  filterChip: {
+    paddingHorizontal: spacingPatterns.md,
+    paddingVertical: spacingPatterns.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+  },
+  favoritesToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.sm,
+    paddingVertical: spacingPatterns.xs,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  favoritesLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   content: {
     padding: spacingPatterns.screen,
   },
+  contentEmpty: {
+    padding: spacingPatterns.screen,
+    flexGrow: 1,
+  },
   emptyState: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacingPatterns.xl * 2,

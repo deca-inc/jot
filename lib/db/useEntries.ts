@@ -30,6 +30,15 @@ export const entryKeys = {
     tag?: string;
     limit?: number;
   }) => [...entryKeys.lists(), "infinite", filters] as const,
+  searches: () => [...entryKeys.all, "search"] as const,
+  search: (filters?: {
+    query?: string;
+    type?: string;
+    isFavorite?: boolean;
+    dateFrom?: number;
+    dateTo?: number;
+    limit?: number;
+  }) => [...entryKeys.searches(), filters] as const,
   details: () => [...entryKeys.all, "detail"] as const,
   detail: (id: number) => [...entryKeys.details(), id] as const,
 };
@@ -120,6 +129,42 @@ export function useInfiniteEntries(options?: {
     getNextPageParam: (lastPage) => lastPage.nextOffset,
     initialPageParam: 0,
     // Always refetch on mount to get latest entries when navigating back to list
+    refetchOnMount: 'always',
+  });
+}
+
+/**
+ * Hook to search entries with infinite scroll/pagination
+ */
+export function useSearchEntries(options: {
+  query: string;
+  type?: "journal" | "ai_chat";
+  isFavorite?: boolean;
+  dateFrom?: number;
+  dateTo?: number;
+  limit?: number;
+}) {
+  const entryRepository = useEntryRepository();
+  const pageSize = options?.limit || 20;
+
+  return useInfiniteQuery({
+    queryKey: entryKeys.search(options),
+    queryFn: async ({ pageParam = 0 }) => {
+      const entries = await entryRepository.search({
+        ...options,
+        limit: pageSize,
+        offset: pageParam,
+      });
+      return {
+        entries,
+        nextOffset:
+          entries.length === pageSize ? pageParam + pageSize : undefined,
+      };
+    },
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    initialPageParam: 0,
+    enabled: options.query.trim().length > 0,
+    // Always refetch on mount when searching
     refetchOnMount: 'always',
   });
 }

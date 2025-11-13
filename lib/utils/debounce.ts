@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+
 /**
  * Create a debounced function that delays execution until after
  * a specified wait time has elapsed since the last invocation.
@@ -77,4 +79,23 @@ export function throttle<T extends (...args: any[]) => any>(
   };
 
   return throttled;
+}
+
+/**
+ * Hook to debounce a value
+ */
+export function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
 }

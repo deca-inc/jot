@@ -184,6 +184,8 @@ export class EntryRepository {
     type?: EntryType;
     isFavorite?: boolean;
     tag?: string;
+    dateFrom?: number;
+    dateTo?: number;
     limit?: number;
     offset?: number;
     orderBy?: "createdAt" | "updatedAt";
@@ -207,6 +209,16 @@ export class EntryRepository {
       params.push(`%"${options.tag}"%`);
     }
 
+    if (options?.dateFrom !== undefined) {
+      query += " AND createdAt >= ?";
+      params.push(options.dateFrom);
+    }
+
+    if (options?.dateTo !== undefined) {
+      query += " AND createdAt <= ?";
+      params.push(options.dateTo);
+    }
+
     const orderBy = options?.orderBy || "updatedAt";
     const order = options?.order || "DESC";
     query += ` ORDER BY ${orderBy} ${order}`;
@@ -217,6 +229,82 @@ export class EntryRepository {
     }
 
     if (options?.offset) {
+      query += " OFFSET ?";
+      params.push(options.offset);
+    }
+
+    const results = await this.db.getAllAsync<{
+      id: number;
+      type: EntryType;
+      title: string;
+      blocks: string;
+      tags: string;
+      attachments: string;
+      isFavorite: number;
+      embedding: Uint8Array | null;
+      embeddingModel: string | null;
+      embeddingCreatedAt: number | null;
+      createdAt: number;
+      updatedAt: number;
+    }>(query, params);
+
+    return results.map((row) => this.mapRowToEntry(row));
+  }
+
+  /**
+   * Search entries using full-text search
+   */
+  async search(options: {
+    query: string;
+    type?: EntryType;
+    isFavorite?: boolean;
+    dateFrom?: number;
+    dateTo?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<Entry[]> {
+    if (!options.query.trim()) {
+      return [];
+    }
+
+    // Build FTS5 query - escape special characters and add wildcard prefix matching
+    const searchQuery = options.query.trim().replace(/['"]/g, '""');
+
+    let query = `
+      SELECT e.* FROM entries e
+      INNER JOIN entries_fts fts ON e.id = fts.rowid
+      WHERE entries_fts MATCH ?
+    `;
+    const params: any[] = [`"${searchQuery}"*`];
+
+    if (options.type) {
+      query += " AND e.type = ?";
+      params.push(options.type);
+    }
+
+    if (options.isFavorite !== undefined) {
+      query += " AND e.isFavorite = ?";
+      params.push(options.isFavorite ? 1 : 0);
+    }
+
+    if (options.dateFrom !== undefined) {
+      query += " AND e.createdAt >= ?";
+      params.push(options.dateFrom);
+    }
+
+    if (options.dateTo !== undefined) {
+      query += " AND e.createdAt <= ?";
+      params.push(options.dateTo);
+    }
+
+    query += " ORDER BY e.updatedAt DESC";
+
+    if (options.limit) {
+      query += " LIMIT ?";
+      params.push(options.limit);
+    }
+
+    if (options.offset) {
       query += " OFFSET ?";
       params.push(options.offset);
     }
