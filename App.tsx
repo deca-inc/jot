@@ -3,12 +3,14 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LogBox } from "react-native";
-import { DatabaseProvider } from "./lib/db/DatabaseProvider";
+import { DatabaseProvider, useDatabase } from "./lib/db/DatabaseProvider";
 import { ThemeProvider } from "./lib/theme/ThemeProvider";
 import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
 import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
+import { OnboardingFlow } from "./lib/navigation/OnboardingFlow";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
 import { ModelProvider } from "./lib/ai/ModelProvider";
+import { OnboardingSettingsRepository } from "./lib/db/onboardingSettings";
 
 // Suppress harmless iOS system warnings
 LogBox.ignoreLogs([
@@ -34,6 +36,7 @@ const queryClient = new QueryClient({
     },
   },
 });
+
 
 export default function App() {
   const [encryptionKey, setEncryptionKey] = useState<string | null>(null);
@@ -66,16 +69,64 @@ export default function App() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <DatabaseProvider encryptionKey={encryptionKey}>
-          <ModelProvider>
-            <ThemeProvider>
-              <SeasonalThemeProvider>
-                <StatusBar style="auto" />
-                <SimpleNavigation />
-              </SeasonalThemeProvider>
-            </ThemeProvider>
-          </ModelProvider>
+          <OnboardingWrapper />
         </DatabaseProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
+  );
+}
+
+// Wrapper component that checks onboarding status after database is ready
+function OnboardingWrapper() {
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
+  const db = useDatabase(); // Use the hook at component level
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      try {
+        const repo = new OnboardingSettingsRepository(db);
+        const hasCompleted = await repo.hasCompletedOnboarding();
+        setShowOnboarding(!hasCompleted);
+      } catch (error) {
+        console.error("Error checking onboarding status:", error);
+        setShowOnboarding(false); // Default to showing main app
+      } finally {
+        setIsCheckingOnboarding(false);
+      }
+    };
+
+    checkOnboarding();
+  }, [db]);
+
+  const handleOnboardingComplete = async () => {
+    try {
+      const repo = new OnboardingSettingsRepository(db);
+      await repo.markOnboardingComplete();
+      setShowOnboarding(false);
+    } catch (error) {
+      console.error("Error marking onboarding complete:", error);
+      setShowOnboarding(false);
+    }
+  };
+
+  if (isCheckingOnboarding || showOnboarding === null) {
+    // Could show a loading screen here
+    return null;
+  }
+
+  return (
+    <ModelProvider>
+      <ThemeProvider>
+        <SeasonalThemeProvider>
+          <StatusBar style="auto" />
+          {showOnboarding ? (
+            <OnboardingFlow onComplete={handleOnboardingComplete} />
+          ) : (
+            <SimpleNavigation />
+          )}
+        </SeasonalThemeProvider>
+      </ThemeProvider>
+    </ModelProvider>
   );
 }

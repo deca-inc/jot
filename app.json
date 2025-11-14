@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "journal",
-    "slug": "journal",
+    "name": "Jot",
+    "owner": "beta-zeta-inc",
+    "slug": "jot",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pkfireee.journal",
+      "bundleIdentifier": "com.betazeta.jot",
       "infoPlist": {
         "UIBackgroundModes": ["fetch", "processing"]
       }
@@ -26,7 +27,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.pkfireee.journal",
+      "package": "com.betazeta.jot",
       "permissions": ["RECEIVE_BOOT_COMPLETED", "WAKE_LOCK"]
     },
     "web": {
@@ -50,6 +51,11 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0218f474-abc5-4575-ab99-0fa81a34e435"
+      }
+    }
   }
 }

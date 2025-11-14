@@ -23,6 +23,7 @@ import { isComponentPlaygroundEnabled } from "../utils/isDev";
 import { deleteModel } from "../ai/modelManager";
 import { useModelSettings } from "../db/modelSettings";
 import { ALL_MODELS, type LlmModelConfig } from "../ai/modelConfig";
+import { useOnboardingSettings } from "../db/onboardingSettings";
 
 interface SettingsScreenProps {
   onNavigateToPlayground?: () => void;
@@ -37,7 +38,9 @@ export function SettingsScreen({
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
   const modelSettings = useModelSettings();
+  const onboardingSettings = useOnboardingSettings();
   const [isRemovingAllModels, setIsRemovingAllModels] = useState(false);
+  const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
 
   const handleRemoveAllModels = async () => {
     Alert.alert(
@@ -85,6 +88,49 @@ export function SettingsScreen({
               Alert.alert(
                 "Error",
                 "Failed to remove all models. Please try again or remove them individually.",
+                [{ text: "OK" }]
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleResetOnboarding = async () => {
+    Alert.alert(
+      "Reset Onboarding?",
+      "This will reset the onboarding flow. The next time you restart the app, you'll see the welcome screens again.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsResettingOnboarding(true);
+              
+              // Reset onboarding settings
+              await onboardingSettings.setSettings({
+                hasCompletedOnboarding: false,
+              });
+
+              setIsResettingOnboarding(false);
+
+              Alert.alert(
+                "Success",
+                "Onboarding has been reset. Restart the app to see the welcome screens again.",
+                [{ text: "OK" }]
+              );
+            } catch (error) {
+              setIsResettingOnboarding(false);
+              console.error("Error resetting onboarding:", error);
+              Alert.alert(
+                "Error",
+                "Failed to reset onboarding. Please try again.",
                 [{ text: "OK" }]
               );
             }
@@ -385,6 +431,42 @@ export function SettingsScreen({
                   <ActivityIndicator size="small" color={theme.colors.accent} />
                 ) : (
                   "Remove All"
+                )}
+              </Button>
+            </View>
+
+            {/* Reset Onboarding */}
+            <View style={styles.adminItem}>
+              <View style={styles.sectionText}>
+                <Text
+                  variant="body"
+                  style={[
+                    styles.adminItemTitle,
+                    { color: seasonalTheme.textPrimary },
+                  ]}
+                >
+                  Reset Onboarding
+                </Text>
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.adminItemDescription,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  Show welcome screens again on restart
+                </Text>
+              </View>
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={handleResetOnboarding}
+                disabled={isResettingOnboarding}
+              >
+                {isResettingOnboarding ? (
+                  <ActivityIndicator size="small" color={theme.colors.accent} />
+                ) : (
+                  "Reset"
                 )}
               </Button>
             </View>

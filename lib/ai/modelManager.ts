@@ -2,6 +2,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Paths } from "expo-file-system";
 import { Asset } from "expo-asset";
 import { Llama32_1B_Instruct, LlmModelConfig } from "./modelConfig";
+import { modelDownloadStatus } from "./modelDownloadStatus";
 
 export interface EnsureResult {
   ptePath: string;
@@ -121,7 +122,8 @@ async function ensureFromRemote(
 async function ensureFromRemoteToFolder(
   url: string,
   folderName: string,
-  fileName: string
+  fileName: string,
+  onProgress?: (progress: number) => void
 ): Promise<string> {
   const modelDir = await ensureModelsDir(folderName);
   const dest = joinPaths(modelDir, fileName);
@@ -131,10 +133,31 @@ async function ensureFromRemoteToFolder(
   }
   const tmp = dest + ".download";
   try {
-    const res = await FileSystem.downloadAsync(url, tmp);
-    if (res.status !== 200) {
-      throw new Error(`Download failed with status ${res.status}`);
+    // Use createDownloadResumable for progress tracking
+    if (onProgress) {
+      const downloadResumable = FileSystem.createDownloadResumable(
+        url,
+        tmp,
+        {},
+        (downloadProgress) => {
+          const progress =
+            downloadProgress.totalBytesWritten /
+            downloadProgress.totalBytesExpectedToWrite;
+          onProgress(progress);
+        }
+      );
+      
+      const res = await downloadResumable.downloadAsync();
+      if (!res || res.status !== 200) {
+        throw new Error(`Download failed with status ${res?.status || "unknown"}`);
+      }
+    } else {
+      const res = await FileSystem.downloadAsync(url, tmp);
+      if (res.status !== 200) {
+        throw new Error(`Download failed with status ${res.status}`);
+      }
     }
+    
     await FileSystem.moveAsync({ from: tmp, to: dest });
     return dest;
   } catch (e) {
@@ -147,7 +170,8 @@ async function ensureFromRemoteToFolder(
 }
 
 export async function ensureModelPresent(
-  config: LlmModelConfig = Llama32_1B_Instruct
+  config: LlmModelConfig = Llama32_1B_Instruct,
+  onProgress?: (progress: number) => void
 ): Promise<EnsureResult> {
   let ptePath: string;
 
@@ -170,6 +194,11 @@ export async function ensureModelPresent(
         1024
       ).toFixed(2)}MB)`
     );
+    
+    // Model already exists, call onProgress with 100% immediately
+    if (onProgress) {
+      onProgress(1.0);
+    }
   } else if (config.pteSource.kind === "unavailable") {
     throw new Error(`Model not available: ${config.pteSource.reason}`);
   } else if (config.pteSource.kind === "bundled") {
@@ -179,6 +208,9 @@ export async function ensureModelPresent(
         config.pteSource.requireId,
         config.pteFileName
       );
+      if (onProgress) {
+        onProgress(1.0);
+      }
     } catch (e) {
       throw new Error(
         `Bundled model not available. Run 'pnpm download:models --model ${config.modelId}' to download.`
@@ -187,11 +219,34 @@ export async function ensureModelPresent(
   } else {
     // Download from remote to model-specific folder
     console.log(`Downloading model from remote: ${config.pteSource.url}`);
-    ptePath = await ensureFromRemoteToFolder(
-      config.pteSource.url,
-      config.folderName,
-      config.pteFileName
-    );
+    
+    // Start tracking download status
+    modelDownloadStatus.startDownload(config.modelId, config.displayName);
+    
+    try {
+      // Main model file progress (80% of total)
+      ptePath = await ensureFromRemoteToFolder(
+        config.pteSource.url,
+        config.folderName,
+        config.pteFileName,
+        (progress) => {
+          const overallProgress = progress * 0.8; // Model is 80% of the work
+          if (onProgress) {
+            onProgress(overallProgress);
+          }
+          modelDownloadStatus.updateProgress(
+            config.modelId,
+            Math.round(overallProgress * 100)
+          );
+        }
+      );
+    } catch (e) {
+      modelDownloadStatus.failDownload(
+        config.modelId,
+        e instanceof Error ? e.message : "Download failed"
+      );
+      throw e;
+    }
   }
 
   let tokenizerPath: string | undefined;
@@ -207,10 +262,23 @@ export async function ensureModelPresent(
         config.tokenizerFileName || "tokenizer.bin"
       );
     } else {
+      // Tokenizer progress (10% of total, starting from 80%)
       tokenizerPath = await ensureFromRemoteToFolder(
         config.tokenizerSource.url,
         config.folderName,
-        config.tokenizerFileName || "tokenizer.bin"
+        config.tokenizerFileName || "tokenizer.bin",
+        (progress) => {
+          const overallProgress = 0.8 + progress * 0.1;
+          if (onProgress) {
+            onProgress(overallProgress);
+          }
+          if (config.pteSource.kind === "remote") {
+            modelDownloadStatus.updateProgress(
+              config.modelId,
+              Math.round(overallProgress * 100)
+            );
+          }
+        }
       );
     }
   }
@@ -228,11 +296,32 @@ export async function ensureModelPresent(
         config.tokenizerConfigFileName || "tokenizer.json"
       );
     } else {
+      // Tokenizer config progress (10% of total, starting from 90%)
       tokenizerConfigPath = await ensureFromRemoteToFolder(
         config.tokenizerConfigSource.url,
         config.folderName,
-        config.tokenizerConfigFileName || "tokenizer.json"
+        config.tokenizerConfigFileName || "tokenizer.json",
+        (progress) => {
+          const overallProgress = 0.9 + progress * 0.1;
+          if (onProgress) {
+            onProgress(overallProgress);
+          }
+          if (config.pteSource.kind === "remote") {
+            modelDownloadStatus.updateProgress(
+              config.modelId,
+              Math.round(overallProgress * 100)
+            );
+          }
+        }
       );
+    }
+  }
+
+  // Download complete
+  if (config.pteSource.kind === "remote") {
+    modelDownloadStatus.completeDownload(config.modelId);
+    if (onProgress) {
+      onProgress(1.0);
     }
   }
 

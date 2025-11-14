@@ -112,8 +112,8 @@ export const Llama32_3B_Instruct: LlmModelConfig = {
 // QWEN 3 MODELS
 // -----------------------------------------------------------------------------
 
-// Qwen 3 0.6B (Quantized) - DEFAULT MODEL
-// Smallest and fastest option - recommended for first-time users
+// Qwen 3 0.6B (Quantized) - Lightweight option
+// Smallest and fastest option
 export const Qwen3_0_6B: LlmModelConfig = {
   modelId: "qwen-3-0.6b",
   displayName: "Qwen 3 0.6B",
@@ -128,7 +128,7 @@ export const Qwen3_0_6B: LlmModelConfig = {
   huggingFaceUrl:
     "https://huggingface.co/software-mansion/react-native-executorch-qwen-3",
   available: true,
-  isDefault: true, // Default recommended model for new users
+  isDefault: false,
   pteSource: {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/ae11f6fb40b8168952970e4dd84285697b5ac069/qwen-3-0.6B/quantized/qwen3_0_6b_8da4w.pte",
@@ -143,12 +143,13 @@ export const Qwen3_0_6B: LlmModelConfig = {
   },
 };
 
-// Qwen 3 1.7B (Quantized)
+// Qwen 3 1.7B (Quantized) - DEFAULT MODEL
+// Best balance of quality and performance - recommended for most users
 export const Qwen3_1_7B: LlmModelConfig = {
   modelId: "qwen-3-1.7b",
   displayName: "Qwen 3 1.7B",
   description:
-    "Balanced 1.7B parameter model offering good quality with reasonable speed. Great all-around choice.",
+    "Balanced 1.7B parameter model offering excellent quality with reasonable speed. Best all-around choice.",
   size: "1.7B",
   quantization: "8-bit (8da4w)",
   folderName: "qwen-3-1.7b",
@@ -158,6 +159,7 @@ export const Qwen3_1_7B: LlmModelConfig = {
   huggingFaceUrl:
     "https://huggingface.co/software-mansion/react-native-executorch-qwen-3",
   available: true,
+  isDefault: true, // Default recommended model for most users
   pteSource: {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/ae11f6fb40b8168952970e4dd84285697b5ac069/qwen-3-1.7B/quantized/qwen3_1_7b_8da4w.pte",
@@ -206,19 +208,18 @@ export const Qwen3_4B: LlmModelConfig = {
 // =============================================================================
 
 export const ALL_MODELS: LlmModelConfig[] = [
-  // Qwen models (8-bit quantized) - Default first
-  Qwen3_0_6B, // Default bundled model
-  // Llama models (SpinQuant)
+  // Qwen models (8-bit quantized) - Recommended model line for on-device inference
+  Qwen3_1_7B, // Default - best balance
+  Qwen3_0_6B, // Lightweight option
+  Qwen3_4B, // Highest quality
+  // Llama models (SpinQuant) - Alternative options
   Llama32_1B_Instruct,
   Llama32_3B_Instruct,
-  // Other Qwen models
-  Qwen3_1_7B,
-  Qwen3_4B,
 ];
 
 export function getModelById(modelId: string): LlmModelConfig | undefined {
   return ALL_MODELS.find((m) => m.modelId === modelId);
 }
 
-// Default model (bundled with app, smallest, fastest)
-export const DEFAULT_MODEL = Qwen3_0_6B;
+// Default model - best balance of quality and performance for most devices
+export const DEFAULT_MODEL = Qwen3_1_7B;

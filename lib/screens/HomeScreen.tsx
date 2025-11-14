@@ -20,7 +20,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Text, EntryListItem, BottomComposer, Button } from "../components";
+import {
+  Text,
+  EntryListItem,
+  BottomComposer,
+  Button,
+  ModelDownloadIndicator,
+} from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { Entry } from "../db/entries";
@@ -457,24 +463,121 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const ListEmptyComponent = useMemo(() => {
     if (isLoading) return null;
 
+    // If searching/filtering, show standard empty state
+    if (isSearching) {
+      return (
+        <View style={styles.emptyState}>
+          <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
+            No results found
+          </Text>
+          <Text
+            variant="body"
+            style={{
+              color: seasonalTheme.textSecondary,
+              marginTop: spacingPatterns.sm,
+            }}
+          >
+            Try adjusting your search or filters
+          </Text>
+        </View>
+      );
+    }
+
+    if (filter === "favorites") {
+      return (
+        <View style={styles.emptyState}>
+          <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
+            No favorites yet
+          </Text>
+          <Text
+            variant="body"
+            style={{
+              color: seasonalTheme.textSecondary,
+              marginTop: spacingPatterns.sm,
+            }}
+          >
+            Tap the star icon on any entry to favorite it
+          </Text>
+        </View>
+      );
+    }
+
+    // Welcome state for new users
     return (
       <View style={styles.emptyState}>
-        <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
-          {isSearching ? "No results found" : "No entries yet"}
+        <Text
+          variant="h2"
+          style={{
+            color: seasonalTheme.textPrimary,
+            marginBottom: spacingPatterns.md,
+            textAlign: "center",
+          }}
+        >
+          Welcome! 👋
         </Text>
         <Text
           variant="body"
           style={{
             color: seasonalTheme.textSecondary,
-            marginTop: spacingPatterns.sm,
+            marginBottom: spacingPatterns.lg,
+            textAlign: "center",
+            lineHeight: 24,
           }}
         >
-          {isSearching
-            ? "Try adjusting your search or filters"
-            : filter === "favorites"
-            ? "You haven't favorited any entries yet"
-            : "Create your first entry to get started"}
+          Start journaling or chat with your AI assistant using the input below
         </Text>
+        <View style={styles.welcomeHints}>
+          <View style={styles.welcomeHint}>
+            <Ionicons
+              name="book-outline"
+              size={24}
+              color={theme.colors.accent}
+            />
+            <View style={styles.welcomeHintText}>
+              <Text
+                variant="body"
+                style={{
+                  color: seasonalTheme.textPrimary,
+                  fontWeight: "600",
+                  marginBottom: spacingPatterns.xxs,
+                }}
+              >
+                Journal Mode
+              </Text>
+              <Text
+                variant="caption"
+                style={{ color: seasonalTheme.textSecondary }}
+              >
+                Write your thoughts, track your day
+              </Text>
+            </View>
+          </View>
+          <View style={styles.welcomeHint}>
+            <Ionicons
+              name="chatbubbles-outline"
+              size={24}
+              color={theme.colors.accent}
+            />
+            <View style={styles.welcomeHintText}>
+              <Text
+                variant="body"
+                style={{
+                  color: seasonalTheme.textPrimary,
+                  fontWeight: "600",
+                  marginBottom: spacingPatterns.xxs,
+                }}
+              >
+                AI Chat Mode
+              </Text>
+              <Text
+                variant="caption"
+                style={{ color: seasonalTheme.textSecondary }}
+              >
+                Get help, brainstorm, or just chat
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
     );
   }, [isLoading, seasonalTheme, filter, isSearching]);
@@ -677,6 +780,9 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           )}
         </View>
 
+        {/* Model download indicator */}
+        <ModelDownloadIndicator />
+
         {/* Content area with FlatList for better performance */}
         <FlatList
           data={groupedData}
@@ -834,6 +940,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacingPatterns.xl * 2,
+  },
+  welcomeHints: {
+    gap: spacingPatterns.md,
+    width: "100%",
+    maxWidth: 400,
+  },
+  welcomeHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.md,
+    paddingVertical: spacingPatterns.sm,
+  },
+  welcomeHintText: {
+    flex: 1,
   },
   bottomComposerContainer: {
     position: "absolute",
