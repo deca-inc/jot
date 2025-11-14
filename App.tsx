@@ -11,6 +11,7 @@ import { OnboardingFlow } from "./lib/navigation/OnboardingFlow";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
 import { ModelProvider } from "./lib/ai/ModelProvider";
 import { OnboardingSettingsRepository } from "./lib/db/onboardingSettings";
+import { ConditionalPostHogProvider } from "./lib/analytics/PostHogProvider";
 
 // Suppress harmless iOS system warnings
 LogBox.ignoreLogs([
@@ -69,7 +70,9 @@ export default function App() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <DatabaseProvider encryptionKey={encryptionKey}>
-          <OnboardingWrapper />
+          <ConditionalPostHogProvider>
+            <OnboardingWrapper />
+          </ConditionalPostHogProvider>
         </DatabaseProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

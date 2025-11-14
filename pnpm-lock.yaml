@@ -11,6 +11,9 @@ dependencies:
   expo:
     specifier: ~54.0.20
     version: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+  expo-application:
+    specifier: ^7.0.7
+    version: 7.0.7(expo@54.0.21)
   expo-background-fetch:
     specifier: ^14.0.7
     version: 14.0.7(expo@54.0.21)(react-native@0.81.5)
@@ -38,6 +41,9 @@ dependencies:
   expo-linear-gradient:
     specifier: ^15.0.7
     version: 15.0.7(expo@54.0.21)(react-native@0.81.5)(react@19.1.0)
+  expo-localization:
+    specifier: ^17.0.7
+    version: 17.0.7(expo@54.0.21)(react@19.1.0)
   expo-secure-store:
     specifier: ~15.0.7
     version: 15.0.7(expo@54.0.21)
@@ -59,6 +65,9 @@ dependencies:
   marked-highlight:
     specifier: ^2.2.3
     version: 2.2.3(marked@17.0.0)
+  posthog-react-native:
+    specifier: ^4.11.0
+    version: 4.11.0(expo-application@7.0.7)(expo-device@8.0.9)(expo-file-system@19.0.17)(expo-localization@17.0.7)(react-native-safe-area-context@5.6.2)(react-native-svg@15.12.1)
   react:
     specifier: 19.1.0
     version: 19.1.0
@@ -2193,6 +2202,12 @@ packages:
     dev: false
     optional: true
 
+  /@posthog/core@1.5.2:
+    resolution: {integrity: sha512-iedUP3EnOPPxTA2VaIrsrd29lSZnUV+ZrMnvY56timRVeZAXoYCkmjfIs3KBAsF8OUT5h1GXLSkoQdrV0r31OQ==}
+    dependencies:
+      cross-spawn: 7.0.6
+    dev: false
+
   /@react-native/assets-registry@0.81.5:
     resolution: {integrity: sha512-705B6x/5Kxm1RKRvSv0ADYWm5JOnoiQ1ufW7h8uu2E6G9Of/eE6hP/Ivw3U5jI16ERqZxiKQwk34VJbB0niX9w==}
     engines: {node: '>= 20.19.4'}
@@ -3725,6 +3740,14 @@ packages:
     engines: {node: '>=6'}
     dev: true
 
+  /expo-application@7.0.7(expo@54.0.21):
+    resolution: {integrity: sha512-Jt1/qqnoDUbZ+bK91+dHaZ1vrPDtRBOltRa681EeedkisqguuEeUx4UHqwVyDK2oHWsK6lO3ojetoA4h8OmNcg==}
+    peerDependencies:
+      expo: '*'
+    dependencies:
+      expo: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+    dev: false
+
   /expo-asset@11.1.7(expo@53.0.23)(react-native@0.81.5)(react@19.1.0):
     resolution: {integrity: sha512-b5P8GpjUh08fRCf6m5XPVAh7ra42cQrHBIMgH2UXP+xsj4Wufl6pLy6jRF5w6U7DranUMbsXm8TOyq4EHy7ADg==}
     peerDependencies:
@@ -3933,6 +3956,17 @@ packages:
       expo: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
+    dev: false
+
+  /expo-localization@17.0.7(expo@54.0.21)(react@19.1.0):
+    resolution: {integrity: sha512-ACg1B0tJLNa+f8mZfAaNrMyNzrrzHAARVH1sHHvh+LolKdQpgSKX69Uroz1Llv4C71furpwBklVStbNcEwVVVA==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+    dependencies:
+      expo: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+      react: 19.1.0
+      rtl-detect: 1.1.2
     dev: false
 
   /expo-modules-autolinking@2.1.14:
@@ -5884,6 +5918,54 @@ packages:
       source-map-js: 1.2.1
     dev: false
 
+  /posthog-react-native@4.11.0(expo-application@7.0.7)(expo-device@8.0.9)(expo-file-system@19.0.17)(expo-localization@17.0.7)(react-native-safe-area-context@5.6.2)(react-native-svg@15.12.1):
+    resolution: {integrity: sha512-f/QCyUrW0qWTfiH78IHpDOf5KQVX/p0POa2Pad4THBM0gfkHXd7jTNoz7sVoRLbfBRyTFFjsXlZKqXUt1mfKtg==}
+    peerDependencies:
+      '@react-native-async-storage/async-storage': '>=1.0.0'
+      '@react-navigation/native': '>= 5.0.0'
+      expo-application: '>= 4.0.0'
+      expo-device: '>= 4.0.0'
+      expo-file-system: '>= 13.0.0'
+      expo-localization: '>= 11.0.0'
+      posthog-react-native-session-replay: '>= 1.2.0'
+      react-native-device-info: '>= 10.0.0'
+      react-native-localize: '>= 3.0.0'
+      react-native-navigation: '>= 6.0.0'
+      react-native-safe-area-context: '>= 4.0.0'
+      react-native-svg: '>= 15.0.0'
+    peerDependenciesMeta:
+      '@react-native-async-storage/async-storage':
+        optional: true
+      '@react-navigation/native':
+        optional: true
+      expo-application:
+        optional: true
+      expo-device:
+        optional: true
+      expo-file-system:
+        optional: true
+      expo-localization:
+        optional: true
+      posthog-react-native-session-replay:
+        optional: true
+      react-native-device-info:
+        optional: true
+      react-native-localize:
+        optional: true
+      react-native-navigation:
+        optional: true
+      react-native-safe-area-context:
+        optional: true
+    dependencies:
+      '@posthog/core': 1.5.2
+      expo-application: 7.0.7(expo@54.0.21)
+      expo-device: 8.0.9(expo@54.0.21)
+      expo-file-system: 19.0.17(expo@54.0.21)(react-native@0.81.5)
+      expo-localization: 17.0.7(expo@54.0.21)(react@19.1.0)
+      react-native-safe-area-context: 5.6.2(react-native@0.81.5)(react@19.1.0)
+      react-native-svg: 15.12.1(react-native@0.81.5)(react@19.1.0)
+    dev: false
+
   /prebuild-install@7.1.3:
     resolution: {integrity: sha512-8Mf2cbV7x1cXPUILADGI3wuhfqWvtiLA1iclTDbFRZkgRQS0NqsPZphna9V+HyTEadheuPmjaJMsbzKQFOzLug==}
     engines: {node: '>=10'}
@@ -6340,6 +6422,10 @@ packages:
     hasBin: true
     dependencies:
       glob: 7.2.3
+    dev: false
+
+  /rtl-detect@1.1.2:
+    resolution: {integrity: sha512-PGMBq03+TTG/p/cRB7HCLKJ1MgDIi07+QU1faSjiYRfmY5UsAttV9Hs08jDAHVwcOwmVLcSJkpwyfXszVjWfIQ==}
     dev: false
 
   /safe-buffer@5.2.1:

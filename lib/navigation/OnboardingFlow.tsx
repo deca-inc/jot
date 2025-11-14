@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { View, StyleSheet } from "react-native";
-import { WelcomeScreen, OnboardingModelSelectionScreen } from "../screens";
+import { WelcomeScreen, OnboardingModelSelectionScreen, TelemetryConsentScreen } from "../screens";
 
 interface OnboardingFlowProps {
   onComplete: () => void;
 }
 
-type OnboardingStep = "welcome" | "model-selection";
+type OnboardingStep = "welcome" | "model-selection" | "telemetry-consent";
 
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome");
@@ -16,6 +16,10 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   const handleModelSelectionContinue = () => {
+    setCurrentStep("telemetry-consent");
+  };
+
+  const handleTelemetryConsentContinue = () => {
     onComplete();
   };
 
@@ -27,6 +31,11 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       {currentStep === "model-selection" && (
         <OnboardingModelSelectionScreen
           onContinue={handleModelSelectionContinue}
+        />
+      )}
+      {currentStep === "telemetry-consent" && (
+        <TelemetryConsentScreen
+          onContinue={handleTelemetryConsentContinue}
         />
       )}
     </View>

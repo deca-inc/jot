@@ -24,6 +24,7 @@ import { deleteModel } from "../ai/modelManager";
 import { useModelSettings } from "../db/modelSettings";
 import { ALL_MODELS, type LlmModelConfig } from "../ai/modelConfig";
 import { useOnboardingSettings } from "../db/onboardingSettings";
+import { useTelemetrySettings } from "../db/telemetrySettings";
 
 interface SettingsScreenProps {
   onNavigateToPlayground?: () => void;
@@ -39,8 +40,21 @@ export function SettingsScreen({
   const insets = useSafeAreaInsets();
   const modelSettings = useModelSettings();
   const onboardingSettings = useOnboardingSettings();
+  const telemetrySettings = useTelemetrySettings();
   const [isRemovingAllModels, setIsRemovingAllModels] = useState(false);
   const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
+  const [telemetryEnabled, setTelemetryEnabled] = useState<boolean | null>(
+    null
+  );
+
+  // Load telemetry settings
+  useEffect(() => {
+    const loadTelemetrySettings = async () => {
+      const enabled = await telemetrySettings.isTelemetryEnabled();
+      setTelemetryEnabled(enabled);
+    };
+    loadTelemetrySettings();
+  }, [telemetrySettings]);
 
   const handleRemoveAllModels = async () => {
     Alert.alert(
@@ -138,6 +152,23 @@ export function SettingsScreen({
         },
       ]
     );
+  };
+
+  const handleTelemetryToggle = async () => {
+    try {
+      const newValue = !telemetryEnabled;
+      setTelemetryEnabled(newValue);
+      await telemetrySettings.setTelemetryEnabled(newValue);
+    } catch (error) {
+      console.error("Error toggling telemetry:", error);
+      // Revert the local state if the save failed
+      setTelemetryEnabled(!telemetryEnabled);
+      Alert.alert(
+        "Error",
+        "Failed to update telemetry setting. Please try again.",
+        [{ text: "OK" }]
+      );
+    }
   };
 
   // Show UI shell immediately - settings are loaded by ThemeControl component
@@ -304,6 +335,82 @@ export function SettingsScreen({
           >
             Coming soon
           </Text>
+        </Card>
+
+        <Card
+          variant="borderless"
+          style={[
+            styles.section,
+            {
+              backgroundColor: seasonalTheme.cardBg,
+              shadowColor: seasonalTheme.subtleGlow.shadowColor,
+              shadowOpacity: seasonalTheme.subtleGlow.shadowOpacity,
+            },
+          ]}
+        >
+          <Text
+            variant="h3"
+            style={[styles.sectionTitle, { color: seasonalTheme.textPrimary }]}
+          >
+            Privacy
+          </Text>
+          <Text
+            variant="body"
+            style={[
+              styles.sectionDescription,
+              { color: seasonalTheme.textSecondary },
+            ]}
+          >
+            Control your data and privacy preferences
+          </Text>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingRowContent}>
+              <Text
+                variant="body"
+                style={[
+                  styles.settingRowTitle,
+                  { color: seasonalTheme.textPrimary },
+                ]}
+              >
+                App Telemetry
+              </Text>
+              <Text
+                variant="caption"
+                style={[
+                  styles.settingRowDescription,
+                  { color: seasonalTheme.textSecondary },
+                ]}
+              >
+                Help improve the app by sharing anonymous usage data. We will
+                never collect your journal entries, personal content, or AI
+                conversations - that completely goes against the purpose of this
+                app.
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleTelemetryToggle}
+              style={[
+                styles.toggle,
+                {
+                  backgroundColor: telemetryEnabled
+                    ? theme.colors.accent
+                    : seasonalTheme.textSecondary + "30",
+                },
+              ]}
+              activeOpacity={0.8}
+            >
+              <View
+                style={[
+                  styles.toggleThumb,
+                  {
+                    backgroundColor: seasonalTheme.cardBg,
+                    transform: [{ translateX: telemetryEnabled ? 20 : 0 }],
+                  },
+                ]}
+              />
+            </TouchableOpacity>
+          </View>
         </Card>
 
         {/* Admin Section - Dev Only */}
@@ -527,5 +634,35 @@ const styles = StyleSheet.create({
   },
   adminItemDescription: {
     fontSize: 12,
+  },
+  settingRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacingPatterns.md,
+  },
+  settingRowContent: {
+    flex: 1,
+    marginRight: spacingPatterns.md,
+  },
+  settingRowTitle: {
+    fontWeight: "500",
+    marginBottom: spacingPatterns.xxs,
+  },
+  settingRowDescription: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  toggle: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    padding: 4,
+    justifyContent: "center",
+  },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
 });
