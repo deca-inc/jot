@@ -112,7 +112,7 @@ export function SettingsScreen({
           onPress: async () => {
             try {
               setIsResettingOnboarding(true);
-              
+
               // Reset onboarding settings
               await onboardingSettings.setSettings({
                 hasCompletedOnboarding: false,
@@ -236,34 +236,6 @@ export function SettingsScreen({
           </Text>
 
           <ModelManagement />
-        </Card>
-
-        <Card
-          variant="borderless"
-          style={[
-            styles.section,
-            {
-              backgroundColor: seasonalTheme.cardBg,
-              shadowColor: seasonalTheme.subtleGlow.shadowColor,
-              shadowOpacity: seasonalTheme.subtleGlow.shadowOpacity,
-            },
-          ]}
-        >
-          <Text
-            variant="h3"
-            style={[styles.sectionTitle, { color: seasonalTheme.textPrimary }]}
-          >
-            General
-          </Text>
-          <Text
-            variant="body"
-            style={[
-              styles.sectionDescription,
-              { color: seasonalTheme.textSecondary },
-            ]}
-          >
-            General app settings and preferences
-          </Text>
         </Card>
 
         <Card
