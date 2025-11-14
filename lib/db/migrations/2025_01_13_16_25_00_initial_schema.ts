@@ -65,11 +65,15 @@ export const up: MigrationRunner = async (db) => {
         ) FROM json_each(new.blocks))
       );
     END;
+  `);
 
+  await db.execAsync(`
     CREATE TRIGGER IF NOT EXISTS entries_fts_delete AFTER DELETE ON entries BEGIN
       DELETE FROM entries_fts WHERE rowid = old.id;
     END;
+  `);
 
+  await db.execAsync(`
     CREATE TRIGGER IF NOT EXISTS entries_fts_update AFTER UPDATE ON entries BEGIN
       DELETE FROM entries_fts WHERE rowid = old.id;
       INSERT INTO entries_fts(rowid, title, content)

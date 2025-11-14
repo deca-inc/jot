@@ -27,9 +27,12 @@ const DatabaseInitializer: React.FC<{
 
     const initializeDatabase = async () => {
       try {
-        // Set encryption key if provided
+        // Set encryption key if provided (must be done before any other operations)
         if (encryptionKey) {
-          await db.execAsync(`PRAGMA key = '${encryptionKey}'`);
+          console.log("Setting encryption key, length:", encryptionKey.length);
+          // Pass the hex key as a string passphrase to SQLCipher
+          // Note: The key is a hex string, but SQLCipher will hash it as a passphrase
+          await db.execAsync(`PRAGMA key = '${encryptionKey}';`);
           console.log("Database encryption key set");
         }
 
@@ -55,13 +58,12 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({
   children,
   encryptionKey,
 }) => {
+  if (!encryptionKey) {
+    throw new Error("Encryption key is required for SQLCipher");
+  }
+
   return (
-    <SQLiteProvider
-      databaseName={DATABASE_NAME}
-      onInit={async () => {
-        console.log(`Database initialized: ${DATABASE_NAME}`);
-      }}
-    >
+    <SQLiteProvider databaseName={DATABASE_NAME}>
       <DatabaseInitializer encryptionKey={encryptionKey}>
         {children}
       </DatabaseInitializer>

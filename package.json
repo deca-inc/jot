@@ -22,6 +22,7 @@
     "expo-background-fetch": "^14.0.7",
     "expo-background-task": "^1.0.8",
     "expo-blur": "~15.0.7",
+    "expo-build-properties": "^1.0.9",
     "expo-crypto": "~15.0.7",
     "expo-file-system": "^19.0.17",
     "expo-glass-effect": "~0.1.6",
