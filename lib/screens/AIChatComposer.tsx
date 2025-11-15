@@ -34,6 +34,7 @@ import json from "highlight.js/lib/languages/json";
 import xml from "highlight.js/lib/languages/xml";
 import css from "highlight.js/lib/languages/css";
 import { Text, FloatingComposerHeader } from "../components";
+import { useTrackScreenView } from "../analytics";
 
 // Register languages
 hljs.registerLanguage("javascript", javascript);
@@ -110,6 +111,9 @@ export function AIChatComposer({
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+
+  // Track screen view
+  useTrackScreenView("AI Chat Composer");
 
   // React Query hooks - load entry first
   const { data: entry } = useEntry(entryId);

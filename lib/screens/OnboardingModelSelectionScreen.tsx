@@ -16,6 +16,7 @@ import { ALL_MODELS, LlmModelConfig } from "../ai/modelConfig";
 import { getRecommendedModel } from "../utils/deviceInfo";
 import { useModelSettings } from "../db/modelSettings";
 import { ensureModelPresent } from "../ai/modelManager";
+import { useTrackScreenView, useTrackEvent } from "../analytics";
 
 interface OnboardingModelSelectionScreenProps {
   onContinue: () => void;
@@ -45,12 +46,16 @@ export function OnboardingModelSelectionScreen({
   const seasonalTheme = useSeasonalTheme();
   const theme = useTheme();
   const modelSettings = useModelSettings();
-  
+
   const [selectedModelId, setSelectedModelId] = useState<string>("");
   const [recommendedModelId, setRecommendedModelId] = useState<string>("");
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Track screen view
+  useTrackScreenView("Model Selection");
+  const trackEvent = useTrackEvent();
 
   useEffect(() => {
     const loadRecommendation = async () => {
@@ -89,13 +94,17 @@ export function OnboardingModelSelectionScreen({
       // Set as selected model in settings immediately
       await modelSettings.setSelectedModelId(selectedModelId);
 
+      // Track model selection
+      trackEvent("model_selected_onboarding", {
+        modelId: selectedModelId,
+        wasRecommended: selectedModelId === recommendedModelId,
+        modelSize: MODEL_SIZES[selectedModelId],
+      });
+
       // Start the download in the background (don't await it)
-      ensureModelPresent(
-        modelConfig,
-        (progress: number) => {
-          console.log(`Model download progress: ${Math.round(progress * 100)}%`);
-        }
-      ).catch((error) => {
+      ensureModelPresent(modelConfig, (progress: number) => {
+        console.log(`Model download progress: ${Math.round(progress * 100)}%`);
+      }).catch((error) => {
         console.error("Error downloading model in background:", error);
       });
 
@@ -165,92 +174,92 @@ export function OnboardingModelSelectionScreen({
               return 0;
             })
             .map((model) => {
-            const isSelected = model.modelId === selectedModelId;
-            const isRecommended = model.modelId === recommendedModelId;
-            const size = MODEL_SIZES[model.modelId] || 0;
-            const description = MODEL_DESCRIPTIONS[model.modelId] || model.description;
+              const isSelected = model.modelId === selectedModelId;
+              const isRecommended = model.modelId === recommendedModelId;
+              const size = MODEL_SIZES[model.modelId] || 0;
+              const description =
+                MODEL_DESCRIPTIONS[model.modelId] || model.description;
 
-            return (
-              <TouchableOpacity
-                key={model.modelId}
-                onPress={() => setSelectedModelId(model.modelId)}
-                disabled={isDownloading}
-                style={[
-                  styles.modelCard,
-                  {
-                    backgroundColor: seasonalTheme.cardBg,
-                    borderColor: isSelected
-                      ? theme.colors.accent
-                      : seasonalTheme.border,
-                    borderWidth: isSelected ? 2 : 1,
-                    opacity: isDownloading ? 0.6 : 1,
-                  },
-                ]}
-              >
-                {/* Selection indicator */}
-                <View style={styles.modelCardHeader}>
-                  <View style={styles.modelCardTitle}>
-                    <Text
-                      variant="h4"
-                      style={[
-                        styles.modelName,
-                        { color: seasonalTheme.textPrimary },
-                      ]}
-                    >
-                      {model.displayName}
-                    </Text>
-                    {isRecommended && (
-                      <View
+              return (
+                <TouchableOpacity
+                  key={model.modelId}
+                  onPress={() => setSelectedModelId(model.modelId)}
+                  disabled={isDownloading}
+                  style={[
+                    styles.modelCard,
+                    {
+                      backgroundColor: seasonalTheme.cardBg,
+                      borderColor: isSelected
+                        ? theme.colors.accent
+                        : seasonalTheme.textSecondary + "30",
+                      borderWidth: isSelected ? 2 : 1,
+                      opacity: isDownloading ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  {/* Selection indicator */}
+                  <View style={styles.modelCardHeader}>
+                    <View style={styles.modelCardTitle}>
+                      <Text
+                        variant="h4"
                         style={[
-                          styles.recommendedBadge,
-                          { backgroundColor: theme.colors.accentLight },
+                          styles.modelName,
+                          { color: seasonalTheme.textPrimary },
                         ]}
                       >
-                        <Text
-                          variant="caption"
+                        {model.displayName}
+                      </Text>
+                      {isRecommended && (
+                        <View
                           style={[
-                            styles.recommendedText,
-                            { color: theme.colors.accent },
+                            styles.recommendedBadge,
+                            { backgroundColor: theme.colors.accentLight },
                           ]}
                         >
-                          Recommended
-                        </Text>
-                      </View>
+                          <Text
+                            variant="caption"
+                            style={[
+                              styles.recommendedText,
+                              { color: theme.colors.accent },
+                            ]}
+                          >
+                            Recommended
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color={theme.colors.accent}
+                      />
                     )}
                   </View>
-                  {isSelected && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={24}
-                      color={theme.colors.accent}
-                    />
-                  )}
-                </View>
 
-                {/* Model info */}
-                <Text
-                  variant="caption"
-                  style={[
-                    styles.modelSize,
-                    { color: seasonalTheme.textSecondary },
-                  ]}
-                >
-                  {model.size} • {formatSize(size)} download
-                </Text>
-                <Text
-                  variant="body"
-                  style={[
-                    styles.modelDescription,
-                    { color: seasonalTheme.textSecondary },
-                  ]}
-                >
-                  {description}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                  {/* Model info */}
+                  <Text
+                    variant="caption"
+                    style={[
+                      styles.modelSize,
+                      { color: seasonalTheme.textSecondary },
+                    ]}
+                  >
+                    {model.size} • {formatSize(size)} download
+                  </Text>
+                  <Text
+                    variant="body"
+                    style={[
+                      styles.modelDescription,
+                      { color: seasonalTheme.textSecondary },
+                    ]}
+                  >
+                    {description}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
         </View>
-
       </ScrollView>
 
       {/* Fixed bottom button */}
@@ -259,7 +268,7 @@ export function OnboardingModelSelectionScreen({
           styles.bottomContainer,
           {
             backgroundColor: seasonalTheme.gradient.middle,
-            borderTopColor: seasonalTheme.border,
+            borderTopColor: seasonalTheme.textSecondary + "30",
           },
         ]}
       >
@@ -402,4 +411,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 });
-

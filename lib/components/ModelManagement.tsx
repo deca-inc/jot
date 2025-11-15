@@ -92,6 +92,8 @@ function ModelCard({
         <Button
           variant="secondary"
           size="sm"
+          label="Download Model"
+          metadata={{ modelId: model.modelId, modelSize: model.size }}
           onPress={onDownload}
           style={styles.iconButton}
         >
@@ -109,6 +111,8 @@ function ModelCard({
       <Button
         variant="secondary"
         size="sm"
+        label="Remove Model"
+        metadata={{ modelId: model.modelId, modelSize: model.size }}
         onPress={onRemove}
         disabled={isSelected}
         style={styles.iconButton}

@@ -9,7 +9,7 @@ interface ConditionalPostHogProviderProps {
 
 /**
  * PostHog provider that only initializes when telemetry is enabled.
- * 
+ *
  * PRIVACY NOTICE:
  * - We NEVER collect journal entries, personal content, or AI conversations
  * - Only anonymous usage data (button clicks, screen views, performance metrics)
@@ -19,7 +19,9 @@ export function ConditionalPostHogProvider({
   children,
 }: ConditionalPostHogProviderProps) {
   const db = useDatabase();
-  const [telemetryEnabled, setTelemetryEnabled] = useState<boolean | null>(null);
+  const [telemetryEnabled, setTelemetryEnabled] = useState<boolean | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -55,10 +57,10 @@ export function ConditionalPostHogProvider({
       apiKey="phc_oiMeOmCKrWa06lKUwyYwTzFrIbkvbpEAzu6333vusTo"
       options={{
         host: "https://us.i.posthog.com",
+        flushAt: 1,
       }}
     >
       {children}
     </PostHogProviderBase>
   );
 }
-

@@ -11,6 +11,7 @@ import {
   CreateEntryInput,
   UpdateEntryInput,
 } from "./entries";
+import { usePostHog, sanitizeProperties } from "../analytics";
 
 /**
  * Query keys for entries
@@ -68,7 +69,7 @@ export function useEntry(id: number | undefined) {
     retry: false,
     // Always refetch on mount to get latest saved version when navigating back to entry
     // Use 'always' instead of true because we skip cache updates during editing
-    refetchOnMount: 'always',
+    refetchOnMount: "always",
     // Don't refetch on window focus if entry might be deleted
     refetchOnWindowFocus: false,
   });
@@ -94,7 +95,7 @@ export function useEntries(options?: {
       return entryRepository.getAll(options);
     },
     // Always refetch on mount to get latest entries when navigating back to list
-    refetchOnMount: 'always',
+    refetchOnMount: "always",
   });
 }
 
@@ -129,7 +130,7 @@ export function useInfiniteEntries(options?: {
     getNextPageParam: (lastPage) => lastPage.nextOffset,
     initialPageParam: 0,
     // Always refetch on mount to get latest entries when navigating back to list
-    refetchOnMount: 'always',
+    refetchOnMount: "always",
   });
 }
 
@@ -165,7 +166,7 @@ export function useSearchEntries(options: {
     initialPageParam: 0,
     enabled: options.query.trim().length > 0,
     // Always refetch on mount when searching
-    refetchOnMount: 'always',
+    refetchOnMount: "always",
   });
 }
 
@@ -175,12 +176,26 @@ export function useSearchEntries(options: {
 export function useCreateEntry() {
   const entryRepository = useEntryRepository();
   const queryClient = useQueryClient();
+  const posthog = usePostHog();
 
   return useMutation({
     mutationFn: async (input: CreateEntryInput) => {
       return entryRepository.create(input);
     },
     onSuccess: (entry) => {
+      // Track entry creation
+      if (posthog) {
+        posthog.capture(
+          "entry_created",
+          sanitizeProperties({
+            type: entry.type,
+            hasBlocks: entry.blocks.length > 0,
+            blockCount: entry.blocks.length,
+            isFavorite: entry.isFavorite,
+            hasAttachments: entry.attachments && entry.attachments.length > 0,
+          })
+        );
+      }
       // Add to detail cache
       queryClient.setQueryData(entryKeys.detail(entry.id), entry);
 
@@ -274,6 +289,7 @@ export function useUpdateEntry() {
 export function useDeleteEntry() {
   const entryRepository = useEntryRepository();
   const queryClient = useQueryClient();
+  const posthog = usePostHog();
 
   return useMutation({
     mutationFn: async (id: number) => {
@@ -281,6 +297,10 @@ export function useDeleteEntry() {
       return id;
     },
     onSuccess: (id) => {
+      // Track entry deletion
+      if (posthog) {
+        posthog.capture("entry_deleted", { entryId: id });
+      }
       // Remove from detail cache immediately
       queryClient.removeQueries({ queryKey: entryKeys.detail(id) });
 
@@ -314,12 +334,20 @@ export function useDeleteEntry() {
 export function useToggleFavorite() {
   const entryRepository = useEntryRepository();
   const queryClient = useQueryClient();
+  const posthog = usePostHog();
 
   return useMutation({
     mutationFn: async (id: number) => {
       return entryRepository.toggleFavorite(id);
     },
     onSuccess: (entry) => {
+      // Track favorite toggle
+      if (posthog) {
+        posthog.capture("entry_favorited", {
+          entryId: entry.id,
+          isFavorite: entry.isFavorite,
+        });
+      }
       // Update detail cache
       queryClient.setQueryData(entryKeys.detail(entry.id), entry);
 

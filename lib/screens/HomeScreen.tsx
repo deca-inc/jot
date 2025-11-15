@@ -42,6 +42,7 @@ import {
 } from "../db/useEntries";
 import { useModel } from "../ai/ModelProvider";
 import { useComposerSettings, type ComposerMode } from "../db/composerSettings";
+import { useTrackScreenView, useTrackEvent } from "../analytics";
 
 type Filter = "all" | "journal" | "ai_chat" | "favorites";
 
@@ -58,6 +59,10 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<Filter>("all");
+
+  // Track screen view
+  useTrackScreenView("Home");
+  const trackEvent = useTrackEvent();
   const [composerMode, setComposerMode] = useState<ComposerMode>("journal");
   const [composerHeight, setComposerHeight] = useState(120);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -699,7 +704,10 @@ export function HomeScreen(props: HomeScreenProps = {}) {
                   {(["all", "today", "week", "month"] as const).map((date) => (
                     <TouchableOpacity
                       key={date}
-                      onPress={() => setDateFilter(date)}
+                      onPress={() => {
+                        setDateFilter(date);
+                        trackEvent("Filter Date", { range: date });
+                      }}
                       style={[
                         styles.filterChip,
                         {
@@ -736,7 +744,13 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
               {/* Favorites Toggle */}
               <TouchableOpacity
-                onPress={() => setFavoritesOnly(!favoritesOnly)}
+                onPress={() => {
+                  const newValue = !favoritesOnly;
+                  setFavoritesOnly(newValue);
+                  trackEvent("Filter Favorites", {
+                    enabled: newValue.toString(),
+                  });
+                }}
                 style={styles.favoritesToggle}
               >
                 <View

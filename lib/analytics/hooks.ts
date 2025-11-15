@@ -7,7 +7,8 @@ import { usePostHog as usePostHogBase } from "posthog-react-native";
  */
 export function usePostHog() {
   try {
-    return usePostHogBase();
+    const posthog = usePostHogBase();
+    return posthog;
   } catch (error) {
     // PostHog provider not available (telemetry disabled)
     return null;
@@ -17,10 +18,10 @@ export function usePostHog() {
 /**
  * Hook to automatically track screen views.
  * Call this at the top of each screen component.
- * 
+ *
  * @param screenName - Name of the screen (e.g., "Home", "Settings", "Composer")
  * @param properties - Optional additional properties (e.g., { entryType: "journal" })
- * 
+ *
  * @example
  * function HomeScreen() {
  *   useTrackScreenView("Home");
@@ -42,7 +43,7 @@ export function useTrackScreenView(
 
 /**
  * Hook to track events with automatic null-safety.
- * 
+ *
  * @example
  * const trackEvent = useTrackEvent();
  * trackEvent("button_clicked", { buttonName: "Save Entry" });
@@ -68,7 +69,7 @@ export function sanitizeProperties(
   properties: Record<string, any>
 ): Record<string, any> {
   const sanitized = { ...properties };
-  
+
   // List of fields that should never be sent to analytics
   const forbiddenFields = [
     "content",
@@ -91,4 +92,3 @@ export function sanitizeProperties(
 
   return sanitized;
 }
-

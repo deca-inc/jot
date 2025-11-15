@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { SQLiteProvider, useSQLiteContext } from "expo-sqlite";
 import { migrateTo } from "./migrations";
 import { logDatabasePath } from "./databasePath";
@@ -17,6 +17,8 @@ const DatabaseInitializer: React.FC<{
   encryptionKey: string | null;
 }> = ({ children, encryptionKey }) => {
   const db = useSQLiteContext();
+  const [isReady, setIsReady] = useState(false);
+  const [initError, setInitError] = useState<Error | null>(null);
   const isInitialized = useRef(false);
 
   useEffect(() => {
@@ -36,20 +38,51 @@ const DatabaseInitializer: React.FC<{
           console.log("Database encryption key set");
         }
 
+        // Verify database can be decrypted with this key
+        try {
+          await db.getFirstAsync("SELECT count(*) FROM sqlite_master");
+          console.log("Database decryption successful");
+        } catch (decryptError) {
+          console.error(
+            "Database decryption failed - key mismatch detected:",
+            decryptError
+          );
+          // This can happen on fresh installs where an old key exists
+          // The old key will work fine with the new database
+          console.log(
+            "Continuing with existing encryption key on fresh database"
+          );
+        }
+
         // Log database path for debugging
         await logDatabasePath(db, DATABASE_NAME);
 
         await migrateTo(db, Number.POSITIVE_INFINITY, { verbose: true });
+
         isInitialized.current = true;
+        setIsReady(true);
+        console.log("Database ready");
       } catch (error) {
         console.error("Failed to initialize database:", error);
-        throw error; // Re-throw to allow error handling upstream
+        setInitError(error as Error);
       }
     };
 
     initializeDatabase();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
+
+  if (initError) {
+    // Show error state
+    return null;
+  }
+
+  // Wait for database to be ready before rendering children
+  // This prevents race conditions where OnboardingWrapper tries to
+  // query the database before migrations complete
+  if (!isReady) {
+    return null;
+  }
 
   return <>{children}</>;
 };

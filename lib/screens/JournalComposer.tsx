@@ -31,6 +31,7 @@ import { useEntry, useUpdateEntry } from "../db/useEntries";
 import { debounce } from "../utils/debounce";
 import { FloatingComposerHeader } from "../components";
 import { saveJournalContent, repairHtml } from "./journalActions";
+import { useTrackScreenView } from "../analytics";
 
 export interface JournalComposerProps {
   entryId: number;
@@ -48,6 +49,9 @@ export function JournalComposer({
   forceSaveRef: externalForceSaveRef,
 }: JournalComposerProps) {
   const seasonalTheme = useSeasonalTheme();
+
+  // Track screen view
+  useTrackScreenView("Journal Composer");
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
 

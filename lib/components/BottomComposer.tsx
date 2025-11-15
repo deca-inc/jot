@@ -15,6 +15,7 @@ import { ComposerInput } from "./ComposerInput";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { type ComposerMode } from "../db/composerSettings";
+import { useTrackEvent } from "../analytics";
 
 export interface BottomComposerProps {
   mode: ComposerMode;
@@ -36,6 +37,7 @@ export function BottomComposer({
   const isDark = seasonalTheme.isDark;
   const [inputText, setInputText] = useState("");
   const glowAnimation = useRef(new Animated.Value(0)).current;
+  const trackEvent = useTrackEvent();
 
   // Slow pulsing glow animation with smooth easing
   useEffect(() => {
@@ -81,7 +83,10 @@ export function BottomComposer({
       {/* Mode selector row */}
       <View style={styles.modeRow}>
         <TouchableOpacity
-          onPress={() => onModeChange("journal")}
+          onPress={() => {
+            onModeChange("journal");
+            trackEvent("Switch Composer Mode", { mode: "journal" });
+          }}
           style={[
             styles.modeToggle,
             mode === "journal" && {
@@ -113,7 +118,10 @@ export function BottomComposer({
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => onModeChange("ai")}
+          onPress={() => {
+            onModeChange("ai");
+            trackEvent("Switch Composer Mode", { mode: "ai" });
+          }}
           style={[
             styles.modeToggle,
             mode === "ai" && {
@@ -230,12 +238,11 @@ export function BottomComposer({
             style={[
               styles.blurContainer,
               {
-                paddingBottom:
-                  isKeyboardVisible
-                    ? spacingPatterns.sm
-                    : insets.bottom > 0
-                      ? insets.bottom
-                      : spacingPatterns.xxs,
+                paddingBottom: isKeyboardVisible
+                  ? spacingPatterns.sm
+                  : insets.bottom > 0
+                  ? insets.bottom
+                  : spacingPatterns.xxs,
               },
             ]}
           >
@@ -287,12 +294,11 @@ export function BottomComposer({
             style={[
               styles.blurContainer,
               {
-                paddingBottom:
-                  isKeyboardVisible
-                    ? spacingPatterns.xxs
-                    : insets.bottom > 0
-                      ? insets.bottom
-                      : spacingPatterns.xxs,
+                paddingBottom: isKeyboardVisible
+                  ? spacingPatterns.xxs
+                  : insets.bottom > 0
+                  ? insets.bottom
+                  : spacingPatterns.xxs,
               },
             ]}
           >

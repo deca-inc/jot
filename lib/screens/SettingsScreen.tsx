@@ -25,6 +25,7 @@ import { useModelSettings } from "../db/modelSettings";
 import { ALL_MODELS, type LlmModelConfig } from "../ai/modelConfig";
 import { useOnboardingSettings } from "../db/onboardingSettings";
 import { useTelemetrySettings } from "../db/telemetrySettings";
+import { useTrackScreenView, useTrackEvent } from "../analytics";
 
 interface SettingsScreenProps {
   onNavigateToPlayground?: () => void;
@@ -46,6 +47,10 @@ export function SettingsScreen({
   const [telemetryEnabled, setTelemetryEnabled] = useState<boolean | null>(
     null
   );
+
+  // Track screen view
+  useTrackScreenView("Settings");
+  const trackEvent = useTrackEvent();
 
   // Load telemetry settings
   useEffect(() => {
@@ -159,6 +164,9 @@ export function SettingsScreen({
       const newValue = !telemetryEnabled;
       setTelemetryEnabled(newValue);
       await telemetrySettings.setTelemetryEnabled(newValue);
+
+      // Track telemetry toggle (will only send if currently enabled)
+      trackEvent("telemetry_toggled", { enabled: newValue });
     } catch (error) {
       console.error("Error toggling telemetry:", error);
       // Revert the local state if the save failed
@@ -394,8 +402,12 @@ export function SettingsScreen({
                 styles.toggle,
                 {
                   backgroundColor: telemetryEnabled
-                    ? theme.colors.accent
-                    : seasonalTheme.textSecondary + "30",
+                    ? seasonalTheme.textPrimary + "20"
+                    : seasonalTheme.textSecondary + "20",
+                  borderWidth: 1.5,
+                  borderColor: telemetryEnabled
+                    ? seasonalTheme.textPrimary
+                    : seasonalTheme.textSecondary + "40",
                 },
               ]}
               activeOpacity={0.8}
@@ -404,7 +416,9 @@ export function SettingsScreen({
                 style={[
                   styles.toggleThumb,
                   {
-                    backgroundColor: seasonalTheme.cardBg,
+                    backgroundColor: telemetryEnabled
+                      ? seasonalTheme.textPrimary
+                      : seasonalTheme.textSecondary,
                     transform: [{ translateX: telemetryEnabled ? 20 : 0 }],
                   },
                 ]}
@@ -472,6 +486,7 @@ export function SettingsScreen({
               <Button
                 variant="secondary"
                 size="sm"
+                label="Open Component Playground"
                 onPress={onNavigateToPlayground}
               >
                 Open
@@ -503,6 +518,8 @@ export function SettingsScreen({
               <Button
                 variant="secondary"
                 size="sm"
+                label="Remove All Models"
+                metadata={{ action: "remove_all_models" }}
                 onPress={handleRemoveAllModels}
                 disabled={isRemovingAllModels}
               >
@@ -539,6 +556,8 @@ export function SettingsScreen({
               <Button
                 variant="secondary"
                 size="sm"
+                label="Reset Onboarding"
+                metadata={{ action: "reset_onboarding" }}
                 onPress={handleResetOnboarding}
                 disabled={isResettingOnboarding}
               >

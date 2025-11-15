@@ -25,6 +25,7 @@ import {
   deleteEntryWithConfirmation,
   type EntryActionContext,
 } from "../screens/entryActions";
+import { useTrackEvent } from "../analytics";
 
 export interface EntryListItemProps {
   entry: Entry;
@@ -51,6 +52,7 @@ export function EntryListItem({
   // Mutations
   const deleteEntryMutation = useDeleteEntry();
   const updateEntryMutation = useUpdateEntry();
+  const trackEvent = useTrackEvent();
 
   // Action context
   const actionContext = useMemo<EntryActionContext>(
@@ -256,6 +258,7 @@ export function EntryListItem({
   const handleDelete = async () => {
     try {
       await deleteEntryWithConfirmation(entry.id, actionContext);
+      trackEvent("Delete Entry", { entryType: entry.type });
     } catch (error) {
       // Error already handled in action (logged and shown to user)
       if (error instanceof Error && error.message !== "Deletion cancelled") {
@@ -279,6 +282,7 @@ export function EntryListItem({
 
     try {
       await renameEntry(entry.id, renameText.trim(), actionContext);
+      trackEvent("Rename Entry", { entryType: entry.type });
       setShowRenameDialog(false);
       setRenameText("");
     } catch (error) {

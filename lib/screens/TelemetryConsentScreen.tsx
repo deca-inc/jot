@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-} from "react-native";
+import { View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../components";
@@ -12,6 +7,7 @@ import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useTheme } from "../theme/ThemeProvider";
 import { useTelemetrySettings } from "../db/telemetrySettings";
+import { useTrackScreenView } from "../analytics";
 
 interface TelemetryConsentScreenProps {
   onContinue: () => void;
@@ -24,8 +20,12 @@ export function TelemetryConsentScreen({
   const theme = useTheme();
   const telemetrySettings = useTelemetrySettings();
 
+  // Track screen view (won't send yet as telemetry not enabled)
+  useTrackScreenView("Telemetry Consent");
+
   const handleChoice = async (enabled: boolean) => {
     await telemetrySettings.setTelemetryEnabled(enabled);
+    // Note: First telemetry event will be sent after this choice is made
     onContinue();
   };
 
@@ -50,7 +50,7 @@ export function TelemetryConsentScreen({
               color={seasonalTheme.textPrimary}
             />
           </View>
-          
+
           <Text
             variant="h1"
             style={[styles.title, { color: seasonalTheme.textPrimary }]}
@@ -61,7 +61,10 @@ export function TelemetryConsentScreen({
             variant="body"
             style={[styles.subtitle, { color: seasonalTheme.textSecondary }]}
           >
-            We'd like to collect anonymous usage data to make the app better for everyone. We will never collect your journal entries, personal content, or AI conversations - that completely goes against the purpose of this app.
+            We'd like to collect anonymous usage data to make the app better for
+            everyone. We will never collect your journal entries, personal
+            content, or AI conversations - that completely goes against the
+            purpose of this app.
           </Text>
         </View>
 
@@ -81,7 +84,7 @@ export function TelemetryConsentScreen({
           >
             What we collect:
           </Text>
-          
+
           <View style={styles.bulletList}>
             <View style={styles.bulletItem}>
               <Ionicons
@@ -92,12 +95,15 @@ export function TelemetryConsentScreen({
               />
               <Text
                 variant="body"
-                style={[styles.bulletText, { color: seasonalTheme.textSecondary }]}
+                style={[
+                  styles.bulletText,
+                  { color: seasonalTheme.textSecondary },
+                ]}
               >
                 App usage patterns and feature interactions
               </Text>
             </View>
-            
+
             <View style={styles.bulletItem}>
               <Ionicons
                 name="checkmark-circle"
@@ -107,12 +113,15 @@ export function TelemetryConsentScreen({
               />
               <Text
                 variant="body"
-                style={[styles.bulletText, { color: seasonalTheme.textSecondary }]}
+                style={[
+                  styles.bulletText,
+                  { color: seasonalTheme.textSecondary },
+                ]}
               >
                 Performance metrics and crash reports
               </Text>
             </View>
-            
+
             <View style={styles.bulletItem}>
               <Ionicons
                 name="checkmark-circle"
@@ -122,7 +131,10 @@ export function TelemetryConsentScreen({
               />
               <Text
                 variant="body"
-                style={[styles.bulletText, { color: seasonalTheme.textSecondary }]}
+                style={[
+                  styles.bulletText,
+                  { color: seasonalTheme.textSecondary },
+                ]}
               >
                 Device type and operating system version
               </Text>
@@ -146,7 +158,7 @@ export function TelemetryConsentScreen({
           >
             What we don't collect:
           </Text>
-          
+
           <View style={styles.bulletList}>
             <View style={styles.bulletItem}>
               <Ionicons
@@ -157,12 +169,15 @@ export function TelemetryConsentScreen({
               />
               <Text
                 variant="body"
-                style={[styles.bulletText, { color: seasonalTheme.textSecondary }]}
+                style={[
+                  styles.bulletText,
+                  { color: seasonalTheme.textSecondary },
+                ]}
               >
                 Your journal entries or personal content
               </Text>
             </View>
-            
+
             <View style={styles.bulletItem}>
               <Ionicons
                 name="close-circle"
@@ -172,12 +187,15 @@ export function TelemetryConsentScreen({
               />
               <Text
                 variant="body"
-                style={[styles.bulletText, { color: seasonalTheme.textSecondary }]}
+                style={[
+                  styles.bulletText,
+                  { color: seasonalTheme.textSecondary },
+                ]}
               >
                 Personally identifiable information
               </Text>
             </View>
-            
+
             <View style={styles.bulletItem}>
               <Ionicons
                 name="close-circle"
@@ -187,7 +205,10 @@ export function TelemetryConsentScreen({
               />
               <Text
                 variant="body"
-                style={[styles.bulletText, { color: seasonalTheme.textSecondary }]}
+                style={[
+                  styles.bulletText,
+                  { color: seasonalTheme.textSecondary },
+                ]}
               >
                 AI conversations or prompts
               </Text>
@@ -343,4 +364,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 });
-

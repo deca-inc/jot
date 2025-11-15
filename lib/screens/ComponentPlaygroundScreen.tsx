@@ -21,6 +21,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, springPresets, borderRadius } from "../theme";
 import { useEntryRepository } from "../db/entries";
+import { useTrackScreenView } from "../analytics";
 
 type ComponentPage =
   | "typography"
@@ -53,6 +54,9 @@ export function ComponentPlaygroundScreen({
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
+
+  // Track screen view
+  useTrackScreenView("Component Playground");
   const [selectedPage, setSelectedPage] = useState<ComponentPage>("typography");
   const [showPicker, setShowPicker] = useState(false);
   const [buttonLoading, setButtonLoading] = useState(false);
@@ -294,23 +298,30 @@ function ButtonsPage({
         Buttons
       </Text>
       <View style={styles.componentGrid}>
-        <Button variant="primary">Primary Button</Button>
-        <Button variant="secondary">Secondary Button</Button>
-        <Button variant="ghost">Ghost Button</Button>
-        <Button variant="primary" size="sm">
+        <Button variant="primary" label="Primary Button">
+          Primary Button
+        </Button>
+        <Button variant="secondary" label="Secondary Button">
+          Secondary Button
+        </Button>
+        <Button variant="ghost" label="Ghost Button">
+          Ghost Button
+        </Button>
+        <Button variant="primary" size="sm" label="Small Button">
           Small
         </Button>
-        <Button variant="primary" size="md">
+        <Button variant="primary" size="md" label="Medium Button">
           Medium
         </Button>
-        <Button variant="primary" size="lg">
+        <Button variant="primary" size="lg" label="Large Button">
           Large
         </Button>
-        <Button variant="primary" disabled>
+        <Button variant="primary" disabled label="Disabled Button">
           Disabled
         </Button>
         <Button
           variant="primary"
+          label="Loading Button"
           loading={buttonLoading}
           onPress={() => {
             setButtonLoading(true);

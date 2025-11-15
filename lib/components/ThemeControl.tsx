@@ -8,6 +8,7 @@ import {
 import { useThemeSettings } from "../db/themeSettings";
 import { type Season, type TimeOfDay } from "../theme/seasonalTheme";
 import { spacingPatterns, borderRadius } from "../theme";
+import { useTrackEvent } from "../analytics";
 
 interface ThemeControlProps {
   onThemeChange?: () => void;
@@ -17,6 +18,7 @@ export function ThemeControl({ onThemeChange }: ThemeControlProps = {}) {
   const seasonalTheme = useSeasonalTheme();
   const { getSettings, setSettings } = useThemeSettings();
   const { refreshTheme } = useSeasonalThemeContext();
+  const trackEvent = useTrackEvent();
 
   const [selectedSeason, setSelectedSeason] = useState<Season | "auto">("auto");
   const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<
@@ -61,6 +63,7 @@ export function ThemeControl({ onThemeChange }: ThemeControlProps = {}) {
 
   const handleSeasonChange = async (season: Season | "auto") => {
     setSelectedSeason(season);
+    trackEvent("Change Theme Season", { season });
     const timeOfDayValue = selectedTimeOfDay || "system";
     await setSettings({
       mode: season === "auto" ? "auto" : "manual",
@@ -79,6 +82,7 @@ export function ThemeControl({ onThemeChange }: ThemeControlProps = {}) {
 
   const handleTimeOfDayChange = async (timeOfDay: TimeOfDay | "system") => {
     setSelectedTimeOfDay(timeOfDay);
+    trackEvent("Change Theme Time", { timeOfDay });
     const seasonValue = selectedSeason === "auto" ? undefined : selectedSeason;
     await setSettings({
       mode: selectedSeason === "auto" ? "auto" : "manual",

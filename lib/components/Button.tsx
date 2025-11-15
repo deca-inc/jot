@@ -10,12 +10,15 @@ import { Text } from "./Text";
 import { useTheme } from "../theme/ThemeProvider";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, borderRadius, springPresets } from "../theme";
+import { useTrackEvent, sanitizeProperties } from "../analytics";
 
 export interface ButtonProps extends TouchableOpacityProps {
   variant?: "primary" | "secondary" | "ghost";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
   children: React.ReactNode;
+  label: string; // Required for analytics tracking
+  metadata?: Record<string, string>; // Optional metadata for analytics
 }
 
 export function Button({
@@ -24,6 +27,8 @@ export function Button({
   loading = false,
   disabled,
   children,
+  label,
+  metadata,
   style,
   onPressIn,
   onPressOut,
@@ -33,6 +38,7 @@ export function Button({
   const seasonalTheme = useSeasonalTheme();
   const scale = useRef(new Animated.Value(1)).current;
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+  const trackEvent = useTrackEvent();
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotionEnabled);
@@ -108,6 +114,18 @@ export function Button({
     onPressOut?.(e);
   };
 
+  const handlePress = (e: any) => {
+    // Track button click using label as event name
+    const eventProperties = sanitizeProperties({
+      ...metadata, // Spread metadata at root level
+    });
+
+    trackEvent(label, eventProperties);
+
+    // Call original onPress handler
+    props.onPress?.(e);
+  };
+
   return (
     <Animated.View style={[{ transform: [{ scale }] }, style]}>
       <TouchableOpacity
@@ -125,7 +143,7 @@ export function Button({
         disabled={disabled || loading}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        {...props}
+        onPress={handlePress}
       >
         {loading ? (
           <ActivityIndicator

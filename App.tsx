@@ -38,7 +38,6 @@ const queryClient = new QueryClient({
   },
 });
 
-
 export default function App() {
   const [encryptionKey, setEncryptionKey] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -53,6 +52,8 @@ export default function App() {
         setEncryptionKey(key);
       } catch (error) {
         console.error("Error initializing encryption:", error);
+        // Still allow app to continue - will use null encryption key
+        setEncryptionKey(null);
       } finally {
         setIsInitializing(false);
       }
@@ -61,8 +62,14 @@ export default function App() {
     initializeEncryption();
   }, []);
 
-  if (isInitializing || !encryptionKey) {
+  if (isInitializing) {
     // Show nothing while initializing (could add a loading screen here)
+    return null;
+  }
+
+  if (!encryptionKey) {
+    // Encryption key failed to initialize - this shouldn't happen in production
+    console.error("Failed to initialize encryption key");
     return null;
   }
 
@@ -93,7 +100,9 @@ function OnboardingWrapper() {
         setShowOnboarding(!hasCompleted);
       } catch (error) {
         console.error("Error checking onboarding status:", error);
-        setShowOnboarding(false); // Default to showing main app
+        // If we can't check onboarding status, default to showing it
+        // This ensures fresh installs show onboarding even if there's an issue
+        setShowOnboarding(true);
       } finally {
         setIsCheckingOnboarding(false);
       }
