@@ -17,7 +17,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.betazeta.jot",
       "infoPlist": {
-        "UIBackgroundModes": ["fetch", "processing"]
+        "UIBackgroundModes": ["fetch", "processing"],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
