@@ -131,7 +131,7 @@ function OnboardingWrapper() {
     <ModelProvider>
       <ThemeProvider>
         <SeasonalThemeProvider>
-          <StatusBar style="auto" />
+          <StatusBarController />
           {showOnboarding ? (
             <OnboardingFlow onComplete={handleOnboardingComplete} />
           ) : (
@@ -141,4 +141,12 @@ function OnboardingWrapper() {
       </ThemeProvider>
     </ModelProvider>
   );
+}
+
+// Status bar controller that responds to the seasonal theme
+function StatusBarController() {
+  const { theme } =
+    require("./lib/theme/SeasonalThemeProvider").useSeasonalThemeContext();
+
+  return <StatusBar style={theme.isDark ? "light" : "dark"} />;
 }

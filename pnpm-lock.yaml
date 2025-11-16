@@ -53,6 +53,9 @@ dependencies:
   expo-status-bar:
     specifier: ~3.0.8
     version: 3.0.8(react-native@0.81.5)(react@19.1.0)
+  expo-system-ui:
+    specifier: ^6.0.8
+    version: 6.0.8(expo@54.0.21)(react-native@0.81.5)
   expo-task-manager:
     specifier: ^14.0.8
     version: 14.0.8(expo@54.0.21)(react-native@0.81.5)
@@ -4046,6 +4049,24 @@ packages:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
       react-native-is-edge-to-edge: 1.2.1(react-native@0.81.5)(react@19.1.0)
+    dev: false
+
+  /expo-system-ui@6.0.8(expo@54.0.21)(react-native@0.81.5):
+    resolution: {integrity: sha512-DzJYqG2fibBSLzPDL4BybGCiilYOtnI1OWhcYFwoM4k0pnEzMBt1Vj8Z67bXglDDuz2HCQPGNtB3tQft5saKqQ==}
+    peerDependencies:
+      expo: '*'
+      react-native: '*'
+      react-native-web: '*'
+    peerDependenciesMeta:
+      react-native-web:
+        optional: true
+    dependencies:
+      '@react-native/normalize-colors': 0.81.5
+      debug: 4.4.3
+      expo: 54.0.21(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
+      react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
+    transitivePeerDependencies:
+      - supports-color
     dev: false
 
   /expo-task-manager@14.0.8(expo@54.0.21)(react-native@0.81.5):
