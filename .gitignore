@@ -49,3 +49,6 @@ journal-test.db
 # AI model files (large binary files, download with pnpm download:models)
 # Downloaded during build/deploy process for production
 assets/models
+
+credentials.json
+jotapp-*.json

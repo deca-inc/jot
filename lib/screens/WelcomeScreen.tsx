@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet, Image, TouchableOpacity } from "react-native";
+import { View, StyleSheet, Image, TouchableOpacity, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "../components";
 import { spacingPatterns, borderRadius } from "../theme";
@@ -87,6 +87,26 @@ export function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
               Get Started
             </Text>
           </TouchableOpacity>
+          
+          {/* Legal text */}
+          <Text variant="caption" style={styles.legalText}>
+            By continuing, you accept our{" "}
+            <Text
+              variant="caption"
+              style={styles.legalLink}
+              onPress={() => Linking.openURL("https://jot.app/terms")}
+            >
+              Terms of Service
+            </Text>
+            {" "}and{" "}
+            <Text
+              variant="caption"
+              style={styles.legalLink}
+              onPress={() => Linking.openURL("https://jot.app/privacy")}
+            >
+              Privacy Policy
+            </Text>
+          </Text>
         </View>
       </View>
     </SafeAreaView>
@@ -107,11 +127,11 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: "center",
-    marginBottom: spacingPatterns.xl * 3,
+    marginBottom: spacingPatterns.xl * 2,
   },
   logo: {
-    width: 240,
-    height: 240,
+    width: 160,
+    height: 160,
   },
   textContainer: {
     alignItems: "center",
@@ -137,7 +157,8 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   spacer: {
-    height: spacingPatterns.xl * 4,
+    flex: 1,
+    minHeight: spacingPatterns.xl * 2,
   },
   buttonContainer: {
     width: "100%",
@@ -158,6 +179,18 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "600",
     letterSpacing: 0.2,
+  },
+  legalText: {
+    marginTop: spacingPatterns.md,
+    textAlign: "center",
+    color: "#999999",
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  legalLink: {
+    color: "#CCCCCC",
+    fontSize: 11,
+    textDecorationLine: "underline",
   },
 });
 
