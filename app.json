@@ -18,6 +18,9 @@
       "bundleIdentifier": "com.betazeta.jot",
       "infoPlist": {
         "UIBackgroundModes": ["fetch", "processing"],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "com.betazeta.jot.background-generation"
+        ],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
