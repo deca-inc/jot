@@ -67,6 +67,15 @@ export function EntryListItem({
   const markdownBlock = entry.blocks.find((b) => b.type === "markdown");
   const isHtmlContent = markdownBlock && markdownBlock.content.includes("<");
 
+  // Strip <think> tags from markdown content for preview rendering
+  const cleanedMarkdownContent = React.useMemo(() => {
+    if (!markdownBlock) return "";
+    return markdownBlock.content
+      .replace(/<think>[\s\S]*?<\/think>/g, "") // Remove complete <think>...</think> blocks
+      .replace(/<\/?think>/g, "") // Remove any remaining <think> or </think> tags
+      .trim();
+  }, [markdownBlock]);
+
   const itemTheme = React.useMemo(
     () =>
       seasonalTheme || {
@@ -430,11 +439,12 @@ export function EntryListItem({
 
             {previewText || isHtmlContent ? (
               <View style={styles.previewContainer}>
-                {isHtmlContent && markdownBlock ? (
+                {isHtmlContent && markdownBlock && cleanedMarkdownContent ? (
                   <RenderHtml
                     contentWidth={htmlContentWidth}
-                    source={{ html: markdownBlock.content }}
+                    source={{ html: cleanedMarkdownContent }}
                     tagsStyles={htmlTagsStyles}
+                    ignoredDomTags={["think"]}
                   />
                 ) : (
                   <Text

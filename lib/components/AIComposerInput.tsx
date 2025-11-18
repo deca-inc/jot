@@ -163,8 +163,23 @@ export function AIComposerInput({
   const footerHeight = footerHeightBase + safeAreaAdjustment + 2; // Base + adjusted safe area + 2px extra spacing
 
   // Determine final position: above keyboard if open, above footer otherwise
-  const targetBottomPosition =
-    keyboardHeight > 0 ? keyboardHeight : footerHeight;
+  // On Android, keyboard height includes the navigation bar area, so add bottom inset when open
+  // When closed, Android needs the container's bottom padding added to position correctly
+  const containerBottomPadding = spacingPatterns.sm;
+  let targetBottomPosition;
+  if (keyboardHeight > 0) {
+    // When keyboard is open
+    targetBottomPosition =
+      Platform.OS === "android"
+        ? keyboardHeight + insets.bottom
+        : keyboardHeight;
+  } else {
+    // When keyboard is closed - Android needs extra bottom padding
+    targetBottomPosition =
+      Platform.OS === "android"
+        ? footerHeight + containerBottomPadding
+        : footerHeight;
+  }
   const hiddenOffset = 200; // How far down to hide it
 
   // Slide in based on swipe progress: starts at 45% of swipe for better timing

@@ -145,16 +145,10 @@ export function Toast({
     }
   };
 
-  // Force opaque background color
+  // Get proper background color from theme
   const getBackgroundColor = () => {
-    // If the theme background is transparent or semi-transparent, use a solid color
-    const bg = seasonalTheme.cardBg;
-    // Remove any alpha channel if present and ensure it's opaque
-    if (bg.includes('rgba')) {
-      // Convert rgba to rgb with full opacity
-      return bg.replace(/rgba\(([^,]+),([^,]+),([^,]+),[^)]+\)/, 'rgb($1,$2,$3)');
-    }
-    return bg;
+    // Use the theme's gradient middle color as the main background
+    return seasonalTheme.gradient.middle;
   };
 
   return (

@@ -14,6 +14,18 @@
 import { Block } from "../db/entries";
 import { llmQueue } from "../ai/ModelProvider";
 
+/**
+ * Strip <think> tags from AI response
+ * Qwen models use these tags for reasoning, but we don't want them in the final output
+ * @export Can be used throughout the app for cleaning Qwen responses
+ */
+export function stripThinkTags(text: string): string {
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/g, "") // Remove complete <think>...</think> blocks
+    .replace(/<\/?think>/g, "") // Remove any remaining <think> or </think> tags
+    .trim();
+}
+
 export interface AIChatActionContext {
   // React Query mutations
   createEntry?: any; // Optional - not needed for all actions
@@ -364,16 +376,19 @@ export async function generateTitle(
   console.log("[AIChat Action] Generating title for entry:", entryId);
 
   try {
+    // Strip out <think> tags from AI response before using for title generation
+    const cleanedAiResponse = aiResponse ? stripThinkTags(aiResponse) : undefined;
+
     // Create title generation prompt with context
     let promptContent = `Generate a specific, memorable title (3-6 words) that captures the main topic of this conversation. The title should help the user remember what was discussed.
 
 User: "${userMessage}"`;
-    if (aiResponse) {
+    if (cleanedAiResponse && cleanedAiResponse.length > 0) {
       // Include AI response for better context, but truncate if too long
       const truncatedResponse =
-        aiResponse.length > 200
-          ? aiResponse.substring(0, 200) + "..."
-          : aiResponse;
+        cleanedAiResponse.length > 200
+          ? cleanedAiResponse.substring(0, 200) + "..."
+          : cleanedAiResponse;
       promptContent += `\n\nAssistant: "${truncatedResponse}"`;
     }
 
@@ -407,8 +422,7 @@ Title:`;
     const generatedTitle = await llmQueue.generate(titleConvoId, messages);
 
     // Clean up the title
-    let cleanTitle = generatedTitle
-      .trim()
+    let cleanTitle = stripThinkTags(generatedTitle) // Remove <think> tags first
       // Remove markdown formatting
       .replace(/\*\*/g, "") // Remove bold markers
       .replace(/\*/g, "") // Remove italic markers
@@ -426,6 +440,15 @@ Title:`;
     // Limit length to 60 chars for more specific titles
     if (cleanTitle.length > 60) {
       cleanTitle = cleanTitle.substring(0, 57) + "...";
+    }
+
+    // If title is empty after cleaning (e.g., only had think tags), use fallback
+    if (cleanTitle.length === 0) {
+      console.warn(
+        "[AIChat Action] Generated title was empty after cleaning, using fallback"
+      );
+      // Generate a simple fallback from user message
+      cleanTitle = userMessage.slice(0, 40) + (userMessage.length > 40 ? "..." : "");
     }
 
     if (cleanTitle.length > 0) {

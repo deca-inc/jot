@@ -88,7 +88,10 @@ import {
 import {
   sendMessageWithResponse,
   type AIChatActionContext,
+  stripThinkTags,
 } from "./aiChatActions";
+import { useModelSettings } from "../db/modelSettings";
+import { getModelById, DEFAULT_MODEL } from "../ai/modelConfig";
 
 export interface AIChatComposerProps {
   entryId?: number;
@@ -118,6 +121,31 @@ export function AIChatComposer({
   // React Query hooks - load entry first
   const { data: entry } = useEntry(entryId);
 
+  // Get model settings to determine which model to use
+  const modelSettings = useModelSettings();
+  const [selectedModelConfig, setSelectedModelConfig] =
+    React.useState(DEFAULT_MODEL);
+
+  // Load selected model from settings
+  React.useEffect(() => {
+    async function loadSelectedModel() {
+      const selectedModelId = await modelSettings.getSelectedModelId();
+      if (selectedModelId) {
+        const config = getModelById(selectedModelId);
+        if (config) {
+          setSelectedModelConfig(config);
+        } else {
+          // Model not found, use default
+          setSelectedModelConfig(DEFAULT_MODEL);
+        }
+      } else {
+        // No model selected, use default
+        setSelectedModelConfig(DEFAULT_MODEL);
+      }
+    }
+    loadSelectedModel();
+  }, [modelSettings]);
+
   // Use new LLM hook - pass entryId as convoId and for DB writes
   // When AIChatComposer mounts, it attaches to existing LLM instance if generation is already running
   // Use useRef to ensure convoId is stable across renders when there's no entryId
@@ -130,7 +158,8 @@ export function AIChatComposer({
   } = useLLMForConvo(
     convoId,
     entryId,
-    entry?.blocks // Initialize with existing blocks if loading entry
+    entry?.blocks, // Initialize with existing blocks if loading entry
+    selectedModelConfig // Pass the selected model config
   );
 
   const createEntry = useCreateEntry();
@@ -539,19 +568,32 @@ export function AIChatComposer({
       const messageContent = block.type === "markdown" ? block.content : "";
       const isEmpty = !messageContent || messageContent.trim().length === 0;
       const isLastMessage = index === displayedBlocks.length - 1;
-      const isGenerating = !isUser && isEmpty && isLastMessage && isLLMLoading;
+
+      // Strip out <think> tags completely (including partial/incomplete ones during streaming)
+      // This handles: <think>...</think>, <think> (incomplete), </think> (orphaned closing tag)
+      const contentWithoutThinkTags = stripThinkTags(messageContent);
+
+      // Check if after removing think tags, there's any actual content
+      const hasActualContent = contentWithoutThinkTags.length > 0;
+
+      // Consider it "generating" if:
+      // - It's the last message AND it's loading
+      // - AND there's no actual content yet (only think tags or empty)
+      const isGenerating =
+        !isUser && isLastMessage && !hasActualContent && isLLMLoading;
 
       let htmlContent: string | null = null;
-      if (!isUser && messageContent && !isGenerating) {
+      if (!isUser && hasActualContent && !isEmpty) {
         try {
-          htmlContent = marked.parse(messageContent) as string;
+          // Parse the content WITHOUT think tags
+          htmlContent = marked.parse(contentWithoutThinkTags) as string;
         } catch (error) {
           console.error("Error parsing markdown:", error);
           htmlContent = null;
         }
       }
 
-      return { htmlContent, isGenerating };
+      return { htmlContent, isGenerating, contentWithoutThinkTags };
     });
   }, [displayedBlocks, isLLMLoading]);
 
@@ -560,10 +602,12 @@ export function AIChatComposer({
     ({ item: message, index }) => {
       const isUser = message.role === "user";
       const messageContent = message.type === "markdown" ? message.content : "";
-      const { htmlContent, isGenerating } = parsedMessages[index] || {
-        htmlContent: null,
-        isGenerating: false,
-      };
+      const { htmlContent, isGenerating, contentWithoutThinkTags } =
+        parsedMessages[index] || {
+          htmlContent: null,
+          isGenerating: false,
+          contentWithoutThinkTags: "",
+        };
 
       // User messages get a bubble, AI messages are full width
       if (isUser) {
@@ -612,6 +656,7 @@ export function AIChatComposer({
               classesStyles={htmlClassesStyles}
               enableExperimentalMarginCollapsing={false}
               enableCSSInlineProcessing={true}
+              ignoredDomTags={["think"]}
             />
           ) : (
             <Text
@@ -620,7 +665,7 @@ export function AIChatComposer({
                 color: seasonalTheme.textPrimary,
               }}
             >
-              {messageContent || " "}
+              {contentWithoutThinkTags || " "}
             </Text>
           )}
         </View>

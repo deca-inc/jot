@@ -1,7 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { Paths } from "expo-file-system";
 import { Asset } from "expo-asset";
-import { Llama32_1B_Instruct, LlmModelConfig } from "./modelConfig";
+import { DEFAULT_MODEL, LlmModelConfig } from "./modelConfig";
 import { modelDownloadStatus } from "./modelDownloadStatus";
 import { persistentDownloadManager } from "./persistentDownloadManager";
 
@@ -181,7 +181,7 @@ async function ensureFromRemoteToFolder(
 }
 
 export async function ensureModelPresent(
-  config: LlmModelConfig = Llama32_1B_Instruct,
+  config: LlmModelConfig = DEFAULT_MODEL,
   onProgress?: (progress: number) => void
 ): Promise<EnsureResult> {
   let ptePath: string;

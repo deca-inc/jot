@@ -12,7 +12,7 @@ interface ModelDownloadIndicatorProps {
 
 /**
  * Shows download progress when a model is downloading
- * - banner: Full-width banner with border (for top of screen)
+ * - banner: Card-style component with rounded edges and shadow (for top of screen)
  * - inline: Compact version without borders (for embedding in settings)
  */
 export function ModelDownloadIndicator({ variant = 'banner' }: ModelDownloadIndicatorProps = {}) {
@@ -33,7 +33,6 @@ export function ModelDownloadIndicator({ variant = 'banner' }: ModelDownloadIndi
         isBanner ? styles.container : styles.inlineContainer,
         isBanner && {
           backgroundColor: seasonalTheme.cardBg,
-          borderBottomColor: seasonalTheme.border,
         },
       ]}
     >
@@ -77,10 +76,16 @@ export function ModelDownloadIndicator({ variant = 'banner' }: ModelDownloadIndi
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: spacingPatterns.screen,
-    paddingTop: spacingPatterns.sm,
-    paddingBottom: spacingPatterns.xs,
-    borderBottomWidth: 1,
+    marginHorizontal: spacingPatterns.screen,
+    marginTop: spacingPatterns.md,
+    marginBottom: spacingPatterns.md,
+    padding: spacingPatterns.md,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
   inlineContainer: {
     paddingHorizontal: spacingPatterns.md,

@@ -35,7 +35,7 @@ import { spacingPatterns } from "../theme";
 import { Entry } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { llmManager } from "../ai/ModelProvider";
-import { Llama32_1B_Instruct } from "../ai/modelConfig";
+import { DEFAULT_MODEL, getModelById } from "../ai/modelConfig";
 import {
   useInfiniteEntries,
   useSearchEntries,
@@ -46,6 +46,7 @@ import {
 import { useModel } from "../ai/ModelProvider";
 import { useComposerSettings, type ComposerMode } from "../db/composerSettings";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
+import { useModelSettings } from "../db/modelSettings";
 
 type Filter = "all" | "journal" | "ai_chat" | "favorites";
 
@@ -75,6 +76,26 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const { currentConfig } = useModel();
   const { getLastUsedMode, setLastUsedMode } = useComposerSettings();
+  const modelSettings = useModelSettings();
+  const [selectedModelConfig, setSelectedModelConfig] = useState(DEFAULT_MODEL);
+
+  // Load selected model from settings
+  useEffect(() => {
+    async function loadSelectedModel() {
+      const selectedModelId = await modelSettings.getSelectedModelId();
+      if (selectedModelId) {
+        const config = getModelById(selectedModelId);
+        if (config) {
+          setSelectedModelConfig(config);
+        } else {
+          setSelectedModelConfig(DEFAULT_MODEL);
+        }
+      } else {
+        setSelectedModelConfig(DEFAULT_MODEL);
+      }
+    }
+    loadSelectedModel();
+  }, [modelSettings]);
 
   // Screen dimensions for swipeable pages
   const screenWidth = Dimensions.get("window").width;
@@ -349,7 +370,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             createEntry: createEntryRef.current,
             updateEntry: updateEntryRef.current,
             llmManager,
-            modelConfig: Llama32_1B_Instruct,
+            modelConfig: selectedModelConfig,
           });
 
           // Navigate to the conversation immediately
@@ -362,7 +383,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
         console.error("Error creating entry:", error);
       }
     },
-    [composerMode]
+    [composerMode, selectedModelConfig]
   );
 
   const handleFABPress = useCallback(() => {
@@ -642,7 +663,11 @@ export function HomeScreen(props: HomeScreenProps = {}) {
               : "Use the input below to chat with your AI assistant"}
           </Text>
           <View style={styles.welcomeHints}>
-            <View style={styles.welcomeHint}>
+            <TouchableOpacity
+              style={styles.welcomeHint}
+              onPress={() => handleModeChange("journal")}
+              activeOpacity={0.7}
+            >
               <Ionicons
                 name="book-outline"
                 size={24}
@@ -666,8 +691,12 @@ export function HomeScreen(props: HomeScreenProps = {}) {
                   Write your thoughts, track your day
                 </Text>
               </View>
-            </View>
-            <View style={styles.welcomeHint}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.welcomeHint}
+              onPress={() => handleModeChange("ai")}
+              activeOpacity={0.7}
+            >
               <Ionicons
                 name="chatbubbles-outline"
                 size={24}
@@ -691,12 +720,19 @@ export function HomeScreen(props: HomeScreenProps = {}) {
                   Get help, brainstorm, or just chat
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
       );
     },
-    [currentData.isLoading, seasonalTheme, filter, isSearching, theme]
+    [
+      currentData.isLoading,
+      seasonalTheme,
+      filter,
+      isSearching,
+      theme,
+      handleModeChange,
+    ]
   );
 
   const JournalListEmptyComponent = useMemo(

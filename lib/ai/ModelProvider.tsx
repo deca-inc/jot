@@ -12,7 +12,7 @@ import {
   Message as LlmMessage,
   LLMModule,
 } from "react-native-executorch";
-import { Llama32_1B_Instruct, LlmModelConfig } from "./modelConfig";
+import { Llama32_1B_Instruct, LlmModelConfig, DEFAULT_MODEL } from "./modelConfig";
 import { ensureModelPresent } from "./modelManager";
 import { Block, EntryRepository } from "../db/entries";
 import { llmQueue } from "./LLMQueue";
@@ -284,7 +284,7 @@ async function createLLMForConvo(
 class LLMManager {
   private listeners = new Map<string, Set<LLMListeners>>();
   private isLoaded = false;
-  private currentConfig: LlmModelConfig = Llama32_1B_Instruct;
+  private currentConfig: LlmModelConfig = DEFAULT_MODEL;
 
   constructor() {
     // Initialize on first use
@@ -368,14 +368,32 @@ class LLMManager {
     // Register callbacks for this conversation
     llmQueue.registerCallbacks(convoId, broadcasterCallbacks);
 
-    // Load LLM queue if not already loaded
-    // CRITICAL: Check both our flag and the queue's actual state
-    if (!this.isLoaded || !llmQueue.getIsLoaded()) {
+    // Check if we need to load or reload the model
+    // CRITICAL: Check if model is loaded AND if it's the correct model
+    const needsReload = 
+      !this.isLoaded || 
+      !llmQueue.getIsLoaded() || 
+      this.currentConfig.modelId !== config.modelId;
+
+    if (needsReload) {
       try {
+        // If switching models, unload the old one first
+        if (this.isLoaded && this.currentConfig.modelId !== config.modelId) {
+          console.log(
+            `[LLMManager] Switching from ${this.currentConfig.modelId} to ${config.modelId}`
+          );
+          await llmQueue.unload();
+          this.isLoaded = false;
+        }
+
+        // Load the new model
         await llmQueue.load(config);
+        
         // Only set our flag if queue confirms it's loaded
         if (llmQueue.getIsLoaded()) {
           this.isLoaded = true;
+          this.currentConfig = config;
+          console.log(`[LLMManager] Successfully loaded ${config.modelId}`);
         } else {
           throw new Error("LLM failed to load - queue reports not loaded");
         }
@@ -384,6 +402,10 @@ class LLMManager {
         this.isLoaded = false;
         throw error;
       }
+    } else {
+      console.log(
+        `[LLMManager] Model ${config.modelId} already loaded, reusing instance`
+      );
     }
 
     // Return adapter that uses the queue
@@ -476,7 +498,7 @@ export function useModel(): ModelContextValue {
 // Provider component to wrap app
 export function ModelProvider({ children }: { children: React.ReactNode }) {
   const [currentConfig, setCurrentConfig] =
-    useState<LlmModelConfig>(Llama32_1B_Instruct);
+    useState<LlmModelConfig>(DEFAULT_MODEL);
   const modelSettings = useModelSettings();
 
   // Initialize download managers and verify models on mount
@@ -570,7 +592,8 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
 export function useLLMForConvo(
   convoId: string,
   entryId?: number,
-  initialBlocks?: Block[]
+  initialBlocks?: Block[],
+  modelConfig?: LlmModelConfig
 ) {
   const listenersRef = useRef<LLMListeners | null>(null);
   const [llm, setLlm] = useState<LLMForConvo | null>(null);
@@ -810,8 +833,12 @@ export function useLLMForConvo(
       );
     }
 
+    // Use provided model config or fall back to DEFAULT_MODEL
+    const configToUse = modelConfig || DEFAULT_MODEL;
+    console.log(`[${convoId}] Loading model: ${configToUse.displayName} (${configToUse.modelId})`);
+    
     llmManager
-      .getOrCreate(convoId, Llama32_1B_Instruct, listeners, initialBlocks)
+      .getOrCreate(convoId, configToUse, listeners, initialBlocks)
       .then((instance) => {
         if (isMountedRef.current) {
           setLlm(instance);
@@ -910,7 +937,7 @@ export function useLLMForConvo(
         clearTimeout(finalWriteTimeout);
       }
     };
-  }, [convoId, onToken, onMessageHistoryUpdate, entryId]); // Don't include initialBlocks - only for initial setup
+  }, [convoId, onToken, onMessageHistoryUpdate, entryId, modelConfig]); // Include modelConfig to reload when model changes
 
   return { llm, isLoading, error };
 }
