@@ -10,25 +10,28 @@ import {
   View,
   StyleSheet,
   FlatList,
-  Platform,
-  TextInput,
-  KeyboardAvoidingView,
   TouchableOpacity,
   ListRenderItem,
   Alert,
-  Keyboard,
+  Dimensions,
+  ScrollView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Text,
   EntryListItem,
-  BottomComposer,
-  Button,
   ModelDownloadIndicator,
+  Footer,
+  FloatingActionButton,
+  AIComposerInput,
+  SearchDropdown,
 } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
+import { spacingPatterns } from "../theme";
 import { Entry } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { llmManager } from "../ai/ModelProvider";
@@ -64,17 +67,20 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   useTrackScreenView("Home");
   const trackEvent = useTrackEvent();
   const [composerMode, setComposerMode] = useState<ComposerMode>("journal");
-  const [composerHeight, setComposerHeight] = useState(120);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [dateFilter, setDateFilter] = useState<
     "all" | "today" | "week" | "month"
   >("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const composerRef = useRef<View>(null);
   const { currentConfig } = useModel();
   const { getLastUsedMode, setLastUsedMode } = useComposerSettings();
+
+  // Screen dimensions for swipeable pages
+  const screenWidth = Dimensions.get("window").width;
+  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const isProgrammaticScroll = useRef(false);
 
   // Debounce search query to prevent excessive re-renders
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -101,8 +107,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     }
   }, [dateFilter]);
 
-  // Build query options based on filter
-  const queryOptions = useMemo(() => {
+  // Build query options for JOURNAL entries
+  const journalQueryOptions = useMemo(() => {
     const options: {
       type?: "journal" | "ai_chat";
       isFavorite?: boolean;
@@ -114,16 +120,42 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     } = {
       orderBy: "updatedAt",
       order: "DESC",
-      limit: 20, // Paginate 20 items at a time
+      limit: 20,
+      type: "journal",
     };
 
-    if (filter === "journal") {
-      options.type = "journal";
-    } else if (filter === "ai_chat") {
-      options.type = "ai_chat";
-    } else if (filter === "favorites") {
+    // Apply favorites filter
+    if (favoritesOnly) {
       options.isFavorite = true;
     }
+
+    // Apply date range filter
+    if (dateRange.dateFrom !== undefined) {
+      options.dateFrom = dateRange.dateFrom;
+    }
+    if (dateRange.dateTo !== undefined) {
+      options.dateTo = dateRange.dateTo;
+    }
+
+    return options;
+  }, [filter, favoritesOnly, dateRange]);
+
+  // Build query options for AI CHAT entries
+  const aiQueryOptions = useMemo(() => {
+    const options: {
+      type?: "journal" | "ai_chat";
+      isFavorite?: boolean;
+      orderBy?: "createdAt" | "updatedAt";
+      order?: "ASC" | "DESC";
+      limit?: number;
+      dateFrom?: number;
+      dateTo?: number;
+    } = {
+      orderBy: "updatedAt",
+      order: "DESC",
+      limit: 20,
+      type: "ai_chat",
+    };
 
     // Apply favorites filter
     if (favoritesOnly) {
@@ -165,22 +197,37 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   // Use search query when search text is present, otherwise use regular query
   const isSearching = debouncedSearchQuery.trim().length > 0;
 
-  const regularQuery = useInfiniteEntries(queryOptions);
+  // Separate queries for journal and AI
+  const journalRegularQuery = useInfiniteEntries(journalQueryOptions);
+  const aiRegularQuery = useInfiniteEntries(aiQueryOptions);
   const searchQueryResult = useSearchEntries(searchOptions);
 
-  const {
-    data,
-    isLoading,
-    isFetchingNextPage,
-    hasNextPage,
-    fetchNextPage,
-    refetch,
-  } = isSearching ? searchQueryResult : regularQuery;
+  // Journal data
+  const journalData = isSearching ? searchQueryResult : journalRegularQuery;
+  const journalEntries = useMemo(() => {
+    if (isSearching) {
+      // Filter search results to only show journal entries
+      return (
+        searchQueryResult.data?.pages.flatMap((page) => page.entries) ?? []
+      ).filter((entry) => entry.type === "journal");
+    }
+    return journalData.data?.pages.flatMap((page) => page.entries) ?? [];
+  }, [journalData.data, isSearching, searchQueryResult.data]);
 
-  // Flatten pages into single array
-  const entries = useMemo(() => {
-    return data?.pages.flatMap((page) => page.entries) ?? [];
-  }, [data]);
+  // AI data
+  const aiData = isSearching ? searchQueryResult : aiRegularQuery;
+  const aiEntries = useMemo(() => {
+    if (isSearching) {
+      // Filter search results to only show AI entries
+      return (
+        searchQueryResult.data?.pages.flatMap((page) => page.entries) ?? []
+      ).filter((entry) => entry.type === "ai_chat");
+    }
+    return aiData.data?.pages.flatMap((page) => page.entries) ?? [];
+  }, [aiData.data, isSearching, searchQueryResult.data]);
+
+  // Use the appropriate data based on current mode for loading states
+  const currentData = composerMode === "journal" ? journalData : aiData;
 
   // React Query mutations
   const createEntry = useCreateEntry();
@@ -188,14 +235,24 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const updateEntry = useUpdateEntry();
 
   const handleRefresh = useCallback(() => {
-    refetch();
-  }, [refetch]);
+    if (composerMode === "journal") {
+      journalData.refetch();
+    } else {
+      aiData.refetch();
+    }
+  }, [composerMode, journalData, aiData]);
 
   const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
+    if (composerMode === "journal") {
+      if (journalData.hasNextPage && !journalData.isFetchingNextPage) {
+        journalData.fetchNextPage();
+      }
+    } else {
+      if (aiData.hasNextPage && !aiData.isFetchingNextPage) {
+        aiData.fetchNextPage();
+      }
     }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [composerMode, journalData, aiData]);
 
   // Use refs to stabilize mutation callbacks
   const toggleFavoriteMutationRef = useRef(toggleFavoriteMutation);
@@ -247,18 +304,19 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       setComposerMode(newMode);
       // Save the selected mode for next time
       setLastUsedMode(newMode);
-    },
-    [currentConfig, onOpenSettings, setLastUsedMode]
-  );
 
-  const handleStartTyping = useCallback(
-    (text: string) => {
-      // Journal mode: open full-screen editor with the text
-      if (composerMode === "journal" && onOpenFullEditor) {
-        onOpenFullEditor(text);
+      // Mark as programmatic scroll to prevent handleScroll from interfering
+      isProgrammaticScroll.current = true;
+
+      // Scroll to the appropriate page
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({
+          x: newMode === "journal" ? 0 : screenWidth,
+          animated: true,
+        });
       }
     },
-    [composerMode, onOpenFullEditor]
+    [currentConfig, onOpenSettings, setLastUsedMode, screenWidth]
   );
 
   const handleComposerSubmit = useCallback(
@@ -307,48 +365,63 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     [composerMode]
   );
 
-  const handleComposerLayout = useCallback(
-    (event: any) => {
-      const { height } = event.nativeEvent.layout;
-      setComposerHeight(height + insets.bottom);
-    },
-    [insets.bottom]
-  );
+  const handleFABPress = useCallback(() => {
+    if (onOpenFullEditor) {
+      onOpenFullEditor();
+    }
+  }, [onOpenFullEditor]);
 
   // Load the last used composer mode on mount
   useEffect(() => {
     getLastUsedMode().then((mode) => {
       setComposerMode(mode);
+      // Scroll to correct page after mode is loaded
+      if (scrollViewRef.current) {
+        // Use timeout to ensure layout is ready
+        setTimeout(() => {
+          scrollViewRef.current?.scrollTo({
+            x: mode === "journal" ? 0 : screenWidth,
+            animated: false,
+          });
+        }, 100);
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
-  // Track keyboard height for both platforms
-  useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+  // Handle scroll events to update mode based on page
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+    {
+      useNativeDriver: false,
+      listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        // Ignore scroll events during programmatic scrolls (from footer taps)
+        if (isProgrammaticScroll.current) {
+          return;
+        }
 
-    const keyboardWillShow = Keyboard.addListener(showEvent, (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
+        const offsetX = event.nativeEvent.contentOffset.x;
+        const page = Math.round(offsetX / screenWidth);
+        const newMode: ComposerMode = page === 0 ? "journal" : "ai";
 
-    const keyboardWillHide = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
-    });
+        if (newMode !== composerMode) {
+          setComposerMode(newMode);
+          setLastUsedMode(newMode);
+        }
+      },
+    }
+  );
 
-    return () => {
-      keyboardWillShow.remove();
-      keyboardWillHide.remove();
-    };
+  // Reset programmatic scroll flag when scroll ends
+  const handleScrollEnd = useCallback(() => {
+    isProgrammaticScroll.current = false;
   }, []);
 
-  // Group entries by day for section headers
-  const groupedData = useMemo(() => {
+  // Group journal entries by day for section headers
+  const journalGroupedData = useMemo(() => {
     const grouped = new Map<string, Entry[]>();
 
-    entries.forEach((entry) => {
+    journalEntries.forEach((entry) => {
       const date = new Date(entry.updatedAt);
       const dateKey = new Date(
         date.getFullYear(),
@@ -376,7 +449,41 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       });
 
     return flatData;
-  }, [entries]);
+  }, [journalEntries]);
+
+  // Group AI entries by day for section headers
+  const aiGroupedData = useMemo(() => {
+    const grouped = new Map<string, Entry[]>();
+
+    aiEntries.forEach((entry) => {
+      const date = new Date(entry.updatedAt);
+      const dateKey = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate()
+      ).toISOString();
+
+      if (!grouped.has(dateKey)) {
+        grouped.set(dateKey, []);
+      }
+      grouped.get(dateKey)!.push(entry);
+    });
+
+    // Convert to flat list with headers
+    const flatData: Array<
+      { type: "header"; dateKey: string } | { type: "entry"; entry: Entry }
+    > = [];
+    Array.from(grouped.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .forEach(([dateKey, dayEntries]) => {
+        flatData.push({ type: "header", dateKey });
+        dayEntries.forEach((entry) => {
+          flatData.push({ type: "entry", entry });
+        });
+      });
+
+    return flatData;
+  }, [aiEntries]);
 
   const formatDateHeader = useCallback((dateKey: string): string => {
     const date = new Date(dateKey);
@@ -465,143 +572,179 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     setFavoritesOnly(false);
   }, []);
 
-  const ListEmptyComponent = useMemo(() => {
-    if (isLoading) return null;
+  const createListEmptyComponent = useCallback(
+    (mode: ComposerMode) => {
+      if (currentData.isLoading) return null;
 
-    // If searching/filtering, show standard empty state
-    if (isSearching) {
+      // If searching/filtering, show standard empty state
+      if (isSearching) {
+        return (
+          <View style={styles.emptyState}>
+            <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
+              No results found
+            </Text>
+            <Text
+              variant="body"
+              style={{
+                color: seasonalTheme.textSecondary,
+                marginTop: spacingPatterns.sm,
+              }}
+            >
+              Try adjusting your search or filters
+            </Text>
+          </View>
+        );
+      }
+
+      if (filter === "favorites") {
+        return (
+          <View style={styles.emptyState}>
+            <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
+              No favorites yet
+            </Text>
+            <Text
+              variant="body"
+              style={{
+                color: seasonalTheme.textSecondary,
+                marginTop: spacingPatterns.sm,
+              }}
+            >
+              Tap the star icon on any entry to favorite it
+            </Text>
+          </View>
+        );
+      }
+
+      // Welcome state for new users
       return (
         <View style={styles.emptyState}>
-          <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
-            No results found
+          <Text
+            variant="h2"
+            style={{
+              color: seasonalTheme.textPrimary,
+              marginBottom: spacingPatterns.md,
+              textAlign: "center",
+            }}
+          >
+            Welcome! 👋
           </Text>
           <Text
             variant="body"
             style={{
               color: seasonalTheme.textSecondary,
-              marginTop: spacingPatterns.sm,
+              marginBottom: spacingPatterns.lg,
+              textAlign: "center",
+              lineHeight: 24,
             }}
           >
-            Try adjusting your search or filters
+            {mode === "journal"
+              ? "Tap the + button to start journaling"
+              : "Use the input below to chat with your AI assistant"}
           </Text>
-        </View>
-      );
-    }
-
-    if (filter === "favorites") {
-      return (
-        <View style={styles.emptyState}>
-          <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
-            No favorites yet
-          </Text>
-          <Text
-            variant="body"
-            style={{
-              color: seasonalTheme.textSecondary,
-              marginTop: spacingPatterns.sm,
-            }}
-          >
-            Tap the star icon on any entry to favorite it
-          </Text>
-        </View>
-      );
-    }
-
-    // Welcome state for new users
-    return (
-      <View style={styles.emptyState}>
-        <Text
-          variant="h2"
-          style={{
-            color: seasonalTheme.textPrimary,
-            marginBottom: spacingPatterns.md,
-            textAlign: "center",
-          }}
-        >
-          Welcome! 👋
-        </Text>
-        <Text
-          variant="body"
-          style={{
-            color: seasonalTheme.textSecondary,
-            marginBottom: spacingPatterns.lg,
-            textAlign: "center",
-            lineHeight: 24,
-          }}
-        >
-          Start journaling or chat with your AI assistant using the input below
-        </Text>
-        <View style={styles.welcomeHints}>
-          <View style={styles.welcomeHint}>
-            <Ionicons
-              name="book-outline"
-              size={24}
-              color={theme.colors.accent}
-            />
-            <View style={styles.welcomeHintText}>
-              <Text
-                variant="body"
-                style={{
-                  color: seasonalTheme.textPrimary,
-                  fontWeight: "600",
-                  marginBottom: spacingPatterns.xxs,
-                }}
-              >
-                Journal Mode
-              </Text>
-              <Text
-                variant="caption"
-                style={{ color: seasonalTheme.textSecondary }}
-              >
-                Write your thoughts, track your day
-              </Text>
+          <View style={styles.welcomeHints}>
+            <View style={styles.welcomeHint}>
+              <Ionicons
+                name="book-outline"
+                size={24}
+                color={theme.colors.accent}
+              />
+              <View style={styles.welcomeHintText}>
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontWeight: "600",
+                    marginBottom: spacingPatterns.xxs,
+                  }}
+                >
+                  Journal Mode
+                </Text>
+                <Text
+                  variant="caption"
+                  style={{ color: seasonalTheme.textSecondary }}
+                >
+                  Write your thoughts, track your day
+                </Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.welcomeHint}>
-            <Ionicons
-              name="chatbubbles-outline"
-              size={24}
-              color={theme.colors.accent}
-            />
-            <View style={styles.welcomeHintText}>
-              <Text
-                variant="body"
-                style={{
-                  color: seasonalTheme.textPrimary,
-                  fontWeight: "600",
-                  marginBottom: spacingPatterns.xxs,
-                }}
-              >
-                AI Chat Mode
-              </Text>
-              <Text
-                variant="caption"
-                style={{ color: seasonalTheme.textSecondary }}
-              >
-                Get help, brainstorm, or just chat
-              </Text>
+            <View style={styles.welcomeHint}>
+              <Ionicons
+                name="chatbubbles-outline"
+                size={24}
+                color={theme.colors.accent}
+              />
+              <View style={styles.welcomeHintText}>
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontWeight: "600",
+                    marginBottom: spacingPatterns.xxs,
+                  }}
+                >
+                  AI Chat Mode
+                </Text>
+                <Text
+                  variant="caption"
+                  style={{ color: seasonalTheme.textSecondary }}
+                >
+                  Get help, brainstorm, or just chat
+                </Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
-    );
-  }, [isLoading, seasonalTheme, filter, isSearching]);
-
-  const ListFooterComponent = useCallback(() => {
-    if (isFetchingNextPage) {
-      return (
-        <View style={{ padding: spacingPatterns.lg }}>
-          <Text
-            variant="body"
-            style={{ color: seasonalTheme.textSecondary, textAlign: "center" }}
-          >
-            Loading more...
-          </Text>
-        </View>
       );
-    }
-    return <View style={{ height: composerHeight }} />;
-  }, [isFetchingNextPage, composerHeight, seasonalTheme]);
+    },
+    [currentData.isLoading, seasonalTheme, filter, isSearching, theme]
+  );
+
+  const JournalListEmptyComponent = useMemo(
+    () => createListEmptyComponent("journal"),
+    [createListEmptyComponent]
+  );
+
+  const AIListEmptyComponent = useMemo(
+    () => createListEmptyComponent("ai"),
+    [createListEmptyComponent]
+  );
+
+  const createListFooterComponent = useCallback(
+    (mode: ComposerMode) => {
+      const isFetching =
+        mode === "journal"
+          ? journalData.isFetchingNextPage
+          : aiData.isFetchingNextPage;
+
+      if (isFetching) {
+        return (
+          <View style={{ padding: spacingPatterns.lg }}>
+            <Text
+              variant="body"
+              style={{
+                color: seasonalTheme.textSecondary,
+                textAlign: "center",
+              }}
+            >
+              Loading more...
+            </Text>
+          </View>
+        );
+      }
+      return <View style={{ height: 140 }} />; // Space for footer + FAB/AI input
+    },
+    [journalData.isFetchingNextPage, aiData.isFetchingNextPage, seasonalTheme]
+  );
+
+  const JournalListFooterComponent = useCallback(
+    () => createListFooterComponent("journal"),
+    [createListFooterComponent]
+  );
+
+  const AIListFooterComponent = useCallback(
+    () => createListFooterComponent("ai"),
+    [createListFooterComponent]
+  );
 
   return (
     <View
@@ -611,246 +754,100 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       ]}
     >
       <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View
-              style={[
-                styles.searchContainer,
-                {
-                  backgroundColor: seasonalTheme.cardBg,
-                  borderColor: seasonalTheme.textSecondary + "20",
-                },
-              ]}
-            >
-              <Ionicons
-                name="search-outline"
-                size={20}
-                color={seasonalTheme.textSecondary}
-                style={styles.searchIcon}
-              />
-              <TextInput
-                style={[
-                  styles.searchInput,
-                  {
-                    color: seasonalTheme.textPrimary,
-                  },
-                ]}
-                placeholder="Search"
-                placeholderTextColor={seasonalTheme.textSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity
-                  onPress={handleClearSearch}
-                  style={styles.clearButton}
-                >
-                  <Ionicons
-                    name="close-circle"
-                    size={20}
-                    color={seasonalTheme.textSecondary}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-            <TouchableOpacity
-              onPress={() => setShowFilters(!showFilters)}
-              style={[
-                styles.filterButton,
-                {
-                  backgroundColor:
-                    showFilters || dateFilter !== "all" || favoritesOnly
-                      ? seasonalTheme.textPrimary + "15"
-                      : "transparent",
-                },
-              ]}
-            >
-              <Ionicons
-                name="filter-outline"
-                size={24}
-                color={seasonalTheme.textSecondary}
-              />
-            </TouchableOpacity>
-            {onOpenSettings && (
-              <TouchableOpacity
-                onPress={onOpenSettings}
-                style={styles.settingsButton}
-              >
-                <Ionicons
-                  name="settings-outline"
-                  size={24}
-                  color={seasonalTheme.textSecondary}
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Filters */}
-          {showFilters && (
-            <View style={styles.filtersContainer}>
-              {/* Date Filter */}
-              <View style={styles.filterSection}>
-                <Text
-                  variant="caption"
-                  style={{
-                    color: seasonalTheme.textSecondary,
-                    marginBottom: spacingPatterns.xs,
-                  }}
-                >
-                  Date Range
-                </Text>
-                <View style={styles.filterChips}>
-                  {(["all", "today", "week", "month"] as const).map((date) => (
-                    <TouchableOpacity
-                      key={date}
-                      onPress={() => {
-                        setDateFilter(date);
-                        trackEvent("Filter Date", { range: date });
-                      }}
-                      style={[
-                        styles.filterChip,
-                        {
-                          backgroundColor:
-                            dateFilter === date
-                              ? seasonalTheme.textPrimary + "15"
-                              : "transparent",
-                          borderColor:
-                            dateFilter === date
-                              ? seasonalTheme.textPrimary
-                              : seasonalTheme.textSecondary + "30",
-                        },
-                      ]}
-                    >
-                      <Text
-                        variant="caption"
-                        style={{
-                          color: seasonalTheme.textPrimary,
-                          fontWeight: dateFilter === date ? "600" : "400",
-                        }}
-                      >
-                        {date === "all"
-                          ? "All Time"
-                          : date === "today"
-                          ? "Today"
-                          : date === "week"
-                          ? "This Week"
-                          : "This Month"}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Favorites Toggle */}
-              <TouchableOpacity
-                onPress={() => {
-                  const newValue = !favoritesOnly;
-                  setFavoritesOnly(newValue);
-                  trackEvent("Filter Favorites", {
-                    enabled: newValue.toString(),
-                  });
-                }}
-                style={styles.favoritesToggle}
-              >
-                <View
-                  style={[
-                    styles.checkbox,
-                    {
-                      backgroundColor: favoritesOnly
-                        ? seasonalTheme.textPrimary + "15"
-                        : "transparent",
-                      borderColor: favoritesOnly
-                        ? seasonalTheme.textPrimary
-                        : seasonalTheme.textSecondary + "30",
-                    },
-                  ]}
-                >
-                  {favoritesOnly && (
-                    <Ionicons
-                      name="checkmark-sharp"
-                      size={18}
-                      color={seasonalTheme.textPrimary}
-                      style={{ fontWeight: "bold" }}
-                    />
-                  )}
-                </View>
-                <View style={styles.favoritesLabel}>
-                  <Ionicons
-                    name="star"
-                    size={16}
-                    color="#FFA500"
-                    style={{ marginRight: spacingPatterns.xs }}
-                  />
-                  <Text
-                    variant="body"
-                    style={{ color: seasonalTheme.textPrimary }}
-                  >
-                    Favorites only
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+        {/* Search dropdown */}
+        <SearchDropdown
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onClearSearch={handleClearSearch}
+          showFilters={showFilters}
+          onToggleFilters={() => setShowFilters(!showFilters)}
+          dateFilter={dateFilter}
+          onDateFilterChange={setDateFilter}
+          favoritesOnly={favoritesOnly}
+          onFavoritesToggle={() => setFavoritesOnly(!favoritesOnly)}
+          onOpenSettings={onOpenSettings}
+        />
 
         {/* Model download indicator */}
         <ModelDownloadIndicator />
 
-        {/* Content area with FlatList for better performance */}
-        <FlatList
-          data={groupedData}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          ListEmptyComponent={ListEmptyComponent}
-          ListFooterComponent={ListFooterComponent}
-          contentContainerStyle={[
-            groupedData.length > 0 ? styles.content : styles.contentEmpty,
-            keyboardHeight > 0 && {
-              paddingBottom: keyboardHeight,
-            },
-          ]}
-          refreshing={false}
-          onRefresh={handleRefresh}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={10}
-          updateCellsBatchingPeriod={50}
-          initialNumToRender={20}
-          windowSize={21}
-          maintainVisibleContentPosition={
-            isSearching
-              ? {
-                  minIndexForVisible: 0,
-                  autoscrollToTopThreshold: 100,
-                }
-              : undefined
-          }
-        />
-
-        {/* Bottom Composer with Safe Area */}
-        <View
-          style={[
-            styles.bottomComposerContainer,
-            keyboardHeight > 0 && {
-              bottom:
-                Platform.OS === "android"
-                  ? keyboardHeight + insets.bottom // Android needs insets
-                  : keyboardHeight, // iOS keyboard height already accounts for safe area
-            },
-          ]}
+        {/* Swipeable content area with horizontal pages */}
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={handleScroll}
+          onMomentumScrollEnd={handleScrollEnd}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
         >
-          <View ref={composerRef} onLayout={handleComposerLayout}>
-            <BottomComposer
-              mode={composerMode}
-              onModeChange={handleModeChange}
-              onStartTyping={handleStartTyping}
-              onSubmit={handleComposerSubmit}
-              isKeyboardVisible={keyboardHeight > 0}
+          {/* Journal Page */}
+          <View style={[styles.page, { width: screenWidth }]}>
+            <FlatList
+              data={journalGroupedData}
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              ListEmptyComponent={JournalListEmptyComponent}
+              ListFooterComponent={JournalListFooterComponent}
+              contentContainerStyle={[
+                journalGroupedData.length > 0
+                  ? styles.content
+                  : styles.contentEmpty,
+              ]}
+              refreshing={false}
+              onRefresh={handleRefresh}
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.5}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              updateCellsBatchingPeriod={50}
+              initialNumToRender={20}
+              windowSize={21}
+            />
+            {/* FAB inside journal page so it moves with the screen */}
+            <FloatingActionButton
+              onPress={handleFABPress}
+              scrollX={scrollX}
+              screenWidth={screenWidth}
             />
           </View>
-        </View>
+
+          {/* AI Page */}
+          <View style={[styles.page, { width: screenWidth }]}>
+            <FlatList
+              data={aiGroupedData}
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              ListEmptyComponent={AIListEmptyComponent}
+              ListFooterComponent={AIListFooterComponent}
+              contentContainerStyle={[
+                aiGroupedData.length > 0 ? styles.content : styles.contentEmpty,
+              ]}
+              refreshing={false}
+              onRefresh={handleRefresh}
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.5}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              updateCellsBatchingPeriod={50}
+              initialNumToRender={20}
+              windowSize={21}
+            />
+          </View>
+        </ScrollView>
+
+        {/* Footer with mode switcher */}
+        <Footer mode={composerMode} onModeChange={handleModeChange} />
+
+        {/* AI input (conditionally visible) */}
+        <AIComposerInput
+          onSubmit={handleComposerSubmit}
+          visible={composerMode === "ai"}
+          scrollX={scrollX}
+          screenWidth={screenWidth}
+        />
       </View>
     </View>
   );
@@ -863,84 +860,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    padding: spacingPatterns.screen,
-    paddingBottom: spacingPatterns.xs,
-  },
-  headerTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingPatterns.sm,
-  },
-  searchContainer: {
+  scrollView: {
     flex: 1,
+  },
+  scrollViewContent: {
     flexDirection: "row",
-    alignItems: "center",
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    minHeight: 44,
-    paddingHorizontal: spacingPatterns.md,
   },
-  searchIcon: {
-    marginRight: spacingPatterns.sm,
-  },
-  searchInput: {
+  page: {
     flex: 1,
-    paddingVertical: spacingPatterns.sm,
-    fontSize: 16,
-  },
-  clearButton: {
-    padding: spacingPatterns.xs,
-  },
-  filterButton: {
-    borderRadius: borderRadius.full,
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  settingsButton: {
-    borderRadius: borderRadius.full,
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  filtersContainer: {
-    marginTop: spacingPatterns.md,
-    gap: spacingPatterns.md,
-  },
-  filterSection: {
-    gap: spacingPatterns.xs,
-  },
-  filterChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacingPatterns.xs,
-  },
-  filterChip: {
-    paddingHorizontal: spacingPatterns.md,
-    paddingVertical: spacingPatterns.xs,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-  },
-  favoritesToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingPatterns.sm,
-    paddingVertical: spacingPatterns.xs,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  favoritesLabel: {
-    flexDirection: "row",
-    alignItems: "center",
   },
   content: {
     padding: spacingPatterns.screen,
@@ -968,11 +895,5 @@ const styles = StyleSheet.create({
   },
   welcomeHintText: {
     flex: 1,
-  },
-  bottomComposerContainer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
   },
 });

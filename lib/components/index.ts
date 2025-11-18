@@ -13,3 +13,7 @@ export * from "./Dialog";
 export * from "./MenuItem";
 export * from "./Toast";
 export * from "./ToastProvider";
+export * from "./Footer";
+export * from "./FloatingActionButton";
+export * from "./AIComposerInput";
+export * from "./SearchDropdown";
