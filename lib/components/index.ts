@@ -8,5 +8,8 @@ export * from "./ComposerInput";
 export * from "./FloatingComposerHeader";
 export * from "./ModelManagement";
 export * from "./ModelDownloadIndicator";
+export * from "./PendingDownloads";
 export * from "./Dialog";
 export * from "./MenuItem";
+export * from "./Toast";
+export * from "./ToastProvider";

@@ -24,6 +24,11 @@ import {
   unregisterBackgroundTasks,
   isBackgroundTaskAvailable,
 } from "./backgroundTasks";
+import { persistentDownloadManager } from "./persistentDownloadManager";
+import { modelDownloadStatus } from "./modelDownloadStatus";
+import { logStorageDebugInfo, verifyAllModels } from "./modelVerification";
+import { ALL_MODELS } from "./modelConfig";
+import { useModelSettings } from "../db/modelSettings";
 import {
   ModelService as ModelServiceClass,
   GenerationOptions,
@@ -472,6 +477,80 @@ export function useModel(): ModelContextValue {
 export function ModelProvider({ children }: { children: React.ReactNode }) {
   const [currentConfig, setCurrentConfig] =
     useState<LlmModelConfig>(Llama32_1B_Instruct);
+  const modelSettings = useModelSettings();
+
+  // Initialize download managers and verify models on mount
+  useEffect(() => {
+    let isMounted = true;
+    
+    async function initializeDownloadManagers() {
+      try {
+        console.log('[ModelProvider] Initializing download managers...');
+        
+        // Log storage debug info (helps diagnose Android issues)
+        await logStorageDebugInfo();
+        
+        // Initialize download status manager (loads persisted state)
+        await modelDownloadStatus.initialize();
+        
+        // Verify all downloaded models still exist (Android can clear cache)
+        const downloadedModels = await modelSettings.getDownloadedModels();
+        if (downloadedModels.length > 0) {
+          console.log(`[ModelProvider] Verifying ${downloadedModels.length} downloaded models...`);
+          
+          const verification = await verifyAllModels(
+            downloadedModels.map(m => m.modelId),
+            ALL_MODELS
+          );
+          
+          if (verification.missing.length > 0) {
+            console.warn(
+              `[ModelProvider] ⚠️  ${verification.missing.length} model(s) are missing from disk!`,
+              verification.missing
+            );
+            
+            // Clean up database entries for missing models
+            for (const missingModelId of verification.missing) {
+              console.log(`[ModelProvider] Removing database entry for missing model: ${missingModelId}`);
+              await modelSettings.removeDownloadedModel(missingModelId);
+            }
+            
+            console.log('[ModelProvider] Database cleaned up. User will need to re-download missing models.');
+          } else {
+            console.log('[ModelProvider] ✅ All downloaded models verified');
+          }
+        }
+        
+        // Check for pending downloads
+        const pendingDownloads = await persistentDownloadManager.getPendingDownloads();
+        
+        if (pendingDownloads.length > 0) {
+          console.log(`[ModelProvider] Found ${pendingDownloads.length} pending downloads`);
+          
+          // Notify user that downloads are available to resume
+          // You could show a notification or UI element here
+          pendingDownloads.forEach(download => {
+            console.log(`[ModelProvider] Pending download: ${download.modelName} (${download.modelId})`);
+          });
+          
+          // Clean up old/stale downloads (older than 7 days)
+          await persistentDownloadManager.cleanupOldDownloads();
+        }
+        
+        console.log('[ModelProvider] Initialization complete');
+      } catch (error) {
+        console.error('[ModelProvider] Failed to initialize:', error);
+      }
+    }
+    
+    if (isMounted) {
+      initializeDownloadManagers();
+    }
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [modelSettings]);
 
   const reloadModel = useCallback(async (config: LlmModelConfig) => {
     await llmManager.reloadWithConfig(config);

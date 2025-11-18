@@ -6,10 +6,16 @@ import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useModelDownloadStatus } from "../ai/useModelDownloadStatus";
 
+interface ModelDownloadIndicatorProps {
+  variant?: 'banner' | 'inline';
+}
+
 /**
- * Shows a banner at the top of the screen when a model is downloading
+ * Shows download progress when a model is downloading
+ * - banner: Full-width banner with border (for top of screen)
+ * - inline: Compact version without borders (for embedding in settings)
  */
-export function ModelDownloadIndicator() {
+export function ModelDownloadIndicator({ variant = 'banner' }: ModelDownloadIndicatorProps = {}) {
   const downloadStatus = useModelDownloadStatus();
   const seasonalTheme = useSeasonalTheme();
   const theme = useTheme();
@@ -19,11 +25,13 @@ export function ModelDownloadIndicator() {
     return null;
   }
 
+  const isBanner = variant === 'banner';
+
   return (
     <View
       style={[
-        styles.container,
-        {
+        isBanner ? styles.container : styles.inlineContainer,
+        isBanner && {
           backgroundColor: seasonalTheme.cardBg,
           borderBottomColor: seasonalTheme.border,
         },
@@ -42,7 +50,7 @@ export function ModelDownloadIndicator() {
             variant="caption"
             style={[styles.subtitle, { color: seasonalTheme.textSecondary }]}
           >
-            {downloadStatus.progress}% complete
+            {downloadStatus.progress}% complete • {downloadStatus.error ? 'Failed' : 'In progress'}
           </Text>
         </View>
       </View>
@@ -56,7 +64,9 @@ export function ModelDownloadIndicator() {
             styles.progressBarFill,
             {
               width: `${downloadStatus.progress}%`,
-              backgroundColor: theme.colors.accent,
+              backgroundColor: downloadStatus.error 
+                ? '#FF6B6B' 
+                : theme.colors.accent,
             },
           ]}
         />
@@ -71,6 +81,12 @@ const styles = StyleSheet.create({
     paddingTop: spacingPatterns.sm,
     paddingBottom: spacingPatterns.xs,
     borderBottomWidth: 1,
+  },
+  inlineContainer: {
+    paddingHorizontal: spacingPatterns.md,
+    paddingVertical: spacingPatterns.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
   },
   content: {
     flexDirection: "row",

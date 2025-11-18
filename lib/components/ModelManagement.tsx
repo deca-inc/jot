@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "./Text";
 import { Button } from "./Button";
+import { useToast } from "./ToastProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
@@ -46,6 +47,7 @@ interface ModelCardProps {
   isDownloaded: boolean;
   isSelected: boolean;
   isDownloading: boolean;
+  isLoading: boolean;
   downloadProgress?: number; // 0-100
   onDownload: () => void;
   onSelect: () => void;
@@ -59,6 +61,7 @@ function ModelCard({
   isDownloaded,
   isSelected,
   isDownloading,
+  isLoading,
   downloadProgress,
   onDownload,
   onSelect,
@@ -149,30 +152,36 @@ function ModelCard({
         activeOpacity={0.7}
       >
         <View style={styles.modelCardContent}>
-          {/* Checkbox */}
-          <View
-            style={[
-              styles.checkbox,
-              {
-                borderColor: `${theme.colors.border}40`,
-                backgroundColor: isSelected
-                  ? theme.colors.accent
-                  : "transparent",
-              },
-            ]}
-          >
-            {isSelected && (
-              <Text style={[styles.checkmark, { color: "white" }]}>✓</Text>
-            )}
-            {isDownloaded && !isSelected && (
-              <View
-                style={[
-                  styles.downloadedDot,
-                  { backgroundColor: theme.colors.primaryLight },
-                ]}
-              />
-            )}
-          </View>
+          {/* Checkbox or Spinner */}
+          {isLoading ? (
+            <View style={styles.checkboxContainer}>
+              <ActivityIndicator size="small" color={theme.colors.accent} />
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.checkbox,
+                {
+                  borderColor: `${theme.colors.border}40`,
+                  backgroundColor: isSelected
+                    ? theme.colors.accent
+                    : "transparent",
+                },
+              ]}
+            >
+              {isSelected && (
+                <Text style={[styles.checkmark, { color: "white" }]}>✓</Text>
+              )}
+              {isDownloaded && !isSelected && (
+                <View
+                  style={[
+                    styles.downloadedDot,
+                    { backgroundColor: theme.colors.primaryLight },
+                  ]}
+                />
+              )}
+            </View>
+          )}
 
           {/* Model Info */}
           <View style={styles.modelInfo}>
@@ -251,6 +260,7 @@ export function ModelManagement() {
   const seasonalTheme = useSeasonalTheme();
   const modelSettings = useModelSettings();
   const { reloadModel } = useModel();
+  const { showToast } = useToast();
 
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<string[]>([]);
@@ -263,6 +273,7 @@ export function ModelManagement() {
   const [modelSizes, setModelSizes] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
 
   // Load settings on mount
   useEffect(() => {
@@ -335,18 +346,12 @@ export function ModelManagement() {
         size,
       });
 
-      Alert.alert(
-        "Download Complete",
-        `${model.displayName} has been downloaded successfully.`
-      );
+      showToast(`${model.displayName} downloaded successfully`, "success");
 
       // Reload settings to update UI
       await loadSettings();
     } catch (error: any) {
-      Alert.alert(
-        "Download Failed",
-        error?.message || "Failed to download model. Please try again."
-      );
+      showToast(error?.message || "Failed to download model", "error");
     } finally {
       setDownloadingModels((prev) => {
         const next = new Set(prev);
@@ -366,32 +371,26 @@ export function ModelManagement() {
       await modelSettings.setSelectedModelId(model.modelId);
       setSelectedModelId(model.modelId);
 
-      // Restart model service with new model
-      Alert.alert(
-        "Model Selected",
-        `${model.displayName} is now selected. Reloading model service...`,
-        [
-          {
-            text: "OK",
-            onPress: async () => {
-              try {
-                await reloadModel(model);
-                Alert.alert(
-                  "Success",
-                  `${model.displayName} is now active and ready to use.`
-                );
-              } catch (error: any) {
-                Alert.alert(
-                  "Error",
-                  `Failed to load model: ${error?.message || "Unknown error"}`
-                );
-              }
-            },
-          },
-        ]
-      );
+      // Show loading state in the checkbox
+      setLoadingModelId(model.modelId);
+
+      // Reload model service with new model
+      try {
+        await reloadModel(model);
+        showToast(`${model.displayName} is now active`, "success");
+      } catch (error: any) {
+        showToast(
+          `Failed to load ${model.displayName}: ${
+            error?.message || "Unknown error"
+          }`,
+          "error"
+        );
+      } finally {
+        setLoadingModelId(null);
+      }
     } catch (error) {
-      Alert.alert("Error", "Failed to select model. Please try again.");
+      showToast("Failed to select model", "error");
+      setLoadingModelId(null);
     }
   };
 
@@ -409,15 +408,12 @@ export function ModelManagement() {
               await deleteModel(model);
               await modelSettings.removeDownloadedModel(model.modelId);
 
-              Alert.alert(
-                "Model Removed",
-                `${model.displayName} has been removed from your device.`
-              );
+              showToast(`${model.displayName} removed`, "success");
 
               // Reload settings
               await loadSettings();
             } catch (error) {
-              Alert.alert("Error", "Failed to remove model. Please try again.");
+              showToast("Failed to remove model", "error");
             }
           },
         },
@@ -492,6 +488,7 @@ export function ModelManagement() {
                 isDownloaded={downloadedModels.includes(model.modelId)}
                 isSelected={selectedModelId === model.modelId}
                 isDownloading={downloadingModels.has(model.modelId)}
+                isLoading={loadingModelId === model.modelId}
                 downloadProgress={downloadProgress.get(model.modelId)}
                 onDownload={() => handleDownload(model)}
                 onSelect={() => handleSelect(model)}
@@ -554,6 +551,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacingPatterns.sm,
+  },
+  checkboxContainer: {
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
   checkbox: {
     width: 20,

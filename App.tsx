@@ -12,6 +12,7 @@ import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
 import { ModelProvider } from "./lib/ai/ModelProvider";
 import { OnboardingSettingsRepository } from "./lib/db/onboardingSettings";
 import { ConditionalPostHogProvider } from "./lib/analytics/PostHogProvider";
+import { ToastProvider } from "./lib/components/ToastProvider";
 
 // Suppress harmless iOS system warnings
 LogBox.ignoreLogs([
@@ -131,12 +132,14 @@ function OnboardingWrapper() {
     <ModelProvider>
       <ThemeProvider>
         <SeasonalThemeProvider>
-          <StatusBarController />
-          {showOnboarding ? (
-            <OnboardingFlow onComplete={handleOnboardingComplete} />
-          ) : (
-            <SimpleNavigation />
-          )}
+          <ToastProvider>
+            <StatusBarController />
+            {showOnboarding ? (
+              <OnboardingFlow onComplete={handleOnboardingComplete} />
+            ) : (
+              <SimpleNavigation />
+            )}
+          </ToastProvider>
         </SeasonalThemeProvider>
       </ThemeProvider>
     </ModelProvider>

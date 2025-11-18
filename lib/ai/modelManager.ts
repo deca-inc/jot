@@ -3,6 +3,7 @@ import { Paths } from "expo-file-system";
 import { Asset } from "expo-asset";
 import { Llama32_1B_Instruct, LlmModelConfig } from "./modelConfig";
 import { modelDownloadStatus } from "./modelDownloadStatus";
+import { persistentDownloadManager } from "./persistentDownloadManager";
 
 export interface EnsureResult {
   ptePath: string;
@@ -24,17 +25,28 @@ function joinPaths(...segments: string[]): string {
 
 // Use the new Paths API for expo-file-system v19+ (compatible with newer iOS versions)
 // Falls back to legacy API if Paths is not available
+// CRITICAL: Never use cacheDirectory as it can be cleared by Android at any time
 function getBaseDir(): string {
   try {
     const documentsDir = Paths.document.uri;
     if (documentsDir) {
+      console.log(`[modelManager] Using Paths API document directory: ${documentsDir}`);
       return documentsDir;
     }
   } catch (e) {
     console.warn("Paths API not available, falling back to legacy API:", e);
   }
-  // Fallback to legacy API
-  return FileSystem.documentDirectory || FileSystem.cacheDirectory || "/";
+  
+  // Fallback to legacy API - use documentDirectory for persistent storage
+  if (FileSystem.documentDirectory) {
+    console.log(`[modelManager] Using legacy documentDirectory: ${FileSystem.documentDirectory}`);
+    return FileSystem.documentDirectory;
+  }
+  
+  // NEVER use cacheDirectory for models - Android can clear it at any time!
+  throw new Error(
+    "No persistent storage directory available. documentDirectory is required for model storage."
+  );
 }
 
 const baseDir = getBaseDir();
@@ -123,48 +135,47 @@ async function ensureFromRemoteToFolder(
   url: string,
   folderName: string,
   fileName: string,
+  modelId: string,
+  modelName: string,
+  fileType: 'model' | 'tokenizer' | 'config',
   onProgress?: (progress: number) => void
 ): Promise<string> {
   const modelDir = await ensureModelsDir(folderName);
   const dest = joinPaths(modelDir, fileName);
   const existing = await FileSystem.getInfoAsync(dest);
   if (existing.exists && existing.size && existing.size > 0) {
+    console.log(`[ensureFromRemoteToFolder] File already exists: ${dest}`);
     return dest;
   }
-  const tmp = dest + ".download";
+  
   try {
-    // Use createDownloadResumable for progress tracking
-    if (onProgress) {
-      const downloadResumable = FileSystem.createDownloadResumable(
-        url,
-        tmp,
-        {},
-        (downloadProgress) => {
-          const progress =
-            downloadProgress.totalBytesWritten /
-            downloadProgress.totalBytesExpectedToWrite;
-          onProgress(progress);
-        }
-      );
-      
-      const res = await downloadResumable.downloadAsync();
-      if (!res || res.status !== 200) {
-        throw new Error(`Download failed with status ${res?.status || "unknown"}`);
-      }
-    } else {
-      const res = await FileSystem.downloadAsync(url, tmp);
-      if (res.status !== 200) {
-        throw new Error(`Download failed with status ${res.status}`);
-      }
-    }
+    console.log(`[ensureFromRemoteToFolder] Starting download: ${url}`);
     
-    await FileSystem.moveAsync({ from: tmp, to: dest });
-    return dest;
+    // Use persistent download manager for resumable downloads
+    const downloadResumable = await persistentDownloadManager.startDownload(
+      modelId,
+      modelName,
+      url,
+      dest,
+      fileType,
+      (progress, bytesWritten, bytesTotal) => {
+        onProgress?.(progress);
+        console.log(`[ensureFromRemoteToFolder] Progress: ${(progress * 100).toFixed(1)}% (${bytesWritten}/${bytesTotal} bytes)`);
+      }
+    );
+    
+    // Execute the download
+    const finalPath = await persistentDownloadManager.executeDownload(
+      downloadResumable,
+      modelId,
+      fileType,
+      dest
+    );
+    
+    console.log(`[ensureFromRemoteToFolder] Download complete: ${finalPath}`);
+    return finalPath;
   } catch (e) {
-    // Cleanup partial
-    try {
-      await FileSystem.deleteAsync(tmp, { idempotent: true });
-    } catch {}
+    console.error(`[ensureFromRemoteToFolder] Download failed:`, e);
     throw e;
   }
 }
@@ -229,6 +240,9 @@ export async function ensureModelPresent(
         config.pteSource.url,
         config.folderName,
         config.pteFileName,
+        config.modelId,
+        config.displayName,
+        'model',
         (progress) => {
           const overallProgress = progress * 0.8; // Model is 80% of the work
           if (onProgress) {
@@ -267,6 +281,9 @@ export async function ensureModelPresent(
         config.tokenizerSource.url,
         config.folderName,
         config.tokenizerFileName || "tokenizer.bin",
+        config.modelId,
+        config.displayName,
+        'tokenizer',
         (progress) => {
           const overallProgress = 0.8 + progress * 0.1;
           if (onProgress) {
@@ -301,6 +318,9 @@ export async function ensureModelPresent(
         config.tokenizerConfigSource.url,
         config.folderName,
         config.tokenizerConfigFileName || "tokenizer.json",
+        config.modelId,
+        config.displayName,
+        'config',
         (progress) => {
           const overallProgress = 0.9 + progress * 0.1;
           if (onProgress) {

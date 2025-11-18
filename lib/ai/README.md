@@ -1,10 +1,12 @@
 # AI Model Service
 
-This module provides a simplified, callback-based API for AI model generation.
+This module provides a simplified, callback-based API for AI model generation and persistent background downloads.
 
 ## Architecture
 
-The implementation is split into two layers:
+The implementation is split into layers:
+
+### Core Services
 
 1. **`ModelService` class** (`modelService.ts`) - Pure service class with no React dependencies
    - Handles model loading, generation, and token streaming
@@ -15,6 +17,51 @@ The implementation is split into two layers:
    - Thin React wrapper around the service class
    - Provides React context for components
    - Manages background tasks and app state monitoring
+   - Initializes download managers on app startup
+
+### Download Management
+
+3. **`persistentDownloadManager`** (`persistentDownloadManager.ts`) - Handles resumable downloads
+   - Downloads persist across app sessions using `expo-secure-store`
+   - Automatic resumption after interruption
+   - Background download support (iOS & Android native downloads)
+   - Automatic cleanup of old downloads (>7 days)
+   - Uses `expo-file-system`'s `DownloadResumable` API
+
+4. **`modelDownloadStatus`** (`modelDownloadStatus.ts`) - Download status tracking
+   - Reactive download progress updates via subscription pattern
+   - Persists download state across app restarts
+   - UI components can subscribe for real-time updates
+
+5. **`modelVerification`** (`modelVerification.ts`) - Model file verification
+   - Verifies model files exist on disk
+   - Detects if models were cleared by Android
+   - Auto-cleans database entries for missing models
+   - Logs storage debug info on startup
+
+### Background Downloads
+
+Downloads use native OS capabilities:
+- **iOS**: Background transfer service (continues when app closed)
+- **Android**: Uses persistent storage (`/files/` not `/cache/`)
+
+**Important**: Requires rebuild after configuration changes:
+```bash
+pnpm android  # or pnpm ios
+```
+
+### Android Storage Notes
+
+⚠️ **Critical**: Models MUST be saved to persistent storage, not cache directory.
+
+**Troubleshooting "disappearing models"**:
+1. Rebuild app after updating (`app.json` permissions changed)
+2. Check console logs - should see "persistent storage" message
+3. Disable battery optimization: Settings → Apps → Jot → Battery → Don't optimize
+4. Ensure 2-3 GB free space on device
+
+Models are stored in: `/data/user/0/<package>/files/models/` (persistent) ✅  
+NOT in: `/data/user/0/<package>/cache/` (can be cleared) 🚨
 
 ## Usage
 

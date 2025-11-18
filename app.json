@@ -17,9 +17,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.betazeta.jot",
       "infoPlist": {
-        "UIBackgroundModes": ["fetch", "processing"],
+        "UIBackgroundModes": ["fetch", "processing", "remote-notification"],
         "BGTaskSchedulerPermittedIdentifiers": [
-          "com.betazeta.jot.background-generation"
+          "com.betazeta.jot.background-generation",
+          "com.betazeta.jot.background-download"
         ],
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -32,7 +33,16 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.dotdotdot.jot",
-      "permissions": ["RECEIVE_BOOT_COMPLETED", "WAKE_LOCK"]
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "requestLegacyExternalStorage": true
     },
     "web": {
       "favicon": "./assets/favicon.png"

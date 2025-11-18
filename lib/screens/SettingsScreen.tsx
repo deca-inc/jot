@@ -15,6 +15,7 @@ import {
   Button,
   ThemeControl,
   ModelManagement,
+  PendingDownloads,
 } from "../components";
 import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
@@ -273,6 +274,11 @@ export function SettingsScreen({
           >
             Manage on-device AI models
           </Text>
+
+          {/* Pending Downloads */}
+          <View style={styles.pendingDownloadsContainer}>
+            <PendingDownloads />
+          </View>
 
           <ModelManagement />
         </Card>
@@ -683,5 +689,8 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
+  },
+  pendingDownloadsContainer: {
+    marginTop: spacingPatterns.md,
   },
 });
