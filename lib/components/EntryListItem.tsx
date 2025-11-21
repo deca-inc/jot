@@ -34,7 +34,7 @@ export interface EntryListItemProps {
   seasonalTheme?: SeasonalTheme;
 }
 
-export function EntryListItem({
+function EntryListItemComponent({
   entry,
   onPress,
   onToggleFavorite,
@@ -595,6 +595,76 @@ export function EntryListItem({
     </TouchableOpacity>
   );
 }
+
+// Memoized comparison function to prevent unnecessary re-renders
+function arePropsEqual(
+  prevProps: EntryListItemProps,
+  nextProps: EntryListItemProps
+): boolean {
+  // Compare entry by checking key fields that affect rendering
+  const prevEntry = prevProps.entry;
+  const nextEntry = nextProps.entry;
+
+  if (
+    prevEntry.id !== nextEntry.id ||
+    prevEntry.title !== nextEntry.title ||
+    prevEntry.updatedAt !== nextEntry.updatedAt ||
+    prevEntry.isFavorite !== nextEntry.isFavorite ||
+    prevEntry.type !== nextEntry.type ||
+    prevEntry.tags.length !== nextEntry.tags.length ||
+    prevEntry.blocks.length !== nextEntry.blocks.length
+  ) {
+    return false;
+  }
+
+  // Deep compare tags array
+  if (prevEntry.tags.some((tag, i) => tag !== nextEntry.tags[i])) {
+    return false;
+  }
+
+  // Deep compare blocks array using JSON comparison for simplicity and correctness
+  // This handles all block types uniformly
+  if (JSON.stringify(prevEntry.blocks) !== JSON.stringify(nextEntry.blocks)) {
+    return false;
+  }
+
+  // Compare callbacks by reference (they should be stable via useCallback)
+  if (
+    prevProps.onPress !== nextProps.onPress ||
+    prevProps.onToggleFavorite !== nextProps.onToggleFavorite
+  ) {
+    return false;
+  }
+
+  // Compare seasonalTheme by reference or key properties
+  if (prevProps.seasonalTheme !== nextProps.seasonalTheme) {
+    // If both are undefined, they're equal
+    if (!prevProps.seasonalTheme && !nextProps.seasonalTheme) {
+      return true;
+    }
+    // If one is undefined, they're not equal
+    if (!prevProps.seasonalTheme || !nextProps.seasonalTheme) {
+      return false;
+    }
+    // Compare key properties that affect rendering
+    const prevTheme = prevProps.seasonalTheme;
+    const nextTheme = nextProps.seasonalTheme;
+    if (
+      prevTheme.textPrimary !== nextTheme.textPrimary ||
+      prevTheme.textSecondary !== nextTheme.textSecondary ||
+      prevTheme.cardBg !== nextTheme.cardBg ||
+      prevTheme.chipBg !== nextTheme.chipBg ||
+      prevTheme.chipText !== nextTheme.chipText
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// Export memoized component
+export const EntryListItem = React.memo(EntryListItemComponent, arePropsEqual);
 
 const styles = StyleSheet.create({
   container: {
