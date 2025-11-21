@@ -81,8 +81,8 @@ dependencies:
     specifier: ^3.0.0
     version: 3.0.0
   react-native-enriched:
-    specifier: ^0.1.5
-    version: 0.1.5(react-native@0.81.5)(react@19.1.0)
+    specifier: ^0.1.6
+    version: 0.1.6(react-native@0.81.5)(react@19.1.0)
   react-native-executorch:
     specifier: ^0.5.15
     version: 0.5.15(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
@@ -6130,8 +6130,8 @@ packages:
       react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
     dev: false
 
-  /react-native-enriched@0.1.5(react-native@0.81.5)(react@19.1.0):
-    resolution: {integrity: sha512-0F+Y6QO1DIbc5LsJjY9+tH5i87sceK9R6HaWSlS8iIMQZlDAiaUolG1aWvas4ssiFl7Zey4/qYuIowI6X5GLpg==}
+  /react-native-enriched@0.1.6(react-native@0.81.5)(react@19.1.0):
+    resolution: {integrity: sha512-UMNmwbcURb+/CdQv6bNMryvMqZRxKRNvO0C4XAZKe9d/fkif+mAjAe6o/eTBx6ior42464V8L2zBCbkVXERHig==}
     peerDependencies:
       react: '*'
       react-native: '*'

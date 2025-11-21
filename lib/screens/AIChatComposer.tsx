@@ -20,7 +20,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import RenderHtml from "react-native-render-html";
+import RenderHtml, {
+  HTMLElementModel,
+  HTMLContentModel,
+} from "react-native-render-html";
 import { marked } from "marked";
 import { markedHighlight } from "marked-highlight";
 import hljs from "highlight.js/lib/core";
@@ -34,7 +37,11 @@ import json from "highlight.js/lib/languages/json";
 import xml from "highlight.js/lib/languages/xml";
 import css from "highlight.js/lib/languages/css";
 import { Text, FloatingComposerHeader } from "../components";
+import { GenerationResumptionPrompt } from "../components/GenerationResumptionPrompt";
 import { useTrackScreenView } from "../analytics";
+import { useGenerationResumption } from "../ai/useGenerationResumption";
+import { llmQueue } from "../ai/ModelProvider";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Register languages
 hljs.registerLanguage("javascript", javascript);
@@ -87,11 +94,16 @@ import {
 } from "../db/useEntries";
 import {
   sendMessageWithResponse,
+  generateAIResponse,
   type AIChatActionContext,
   stripThinkTags,
 } from "./aiChatActions";
 import { useModelSettings } from "../db/modelSettings";
-import { getModelById, DEFAULT_MODEL } from "../ai/modelConfig";
+import {
+  getModelById,
+  DEFAULT_MODEL,
+  type LlmModelConfig,
+} from "../ai/modelConfig";
 
 export interface AIChatComposerProps {
   entryId?: number;
@@ -122,35 +134,31 @@ export function AIChatComposer({
   const { data: entry } = useEntry(entryId);
 
   // Get model settings to determine which model to use
+  // CRITICAL: Load config ONCE and use ref to keep it stable
   const modelSettings = useModelSettings();
-  const [selectedModelConfig, setSelectedModelConfig] =
-    React.useState(DEFAULT_MODEL);
+  const modelConfigRef = useRef<LlmModelConfig>(DEFAULT_MODEL);
 
-  // Load selected model from settings
+  // Load selected model from settings ONCE on mount
   React.useEffect(() => {
     async function loadSelectedModel() {
       const selectedModelId = await modelSettings.getSelectedModelId();
       if (selectedModelId) {
         const config = getModelById(selectedModelId);
         if (config) {
-          setSelectedModelConfig(config);
-        } else {
-          // Model not found, use default
-          setSelectedModelConfig(DEFAULT_MODEL);
+          modelConfigRef.current = config;
         }
-      } else {
-        // No model selected, use default
-        setSelectedModelConfig(DEFAULT_MODEL);
       }
+      // If no model selected or not found, ref already has DEFAULT_MODEL
     }
     loadSelectedModel();
-  }, [modelSettings]);
+  }, []); // Empty deps - only run once on mount
 
   // Use new LLM hook - pass entryId as convoId and for DB writes
   // When AIChatComposer mounts, it attaches to existing LLM instance if generation is already running
   // Use useRef to ensure convoId is stable across renders when there's no entryId
   const convoIdRef = useRef(entryId ? `entry-${entryId}` : `new-${Date.now()}`);
   const convoId = entryId ? `entry-${entryId}` : convoIdRef.current;
+
   const {
     llm,
     isLoading: isLLMLoading,
@@ -159,11 +167,18 @@ export function AIChatComposer({
     convoId,
     entryId,
     entry?.blocks, // Initialize with existing blocks if loading entry
-    selectedModelConfig // Pass the selected model config
+    modelConfigRef.current // Use stable ref - won't change after initial load
   );
 
   const createEntry = useCreateEntry();
   const updateEntry = useUpdateEntry();
+
+  // Check for incomplete generation for this specific entry
+  const {
+    currentPrompt: incompleteGenerationPrompt,
+    dismissGeneration: dismissGenerationFromHook,
+    clearCurrentPrompt,
+  } = useGenerationResumption(entryId);
 
   // Local state for input only
   const [newMessage, setNewMessage] = useState("");
@@ -177,6 +192,27 @@ export function AIChatComposer({
   // Derive displayed data from entry or fallback to initial props
   const displayedTitle = entry?.title ?? initialTitle;
   const displayedBlocks = entry?.blocks ?? initialBlocks;
+
+  // If entry has generationStatus "generating" but no assistant block yet, add a placeholder
+  // This ensures the UI shows "Thinking..." even if the assistant block hasn't been created yet
+  const blocksWithPlaceholder = useMemo(() => {
+    if (
+      entry?.generationStatus === "generating" &&
+      displayedBlocks.length > 0 &&
+      displayedBlocks[displayedBlocks.length - 1]?.role !== "assistant"
+    ) {
+      // Add placeholder assistant block to show "Thinking..." indicator
+      return [
+        ...displayedBlocks,
+        {
+          type: "markdown" as const,
+          content: "",
+          role: "assistant" as const,
+        },
+      ];
+    }
+    return displayedBlocks;
+  }, [displayedBlocks, entry?.generationStatus]);
 
   // Show LLM errors
   if (llmError) {
@@ -330,6 +366,16 @@ export function AIChatComposer({
         marginBottom: 8,
         fontStyle: "italic" as const,
       },
+      // Style think tags as dimmed/preliminary content
+      // These tags show the model's reasoning process and will be removed when generation completes
+      think: {
+        color: seasonalTheme.textSecondary + "AA", // Dimmed text (67% opacity via hex)
+        fontStyle: "italic" as const,
+        fontSize: 13,
+        opacity: 0.5,
+        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+        whiteSpace: "pre" as const, // Preserve whitespace and newlines
+      },
       // Syntax highlighting colors - span elements
       span: {
         fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
@@ -338,6 +384,27 @@ export function AIChatComposer({
     }),
     [seasonalTheme.textPrimary, seasonalTheme.textSecondary]
   );
+
+  // Custom renderer for think tags to ensure consistent styling for all children
+  // This ensures that when markdown creates <p> tags or other elements inside <think>,
+  // they all get the same dimmed styling
+  const customRenderers = useMemo(() => {
+    const thinkStyle = htmlTagsStyles.think;
+
+    return {
+      think: (props: any) => {
+        const { TDefaultRenderer, ...restProps } = props;
+        return (
+          <TDefaultRenderer
+            {...restProps}
+            style={[thinkStyle, restProps.style]}
+            // Apply think styling to all child elements by using a wrapper View
+            // This ensures consistent styling even when markdown creates nested elements
+          />
+        );
+      },
+    };
+  }, [htmlTagsStyles]);
 
   const htmlContentWidth = useMemo(
     () => width - spacingPatterns.screen * 2,
@@ -496,20 +563,157 @@ export function AIChatComposer({
     [seasonalTheme.textSecondary, seasonalTheme.textPrimary]
   );
 
+  const queryClient = useQueryClient();
+
   // Create action context for dispatching actions
   const actionContext = useMemo<AIChatActionContext>(
     () => ({
       createEntry,
       updateEntry,
+      queryClient, // Pass query client for accessing cache
       setTitle: () => {}, // No-op - React Query handles title updates automatically
       llm,
+      modelConfig: modelConfigRef.current, // Pass model config for title generation
       onSave: (id: number) => {
         scrollToBottom();
         onSave?.(id);
       },
     }),
-    [createEntry, updateEntry, llm, onSave, scrollToBottom]
+    [createEntry, updateEntry, queryClient, llm, onSave, scrollToBottom]
   );
+
+  // Custom resume handler that uses the existing llm instance
+  const handleResumeGeneration = useCallback(
+    async (generation: any) => {
+      if (!llm || !entryId) {
+        console.error("[AIChatComposer] Cannot resume: llm or entryId missing");
+        return;
+      }
+
+      // Clear the prompt immediately when resume is clicked
+      clearCurrentPrompt();
+
+      try {
+        console.log(
+          `[AIChatComposer] Resuming generation for entry ${entryId}`
+        );
+
+        // Remove only the incomplete assistant message block (last block if it's assistant)
+        // Keep all user messages intact
+        const lastBlock = displayedBlocks[displayedBlocks.length - 1];
+        const messagesForResume =
+          lastBlock && lastBlock.role === "assistant"
+            ? displayedBlocks.slice(0, -1)
+            : displayedBlocks;
+
+        // Update status to generating
+        await new Promise<void>((resolve, reject) => {
+          updateEntry.mutate(
+            {
+              id: entryId,
+              input: {
+                generationStatus: "generating",
+                generationStartedAt: Date.now(),
+              },
+            },
+            {
+              onSuccess: () => resolve(),
+              onError: reject,
+            }
+          );
+        });
+
+        // Generate response using existing llm instance
+        // This will use the listeners from useLLMForConvo to update the UI
+        await generateAIResponse(
+          messagesForResume,
+          actionContext,
+          entryId,
+          entry?.generationModelId || undefined
+        );
+
+        console.log(
+          `[AIChatComposer] Successfully resumed generation for entry ${entryId}`
+        );
+
+        // Scroll to bottom to show the generation
+        scrollToBottom();
+      } catch (error) {
+        console.error(`[AIChatComposer] Failed to resume generation:`, error);
+
+        // Mark as failed
+        try {
+          await new Promise<void>((resolve, reject) => {
+            updateEntry.mutate(
+              {
+                id: entryId,
+                input: {
+                  generationStatus: "failed",
+                },
+              },
+              {
+                onSuccess: () => resolve(),
+                onError: reject,
+              }
+            );
+          });
+        } catch (updateError) {
+          console.error(
+            "[AIChatComposer] Failed to mark as failed:",
+            updateError
+          );
+        }
+
+        Alert.alert(
+          "Resume Failed",
+          `Failed to resume generation: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    },
+    [
+      llm,
+      entryId,
+      displayedBlocks,
+      actionContext,
+      updateEntry,
+      entry?.generationModelId,
+      scrollToBottom,
+    ]
+  );
+
+  const dismissGeneration = useCallback(
+    async (generation: any) => {
+      // Clear the prompt immediately
+      clearCurrentPrompt();
+      await dismissGenerationFromHook(generation);
+    },
+    [dismissGenerationFromHook, clearCurrentPrompt]
+  );
+
+  // Check if generation is in progress when returning to chat
+  // The actions layer handles all the background work, so we just need to
+  // check status and show the resume prompt if needed
+  useEffect(() => {
+    if (
+      !entry ||
+      !entryId ||
+      entry.generationStatus !== "generating" ||
+      incompleteGenerationPrompt
+    ) {
+      return;
+    }
+
+    // Check if there's an active generation in the queue
+    const convoId = `entry-${entryId}`;
+    const currentRequestId = llmQueue.getCurrentRequestId();
+
+    // If generation is still running, just wait - actions layer handles everything
+    if (currentRequestId === convoId) {
+      return;
+    }
+  }, [entry, entryId, incompleteGenerationPrompt]);
 
   // Note: All initial work is now handled by BottomComposer via aiChatActions
   // before navigating to this composer. No need to queue work here.
@@ -563,51 +767,104 @@ export function AIChatComposer({
 
   // Pre-parse markdown to HTML outside of render callback
   const parsedMessages = useMemo(() => {
-    return displayedBlocks.map((block, index) => {
+    return blocksWithPlaceholder.map((block, index) => {
       const isUser = block.role === "user";
       const messageContent = block.type === "markdown" ? block.content : "";
       const isEmpty = !messageContent || messageContent.trim().length === 0;
-      const isLastMessage = index === displayedBlocks.length - 1;
+      const isLastMessage = index === blocksWithPlaceholder.length - 1;
 
-      // Strip out <think> tags completely (including partial/incomplete ones during streaming)
-      // This handles: <think>...</think>, <think> (incomplete), </think> (orphaned closing tag)
-      const contentWithoutThinkTags = stripThinkTags(messageContent);
+      // Detect think tags - during generation, show them inline as preliminary content
+      // Qwen uses <think>...</think> tags for reasoning - these are preliminary and will be removed when complete
+      // Normalize both <think> and <think> opening tags to <think> for consistent styling
+      const normalizedContent = messageContent
+        .replace(/<think>/g, "<think>") // Normalize <think> to <think>
+        .replace(/<think>/g, "<think>"); // Also normalize <think> to <think>
 
-      // Check if after removing think tags, there's any actual content
-      const hasActualContent = contentWithoutThinkTags.length > 0;
+      const thinkTagRegex = /<think>[\s\S]*?<\/think>/g;
+      const hasThinkTags = thinkTagRegex.test(normalizedContent);
 
-      // Consider it "generating" if:
-      // - It's the last message AND it's loading
-      // - AND there's no actual content yet (only think tags or empty)
-      const isGenerating =
-        !isUser && isLastMessage && !hasActualContent && isLLMLoading;
+      // Check if generation is complete - if so, strip think tags
+      // During generation, show think tags inline as preliminary content
+      const isGenerationInProgress =
+        entry?.generationStatus === "generating" || isLLMLoading;
+      const isGenerating = !isUser && isLastMessage && isGenerationInProgress;
+
+      // During generation, keep think tags in content so they show as preliminary
+      // After generation completes, strip them
+      const shouldStripThinkTags = !isGenerating;
+      const contentForDisplay = shouldStripThinkTags
+        ? stripThinkTags(normalizedContent)
+        : normalizedContent; // Keep think tags during generation
+
+      // Check if we have any content (including think tags during generation)
+      const hasActualContent = contentForDisplay.trim().length > 0;
+      // During generation, also consider think tags as "content" to display
+      const hasContentToShow =
+        hasActualContent || (isGenerating && hasThinkTags);
 
       let htmlContent: string | null = null;
-      if (!isUser && hasActualContent && !isEmpty) {
+      if (!isUser && hasContentToShow && !isEmpty) {
         try {
-          // Parse the content WITHOUT think tags
-          htmlContent = marked.parse(contentWithoutThinkTags) as string;
+          // Parse markdown WITH think tags during generation (so we can style them)
+          // Think tags will be styled as preliminary/dimmed content via htmlTagsStyles
+          let parsed = marked.parse(contentForDisplay) as string;
+
+          // CRITICAL: After parsing, ensure all child elements inside think tags
+          // get the think styling by wrapping them or ensuring they inherit styles
+          // When markdown creates <p> tags inside <think>, they need to inherit think styling
+          // We'll replace <p> tags inside think tags with styled versions
+          if (isGenerating && hasThinkTags) {
+            // Replace <p> tags that are direct children of <think> tags
+            // This ensures consistent styling across line breaks
+            parsed = parsed.replace(
+              /<think>([\s\S]*?)<\/think>/g,
+              (match, content) => {
+                // Replace <p> tags inside think with spans that preserve styling
+                const processedContent = content
+                  .replace(/<p>/g, '<span style="display: block;">')
+                  .replace(/<\/p>/g, "</span>");
+                return `<think>${processedContent}</think>`;
+              }
+            );
+          }
+
+          htmlContent = parsed;
         } catch (error) {
           console.error("Error parsing markdown:", error);
           htmlContent = null;
         }
       }
 
-      return { htmlContent, isGenerating, contentWithoutThinkTags };
+      return {
+        htmlContent,
+        isGenerating,
+        contentWithoutThinkTags: shouldStripThinkTags
+          ? contentForDisplay
+          : stripThinkTags(contentForDisplay),
+        hasThinkTags,
+        thinkContent: "", // Not used anymore - think tags shown inline
+      };
     });
-  }, [displayedBlocks, isLLMLoading]);
+  }, [blocksWithPlaceholder, isLLMLoading, entry?.generationStatus]);
 
   // Render item for FlatList
   const renderMessage: ListRenderItem<Block> = useCallback(
     ({ item: message, index }) => {
       const isUser = message.role === "user";
       const messageContent = message.type === "markdown" ? message.content : "";
-      const { htmlContent, isGenerating, contentWithoutThinkTags } =
-        parsedMessages[index] || {
-          htmlContent: null,
-          isGenerating: false,
-          contentWithoutThinkTags: "",
-        };
+      const {
+        htmlContent,
+        isGenerating,
+        contentWithoutThinkTags,
+        hasThinkTags,
+        thinkContent,
+      } = parsedMessages[index] || {
+        htmlContent: null,
+        isGenerating: false,
+        contentWithoutThinkTags: "",
+        hasThinkTags: false,
+        thinkContent: "",
+      };
 
       // User messages get a bubble, AI messages are full width
       if (isUser) {
@@ -637,7 +894,8 @@ export function AIChatComposer({
       // AI messages: full width, no bubble
       return (
         <View style={styles.assistantMessageFullWidth}>
-          {isGenerating ? (
+          {isGenerating && !htmlContent ? (
+            // Show "Thinking..." only if we have no content to display yet
             <Text
               variant="body"
               style={{
@@ -648,17 +906,25 @@ export function AIChatComposer({
               Thinking...
             </Text>
           ) : htmlContent ? (
+            // Show content (with think tags if generating, without if complete)
             <RenderHtml
               contentWidth={htmlContentWidth}
               source={{ html: htmlContent }}
               tagsStyles={htmlTagsStyles}
               baseStyle={htmlBaseStyle}
               classesStyles={htmlClassesStyles}
+              renderers={customRenderers}
               enableExperimentalMarginCollapsing={false}
               enableCSSInlineProcessing={true}
-              ignoredDomTags={["think"]}
+              customHTMLElementModels={{
+                think: HTMLElementModel.fromCustomModel({
+                  tagName: "think",
+                  contentModel: HTMLContentModel.mixed,
+                }),
+              }}
             />
           ) : (
+            // Fallback text if no HTML content
             <Text
               variant="body"
               style={{
@@ -696,6 +962,20 @@ export function AIChatComposer({
     );
   }, [seasonalTheme]);
 
+  // Footer component for incomplete generation prompt
+  const ListFooterComponent = useCallback(() => {
+    if (!incompleteGenerationPrompt) {
+      return null;
+    }
+    return (
+      <GenerationResumptionPrompt
+        generation={incompleteGenerationPrompt}
+        onResume={handleResumeGeneration}
+        onDismiss={dismissGeneration}
+      />
+    );
+  }, [incompleteGenerationPrompt, handleResumeGeneration, dismissGeneration]);
+
   // Show UI shell immediately - content will load progressively
   return (
     <View
@@ -717,10 +997,11 @@ export function AIChatComposer({
       {/* Messages with FlatList for better performance */}
       <FlatList
         ref={flatListRef}
-        data={displayedBlocks}
+        data={blocksWithPlaceholder}
         renderItem={renderMessage}
         keyExtractor={keyExtractor}
         ListEmptyComponent={ListEmptyComponent}
+        ListFooterComponent={ListFooterComponent}
         style={styles.chatMessages}
         contentContainerStyle={[
           styles.chatMessagesContent,
@@ -741,7 +1022,7 @@ export function AIChatComposer({
         }}
         onLayout={() => {
           // Scroll to bottom on initial layout if we have messages
-          if (displayedBlocks.length > 0) {
+          if (blocksWithPlaceholder.length > 0) {
             setTimeout(() => {
               flatListRef.current?.scrollToEnd({ animated: false });
             }, 100);
@@ -897,5 +1178,22 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
+  },
+  thinkTagContainer: {
+    marginBottom: spacingPatterns.sm,
+    padding: spacingPatterns.sm,
+    borderRadius: borderRadius.md,
+    borderLeftWidth: 3,
+  },
+  thinkTagLabel: {
+    fontWeight: "600",
+    marginBottom: spacingPatterns.xs / 2,
+    fontSize: 11,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
+  },
+  thinkTagContent: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

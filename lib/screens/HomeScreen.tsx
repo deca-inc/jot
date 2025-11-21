@@ -47,6 +47,8 @@ import { useModel } from "../ai/ModelProvider";
 import { useComposerSettings, type ComposerMode } from "../db/composerSettings";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
 import { useModelSettings } from "../db/modelSettings";
+import { useQueryClient } from "@tanstack/react-query";
+import { createConversation } from "./aiChatActions";
 
 type Filter = "all" | "journal" | "ai_chat" | "favorites";
 
@@ -78,8 +80,9 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const { getLastUsedMode, setLastUsedMode } = useComposerSettings();
   const modelSettings = useModelSettings();
   const [selectedModelConfig, setSelectedModelConfig] = useState(DEFAULT_MODEL);
+  const queryClient = useQueryClient();
 
-  // Load selected model from settings
+  // Load selected model from settings ONCE on mount
   useEffect(() => {
     async function loadSelectedModel() {
       const selectedModelId = await modelSettings.getSelectedModelId();
@@ -95,7 +98,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       }
     }
     loadSelectedModel();
-  }, [modelSettings]);
+  }, []); // Empty deps - only run once on mount
 
   // Screen dimensions for swipeable pages
   const screenWidth = Dimensions.get("window").width;
@@ -363,14 +366,13 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           });
         } else {
           // Create AI chat conversation using action system
-          const { createConversation } = require("./aiChatActions");
-
           const entryId = await createConversation({
             userMessage: text,
             createEntry: createEntryRef.current,
             updateEntry: updateEntryRef.current,
             llmManager,
             modelConfig: selectedModelConfig,
+            queryClient,
           });
 
           // Navigate to the conversation immediately

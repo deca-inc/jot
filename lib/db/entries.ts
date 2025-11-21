@@ -55,6 +55,8 @@ export type Block =
       role?: "user" | "assistant" | "system";
     };
 
+export type GenerationStatus = "idle" | "generating" | "completed" | "failed";
+
 export interface Entry {
   id: number;
   type: EntryType;
@@ -66,6 +68,9 @@ export interface Entry {
   embedding: Uint8Array | null;
   embeddingModel: string | null;
   embeddingCreatedAt: number | null;
+  generationStatus: GenerationStatus | null;
+  generationStartedAt: number | null;
+  generationModelId: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -85,6 +90,9 @@ export interface UpdateEntryInput {
   tags?: string[];
   attachments?: string[];
   isFavorite?: boolean;
+  generationStatus?: GenerationStatus;
+  generationStartedAt?: number | null;
+  generationModelId?: string | null;
 }
 
 /**
@@ -166,6 +174,9 @@ export class EntryRepository {
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
+      generationStatus: GenerationStatus | null;
+      generationStartedAt: number | null;
+      generationModelId: string | null;
       createdAt: number;
       updatedAt: number;
     }>(`SELECT * FROM entries WHERE id = ?`, [id]);
@@ -244,6 +255,9 @@ export class EntryRepository {
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
+      generationStatus: GenerationStatus | null;
+      generationStartedAt: number | null;
+      generationModelId: string | null;
       createdAt: number;
       updatedAt: number;
     }>(query, params);
@@ -320,6 +334,9 @@ export class EntryRepository {
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
+      generationStatus?: GenerationStatus | null;
+      generationStartedAt?: number | null;
+      generationModelId?: string | null;
       createdAt: number;
       updatedAt: number;
     }>(query, params);
@@ -362,6 +379,21 @@ export class EntryRepository {
     if (input.isFavorite !== undefined) {
       updates.push("isFavorite = ?");
       params.push(input.isFavorite ? 1 : 0);
+    }
+
+    if (input.generationStatus !== undefined) {
+      updates.push("generationStatus = ?");
+      params.push(input.generationStatus);
+    }
+
+    if (input.generationStartedAt !== undefined) {
+      updates.push("generationStartedAt = ?");
+      params.push(input.generationStartedAt);
+    }
+
+    if (input.generationModelId !== undefined) {
+      updates.push("generationModelId = ?");
+      params.push(input.generationModelId);
     }
 
     if (updates.length === 0) {
@@ -427,6 +459,40 @@ export class EntryRepository {
   }
 
   /**
+   * Find entries with incomplete generations (status = 'generating')
+   * within the last 24 hours
+   */
+  async findIncompleteGenerations(): Promise<Entry[]> {
+    const cutoffTime = Date.now() - 24 * 60 * 60 * 1000; // 24 hours ago
+
+    const results = await this.db.getAllAsync<{
+      id: number;
+      type: EntryType;
+      title: string;
+      blocks: string;
+      tags: string;
+      attachments: string;
+      isFavorite: number;
+      embedding: Uint8Array | null;
+      embeddingModel: string | null;
+      embeddingCreatedAt: number | null;
+      generationStatus: GenerationStatus | null;
+      generationStartedAt: number | null;
+      generationModelId: string | null;
+      createdAt: number;
+      updatedAt: number;
+    }>(
+      `SELECT * FROM entries 
+       WHERE generationStatus = 'generating' 
+       AND generationStartedAt > ?
+       ORDER BY generationStartedAt DESC`,
+      [cutoffTime]
+    );
+
+    return results.map((row) => this.mapRowToEntry(row));
+  }
+
+  /**
    * Map database row to Entry object
    */
   private mapRowToEntry(row: {
@@ -440,6 +506,9 @@ export class EntryRepository {
     embedding: Uint8Array | null;
     embeddingModel: string | null;
     embeddingCreatedAt: number | null;
+    generationStatus?: GenerationStatus | null;
+    generationStartedAt?: number | null;
+    generationModelId?: string | null;
     createdAt: number;
     updatedAt: number;
   }): Entry {
@@ -456,6 +525,9 @@ export class EntryRepository {
       embedding: row.embedding,
       embeddingModel: row.embeddingModel,
       embeddingCreatedAt: row.embeddingCreatedAt,
+      generationStatus: row.generationStatus ?? null,
+      generationStartedAt: row.generationStartedAt ?? null,
+      generationModelId: row.generationModelId ?? null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

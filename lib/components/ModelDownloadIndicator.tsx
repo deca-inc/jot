@@ -7,7 +7,7 @@ import { spacingPatterns, borderRadius } from "../theme";
 import { useModelDownloadStatus } from "../ai/useModelDownloadStatus";
 
 interface ModelDownloadIndicatorProps {
-  variant?: 'banner' | 'inline';
+  variant?: "banner" | "inline";
 }
 
 /**
@@ -15,7 +15,9 @@ interface ModelDownloadIndicatorProps {
  * - banner: Card-style component with rounded edges and shadow (for top of screen)
  * - inline: Compact version without borders (for embedding in settings)
  */
-export function ModelDownloadIndicator({ variant = 'banner' }: ModelDownloadIndicatorProps = {}) {
+export function ModelDownloadIndicator({
+  variant = "banner",
+}: ModelDownloadIndicatorProps = {}) {
   const downloadStatus = useModelDownloadStatus();
   const seasonalTheme = useSeasonalTheme();
   const theme = useTheme();
@@ -25,7 +27,7 @@ export function ModelDownloadIndicator({ variant = 'banner' }: ModelDownloadIndi
     return null;
   }
 
-  const isBanner = variant === 'banner';
+  const isBanner = variant === "banner";
 
   return (
     <View
@@ -49,22 +51,30 @@ export function ModelDownloadIndicator({ variant = 'banner' }: ModelDownloadIndi
             variant="caption"
             style={[styles.subtitle, { color: seasonalTheme.textSecondary }]}
           >
-            {downloadStatus.progress}% complete • {downloadStatus.error ? 'Failed' : 'In progress'}
+            {downloadStatus.progress}% complete •{" "}
+            {downloadStatus.error ? "Failed" : "In progress"}
           </Text>
         </View>
       </View>
-      
+
       {/* Progress bar */}
       <View
-        style={[styles.progressBarBg, { backgroundColor: seasonalTheme.border }]}
+        style={[
+          styles.progressBarBg,
+          {
+            backgroundColor: seasonalTheme.isDark
+              ? "rgba(255, 255, 255, 0.1)"
+              : "rgba(0, 0, 0, 0.1)",
+          },
+        ]}
       >
         <View
           style={[
             styles.progressBarFill,
             {
               width: `${downloadStatus.progress}%`,
-              backgroundColor: downloadStatus.error 
-                ? '#FF6B6B' 
+              backgroundColor: downloadStatus.error
+                ? "#FF6B6B"
                 : theme.colors.accent,
             },
           ]}
@@ -81,8 +91,8 @@ const styles = StyleSheet.create({
     marginBottom: spacingPatterns.md,
     padding: spacingPatterns.md,
     borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    shadowColor: '#000',
+    overflow: "hidden",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -91,7 +101,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingPatterns.md,
     paddingVertical: spacingPatterns.sm,
     borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    backgroundColor: "rgba(0, 0, 0, 0.03)",
   },
   content: {
     flexDirection: "row",
@@ -111,12 +121,11 @@ const styles = StyleSheet.create({
   },
   progressBarBg: {
     height: 3,
-    borderRadius: borderRadius.xs,
+    borderRadius: borderRadius.sm,
     overflow: "hidden",
   },
   progressBarFill: {
     height: "100%",
-    borderRadius: borderRadius.xs,
+    borderRadius: borderRadius.sm,
   },
 });
-

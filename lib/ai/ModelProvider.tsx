@@ -7,13 +7,8 @@ import React, {
   useCallback,
 } from "react";
 import { Alert, AppState, AppStateStatus } from "react-native";
-import {
-  useLLM,
-  Message as LlmMessage,
-  LLMModule,
-} from "react-native-executorch";
-import { Llama32_1B_Instruct, LlmModelConfig, DEFAULT_MODEL } from "./modelConfig";
-import { ensureModelPresent } from "./modelManager";
+import { Message as LlmMessage, LLMModule } from "react-native-executorch";
+import { LlmModelConfig, DEFAULT_MODEL } from "./modelConfig";
 import { Block, EntryRepository } from "../db/entries";
 import { llmQueue } from "./LLMQueue";
 
@@ -29,6 +24,7 @@ import { modelDownloadStatus } from "./modelDownloadStatus";
 import { logStorageDebugInfo, verifyAllModels } from "./modelVerification";
 import { ALL_MODELS } from "./modelConfig";
 import { useModelSettings } from "../db/modelSettings";
+import { generationResumption } from "./generationResumption";
 import {
   ModelService as ModelServiceClass,
   GenerationOptions,
@@ -50,231 +46,6 @@ interface LLMForConvo {
   delete: () => void;
 }
 
-async function createLLMForConvo(
-  config: LlmModelConfig,
-  listeners: LLMListeners,
-  convoId?: string,
-  generatingTracker?: Set<string>
-): Promise<LLMForConvo> {
-  if (
-    !config.pteSource ||
-    !config.tokenizerSource ||
-    !config.tokenizerConfigSource
-  ) {
-    throw new Error(`Model config ${config.modelId} is not valid`);
-  }
-
-  let llm: LLMModule | null = null;
-  let isDeleted = false; // Flag to invalidate callbacks after deletion
-
-  try {
-    // Ensure model files are downloaded/available before loading
-    const modelPaths = await ensureModelPresent(config);
-
-    // Create safe wrappers for callbacks that check if instance is still valid
-    const safeTokenCallback = (token: string) => {
-      if (isDeleted || !llm) {
-        return; // Ignore callbacks after deletion
-      }
-      try {
-        listeners.onToken(token);
-      } catch (e) {
-        console.error(`[createLLMForConvo] Error in safeTokenCallback:`, e);
-      }
-    };
-
-    const safeMessageHistoryCallback = (messages: LlmMessage[]) => {
-      if (isDeleted || !llm) {
-        return; // Ignore callbacks after deletion
-      }
-      try {
-        listeners.onMessageHistoryUpdate(messages);
-      } catch (e) {
-        console.error(
-          `[createLLMForConvo] Error in safeMessageHistoryCallback:`,
-          e
-        );
-      }
-    };
-
-    llm = new LLMModule({
-      tokenCallback: safeTokenCallback,
-      messageHistoryCallback: safeMessageHistoryCallback,
-    });
-
-    // Load model with error handling
-    try {
-      await llm.load(
-        {
-          modelSource: modelPaths.ptePath,
-          tokenizerSource: modelPaths.tokenizerPath || "",
-          tokenizerConfigSource: modelPaths.tokenizerConfigPath || "",
-        },
-        (progress) => {
-          // Download progress callback (optional)
-        }
-      );
-
-      // Small delay to ensure native module is fully initialized
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    } catch (loadError) {
-      console.error(`[createLLMForConvo] Failed to load model:`, loadError);
-      isDeleted = true; // Mark as deleted to prevent callbacks
-      // Clean up the LLM instance if load failed
-      try {
-        if (llm) {
-          llm.delete();
-        }
-      } catch (cleanupError) {
-        console.error(
-          `[createLLMForConvo] Failed to cleanup after load error:`,
-          cleanupError
-        );
-      }
-      throw loadError;
-    }
-
-    // Track if this instance is currently generating to prevent concurrent calls
-    let isGenerating = false;
-
-    return {
-      llm,
-      sendMessage: async (message: string) => {
-        if (isDeleted || !llm) {
-          throw new Error("LLM instance has been deleted");
-        }
-        try {
-          await llm.sendMessage(message);
-        } catch (e) {
-          console.error(`[createLLMForConvo] sendMessage failed:`, e);
-          throw e;
-        }
-      },
-      generate: async (messages: LlmMessage[]) => {
-        if (isDeleted || !llm) {
-          throw new Error("LLM instance has been deleted");
-        }
-
-        // Prevent concurrent generate() calls on the same instance
-        if (isGenerating) {
-          console.warn(
-            `[createLLMForConvo] Generation already in progress, ignoring concurrent call`
-          );
-          throw new Error("Generation already in progress");
-        }
-
-        if (convoId && generatingTracker) {
-          if (generatingTracker.has(convoId)) {
-            console.warn(
-              `[createLLMForConvo] Generation already in progress for ${convoId}`
-            );
-            throw new Error("Generation already in progress");
-          }
-          generatingTracker.add(convoId);
-        }
-
-        isGenerating = true;
-
-        try {
-          // generate() returns the response string and triggers tokenCallback during generation
-          // But it doesn't update messageHistory automatically like sendMessage() does
-          const response = await llm.generate(messages);
-
-          // Only update message history if not deleted
-          if (!isDeleted) {
-            // generate() doesn't automatically update messageHistory, so we need to manually
-            // reconstruct the full conversation and trigger the callback
-            // This ensures the UI/database gets the final state
-            const fullHistory = [
-              ...messages,
-              { role: "assistant" as const, content: response },
-            ];
-            listeners.onMessageHistoryUpdate(fullHistory);
-          }
-
-          return response;
-        } catch (e) {
-          console.error(`[createLLMForConvo] Generation failed:`, e);
-          throw e;
-        } finally {
-          isGenerating = false;
-          if (convoId && generatingTracker) {
-            generatingTracker.delete(convoId);
-          }
-        }
-      },
-      interrupt: () => {
-        if (isDeleted || !llm) {
-          return;
-        }
-        try {
-          llm.interrupt();
-        } catch (e) {
-          console.error(`[createLLMForConvo] Failed to interrupt:`, e);
-        } finally {
-          isGenerating = false;
-          if (convoId && generatingTracker) {
-            generatingTracker.delete(convoId);
-          }
-        }
-      },
-      delete: () => {
-        if (isDeleted) {
-          return; // Already deleted
-        }
-        isDeleted = true; // Mark as deleted first to stop callbacks
-
-        try {
-          if (llm) {
-            // Interrupt any ongoing generation first
-            if (isGenerating) {
-              try {
-                llm.interrupt();
-              } catch (e) {
-                // Ignore errors during interrupt
-              }
-            }
-          }
-        } catch (e) {
-          console.error(
-            `[createLLMForConvo] Error during interrupt before delete:`,
-            e
-          );
-        }
-
-        try {
-          if (llm) {
-            llm.delete();
-            llm = null; // Clear reference
-          }
-        } catch (e) {
-          console.error(`[createLLMForConvo] Failed to delete LLM:`, e);
-        } finally {
-          isGenerating = false;
-          if (convoId && generatingTracker) {
-            generatingTracker.delete(convoId);
-          }
-        }
-      },
-    };
-  } catch (error) {
-    // If we created an LLM instance but failed somewhere, clean it up
-    isDeleted = true; // Mark as deleted to prevent callbacks
-    if (llm) {
-      try {
-        llm.delete();
-      } catch (cleanupError) {
-        console.error(
-          `[createLLMForConvo] Failed to cleanup after error:`,
-          cleanupError
-        );
-      }
-      llm = null;
-    }
-    throw error;
-  }
-}
-
 /**
  * LLMManager - Single instance queue-based manager
  *
@@ -294,20 +65,19 @@ class LLMManager {
    * Reload the LLM with a new model configuration
    */
   async reloadWithConfig(config: LlmModelConfig): Promise<void> {
-    console.log(`[LLMManager] Reloading with model: ${config.modelId}`);
-
-    // Unload current model
-    await llmQueue.unload();
-    this.isLoaded = false;
-
     // Update config
     this.currentConfig = config;
 
-    // Load new model
+    // Load new model - queue will handle unloading/queuing internally
     await llmQueue.load(config);
-    this.isLoaded = true;
 
-    console.log(`[LLMManager] Successfully reloaded with ${config.modelId}`);
+    // Verify it loaded
+    if (llmQueue.getIsLoaded()) {
+      this.isLoaded = true;
+    } else {
+      this.isLoaded = false;
+      throw new Error("Failed to reload model - queue reports not loaded");
+    }
   }
 
   /**
@@ -370,30 +140,21 @@ class LLMManager {
 
     // Check if we need to load or reload the model
     // CRITICAL: Check if model is loaded AND if it's the correct model
-    const needsReload = 
-      !this.isLoaded || 
-      !llmQueue.getIsLoaded() || 
+    const needsReload =
+      !this.isLoaded ||
+      !llmQueue.getIsLoaded() ||
       this.currentConfig.modelId !== config.modelId;
 
     if (needsReload) {
       try {
-        // If switching models, unload the old one first
-        if (this.isLoaded && this.currentConfig.modelId !== config.modelId) {
-          console.log(
-            `[LLMManager] Switching from ${this.currentConfig.modelId} to ${config.modelId}`
-          );
-          await llmQueue.unload();
-          this.isLoaded = false;
-        }
-
-        // Load the new model
+        // Load the new model - queue will handle unloading/queuing internally
+        // This will automatically wait for any ongoing operations and queue if needed
         await llmQueue.load(config);
-        
+
         // Only set our flag if queue confirms it's loaded
         if (llmQueue.getIsLoaded()) {
           this.isLoaded = true;
           this.currentConfig = config;
-          console.log(`[LLMManager] Successfully loaded ${config.modelId}`);
         } else {
           throw new Error("LLM failed to load - queue reports not loaded");
         }
@@ -402,10 +163,6 @@ class LLMManager {
         this.isLoaded = false;
         throw error;
       }
-    } else {
-      console.log(
-        `[LLMManager] Model ${config.modelId} already loaded, reusing instance`
-      );
     }
 
     // Return adapter that uses the queue
@@ -500,79 +257,65 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
   const [currentConfig, setCurrentConfig] =
     useState<LlmModelConfig>(DEFAULT_MODEL);
   const modelSettings = useModelSettings();
+  const db = useDatabase();
 
   // Initialize download managers and verify models on mount
   useEffect(() => {
     let isMounted = true;
-    
+
     async function initializeDownloadManagers() {
       try {
-        console.log('[ModelProvider] Initializing download managers...');
-        
         // Log storage debug info (helps diagnose Android issues)
         await logStorageDebugInfo();
-        
+
         // Initialize download status manager (loads persisted state)
         await modelDownloadStatus.initialize();
-        
+
         // Verify all downloaded models still exist (Android can clear cache)
         const downloadedModels = await modelSettings.getDownloadedModels();
         if (downloadedModels.length > 0) {
-          console.log(`[ModelProvider] Verifying ${downloadedModels.length} downloaded models...`);
-          
           const verification = await verifyAllModels(
-            downloadedModels.map(m => m.modelId),
+            downloadedModels.map((m) => m.modelId),
             ALL_MODELS
           );
-          
+
           if (verification.missing.length > 0) {
             console.warn(
               `[ModelProvider] ⚠️  ${verification.missing.length} model(s) are missing from disk!`,
               verification.missing
             );
-            
+
             // Clean up database entries for missing models
             for (const missingModelId of verification.missing) {
-              console.log(`[ModelProvider] Removing database entry for missing model: ${missingModelId}`);
               await modelSettings.removeDownloadedModel(missingModelId);
             }
-            
-            console.log('[ModelProvider] Database cleaned up. User will need to re-download missing models.');
-          } else {
-            console.log('[ModelProvider] ✅ All downloaded models verified');
           }
         }
-        
+
         // Check for pending downloads
-        const pendingDownloads = await persistentDownloadManager.getPendingDownloads();
-        
+        const pendingDownloads =
+          await persistentDownloadManager.getPendingDownloads();
+
         if (pendingDownloads.length > 0) {
-          console.log(`[ModelProvider] Found ${pendingDownloads.length} pending downloads`);
-          
-          // Notify user that downloads are available to resume
-          // You could show a notification or UI element here
-          pendingDownloads.forEach(download => {
-            console.log(`[ModelProvider] Pending download: ${download.modelName} (${download.modelId})`);
-          });
-          
           // Clean up old/stale downloads (older than 7 days)
           await persistentDownloadManager.cleanupOldDownloads();
         }
-        
-        console.log('[ModelProvider] Initialization complete');
+
+        // Check for incomplete generations that can be resumed
+        await generationResumption.checkForIncompleteGenerations(db);
       } catch (error) {
-        console.error('[ModelProvider] Failed to initialize:', error);
+        console.error("[ModelProvider] Failed to initialize:", error);
       }
     }
-    
+
     if (isMounted) {
       initializeDownloadManagers();
     }
-    
+
     return () => {
       isMounted = false;
     };
-  }, [modelSettings]);
+  }, [modelSettings, db]);
 
   const reloadModel = useCallback(async (config: LlmModelConfig) => {
     await llmManager.reloadWithConfig(config);
@@ -604,6 +347,13 @@ export function useLLMForConvo(
   const entryRepositoryRef = useRef<EntryRepository | null>(null);
   const queryClient = useQueryClient();
 
+  // CRITICAL: Use ref to capture model config on FIRST render only
+  // This prevents duplicate loads when parent re-renders with different config object
+  const modelConfigFirstLoadRef = useRef<LlmModelConfig | null>(null);
+  if (!modelConfigFirstLoadRef.current) {
+    modelConfigFirstLoadRef.current = modelConfig || DEFAULT_MODEL;
+  }
+
   // Initialize entry repository
   useEffect(() => {
     entryRepositoryRef.current = new EntryRepository(db);
@@ -617,11 +367,6 @@ export function useLLMForConvo(
     return () => subscription.remove();
   }, []);
 
-  // Accumulate tokens for debounced DB writes
-  const tokenBufferRef = useRef<string>("");
-  const lastWriteTimeRef = useRef<number>(0);
-  const DEBOUNCE_MS = 500; // Write to DB every 500ms
-  const lastFullResponseRef = useRef<string>("");
   // Track if we've received initial blocks to prevent overwriting with empty messages
   const hasInitializedRef = useRef<boolean>(false);
   const initialBlocksRef = useRef<Block[] | undefined>(initialBlocks);
@@ -637,79 +382,42 @@ export function useLLMForConvo(
   // Track if component is mounted to prevent callbacks after unmount
   const isMountedRefForCallbacks = useRef(true);
 
-  // Create listeners that handle both UI updates and DB writes
+  // Simple UI-only listeners - database writes are handled by actions layer
   const onToken = useCallback(
     async (token: string) => {
-      // Guard: Don't process if component is unmounted
-      if (!isMountedRefForCallbacks.current) {
+      // Only update UI if component is mounted
+      // Database writes are handled by the actions layer
+      if (!isMountedRefForCallbacks.current || !entryId) {
         return;
       }
 
-      if (!entryId || !entryRepositoryRef.current) {
-        return;
-      }
+      // Update React Query cache for UI updates
+      try {
+        const entry = await entryRepositoryRef.current?.getById(entryId);
+        if (entry) {
+          // Get current response from the last assistant block
+          const lastBlock = entry.blocks[entry.blocks.length - 1];
+          const currentContent =
+            lastBlock?.role === "assistant" && lastBlock?.type === "markdown"
+              ? lastBlock.content
+              : "";
 
-      // Accumulate tokens
-      tokenBufferRef.current += token;
-      lastFullResponseRef.current += token;
-
-      const now = Date.now();
-      const shouldWrite =
-        now - lastWriteTimeRef.current >= DEBOUNCE_MS ||
-        tokenBufferRef.current.length >= 100; // Or if buffer is large
-
-      if (shouldWrite) {
-        try {
-          // Get current entry to preserve existing blocks
-          const entry = await entryRepositoryRef.current.getById(entryId);
-          if (!entry) {
-            console.warn(`[${convoId}] Entry ${entryId} not found`);
-            return;
-          }
-
-          // Update assistant message block (last one should be assistant)
-          const updatedBlocks = [...entry.blocks];
-          const lastBlock = updatedBlocks[updatedBlocks.length - 1];
-
-          if (
-            lastBlock &&
-            lastBlock.role === "assistant" &&
-            lastBlock.type === "markdown"
-          ) {
-            // Update existing assistant block
-            updatedBlocks[updatedBlocks.length - 1] = {
-              type: "markdown",
-              content: lastFullResponseRef.current,
-              role: "assistant",
-            } as Block;
-          } else {
-            // Add new assistant block
-            updatedBlocks.push({
-              type: "markdown",
-              content: lastFullResponseRef.current,
-              role: "assistant",
-            });
-          }
-
-          // Write to database (works even when backgrounded)
-          await entryRepositoryRef.current.update(entryId, {
-            blocks: updatedBlocks,
-          });
-
-          // Update React Query cache (for UI updates)
-          // React Query uses deep equality, so new blocks array will trigger updates
+          // Update cache with new token (optimistic update)
           queryClient.setQueryData(entryKeys.detail(entryId), {
             ...entry,
-            blocks: updatedBlocks,
+            blocks: [
+              ...entry.blocks.slice(0, -1),
+              {
+                type: "markdown" as const,
+                content: currentContent + token,
+                role: "assistant" as const,
+              },
+            ],
           });
-
-          // Clear buffer and update write time
-          tokenBufferRef.current = "";
-          lastWriteTimeRef.current = now;
-        } catch (e) {
-          console.error(`[${convoId}] Failed to write token to DB:`, e);
-          // Don't throw - continue generation even if write fails
         }
+      } catch (e) {
+        // Ignore errors - database writes are handled by actions
+        console.warn(`[${convoId}] Failed to update UI cache:`, e);
       }
     },
     [convoId, entryId, queryClient]
@@ -717,86 +425,36 @@ export function useLLMForConvo(
 
   const onMessageHistoryUpdate = useCallback(
     async (messages: LlmMessage[]) => {
-      // Guard: Don't process if component is unmounted
-      if (!isMountedRefForCallbacks.current) {
+      // Only update UI if component is mounted
+      // Database writes are handled by the actions layer
+      if (!isMountedRefForCallbacks.current || !entryId) {
         return;
       }
 
-      // Final message history update - ensure DB is up to date
-      if (entryId && entryRepositoryRef.current) {
-        try {
-          const entry = await entryRepositoryRef.current.getById(entryId);
-          if (!entry) return;
+      // Update React Query cache for UI updates
+      try {
+        const entry = await entryRepositoryRef.current?.getById(entryId);
+        if (!entry) return;
 
-          // Convert LLM messages back to blocks
-          const updatedBlocks = messages
-            .filter((m) => m.role !== "system")
-            .map((m) => ({
-              type: "markdown" as const,
-              content: m.content,
-              role: m.role as "user" | "assistant",
-            }));
+        // Convert LLM messages back to blocks
+        const updatedBlocks = messages
+          .filter((m) => m.role !== "system")
+          .map((m) => ({
+            type: "markdown" as const,
+            content: m.content,
+            role: m.role as "user" | "assistant",
+          }));
 
-          // CRITICAL FIX: Prevent overwriting existing blocks with empty messages
-          // This can happen when:
-          // 1. LLM instance initializes and calls callback with empty array
-          // 2. Opening an existing conversation triggers initialization
-          // 3. We should never replace existing content with empty content
-          if (updatedBlocks.length === 0) {
-            // If messages are empty and entry already has blocks, don't overwrite
-            if (entry.blocks && entry.blocks.length > 0) {
-              console.log(
-                `[${convoId}] Ignoring empty message history update - entry has ${entry.blocks.length} existing blocks`
-              );
-              return;
-            }
-          }
-
-          // If we have existing blocks and the new blocks are shorter than existing,
-          // this might be an initialization issue - compare more carefully
-          if (
-            entry.blocks &&
-            entry.blocks.length > 0 &&
-            updatedBlocks.length < entry.blocks.length
-          ) {
-            // Check if existing blocks are actually different from new blocks
-            // Only update if new blocks have more content or are actually different
-            const existingContent = entry.blocks
-              .filter((b) => b.type === "markdown")
-              .map((b) => b.content)
-              .join("");
-            const newContent = updatedBlocks.map((b) => b.content).join("");
-
-            // If new content is empty or shorter than existing, don't overwrite
-            if (!newContent || newContent.length < existingContent.length) {
-              console.log(
-                `[${convoId}] Ignoring message history update - would lose ${
-                  entry.blocks.length - updatedBlocks.length
-                } blocks`
-              );
-              return;
-            }
-          }
-
-          // Only update if we have actual messages to write
-          if (updatedBlocks.length > 0 || entry.blocks.length === 0) {
-            await entryRepositoryRef.current.update(entryId, {
-              blocks: updatedBlocks,
-            });
-
-            // Update React Query cache (triggers UI updates)
-            queryClient.setQueryData(entryKeys.detail(entryId), {
-              ...entry,
-              blocks: updatedBlocks,
-            });
-          }
-
-          // Clear token buffer
-          tokenBufferRef.current = "";
-          lastFullResponseRef.current = "";
-        } catch (e) {
-          console.error(`[${convoId}] Failed to write message history:`, e);
+        // Only update if we have actual messages
+        if (updatedBlocks.length > 0) {
+          queryClient.setQueryData(entryKeys.detail(entryId), {
+            ...entry,
+            blocks: updatedBlocks,
+          });
         }
+      } catch (e) {
+        // Ignore errors - database writes are handled by actions
+        console.warn(`[${convoId}] Failed to update UI cache:`, e);
       }
     },
     [convoId, entryId, queryClient]
@@ -833,10 +491,9 @@ export function useLLMForConvo(
       );
     }
 
-    // Use provided model config or fall back to DEFAULT_MODEL
-    const configToUse = modelConfig || DEFAULT_MODEL;
-    console.log(`[${convoId}] Loading model: ${configToUse.displayName} (${configToUse.modelId})`);
-    
+    // Use first-load model config to prevent duplicate loads
+    const configToUse = modelConfigFirstLoadRef.current!;
+
     llmManager
       .getOrCreate(convoId, configToUse, listeners, initialBlocks)
       .then((instance) => {
@@ -857,87 +514,15 @@ export function useLLMForConvo(
     let finalWriteTimeout: NodeJS.Timeout | null = null;
 
     return () => {
-      isMountedRef.current = false; // Mark as unmounted to prevent state updates
+      isMountedRef.current = false;
+      isMountedRefForCallbacks.current = false;
 
-      // Interrupt any ongoing generation before cleanup
+      // Unregister listeners - database writes are handled by actions layer
       if (listenersRef.current) {
-        try {
-          // Interrupt via queue if this conversation is currently processing
-          if (llmQueue.getCurrentRequestId() === convoId) {
-            llmQueue.interrupt();
-          }
-        } catch (e) {
-          console.error(`[${convoId}] Failed to interrupt on unmount:`, e);
-        }
-
-        // Unregister listeners
         llmManager.unregisterListeners(convoId, listenersRef.current);
       }
-
-      // Write any remaining buffered tokens (but only if entry still exists)
-      // CRITICAL: Don't write to database on unmount if entry was deleted
-      // This prevents crashes from trying to update deleted entries
-      if (tokenBufferRef.current && entryId && entryRepositoryRef.current) {
-        // Final write on unmount - use setTimeout to avoid blocking unmount
-        // But only if we have a valid entryId and the component is unmounted
-        finalWriteTimeout = setTimeout(() => {
-          if (!isMountedRef.current && entryRepositoryRef.current) {
-            // Only proceed if still unmounted (avoid race condition)
-            entryRepositoryRef.current
-              .getById(entryId)
-              .then((entry) => {
-                // Guard: Check if entry still exists and component is still unmounted
-                if (
-                  entry &&
-                  !isMountedRef.current &&
-                  entryRepositoryRef.current
-                ) {
-                  try {
-                    const updatedBlocks = [...entry.blocks];
-                    const lastBlock = updatedBlocks[updatedBlocks.length - 1];
-                    if (
-                      lastBlock &&
-                      lastBlock.role === "assistant" &&
-                      lastBlock.type === "markdown"
-                    ) {
-                      updatedBlocks[updatedBlocks.length - 1] = {
-                        type: "markdown",
-                        content: lastFullResponseRef.current,
-                        role: "assistant",
-                      } as Block;
-                    }
-                    return entryRepositoryRef.current.update(entryId, {
-                      blocks: updatedBlocks,
-                    });
-                  } catch (updateError) {
-                    // Entry might have been deleted - ignore error
-                    console.warn(
-                      `[${convoId}] Final write failed - entry may be deleted:`,
-                      updateError
-                    );
-                  }
-                }
-              })
-              .catch((e) => {
-                // Entry doesn't exist or was deleted - this is expected, don't log as error
-                if (e?.message?.includes("not found")) {
-                  console.log(
-                    `[${convoId}] Entry ${entryId} not found for final write - already deleted`
-                  );
-                } else {
-                  console.error(`[${convoId}] Final write failed:`, e);
-                }
-              });
-          }
-        }, 0);
-      }
-
-      // Clear timeout on cleanup if it was set
-      if (finalWriteTimeout) {
-        clearTimeout(finalWriteTimeout);
-      }
     };
-  }, [convoId, onToken, onMessageHistoryUpdate, entryId, modelConfig]); // Include modelConfig to reload when model changes
+  }, [convoId, onToken, onMessageHistoryUpdate, entryId]); // Model config captured on first render via ref - won't change
 
   return { llm, isLoading, error };
 }

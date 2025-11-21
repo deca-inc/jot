@@ -1,5 +1,12 @@
 import React, { useEffect, useRef } from "react";
-import { View, StyleSheet, Animated, Platform, TouchableOpacity, PanResponder } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Animated,
+  Platform,
+  TouchableOpacity,
+  PanResponder,
+} from "react-native";
 import { Text } from "./Text";
 import { Ionicons } from "@expo/vector-icons";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -35,25 +42,29 @@ export function Toast({
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
         // Only respond to horizontal swipes (left or right)
-        return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        return (
+          Math.abs(gestureState.dx) > 10 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy)
+        );
       },
       onMoveShouldSetPanResponderCapture: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        return (
+          Math.abs(gestureState.dx) > 10 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy)
+        );
       },
       onPanResponderGrant: () => {
-        translateX.setOffset(translateX._value);
+        translateX.flattenOffset();
       },
-      onPanResponderMove: Animated.event(
-        [null, { dx: translateX }],
-        { useNativeDriver: false }
-      ),
+      onPanResponderMove: Animated.event([null, { dx: translateX }], {
+        useNativeDriver: false,
+      }),
       onPanResponderRelease: (_, gestureState) => {
         translateX.flattenOffset();
         // If swiped more than 100 pixels or fast swipe velocity in either direction, dismiss
-        const shouldDismiss = 
-          Math.abs(gestureState.dx) > 100 || 
-          Math.abs(gestureState.vx) > 0.5;
-        
+        const shouldDismiss =
+          Math.abs(gestureState.dx) > 100 || Math.abs(gestureState.vx) > 0.5;
+
         if (shouldDismiss) {
           handleSwipeDismiss(gestureState.dx > 0 ? 1 : -1);
         } else {
@@ -74,7 +85,7 @@ export function Toast({
       // Reset positions
       translateY.setValue(-100);
       translateX.setValue(0);
-      
+
       // Slide down from top with spring animation
       Animated.spring(translateY, {
         toValue: 0,
@@ -162,10 +173,7 @@ export function Toast({
       ]}
     >
       <Animated.View
-        style={[
-          styles.toastContainer,
-          { transform: [{ translateX }] }
-        ]}
+        style={[styles.toastContainer, { transform: [{ translateX }] }]}
         {...panResponder.panHandlers}
       >
         <View
@@ -175,7 +183,7 @@ export function Toast({
               backgroundColor: getBackgroundColor(),
               shadowColor: "#000",
             },
-            Platform.OS === 'android' && styles.androidElevation,
+            Platform.OS === "android" && styles.androidElevation,
           ]}
         >
           <Ionicons name={getIcon()} size={20} color={getColor()} />
@@ -186,7 +194,11 @@ export function Toast({
             {message}
           </Text>
           <TouchableOpacity onPress={handleHide} style={styles.closeButton}>
-            <Ionicons name="close" size={18} color={seasonalTheme.textSecondary} />
+            <Ionicons
+              name="close"
+              size={18}
+              color={seasonalTheme.textSecondary}
+            />
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -240,4 +252,3 @@ const styles = StyleSheet.create({
     marginLeft: spacingPatterns.xs,
   },
 });
-

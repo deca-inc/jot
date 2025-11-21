@@ -42,7 +42,7 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-argon2": "^3.0.0",
-    "react-native-enriched": "^0.1.5",
+    "react-native-enriched": "^0.1.6",
     "react-native-executorch": "^0.5.15",
     "react-native-quick-crypto": "^0.7.17",
     "react-native-render-html": "^6.3.4",

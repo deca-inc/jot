@@ -21,6 +21,12 @@ interface LLMQueueConfig {
   onMessageHistoryUpdate?: (messages: LlmMessage[]) => void;
 }
 
+interface QueuedModelChange {
+  config: LlmModelConfig;
+  resolve: () => void;
+  reject: (error: Error) => void;
+}
+
 type ConversationCallbacks = Map<string, LLMQueueConfig>;
 
 /**
@@ -35,12 +41,14 @@ class LLMQueueService {
   private isLoading = false;
   private isProcessing = false;
   private queue: QueuedRequest[] = [];
+  private modelChangeQueue: QueuedModelChange[] = [];
   private config: LlmModelConfig | null = null;
   private loadPromise: Promise<void> | null = null;
   private conversationCallbacks: ConversationCallbacks = new Map();
   private currentRequestId: string | null = null;
   private isDeleted = false;
-  private shouldUnloadAfterProcessing = false;
+  private isChangingModel = false;
+  private unloadPromise: Promise<void> | null = null;
 
   /**
    * Register callbacks for a conversation
@@ -67,11 +75,46 @@ class LLMQueueService {
   }
 
   /**
+   * Check if the queue is currently busy (processing, loading, or changing models)
+   */
+  private isBusy(): boolean {
+    return this.isProcessing || this.isLoading || this.isChangingModel;
+  }
+
+  /**
+   * Check if ready to process requests
+   */
+  private isReadyToProcess(): boolean {
+    return this.isLoaded && !this.isDeleted && !this.isBusy();
+  }
+
+  /**
+   * Queue a request for later processing
+   */
+  private queueRequest(
+    requestId: string,
+    messages: LlmMessage[]
+  ): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      this.queue.push({
+        id: requestId,
+        messages,
+        resolve,
+        reject,
+      });
+    });
+  }
+
+  /**
    * Load the LLM model (only if not already loaded)
    */
   async load(config: LlmModelConfig): Promise<void> {
     // If already loaded with same config, return
-    if (this.isLoaded && this.config?.modelId === config.modelId) {
+    if (
+      this.isLoaded &&
+      this.config?.modelId === config.modelId &&
+      !this.isChangingModel
+    ) {
       return;
     }
 
@@ -80,12 +123,21 @@ class LLMQueueService {
       return this.loadPromise;
     }
 
-    // If already loaded with different config, unload first
+    // If already loaded with different config, we need to switch models
     if (this.isLoaded && this.config?.modelId !== config.modelId) {
-      await this.unload();
+      // If busy, queue this model change
+      if (this.isBusy()) {
+        return new Promise<void>((resolve, reject) => {
+          this.modelChangeQueue.push({ config, resolve, reject });
+        });
+      }
+
+      // Otherwise, unload current model and load new one
+      await this.safeUnload();
     }
 
     this.isLoading = true;
+    this.isChangingModel = true;
     this.config = config;
 
     this.loadPromise = (async () => {
@@ -157,16 +209,15 @@ class LLMQueueService {
         this.isLoaded = true;
         this.isDeleted = false;
 
-        console.log(`[LLMQueue] LLM successfully loaded and ready`);
-
-        // Process any queued requests
-        this.processQueue();
+        // Process any queued items (model changes have priority)
+        this.processNextInQueue();
       } catch (error) {
         this.isLoaded = false;
         this.llm = null;
         throw error;
       } finally {
         this.isLoading = false;
+        this.isChangingModel = false;
         this.loadPromise = null;
       }
     })();
@@ -178,13 +229,22 @@ class LLMQueueService {
    * Generate a response (queued if another request is processing)
    */
   async generate(requestId: string, messages: LlmMessage[]): Promise<string> {
+    // CRITICAL: Process any pending model changes FIRST before accepting new requests
+    if (this.modelChangeQueue.length > 0 && this.isReadyToProcess()) {
+      this.processModelChangeQueue();
+      // After triggering model change, queue this request
+      return this.queueRequest(requestId, messages);
+    }
+
+    // If busy (processing, loading, or changing models), queue the request
+    if (this.isBusy()) {
+      return this.queueRequest(requestId, messages);
+    }
+
     // CRITICAL: Check actual state - if not loaded and not loading, try to reload
     if (!this.isLoaded && !this.isLoading) {
       // Check if we have a config to reload with
       if (this.config) {
-        console.warn(
-          `[LLMQueue] LLM was unloaded unexpectedly, reloading for request ${requestId}`
-        );
         try {
           await this.load(this.config);
           // Verify it actually loaded
@@ -238,16 +298,9 @@ class LLMQueueService {
       );
     }
 
-    // If currently processing, queue the request
+    // Final check: if processing now (shouldn't happen after isBusy() check, but defensive)
     if (this.isProcessing) {
-      return new Promise<string>((resolve, reject) => {
-        this.queue.push({
-          id: requestId,
-          messages,
-          resolve,
-          reject,
-        });
-      });
+      return this.queueRequest(requestId, messages);
     }
 
     // Process immediately
@@ -309,20 +362,26 @@ class LLMQueueService {
       this.isProcessing = false;
       this.currentRequestId = null;
 
-      // Check if we should unload after processing completes
-      // NOTE: We don't actually unload during app lifetime - only on app termination
-      // This flag is kept for safety but won't trigger in normal operation
-      if (this.shouldUnloadAfterProcessing) {
-        this.shouldUnloadAfterProcessing = false;
-        // Only unload if explicitly requested (e.g., app termination)
-        // In normal operation, we keep LLM loaded
-        console.log(
-          `[LLMQueue] Processing completed, but keeping LLM loaded for app lifetime`
-        );
-      }
+      // CRITICAL: Always check for model changes first, then requests
+      // This ensures model switches have priority over new generations
+      this.processNextInQueue();
+    }
+  }
 
-      // Process next request in queue
+  /**
+   * Process the next item in queue (model changes take priority over requests)
+   */
+  private processNextInQueue(): void {
+    // Model changes have priority - process them first
+    if (this.modelChangeQueue.length > 0 && this.isReadyToProcess()) {
+      this.processModelChangeQueue();
+      return;
+    }
+
+    // Then process regular requests
+    if (this.queue.length > 0 && this.isReadyToProcess()) {
       this.processQueue();
+      return;
     }
   }
 
@@ -330,7 +389,7 @@ class LLMQueueService {
    * Process the next request in the queue
    */
   private processQueue(): void {
-    if (this.queue.length === 0 || this.isProcessing || !this.isLoaded) {
+    if (this.queue.length === 0 || !this.isReadyToProcess()) {
       return;
     }
 
@@ -339,6 +398,22 @@ class LLMQueueService {
       this.processRequest(request.id, request.messages)
         .then(request.resolve)
         .catch(request.reject);
+    }
+  }
+
+  /**
+   * Process the next model change in the queue
+   */
+  private processModelChangeQueue(): void {
+    if (this.isBusy()) {
+      return;
+    }
+
+    const modelChange = this.modelChangeQueue.shift();
+    if (modelChange) {
+      this.load(modelChange.config)
+        .then(modelChange.resolve)
+        .catch(modelChange.reject);
     }
   }
 
@@ -358,29 +433,56 @@ class LLMQueueService {
   }
 
   /**
-   * Unload the LLM model to free memory
-   * NOTE: Only called on app termination - we keep LLM loaded while app is alive
+   * Safely unload the LLM model, waiting for any ongoing operations
+   * This is used internally when switching models
+   * NOTE: Does NOT interrupt - waits for natural completion
    */
-  async unload(): Promise<void> {
-    // Log when unload is called (should only happen on app termination)
-    console.log(
-      `[LLMQueue] unload() called - this should only happen on app termination`
-    );
-
-    // CRITICAL: Don't unload while processing - wait for completion
-    if (this.isProcessing) {
-      console.warn(
-        `[LLMQueue] Cannot unload while processing request ${
-          this.currentRequestId || "unknown"
-        } - will unload after completion`
-      );
-      // Mark for unloading after completion
-      this.shouldUnloadAfterProcessing = true;
-      return;
+  private async safeUnload(): Promise<void> {
+    // If already unloading, wait for it
+    if (this.unloadPromise) {
+      return this.unloadPromise;
     }
 
-    // Interrupt any ongoing generation (though we shouldn't be processing)
-    this.interrupt();
+    this.unloadPromise = (async () => {
+      // CRITICAL: Wait for processing to complete naturally
+      // We DON'T interrupt because that would corrupt the current generation
+      if (this.isProcessing) {
+        // Wait for processing to complete (poll every 100ms, max 30 seconds)
+        let attempts = 0;
+        const maxAttempts = 300;
+        while (this.isProcessing && attempts < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          attempts++;
+        }
+
+        if (this.isProcessing) {
+          console.error(
+            `[LLMQueue] Timeout waiting for processing to complete after 30 seconds`
+          );
+          // Even on timeout, DON'T interrupt - just log and proceed
+          // The generation will eventually complete or error out
+          // Unloading now might cause crashes but is safer than interrupting mid-generation
+        }
+      }
+
+      // Now actually unload
+      await this.doUnload();
+    })();
+
+    try {
+      await this.unloadPromise;
+    } finally {
+      this.unloadPromise = null;
+    }
+  }
+
+  /**
+   * Actually perform the unload operation
+   * NOTE: Should only be called after waiting for processing to complete
+   */
+  private async doUnload(): Promise<void> {
+    // At this point, processing should be complete (we waited in safeUnload)
+    // Don't interrupt - that contradicts the wait-for-completion approach
 
     // Clear queue and reject all pending requests
     this.queue.forEach((request) => {
@@ -402,13 +504,23 @@ class LLMQueueService {
     this.isProcessing = false;
     this.currentRequestId = null;
     this.isDeleted = true;
-    this.shouldUnloadAfterProcessing = false;
     this.conversationCallbacks.clear();
+
+    // Small delay to ensure cleanup
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Force garbage collection hint
     if (global.gc) {
       global.gc();
     }
+  }
+
+  /**
+   * Unload the LLM model to free memory
+   * NOTE: Only called on app termination - we keep LLM loaded while app is alive
+   */
+  async unload(): Promise<void> {
+    await this.safeUnload();
   }
 
   /**
