@@ -48,31 +48,62 @@ export async function getDeviceRAM(): Promise<number> {
   }
 }
 
+// Model metadata for RAM calculation
+const MODEL_METADATA = [
+  {
+    modelId: "qwen-3-1.7b",
+    fileSizeMB: 2064,
+    ramUsageMB: 2064 * 1.5, // ~3.1 GB
+    priority: 3, // Highest priority
+  },
+  {
+    modelId: "llama-3.2-1b-instruct",
+    fileSizeMB: 1083,
+    ramUsageMB: 1083 * 1.5, // ~1.62 GB
+    priority: 2, // Medium priority
+  },
+  {
+    modelId: "qwen-3-0.6b",
+    fileSizeMB: 900,
+    ramUsageMB: 900 * 1.5, // ~1.35 GB
+    priority: 1, // Lowest priority
+  },
+] as const;
+
+/**
+ * Get all compatible models for the device (models that fit within 20% RAM)
+ * Returns array of modelIds sorted by priority (highest first)
+ */
+export async function getCompatibleModels(): Promise<string[]> {
+  const ramGB = await getDeviceRAM();
+  const ramMB = ramGB * 1024; // Convert to MB
+  const maxRAMUsageMB = ramMB * 0.2; // 20% of total RAM
+  
+  // Find all models that fit within 20% RAM
+  const suitableModels = MODEL_METADATA.filter(
+    (model) => model.ramUsageMB <= maxRAMUsageMB
+  );
+  
+  if (suitableModels.length === 0) {
+    // Fallback to smallest model if none fit (shouldn't happen in practice)
+    return ["qwen-3-0.6b"];
+  }
+  
+  // Sort by priority (highest first) and return modelIds
+  suitableModels.sort((a, b) => b.priority - a.priority);
+  return suitableModels.map((m) => m.modelId);
+}
+
 /**
  * Get recommended model based on device capabilities
  * Returns modelId of the best model for this device
  * 
- * Prefers Qwen models - better quality and performance for on-device inference
+ * Automatically selects the highest-end model that consumes less than 20% of RAM.
+ * Options: Qwen3_0_6B (low), Llama32_1B_Instruct (medium), Qwen3_1_7B (high)
  */
 export async function getRecommendedModel(): Promise<string> {
-  const ram = await getDeviceRAM();
-  
-  // 8GB+ RAM: Can handle larger models, use the balanced middle option
-  if (ram >= 8) {
-    return "qwen-3-1.7b"; // Best balance of quality and speed
-  }
-  
-  // 6GB RAM: Use balanced middle model
-  if (ram >= 6) {
-    return "qwen-3-1.7b"; // Still good for most modern devices
-  }
-  
-  // 4-5GB RAM: Use lightweight model
-  if (ram >= 4) {
-    return "qwen-3-0.6b"; // Lightweight but capable
-  }
-  
-  // Less than 4GB: Use smallest model
-  return "qwen-3-0.6b"; // Smallest, fastest model
+  const compatible = await getCompatibleModels();
+  // The first model in the compatible list is the highest priority (best) one
+  return compatible[0];
 }
 

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   StyleSheet,
+  ActivityIndicator,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,8 +12,8 @@ import { Text } from "../components";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useTheme } from "../theme/ThemeProvider";
-import { ALL_MODELS, LlmModelConfig } from "../ai/modelConfig";
-import { getRecommendedModel } from "../utils/deviceInfo";
+import { ALL_MODELS } from "../ai/modelConfig";
+import { getRecommendedModel, getCompatibleModels } from "../utils/deviceInfo";
 import { useModelSettings } from "../db/modelSettings";
 import { ensureModelPresent } from "../ai/modelManager";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
@@ -22,7 +22,7 @@ interface OnboardingModelSelectionScreenProps {
   onContinue: () => void;
 }
 
-// Model sizes in MB
+// Model sizes in MB (for analytics tracking)
 const MODEL_SIZES: Record<string, number> = {
   "llama-3.2-1b-instruct": 1083,
   "llama-3.2-3b-instruct": 2435,
@@ -31,13 +31,11 @@ const MODEL_SIZES: Record<string, number> = {
   "qwen-3-4b": 3527,
 };
 
-// Simplified descriptions for onboarding
+// Model descriptions for display
 const MODEL_DESCRIPTIONS: Record<string, string> = {
-  "llama-3.2-1b-instruct": "Fast responses, good for everyday use",
-  "llama-3.2-3b-instruct": "Better quality, slightly slower",
-  "qwen-3-0.6b": "Fastest, smallest download",
-  "qwen-3-1.7b": "Great balance of speed and quality",
-  "qwen-3-4b": "Best quality, largest download",
+  "qwen-3-0.6b": "Fastest responses, smallest download",
+  "llama-3.2-1b-instruct": "Good balance of speed and quality",
+  "qwen-3-1.7b": "Best quality, great for complex tasks",
 };
 
 export function OnboardingModelSelectionScreen({
@@ -47,43 +45,43 @@ export function OnboardingModelSelectionScreen({
   const theme = useTheme();
   const modelSettings = useModelSettings();
 
-  const [selectedModelId, setSelectedModelId] = useState<string>("");
+  const [compatibleModelIds, setCompatibleModelIds] = useState<string[]>([]);
   const [recommendedModelId, setRecommendedModelId] = useState<string>("");
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [selectedModelId, setSelectedModelId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Track screen view
   useTrackScreenView("Model Selection");
   const trackEvent = useTrackEvent();
 
   useEffect(() => {
-    const loadRecommendation = async () => {
+    const loadModels = async () => {
       try {
-        const recommended = await getRecommendedModel();
+        const [compatible, recommended] = await Promise.all([
+          getCompatibleModels(),
+          getRecommendedModel(),
+        ]);
+        setCompatibleModelIds(compatible);
         setRecommendedModelId(recommended);
         setSelectedModelId(recommended);
       } catch (error) {
-        console.error("Error getting recommended model:", error);
+        console.error("Error loading compatible models:", error);
         // Fallback to default
-        setRecommendedModelId("qwen-3-0.6b");
-        setSelectedModelId("qwen-3-0.6b");
+        const fallback = "qwen-3-0.6b";
+        setCompatibleModelIds([fallback]);
+        setRecommendedModelId(fallback);
+        setSelectedModelId(fallback);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadRecommendation();
+    loadModels();
   }, []);
 
-  const formatSize = (mb: number) => {
-    if (mb < 1024) return `${mb} MB`;
-    const gb = mb / 1024;
-    return `${gb.toFixed(1)} GB`;
-  };
-
-  const handleContinue = async () => {
-    if (!selectedModelId) return;
+  const handleDownload = useCallback(async () => {
+    if (!selectedModelId || isDownloading) return;
 
     try {
       setIsDownloading(true);
@@ -98,7 +96,8 @@ export function OnboardingModelSelectionScreen({
       trackEvent("model_selected_onboarding", {
         modelId: selectedModelId,
         wasRecommended: selectedModelId === recommendedModelId,
-        modelSize: MODEL_SIZES[selectedModelId],
+        modelSize: MODEL_SIZES[selectedModelId] || 0,
+        autoSelected: false,
       });
 
       // Start the download in the background (don't await it)
@@ -115,6 +114,19 @@ export function OnboardingModelSelectionScreen({
       setIsDownloading(false);
       // Could show an alert here, but for now just let user try again
     }
+  }, [
+    selectedModelId,
+    isDownloading,
+    modelSettings,
+    trackEvent,
+    recommendedModelId,
+    onContinue,
+  ]);
+
+  const formatSize = (mb: number) => {
+    if (mb < 1024) return `${mb} MB`;
+    const gb = mb / 1024;
+    return `${gb.toFixed(1)} GB`;
   };
 
   if (isLoading) {
@@ -132,6 +144,10 @@ export function OnboardingModelSelectionScreen({
       </SafeAreaView>
     );
   }
+
+  const compatibleModels = ALL_MODELS.filter((m) =>
+    compatibleModelIds.includes(m.modelId)
+  );
 
   return (
     <SafeAreaView
@@ -157,108 +173,111 @@ export function OnboardingModelSelectionScreen({
             variant="body"
             style={[styles.subtitle, { color: seasonalTheme.textSecondary }]}
           >
-            All models run completely offline on your device. You can change
-            this later in settings.
+            These models are compatible with your device. We recommend the one
+            selected below.
+          </Text>
+          <Text
+            variant="body"
+            style={[
+              styles.subtitle,
+              {
+                color: seasonalTheme.textSecondary,
+                marginTop: spacingPatterns.xs,
+              },
+            ]}
+          >
+            You can change this later in settings.
           </Text>
         </View>
 
-        {/* Model list - Qwen models first (better for on-device inference) */}
+        {/* Model list */}
         <View style={styles.modelList}>
-          {ALL_MODELS.filter((m) => m.available)
-            .sort((a, b) => {
-              // Qwen models first
-              const aIsQwen = a.modelId.startsWith("qwen");
-              const bIsQwen = b.modelId.startsWith("qwen");
-              if (aIsQwen && !bIsQwen) return -1;
-              if (!aIsQwen && bIsQwen) return 1;
-              return 0;
-            })
-            .map((model) => {
-              const isSelected = model.modelId === selectedModelId;
-              const isRecommended = model.modelId === recommendedModelId;
-              const size = MODEL_SIZES[model.modelId] || 0;
-              const description =
-                MODEL_DESCRIPTIONS[model.modelId] || model.description;
+          {compatibleModels.map((model) => {
+            const isSelected = model.modelId === selectedModelId;
+            const isRecommended = model.modelId === recommendedModelId;
+            const size = MODEL_SIZES[model.modelId] || 0;
+            const description =
+              MODEL_DESCRIPTIONS[model.modelId] || model.description;
 
-              return (
-                <TouchableOpacity
-                  key={model.modelId}
-                  onPress={() => setSelectedModelId(model.modelId)}
-                  disabled={isDownloading}
-                  style={[
-                    styles.modelCard,
-                    {
-                      backgroundColor: seasonalTheme.cardBg,
-                      borderColor: isSelected
-                        ? theme.colors.accent
-                        : seasonalTheme.textSecondary + "30",
-                      borderWidth: isSelected ? 2 : 1,
-                      opacity: isDownloading ? 0.6 : 1,
-                    },
-                  ]}
-                >
-                  {/* Selection indicator */}
-                  <View style={styles.modelCardHeader}>
-                    <View style={styles.modelCardTitle}>
-                      <Text
-                        variant="h4"
+            return (
+              <TouchableOpacity
+                key={model.modelId}
+                onPress={() => setSelectedModelId(model.modelId)}
+                disabled={isDownloading}
+                style={[
+                  styles.modelCard,
+                  {
+                    backgroundColor: seasonalTheme.cardBg,
+                    borderColor: isSelected
+                      ? theme.colors.accent
+                      : seasonalTheme.textSecondary + "30",
+                    borderWidth: isSelected ? 2 : 1,
+                    opacity: isDownloading ? 0.6 : 1,
+                  },
+                ]}
+              >
+                {/* Selection indicator */}
+                <View style={styles.modelCardHeader}>
+                  <View style={styles.modelCardTitle}>
+                    <Text
+                      variant="h4"
+                      style={[
+                        styles.modelName,
+                        { color: seasonalTheme.textPrimary },
+                      ]}
+                    >
+                      {model.displayName}
+                    </Text>
+                    {isRecommended && (
+                      <View
                         style={[
-                          styles.modelName,
-                          { color: seasonalTheme.textPrimary },
+                          styles.recommendedBadge,
+                          { backgroundColor: theme.colors.accentLight },
                         ]}
                       >
-                        {model.displayName}
-                      </Text>
-                      {isRecommended && (
-                        <View
+                        <Text
+                          variant="caption"
                           style={[
-                            styles.recommendedBadge,
-                            { backgroundColor: theme.colors.accentLight },
+                            styles.recommendedText,
+                            { color: theme.colors.accent },
                           ]}
                         >
-                          <Text
-                            variant="caption"
-                            style={[
-                              styles.recommendedText,
-                              { color: theme.colors.accent },
-                            ]}
-                          >
-                            Recommended
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    {isSelected && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={24}
-                        color={theme.colors.accent}
-                      />
+                          Recommended
+                        </Text>
+                      </View>
                     )}
                   </View>
+                  {isSelected && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={24}
+                      color={theme.colors.accent}
+                    />
+                  )}
+                </View>
 
-                  {/* Model info */}
-                  <Text
-                    variant="caption"
-                    style={[
-                      styles.modelSize,
-                      { color: seasonalTheme.textSecondary },
-                    ]}
-                  >
-                    {model.size} • {formatSize(size)} download
-                  </Text>
-                  <Text
-                    variant="body"
-                    style={[
-                      styles.modelDescription,
-                      { color: seasonalTheme.textSecondary },
-                    ]}
-                  >
-                    {description}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+                {/* Model info */}
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.modelSize,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  {model.size} • {formatSize(size)} download
+                </Text>
+                <Text
+                  variant="body"
+                  style={[
+                    styles.modelDescription,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  {description}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -273,13 +292,15 @@ export function OnboardingModelSelectionScreen({
         ]}
       >
         <TouchableOpacity
-          onPress={handleContinue}
+          onPress={handleDownload}
           disabled={!selectedModelId || isDownloading}
           style={[
-            styles.continueButton,
+            styles.downloadButton,
             {
-              borderColor: seasonalTheme.textPrimary,
-              opacity: !selectedModelId || isDownloading ? 0.4 : 1,
+              backgroundColor: isDownloading
+                ? seasonalTheme.textSecondary + "40"
+                : theme.colors.accent,
+              opacity: !selectedModelId || isDownloading ? 0.6 : 1,
             },
           ]}
           activeOpacity={0.8}
@@ -291,7 +312,7 @@ export function OnboardingModelSelectionScreen({
               variant="body"
               style={[styles.buttonText, { color: seasonalTheme.textPrimary }]}
             >
-              Continue
+              Start Download
             </Text>
           )}
         </TouchableOpacity>
@@ -364,44 +385,17 @@ const styles = StyleSheet.create({
   modelDescription: {
     lineHeight: 20,
   },
-  progressContainer: {
-    padding: spacingPatterns.md,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacingPatterns.md,
-  },
-  progressHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacingPatterns.sm,
-  },
-  progressText: {
-    fontWeight: "500",
-  },
-  progressPercent: {
-    fontWeight: "600",
-  },
-  progressBarBg: {
-    height: 8,
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressBarFill: {
-    height: "100%",
-    borderRadius: 4,
-  },
   bottomContainer: {
     paddingHorizontal: spacingPatterns.screen,
     paddingTop: spacingPatterns.md,
     paddingBottom: spacingPatterns.md,
     borderTopWidth: 1,
   },
-  continueButton: {
+  downloadButton: {
     width: "100%",
     paddingVertical: spacingPatterns.md,
     paddingHorizontal: spacingPatterns.lg,
     borderRadius: borderRadius.full,
-    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
   },
