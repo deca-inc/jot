@@ -20,22 +20,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import RenderHtml, {
-  HTMLElementModel,
-  HTMLContentModel,
-} from "react-native-render-html";
+import RenderHtml from "react-native-render-html";
 import { marked } from "marked";
-import { markedHighlight } from "marked-highlight";
-import hljs from "highlight.js/lib/core";
-// Import only the languages you need to keep bundle size small
-import javascript from "highlight.js/lib/languages/javascript";
-import typescript from "highlight.js/lib/languages/typescript";
-import python from "highlight.js/lib/languages/python";
-import java from "highlight.js/lib/languages/java";
-import cpp from "highlight.js/lib/languages/cpp";
-import json from "highlight.js/lib/languages/json";
-import xml from "highlight.js/lib/languages/xml";
-import css from "highlight.js/lib/languages/css";
 import { Text, FloatingComposerHeader } from "../components";
 import { GenerationResumptionPrompt } from "../components/GenerationResumptionPrompt";
 import { useTrackScreenView } from "../analytics";
@@ -43,40 +29,7 @@ import { useGenerationResumption } from "../ai/useGenerationResumption";
 import { llmQueue } from "../ai/ModelProvider";
 import { useQueryClient } from "@tanstack/react-query";
 
-// Register languages
-hljs.registerLanguage("javascript", javascript);
-hljs.registerLanguage("typescript", typescript);
-hljs.registerLanguage("python", python);
-hljs.registerLanguage("java", java);
-hljs.registerLanguage("cpp", cpp);
-hljs.registerLanguage("c++", cpp);
-hljs.registerLanguage("json", json);
-hljs.registerLanguage("xml", xml);
-hljs.registerLanguage("html", xml);
-hljs.registerLanguage("css", css);
-
-// Configure marked with syntax highlighting
-marked.use(
-  markedHighlight({
-    langPrefix: "hljs language-",
-    highlight(code, lang) {
-      // Only highlight if the language is registered, otherwise return plain text
-      if (lang && hljs.getLanguage(lang)) {
-        try {
-          return hljs.highlight(code, { language: lang }).value;
-        } catch (err) {
-          console.error("Error highlighting code:", err);
-          // Return plain code without styling on error
-          return code;
-        }
-      }
-      // Return plain code for unknown languages - let the default code/pre styles handle it
-      return code;
-    },
-  })
-);
-
-// Configure marked options
+// Configure marked for simple rendering
 marked.setOptions({
   breaks: true,
   gfm: true,
@@ -336,25 +289,26 @@ export function AIChatComposer({
         marginBottom: 4,
         paddingLeft: 4,
       },
+      // Code element base styles (will be overridden by renderer for inline vs block)
       code: {
-        color: seasonalTheme.textPrimary,
-        backgroundColor: seasonalTheme.textSecondary + "30",
         fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
         fontSize: 13,
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-        borderRadius: 4,
+        color: seasonalTheme.textPrimary,
       },
+      // Code block (triple backtick)
       pre: {
         color: seasonalTheme.textPrimary,
-        backgroundColor: seasonalTheme.textSecondary + "25",
+        backgroundColor: seasonalTheme.textSecondary + "15",
+        borderColor: seasonalTheme.textSecondary + "30",
+        borderWidth: 1,
         fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
         fontSize: 13,
-        padding: 12,
-        borderRadius: 8,
-        marginTop: 4,
-        marginBottom: 12,
-        whiteSpace: "pre" as const,
+        padding: spacingPatterns.sm,
+        borderRadius: borderRadius.md,
+        marginTop: spacingPatterns.xs,
+        marginBottom: spacingPatterns.sm,
+        overflow: "scroll" as const,
+        whiteSpace: "pre-wrap" as const,
       },
       blockquote: {
         color: seasonalTheme.textSecondary,
@@ -366,16 +320,6 @@ export function AIChatComposer({
         marginBottom: 8,
         fontStyle: "italic" as const,
       },
-      // Style think tags as dimmed/preliminary content
-      // These tags show the model's reasoning process and will be removed when generation completes
-      think: {
-        color: seasonalTheme.textSecondary + "AA", // Dimmed text (67% opacity via hex)
-        fontStyle: "italic" as const,
-        fontSize: 13,
-        opacity: 0.5,
-        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-        whiteSpace: "pre" as const, // Preserve whitespace and newlines
-      },
       // Syntax highlighting colors - span elements
       span: {
         fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
@@ -385,167 +329,39 @@ export function AIChatComposer({
     [seasonalTheme.textPrimary, seasonalTheme.textSecondary]
   );
 
-  // Custom renderers (currently none needed)
-  const customRenderers = useMemo(() => {
-    return {};
-  }, []);
-
   const htmlContentWidth = useMemo(
     () => width - spacingPatterns.screen * 2,
     [width]
   );
 
-  // Custom styles for code blocks to handle pre > code nesting
-  const htmlBaseStyle = useMemo(
+  // Custom renderer to handle inline code vs block code differently
+  const customRenderers = useMemo(
     () => ({
-      backgroundColor: "transparent",
+      code: ({TDefaultRenderer, tnode, style, ...props}: any) => {
+        // Check if this code element is inside a pre element (block code)
+        const isBlockCode = tnode.parent?.tagName === 'pre';
+
+        if (isBlockCode) {
+          // Block code - no additional styling, pre handles it
+          return <TDefaultRenderer tnode={tnode} style={style} {...props} />;
+        }
+
+        // Inline code - add background and padding
+        const inlineStyle = {
+          ...style,
+          backgroundColor: seasonalTheme.textSecondary + "20",
+          paddingHorizontal: 4,
+          paddingVertical: 1,
+          borderRadius: 3,
+        };
+
+        return <TDefaultRenderer tnode={tnode} style={inlineStyle} {...props} />;
+      },
     }),
-    []
+    [seasonalTheme.textSecondary]
   );
 
-  // Syntax highlighting class styles (for hljs classes)
-  const htmlClassesStyles = useMemo(
-    () => ({
-      // Base hljs class (the code element inside pre)
-      hljs: {
-        backgroundColor: "transparent",
-        padding: 0,
-        margin: 0,
-        borderWidth: 0,
-        whiteSpace: "pre" as const,
-        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-        fontSize: 13,
-        color: seasonalTheme.textPrimary,
-      },
-      // Language-specific classes (language-python, language-javascript, etc.)
-      "language-javascript": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-      },
-      "language-typescript": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-      },
-      "language-python": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-      },
-      "language-java": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-      },
-      "language-cpp": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-      },
-      "language-c++": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-      },
-      "language-json": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-      },
-      "language-xml": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-      },
-      "language-html": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-      },
-      "language-css": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-      },
-      // Catch-all for unknown languages
-      "language-bash": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-      },
-      "language-shell": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-      },
-      "language-plaintext": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-      },
-      "language-text": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-      },
-      "language-": {
-        backgroundColor: "transparent",
-        color: seasonalTheme.textPrimary,
-        fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-      },
-      // Keywords (if, else, function, const, let, var, etc.)
-      "hljs-keyword": { color: "#CF8E6D" },
-      "hljs-built_in": { color: "#CF8E6D" },
-      "hljs-type": { color: "#CF8E6D" },
 
-      // Strings
-      "hljs-string": { color: "#6AAB73" },
-      "hljs-template-variable": { color: "#6AAB73" },
-
-      // Numbers
-      "hljs-number": { color: "#6897BB" },
-      "hljs-literal": { color: "#6897BB" },
-
-      // Comments
-      "hljs-comment": {
-        color: seasonalTheme.textSecondary,
-        fontStyle: "italic" as const,
-      },
-      "hljs-quote": {
-        color: seasonalTheme.textSecondary,
-        fontStyle: "italic" as const,
-      },
-
-      // Functions
-      "hljs-function": { color: "#56A8F5" },
-      "hljs-title": { color: "#56A8F5" },
-      "hljs-name": { color: "#56A8F5" },
-
-      // Variables and parameters
-      "hljs-variable": { color: "#A9B7C6" },
-      "hljs-params": { color: "#A9B7C6" },
-      "hljs-attr": { color: "#A9B7C6" },
-
-      // Classes and types
-      "hljs-class": { color: "#A5C261" },
-
-      // Operators
-      "hljs-operator": { color: "#A9B7C6" },
-      "hljs-punctuation": { color: "#A9B7C6" },
-
-      // Meta (decorators, annotations)
-      "hljs-meta": { color: "#BBB529" },
-      "hljs-meta-keyword": { color: "#BBB529" },
-
-      // Tags (HTML/XML)
-      "hljs-tag": { color: "#E8BF6A" },
-      "hljs-selector-tag": { color: "#E8BF6A" },
-
-      // Attributes
-      "hljs-attribute": { color: "#BABABA" },
-
-      // Symbols and special
-      "hljs-symbol": { color: "#9876AA" },
-      "hljs-bullet": { color: "#9876AA" },
-      "hljs-regexp": { color: "#D16969" },
-
-      // Additions/deletions (for diffs)
-      "hljs-addition": { backgroundColor: "#294436", color: "#6AAB73" },
-      "hljs-deletion": { backgroundColor: "#484A4A", color: "#FF0000" },
-    }),
-    [seasonalTheme.textSecondary, seasonalTheme.textPrimary]
-  );
 
   const queryClient = useQueryClient();
 
@@ -751,73 +567,91 @@ export function AIChatComposer({
 
   // Pre-parse markdown to HTML outside of render callback
   const parsedMessages = useMemo(() => {
+    const generationStatus = entry?.generationStatus;
+
     return blocksWithPlaceholder.map((block, index) => {
       const isUser = block.role === "user";
       const messageContent = block.type === "markdown" ? block.content : "";
-      const isEmpty = !messageContent || messageContent.trim().length === 0;
       const isLastMessage = index === blocksWithPlaceholder.length - 1;
-      const normalizedContent = messageContent;
 
-      const thinkTagRegex = /<think>/g;
-      const hasThinkTags = thinkTagRegex.test(normalizedContent);
-      const hasEndingThinkTags = /<\/think>$/g.test(normalizedContent);
-
-      // Check if generation is complete - if so, strip think tags
-      // During generation, show think tags inline as preliminary content
-      const isGenerationInProgress =
-        entry?.generationStatus === "generating" || isLLMLoading;
+      // Check if generation is in progress
+      const isGenerationInProgress = generationStatus === "generating" || isLLMLoading;
       const isGenerating = !isUser && isLastMessage && isGenerationInProgress;
 
-      // During generation, keep think tags in content so they show as preliminary
-      // After generation completes, strip them
-      const contentForDisplay = isGenerating
-        ? stripThinkTags(normalizedContent).replace(/\n/g, "<br />") // Keep think tags during generation so we can style them
-        : messageContent; // Strip think tags after generation completes
+      // For non-generating messages, skip think tag processing entirely
+      if (!isGenerating) {
+        const cleanContent = stripThinkTags(messageContent);
+        let htmlContent: string | null = null;
 
-      // Check if we have any content (including think tags during generation)
-      const hasActualContent = contentForDisplay.trim().length > 0;
-      // During generation, also consider think tags as "content" to display
-      const hasContentToShow =
-        hasActualContent || (isGenerating && hasThinkTags);
+        if (!isUser && cleanContent.trim().length > 0) {
+          try {
+            htmlContent = marked.parse(cleanContent) as string;
+          } catch (error) {
+            console.error("[AIChatComposer] Error parsing markdown:", error);
+          }
+        }
+
+        return {
+          htmlContent,
+          isGenerating: false,
+          hasThinkTags: false,
+          thinkContent: "",
+          contentWithoutThinkTags: cleanContent,
+        };
+      }
+
+      // Only process think tags for generating messages
+      const hasThinkTag = messageContent.includes('<think>');
+      const hasClosedThinkTag = messageContent.includes('</think>');
+
+      let thinkContent = "";
+      let contentAfterThink = "";
+
+      if (hasThinkTag) {
+        // Extract thinking content (everything between <think> and </think>, or to end if unclosed)
+        const thinkMatch = messageContent.match(/<think>([\s\S]*?)(<\/think>|$)/);
+        thinkContent = thinkMatch ? thinkMatch[1].trim() : "";
+
+        // Get last ~200 characters for display (enough for ~2 visual lines)
+        // numberOfLines={2} will handle the actual visual truncation
+        if (thinkContent.length > 200) {
+          thinkContent = "..." + thinkContent.slice(-200);
+        }
+
+        // Only show content that comes AFTER the closing </think> tag
+        if (hasClosedThinkTag) {
+          const afterThinkMatch = messageContent.match(/<\/think>([\s\S]*)/);
+          contentAfterThink = afterThinkMatch ? afterThinkMatch[1].trim() : "";
+        }
+        // If think tag is unclosed, there's no actual content yet
+      } else {
+        // No think tags at all, show all content
+        contentAfterThink = messageContent;
+      }
+
+      const hasActualContent = contentAfterThink.trim().length > 0;
 
       let htmlContent: string | null = null;
-      if (!isUser && hasContentToShow && !isEmpty) {
+      if (!isUser && hasActualContent) {
         try {
-          // Strip think tags completely before parsing
-          const contentWithoutThinkTags = stripThinkTags(contentForDisplay);
-          let parsed = marked.parse(contentWithoutThinkTags) as string;
-
-          // If the original content had think tags, wrap the entire parsed content in a styled div
-          if (isGenerating && hasThinkTags && !hasEndingThinkTags) {
-            // Wrap the entire content with think styling (dimmed, italic, smaller font)
-            const thinkStyle = `color: ${
-              seasonalTheme.textSecondary
-            }AA; font-style: italic; font-size: 13px; opacity: 0.5; font-family: ${
-              Platform.OS === "ios" ? "Menlo" : "monospace"
-            }; white-space: pre;`;
-            parsed = `<div style="${thinkStyle}">${parsed}</div>`;
-          }
-
-          htmlContent = parsed;
+          htmlContent = marked.parse(contentAfterThink) as string;
         } catch (error) {
-          console.error("Error parsing markdown:", error);
-          htmlContent = null;
+          console.error("[AIChatComposer] Error parsing markdown:", error);
         }
       }
 
       return {
         htmlContent,
         isGenerating,
-        contentWithoutThinkTags: stripThinkTags(normalizedContent),
-        hasThinkTags,
-        thinkContent: "", // Not used anymore - think tags shown inline
+        hasThinkTags: hasThinkTag && !!thinkContent,
+        thinkContent,
+        contentWithoutThinkTags: contentAfterThink,
       };
     });
   }, [
     blocksWithPlaceholder,
     isLLMLoading,
     entry?.generationStatus,
-    seasonalTheme,
   ]);
 
   // Render item for FlatList
@@ -867,7 +701,32 @@ export function AIChatComposer({
       // AI messages: full width, no bubble
       return (
         <View style={styles.assistantMessageFullWidth}>
-          {isGenerating && !htmlContent ? (
+          {/* Show thinking card if generating and has think content */}
+          {isGenerating && hasThinkTags && thinkContent && (
+            <View
+              style={[
+                styles.thinkingCard,
+                {
+                  backgroundColor: seasonalTheme.textSecondary + "15",
+                  borderColor: seasonalTheme.textSecondary + "30",
+                },
+              ]}
+            >
+              <Text
+                variant="caption"
+                style={[
+                  styles.thinkingText,
+                  { color: seasonalTheme.textSecondary },
+                ]}
+                numberOfLines={2}
+              >
+                {thinkContent}
+              </Text>
+            </View>
+          )}
+
+          {/* Show actual content */}
+          {isGenerating && !htmlContent && !thinkContent ? (
             // Show "Thinking..." only if we have no content to display yet
             <Text
               variant="body"
@@ -879,39 +738,31 @@ export function AIChatComposer({
               Thinking...
             </Text>
           ) : htmlContent ? (
-            // Show content (with think tags if generating, without if complete)
+            // Show actual response content (without think tags)
             <RenderHtml
               contentWidth={htmlContentWidth}
               source={{ html: htmlContent }}
               tagsStyles={htmlTagsStyles}
-              baseStyle={htmlBaseStyle}
-              classesStyles={htmlClassesStyles}
               renderers={customRenderers}
-              enableExperimentalMarginCollapsing={false}
-              enableCSSInlineProcessing={true}
+              ignoredDomTags={['think']}
             />
           ) : (
             // Fallback text if no HTML content
-            <Text
-              variant="body"
-              style={{
-                color: seasonalTheme.textPrimary,
-              }}
-            >
-              {contentWithoutThinkTags || " "}
-            </Text>
+            contentWithoutThinkTags && (
+              <Text
+                variant="body"
+                style={{
+                  color: seasonalTheme.textPrimary,
+                }}
+              >
+                {contentWithoutThinkTags}
+              </Text>
+            )
           )}
         </View>
       );
     },
-    [
-      parsedMessages,
-      seasonalTheme,
-      htmlContentWidth,
-      htmlTagsStyles,
-      htmlBaseStyle,
-      htmlClassesStyles,
-    ]
+    [parsedMessages, seasonalTheme, htmlContentWidth, htmlTagsStyles, customRenderers]
   );
 
   const keyExtractor = useCallback((item: Block, index: number) => {
@@ -1146,21 +997,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  thinkTagContainer: {
+  thinkingCard: {
     marginBottom: spacingPatterns.sm,
     padding: spacingPatterns.sm,
     borderRadius: borderRadius.md,
-    borderLeftWidth: 3,
+    borderWidth: 1,
   },
-  thinkTagLabel: {
-    fontWeight: "600",
-    marginBottom: spacingPatterns.xs / 2,
-    fontSize: 11,
-    textTransform: "uppercase" as const,
-    letterSpacing: 0.5,
-  },
-  thinkTagContent: {
-    fontSize: 13,
-    lineHeight: 18,
+  thinkingText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontStyle: "italic",
   },
 });
