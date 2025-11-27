@@ -8,7 +8,11 @@ import React, {
 } from "react";
 import { Alert, AppState, AppStateStatus } from "react-native";
 import { Message as LlmMessage, LLMModule } from "react-native-executorch";
-import { LlmModelConfig, DEFAULT_MODEL } from "./modelConfig";
+import {
+  LlmModelConfig,
+  DEFAULT_MODEL,
+  DEFAULT_SYSTEM_PROMPT,
+} from "./modelConfig";
 import { Block, EntryRepository } from "../db/entries";
 import { llmQueue } from "./LLMQueue";
 
@@ -537,9 +541,9 @@ export function blocksToLlmMessages(
 ): LlmMessage[] {
   const messages: LlmMessage[] = [];
 
-  if (systemPrompt) {
-    messages.push({ role: "system", content: systemPrompt });
-  }
+  // Use default system prompt if none provided
+  const promptToUse = systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+  messages.push({ role: "system", content: promptToUse });
 
   const chatMessages = blocks
     .filter((m) => m.type === "markdown")

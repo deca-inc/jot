@@ -6,7 +6,7 @@
  */
 
 import { LLMModule, Message as LlmMessage } from "react-native-executorch";
-import { LlmModelConfig } from "./modelConfig";
+import { LlmModelConfig, DEFAULT_SYSTEM_PROMPT } from "./modelConfig";
 import { ensureModelPresent } from "./modelManager";
 
 interface QueuedRequest {
@@ -192,12 +192,11 @@ class LLMQueueService {
         await new Promise((resolve) => setTimeout(resolve, 200));
 
         // Configure LLM
-        const systemPrompt = "You are a helpful AI assistant.";
         try {
           this.llm.configure({
             chatConfig: {
               initialMessageHistory: [],
-              systemPrompt,
+              systemPrompt: DEFAULT_SYSTEM_PROMPT,
             },
           });
         } catch (e) {

@@ -138,10 +138,7 @@ export function useGenerationResumption(entryId?: number) {
         );
 
         // Convert existing blocks to messages and regenerate
-        const messages = blocksToLlmMessages(
-          existingBlocks,
-          "You are a helpful AI assistant."
-        );
+        const messages = blocksToLlmMessages(existingBlocks);
 
         // Update status to generating
         updateEntry.mutate({

@@ -223,3 +223,19 @@ export function getModelById(modelId: string): LlmModelConfig | undefined {
 
 // Default model - best balance of quality and performance for most devices
 export const DEFAULT_MODEL = Qwen3_1_7B;
+
+// =============================================================================
+// SYSTEM PROMPTS
+// =============================================================================
+
+/**
+ * Default system prompt for AI conversations
+ */
+export const DEFAULT_SYSTEM_PROMPT =
+  "You're a thoughtful, AI assistant is both concise and thorough. When unsure about the user's intentions you should clarify. When unsure about a fact, you should indicate so. You should not present bias in your answers politically. You should not be paternalistic in the types of content you produce. Your answers should be well balanced, truthful, and informative.";
+
+/**
+ * System prompt for title generation
+ */
+export const TITLE_GENERATION_SYSTEM_PROMPT =
+  "You are a helpful AI assistant that generates specific, memorable titles for conversations. Return ONLY plain text titles with no markdown formatting, quotes, or special characters. The title should be just a few words in length.";

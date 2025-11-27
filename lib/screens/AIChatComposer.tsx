@@ -385,26 +385,10 @@ export function AIChatComposer({
     [seasonalTheme.textPrimary, seasonalTheme.textSecondary]
   );
 
-  // Custom renderer for think tags to ensure consistent styling for all children
-  // This ensures that when markdown creates <p> tags or other elements inside <think>,
-  // they all get the same dimmed styling
+  // Custom renderers (currently none needed)
   const customRenderers = useMemo(() => {
-    const thinkStyle = htmlTagsStyles.think;
-
-    return {
-      think: (props: any) => {
-        const { TDefaultRenderer, ...restProps } = props;
-        return (
-          <TDefaultRenderer
-            {...restProps}
-            style={[thinkStyle, restProps.style]}
-            // Apply think styling to all child elements by using a wrapper View
-            // This ensures consistent styling even when markdown creates nested elements
-          />
-        );
-      },
-    };
-  }, [htmlTagsStyles]);
+    return {};
+  }, []);
 
   const htmlContentWidth = useMemo(
     () => width - spacingPatterns.screen * 2,
@@ -772,16 +756,11 @@ export function AIChatComposer({
       const messageContent = block.type === "markdown" ? block.content : "";
       const isEmpty = !messageContent || messageContent.trim().length === 0;
       const isLastMessage = index === blocksWithPlaceholder.length - 1;
+      const normalizedContent = messageContent;
 
-      // Detect think tags - during generation, show them inline as preliminary content
-      // Qwen uses <think>...</think> tags for reasoning - these are preliminary and will be removed when complete
-      // Normalize both <think> and <think> opening tags to <think> for consistent styling
-      const normalizedContent = messageContent
-        .replace(/<think>/g, "<think>") // Normalize <think> to <think>
-        .replace(/<think>/g, "<think>"); // Also normalize <think> to <think>
-
-      const thinkTagRegex = /<think>[\s\S]*?<\/think>/g;
+      const thinkTagRegex = /<think>/g;
       const hasThinkTags = thinkTagRegex.test(normalizedContent);
+      const hasEndingThinkTags = /<\/think>$/g.test(normalizedContent);
 
       // Check if generation is complete - if so, strip think tags
       // During generation, show think tags inline as preliminary content
@@ -791,10 +770,9 @@ export function AIChatComposer({
 
       // During generation, keep think tags in content so they show as preliminary
       // After generation completes, strip them
-      const shouldStripThinkTags = !isGenerating;
-      const contentForDisplay = shouldStripThinkTags
-        ? stripThinkTags(normalizedContent)
-        : normalizedContent; // Keep think tags during generation
+      const contentForDisplay = isGenerating
+        ? stripThinkTags(normalizedContent).replace(/\n/g, "<br />") // Keep think tags during generation so we can style them
+        : messageContent; // Strip think tags after generation completes
 
       // Check if we have any content (including think tags during generation)
       const hasActualContent = contentForDisplay.trim().length > 0;
@@ -805,27 +783,19 @@ export function AIChatComposer({
       let htmlContent: string | null = null;
       if (!isUser && hasContentToShow && !isEmpty) {
         try {
-          // Parse markdown WITH think tags during generation (so we can style them)
-          // Think tags will be styled as preliminary/dimmed content via htmlTagsStyles
-          let parsed = marked.parse(contentForDisplay) as string;
+          // Strip think tags completely before parsing
+          const contentWithoutThinkTags = stripThinkTags(contentForDisplay);
+          let parsed = marked.parse(contentWithoutThinkTags) as string;
 
-          // CRITICAL: After parsing, ensure all child elements inside think tags
-          // get the think styling by wrapping them or ensuring they inherit styles
-          // When markdown creates <p> tags inside <think>, they need to inherit think styling
-          // We'll replace <p> tags inside think tags with styled versions
-          if (isGenerating && hasThinkTags) {
-            // Replace <p> tags that are direct children of <think> tags
-            // This ensures consistent styling across line breaks
-            parsed = parsed.replace(
-              /<think>([\s\S]*?)<\/think>/g,
-              (match, content) => {
-                // Replace <p> tags inside think with spans that preserve styling
-                const processedContent = content
-                  .replace(/<p>/g, '<span style="display: block;">')
-                  .replace(/<\/p>/g, "</span>");
-                return `<think>${processedContent}</think>`;
-              }
-            );
+          // If the original content had think tags, wrap the entire parsed content in a styled div
+          if (isGenerating && hasThinkTags && !hasEndingThinkTags) {
+            // Wrap the entire content with think styling (dimmed, italic, smaller font)
+            const thinkStyle = `color: ${
+              seasonalTheme.textSecondary
+            }AA; font-style: italic; font-size: 13px; opacity: 0.5; font-family: ${
+              Platform.OS === "ios" ? "Menlo" : "monospace"
+            }; white-space: pre;`;
+            parsed = `<div style="${thinkStyle}">${parsed}</div>`;
           }
 
           htmlContent = parsed;
@@ -838,14 +808,17 @@ export function AIChatComposer({
       return {
         htmlContent,
         isGenerating,
-        contentWithoutThinkTags: shouldStripThinkTags
-          ? contentForDisplay
-          : stripThinkTags(contentForDisplay),
+        contentWithoutThinkTags: stripThinkTags(normalizedContent),
         hasThinkTags,
         thinkContent: "", // Not used anymore - think tags shown inline
       };
     });
-  }, [blocksWithPlaceholder, isLLMLoading, entry?.generationStatus]);
+  }, [
+    blocksWithPlaceholder,
+    isLLMLoading,
+    entry?.generationStatus,
+    seasonalTheme,
+  ]);
 
   // Render item for FlatList
   const renderMessage: ListRenderItem<Block> = useCallback(
@@ -916,12 +889,6 @@ export function AIChatComposer({
               renderers={customRenderers}
               enableExperimentalMarginCollapsing={false}
               enableCSSInlineProcessing={true}
-              customHTMLElementModels={{
-                think: HTMLElementModel.fromCustomModel({
-                  tagName: "think",
-                  contentModel: HTMLContentModel.mixed,
-                }),
-              }}
             />
           ) : (
             // Fallback text if no HTML content

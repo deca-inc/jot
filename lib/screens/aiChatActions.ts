@@ -13,6 +13,7 @@
 
 import { Block } from "../db/entries";
 import { llmQueue, llmManager, blocksToLlmMessages } from "../ai/ModelProvider";
+import { TITLE_GENERATION_SYSTEM_PROMPT } from "../ai/modelConfig";
 import { entryKeys } from "../db/useEntries";
 
 /**
@@ -21,10 +22,12 @@ import { entryKeys } from "../db/useEntries";
  * @export Can be used throughout the app for cleaning Qwen responses
  */
 export function stripThinkTags(text: string): string {
-  return text
+  const out = text
     .replace(/<think>[\s\S]*?<\/think>/g, "") // Remove complete <think>...</think> blocks
     .replace(/<\/?think>/g, "") // Remove any remaining <think> or </think> tags
     .trim();
+
+  return out;
 }
 
 export interface AIChatActionContext {
@@ -294,10 +297,7 @@ async function queueBackgroundGeneration(
       throw getOrCreateError;
     }
 
-    const messages = blocksToLlmMessages(
-      blocks,
-      "You are a helpful AI assistant."
-    );
+    const messages = blocksToLlmMessages(blocks);
 
     const aiResponse = await llmForConvo.generate(messages);
 
@@ -625,10 +625,7 @@ export async function generateAIResponse(
     llmQueue.registerCallbacks(convoId, listeners);
 
     // Convert blocks to LLM messages
-    const llmMessages = blocksToLlmMessages(
-      currentBlocks,
-      "You are a helpful AI assistant."
-    );
+    const llmMessages = blocksToLlmMessages(currentBlocks);
 
     // Generate response - this will stream tokens and update the DB via listeners
     const generatedContent = await llm.generate(llmMessages);
@@ -736,7 +733,7 @@ Title:`;
 
     const messages = blocksToLlmMessages(
       titlePrompt,
-      "You are a helpful AI assistant that generates specific, memorable titles for conversations. Return ONLY plain text titles with no markdown formatting, quotes, or special characters."
+      TITLE_GENERATION_SYSTEM_PROMPT
     );
 
     // Use separate conversation ID for title generation to avoid interfering with main chat

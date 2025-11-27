@@ -10,7 +10,7 @@ export async function getDeviceRAM(): Promise<number> {
     // For iOS, estimate based on model year (rough heuristic)
     if (Platform.OS === "ios") {
       const modelName = Device.modelName || "";
-      
+
       // High-end devices (iPhone 14 Pro+, iPhone 15+)
       if (
         modelName.includes("iPhone 14 Pro") ||
@@ -20,7 +20,7 @@ export async function getDeviceRAM(): Promise<number> {
       ) {
         return 8; // 6-8GB RAM
       }
-      
+
       // Mid-range devices (iPhone 13+, iPhone 14)
       if (
         modelName.includes("iPhone 13") ||
@@ -29,17 +29,17 @@ export async function getDeviceRAM(): Promise<number> {
       ) {
         return 6; // 4-6GB RAM
       }
-      
+
       // Older or lower-end devices
       return 4; // 3-4GB RAM
     }
-    
+
     // For Android, we could use react-native-device-info, but for now estimate
     if (Platform.OS === "android") {
       // Most modern Android devices have at least 6GB
       return 6;
     }
-    
+
     // Default fallback
     return 4;
   } catch (error) {
@@ -78,17 +78,17 @@ export async function getCompatibleModels(): Promise<string[]> {
   const ramGB = await getDeviceRAM();
   const ramMB = ramGB * 1024; // Convert to MB
   const maxRAMUsageMB = ramMB * 0.2; // 20% of total RAM
-  
+
   // Find all models that fit within 20% RAM
   const suitableModels = MODEL_METADATA.filter(
     (model) => model.ramUsageMB <= maxRAMUsageMB
   );
-  
+
   if (suitableModels.length === 0) {
     // Fallback to smallest model if none fit (shouldn't happen in practice)
     return ["qwen-3-0.6b"];
   }
-  
+
   // Sort by priority (highest first) and return modelIds
   suitableModels.sort((a, b) => b.priority - a.priority);
   return suitableModels.map((m) => m.modelId);
@@ -97,7 +97,7 @@ export async function getCompatibleModels(): Promise<string[]> {
 /**
  * Get recommended model based on device capabilities
  * Returns modelId of the best model for this device
- * 
+ *
  * Automatically selects the highest-end model that consumes less than 20% of RAM.
  * Options: Qwen3_0_6B (low), Llama32_1B_Instruct (medium), Qwen3_1_7B (high)
  */
@@ -106,4 +106,3 @@ export async function getRecommendedModel(): Promise<string> {
   // The first model in the compatible list is the highest priority (best) one
   return compatible[0];
 }
-
