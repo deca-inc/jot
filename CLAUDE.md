@@ -83,6 +83,7 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 
 ### Tech Stack
 - **Framework**: Expo + React Native for macOS via [react-native-macos](https://github.com/microsoft/react-native-macos)
+- **Package Manager**: pnpm (always use `pnpm` commands, never `npm` or `yarn`)
 - **No web app**: Desktop-only initially
 
 ### Local-First Storage

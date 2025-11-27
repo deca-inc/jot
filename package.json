@@ -56,5 +56,10 @@
     "tsx": "^4.20.6",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "pnpm": {
+    "patchedDependencies": {
+      "react-native-enriched@0.1.6": "patches/react-native-enriched@0.1.6.patch"
+    }
+  }
 }
