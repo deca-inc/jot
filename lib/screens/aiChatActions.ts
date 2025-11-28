@@ -13,7 +13,6 @@
 
 import { Block } from "../db/entries";
 import { llmQueue, llmManager, blocksToLlmMessages } from "../ai/ModelProvider";
-import { TITLE_GENERATION_SYSTEM_PROMPT } from "../ai/modelConfig";
 import { entryKeys } from "../db/useEntries";
 
 /**
@@ -70,10 +69,9 @@ interface CreateConversationParams {
  * This handles the complete flow and returns the entry ID for navigation.
  *
  * Flow:
- * 1. Create entry with user message
+ * 1. Create entry with user's first message as title
  * 2. Return entry ID immediately for navigation
  * 3. Queue AI response generation (runs in background)
- * 4. Generate title after AI response completes
  *
  * @returns The created entry ID
  */
@@ -90,12 +88,17 @@ export async function createConversation(
   } = params;
 
   try {
-    // Step 1: Create entry with user message
+    // Step 1: Create entry with user message as title
+    // Generate a simple title from the first message (truncate to 60 chars)
+    const title = userMessage.trim().length > 60
+      ? userMessage.trim().substring(0, 57) + "..."
+      : userMessage.trim();
+
     const entry = await new Promise<any>((resolve, reject) => {
       createEntry.mutate(
         {
           type: "ai_chat",
-          title: "AI Conversation",
+          title,
           blocks: [
             {
               type: "markdown",
@@ -115,9 +118,9 @@ export async function createConversation(
     });
 
     // Step 2: Queue background work (don't await - let it run async)
+    // No longer generating titles - just AI response
     queueBackgroundGeneration(
       entry.id,
-      userMessage,
       entry.blocks,
       updateEntry,
       llmManager,
@@ -143,11 +146,11 @@ export async function createConversation(
 }
 
 /**
- * Queue AI generation and title generation to run in background
+ * Queue AI generation to run in background
+ * Title is now set from user's first message, no generation needed
  */
 async function queueBackgroundGeneration(
   entryId: number,
-  userMessage: string,
   blocks: Block[],
   updateEntry: any,
   llmManager: any,
@@ -233,41 +236,12 @@ async function queueBackgroundGeneration(
             }));
 
           // Final write with complete message history
-          // CRITICAL: Get current entry from database to preserve title if it was already set
-          // This prevents overwriting a title that was generated
-          let currentTitle: string | undefined = undefined;
-
-          // First try to get from cache
-          if (queryClient) {
-            try {
-              const currentEntry = queryClient.getQueryData(
-                entryKeys.detail(entryId)
-              );
-              if (
-                currentEntry?.title &&
-                currentEntry.title !== "AI Conversation"
-              ) {
-                currentTitle = currentEntry.title;
-              }
-            } catch (e) {
-              console.warn("[AIChat Action] Error reading cache:", e);
-            }
-          }
-
-          const updateInput: any = {
-            blocks: updatedBlocks,
-          };
-
-          // CRITICAL: Only include title if we have a non-default one to preserve
-          // If we don't include title, the update method will preserve the existing database title
-          // This prevents overwriting a title that was generated but not yet in cache
-          if (currentTitle) {
-            updateInput.title = currentTitle;
-          }
-
+          // Title is now always set from user's first message, so we just preserve it
           await updateEntry.mutateAsync({
             id: entryId,
-            input: updateInput,
+            input: {
+              blocks: updatedBlocks,
+            },
           });
 
           // CRITICAL: The update method returns the entry from the database
@@ -314,38 +288,10 @@ async function queueBackgroundGeneration(
         "[AIChat Action] Failed to mark generation as completed:",
         updateError
       );
-      // Don't block title generation if this fails
+      // Continue anyway
     }
 
-    // Generate title after AI response completes
-    // IMPORTANT: Do this AFTER onMessageHistoryUpdate has had a chance to fire
-    // We'll add a small delay to ensure the callback has completed
-    if (userMessage) {
-      // Small delay to ensure onMessageHistoryUpdate has completed
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      try {
-        await generateTitle(
-          userMessage,
-          entryId,
-          {
-            updateEntry,
-            setTitle: () => {}, // No-op
-            llm: llmForConvo, // Use the same LLM instance for title generation
-            onSave: undefined,
-            modelConfig: modelConfig, // Pass model config for title generation
-            queryClient: queryClient, // Pass query client for cache updates
-          },
-          aiResponse
-        );
-      } catch (titleError) {
-        console.error(
-          `[AIChat Action] Title generation failed for entry ${entryId}:`,
-          titleError
-        );
-        // Don't throw - title generation is non-critical
-      }
-    }
+    // Title is now set from user's first message - no generation needed
   } catch (error) {
     console.error(
       `[AIChat Action] Background generation failed for entry ${entryId}:`,
@@ -381,25 +327,32 @@ async function queueBackgroundGeneration(
  * Action: Initialize a new AI conversation (legacy - used by AIChatComposer)
  *
  * This handles the complete flow:
- * 1. Create entry with initial message
+ * 1. Create entry with user's first message as title
  * 2. Generate AI response
- * 3. Generate title based on user's first message
- * 4. Trigger navigation
+ * 3. Trigger navigation
  */
 export async function initializeAIConversation(
   params: InitialConversationParams,
   context: AIChatActionContext
 ): Promise<void> {
-  const { initialMessage, title = "AI Conversation" } = params;
+  const { initialMessage, title } = params;
   const { createEntry, onSave } = context;
 
   try {
-    // Step 1: Create entry with initial message
+    // Step 1: Create entry with user's first message as title
+    const firstMessageContent =
+      initialMessage.type === "markdown" ? initialMessage.content : "";
+
+    // Generate a simple title from the first message (truncate to 60 chars)
+    const entryTitle = title || (firstMessageContent.trim().length > 60
+      ? firstMessageContent.trim().substring(0, 57) + "..."
+      : firstMessageContent.trim());
+
     const entry = await new Promise<any>((resolve, reject) => {
       createEntry!.mutate(
         {
           type: "ai_chat",
-          title,
+          title: entryTitle,
           blocks: [initialMessage],
           tags: [],
           attachments: [],
@@ -416,24 +369,12 @@ export async function initializeAIConversation(
     onSave?.(entry.id);
 
     // Step 3: Generate AI response
-    const aiResponseContent = await generateAIResponse(
+    await generateAIResponse(
       [initialMessage],
       context,
       entry.id,
       undefined // modelId will be set from context if needed
     );
-
-    // Step 4: Generate title based on first message and AI response
-    const firstMessageContent =
-      initialMessage.type === "markdown" ? initialMessage.content : "";
-    if (firstMessageContent) {
-      await generateTitle(
-        firstMessageContent,
-        entry.id,
-        context,
-        aiResponseContent
-      );
-    }
 
     console.log("[AIChat Action] Conversation initialized successfully");
   } catch (error) {
@@ -581,31 +522,11 @@ export async function generateAIResponse(
             }));
 
           // Final write with complete message history
-          // CRITICAL: Get current entry to preserve title if it was already set
-          // This prevents overwriting a title that was generated
-          let currentTitle: string | undefined = undefined;
-          if (context.queryClient) {
-            try {
-              const currentEntry = context.queryClient.getQueryData(
-                entryKeys.detail(entryId)
-              );
-              if (
-                currentEntry?.title &&
-                currentEntry.title !== "AI Conversation"
-              ) {
-                currentTitle = currentEntry.title;
-              }
-            } catch (e) {
-              // Ignore cache errors
-            }
-          }
-
+          // Title is now always set from user's first message, so we just preserve it
           await updateEntry.mutateAsync({
             id: entryId,
             input: {
               blocks: updatedBlocks,
-              // Only include title if we have a non-default one to preserve
-              ...(currentTitle ? { title: currentTitle } : {}),
             },
           });
         } catch (e) {
@@ -849,7 +770,6 @@ Title:`;
  * 1. Add user message to entry (create or update)
  * 2. Trigger navigation if new entry
  * 3. Queue AI response generation (runs in background)
- * 4. Generate title if first message
  */
 export async function sendMessageWithResponse(
   message: string,
@@ -867,7 +787,15 @@ export async function sendMessageWithResponse(
   };
 
   const updatedMessages = [...currentMessages, userMessage];
-  const finalTitle = currentTitle.trim() || "AI Conversation";
+
+  // If this is the first message, use it as the title
+  const isFirstMessage = currentMessages.filter((m) => m.role === "user").length === 0;
+  const finalTitle = isFirstMessage
+    ? (message.trim().length > 60
+        ? message.trim().substring(0, 57) + "..."
+        : message.trim())
+    : (currentTitle.trim() || message.trim());
+
   let finalEntryId = entryId;
 
   // Save the user message to the entry
@@ -916,19 +844,12 @@ export async function sendMessageWithResponse(
   }
 
   // Generate AI response in background
-  const aiResponseContent = await generateAIResponse(
+  await generateAIResponse(
     updatedMessages,
     context,
     finalEntryId,
     undefined // modelId will be set from context if needed
   );
-
-  // Generate title if this is the first message (only user message, no assistant response yet)
-  const isFirstMessage =
-    currentMessages.filter((m) => m.role === "user").length === 1;
-  if (isFirstMessage) {
-    await generateTitle(message, finalEntryId!, context, aiResponseContent);
-  }
 
   return finalEntryId!;
 }

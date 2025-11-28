@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import RenderHtml from "react-native-render-html";
+import { marked } from "marked";
 import { Text } from "./Text";
 import { Card } from "./Card";
 import { Dialog } from "./Dialog";
@@ -42,7 +43,26 @@ function EntryListItemComponent({
 }: EntryListItemProps) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const previewText = extractPreviewText(entry.blocks);
+
+  // For AI chats, show the assistant's response if available, otherwise show user's message
+  const previewText = React.useMemo(() => {
+    if (entry.type === "ai_chat") {
+      // Find the first assistant message (AI response)
+      const assistantBlock = entry.blocks.find((b) => b.role === "assistant");
+      if (assistantBlock && assistantBlock.type === "markdown" && assistantBlock.content.trim()) {
+        // Strip HTML and think tags for preview
+        const strippedContent = assistantBlock.content
+          .replace(/<think>[\s\S]*?<\/think>/g, "") // Remove think tags
+          .replace(/<\/?think>/g, "") // Remove any remaining think tags
+          .replace(/<[^>]*>/g, " ") // Remove HTML tags
+          .replace(/\s+/g, " ") // Normalize whitespace
+          .trim();
+        return strippedContent;
+      }
+    }
+    // Fall back to default preview text extraction
+    return extractPreviewText(entry.blocks);
+  }, [entry.blocks, entry.type]);
 
   // Menu state
   const [showMenu, setShowMenu] = useState(false);
@@ -63,18 +83,46 @@ function EntryListItemComponent({
     [updateEntryMutation, deleteEntryMutation]
   );
 
-  // Check if content is HTML
-  const markdownBlock = entry.blocks.find((b) => b.type === "markdown");
-  const isHtmlContent = markdownBlock && markdownBlock.content.includes("<");
+  // Check if we should render markdown
+  // For AI chats, use assistant's response for preview; otherwise use first markdown block
+  const markdownBlock = React.useMemo(() => {
+    if (entry.type === "ai_chat") {
+      // Find the first assistant message (AI response)
+      return entry.blocks.find((b) => b.role === "assistant" && b.type === "markdown");
+    }
+    return entry.blocks.find((b) => b.type === "markdown");
+  }, [entry.blocks, entry.type]);
 
-  // Strip <think> tags from markdown content for preview rendering
-  const cleanedMarkdownContent = React.useMemo(() => {
+  // For AI chats, always try to render markdown if we have an assistant block
+  // For other entries, check if content includes HTML tags
+  const shouldRenderMarkdown = React.useMemo(() => {
+    if (entry.type === "ai_chat" && markdownBlock) {
+      return true; // Always render AI responses as markdown
+    }
+    return markdownBlock && markdownBlock.content.includes("<");
+  }, [entry.type, markdownBlock]);
+
+  // Strip <think> tags from markdown content and convert to HTML for preview rendering
+  const htmlContent = React.useMemo(() => {
     if (!markdownBlock) return "";
-    return markdownBlock.content
+
+    const cleanedMarkdown = markdownBlock.content
       .replace(/<think>[\s\S]*?<\/think>/g, "") // Remove complete <think>...</think> blocks
       .replace(/<\/?think>/g, "") // Remove any remaining <think> or </think> tags
       .trim();
-  }, [markdownBlock]);
+
+    // For AI chats, parse markdown to HTML
+    if (shouldRenderMarkdown && cleanedMarkdown) {
+      try {
+        return marked.parse(cleanedMarkdown) as string;
+      } catch (error) {
+        console.error("[EntryListItem] Error parsing markdown:", error);
+        return cleanedMarkdown; // Fallback to plain text
+      }
+    }
+
+    return cleanedMarkdown;
+  }, [markdownBlock, shouldRenderMarkdown]);
 
   const itemTheme = React.useMemo(
     () =>
@@ -437,12 +485,12 @@ function EntryListItemComponent({
               </Text>
             )}
 
-            {previewText || isHtmlContent ? (
+            {previewText || shouldRenderMarkdown ? (
               <View style={styles.previewContainer}>
-                {isHtmlContent && markdownBlock && cleanedMarkdownContent ? (
+                {shouldRenderMarkdown && htmlContent ? (
                   <RenderHtml
                     contentWidth={htmlContentWidth}
-                    source={{ html: cleanedMarkdownContent }}
+                    source={{ html: htmlContent }}
                     tagsStyles={htmlTagsStyles}
                     ignoredDomTags={["think"]}
                   />

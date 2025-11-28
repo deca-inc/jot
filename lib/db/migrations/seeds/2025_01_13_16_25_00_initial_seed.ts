@@ -50,12 +50,8 @@ export const up: MigrationRunner = async (db) => {
   );
 
   // Sample AI chat entry
+  // Note: Order is important - user message first, then assistant responses
   const aiChatBlocks = JSON.stringify([
-    {
-      type: "markdown",
-      content: "Hello! How can I help you today?",
-      role: "assistant",
-    },
     {
       type: "markdown",
       content: "I'd like to understand more about journaling.",
@@ -64,7 +60,7 @@ export const up: MigrationRunner = async (db) => {
     {
       type: "markdown",
       content:
-        "Journaling is a great practice for self-reflection and personal growth.",
+        "Journaling is a great practice for self-reflection and personal growth. It helps you track your thoughts, feelings, and experiences over time.",
       role: "assistant",
     },
   ]);
@@ -74,7 +70,7 @@ export const up: MigrationRunner = async (db) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       "ai_chat",
-      "AI Conversation",
+      "I'd like to understand more about journaling.", // Title is now the user's first message
       aiChatBlocks,
       JSON.stringify(["ai", "conversation"]),
       JSON.stringify([]),
