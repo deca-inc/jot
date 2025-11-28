@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   react-native-enriched@0.1.6:
-    hash: berltek7pi5gmvm2fcmce2pv54
+    hash: k3lgjnzhlj3yiclb6v2a6p5vnm
     path: patches/react-native-enriched@0.1.6.patch
 
 dependencies:
@@ -87,7 +87,7 @@ dependencies:
     version: 3.0.0
   react-native-enriched:
     specifier: ^0.1.6
-    version: 0.1.6(patch_hash=berltek7pi5gmvm2fcmce2pv54)(react-native@0.81.5)(react@19.1.0)
+    version: 0.1.6(patch_hash=k3lgjnzhlj3yiclb6v2a6p5vnm)(react-native@0.81.5)(react@19.1.0)
   react-native-executorch:
     specifier: ^0.5.15
     version: 0.5.15(@babel/core@7.28.5)(react-native@0.81.5)(react@19.1.0)
@@ -6135,7 +6135,7 @@ packages:
       react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
     dev: false
 
-  /react-native-enriched@0.1.6(patch_hash=berltek7pi5gmvm2fcmce2pv54)(react-native@0.81.5)(react@19.1.0):
+  /react-native-enriched@0.1.6(patch_hash=k3lgjnzhlj3yiclb6v2a6p5vnm)(react-native@0.81.5)(react@19.1.0):
     resolution: {integrity: sha512-UMNmwbcURb+/CdQv6bNMryvMqZRxKRNvO0C4XAZKe9d/fkif+mAjAe6o/eTBx6ior42464V8L2zBCbkVXERHig==}
     peerDependencies:
       react: '*'

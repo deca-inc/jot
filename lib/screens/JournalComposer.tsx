@@ -317,7 +317,7 @@ export function JournalComposer({
               fontSize: 18,
               flex: 1,
               color: seasonalTheme.textPrimary,
-              lineHeight: 28, // Better vertical rhythm
+              lineHeight: 25,
               paddingBottom: isKeyboardVisible
                 ? Platform.OS === "android"
                   ? 62 // Just toolbar (~60) + 2px margin
@@ -326,28 +326,43 @@ export function JournalComposer({
             }}
             htmlStyle={{
               h1: {
-                fontSize: 32,
+                fontSize: 37, // Golden ratio: 18 × 1.618²
                 bold: true,
+                lineSpacing: 11,
+                spacingBefore: 47,
+                spacingAfter: 18,
               },
               h2: {
-                fontSize: 26,
+                fontSize: 29, // Golden ratio: 18 × 1.618
                 bold: true,
+                lineSpacing: 11,
+                spacingBefore: 37,
+                spacingAfter: 18,
               },
               h3: {
-                fontSize: 22,
+                fontSize: 23, // Golden ratio scale
                 bold: true,
+                lineSpacing: 11,
+                spacingBefore: 29,
+                spacingAfter: 11,
               },
               ul: {
                 bulletColor: seasonalTheme.textPrimary,
-                bulletSize: 4,
-                marginLeft: 12,
-                gapWidth: 12,
+                bulletSize: 8,
+                marginLeft: 18,
+                gapWidth: 18,
+                lineSpacing: 25, // Match base lineHeight
+                itemSpacing: 6,
+                spacingBefore: 29,
               },
               ol: {
                 markerColor: seasonalTheme.textPrimary,
                 markerFontWeight: "normal",
-                marginLeft: 12,
-                gapWidth: 12,
+                marginLeft: 18,
+                gapWidth: 18,
+                lineSpacing: 25, // Match base lineHeight
+                itemSpacing: 6,
+                spacingBefore: 29,
               },
             }}
             placeholder="Start writing..."

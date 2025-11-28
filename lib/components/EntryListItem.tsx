@@ -133,15 +133,15 @@ function EntryListItemComponent({
     () => ({
       body: {
         color: itemTheme.textPrimary,
-        fontSize: 14,
-        lineHeight: 18, // Compact for previews
+        fontSize: 13, // Smaller for compact previews
+        lineHeight: 18,
         margin: 0,
         padding: 0,
       },
       p: {
         color: itemTheme.textPrimary,
-        fontSize: 14,
-        lineHeight: 18, // Compact for previews
+        fontSize: 13,
+        lineHeight: 18,
         marginTop: 0,
         marginBottom: 2, // Minimal spacing for compact previews
       },
@@ -170,48 +170,48 @@ function EntryListItemComponent({
       },
       h1: {
         color: itemTheme.textPrimary,
-        fontSize: 16,
-        lineHeight: 20,
+        fontSize: 16, // Still distinct but compact
+        lineHeight: 22,
         fontWeight: "bold" as const,
         marginTop: 0,
-        marginBottom: 2, // Minimal spacing for compact previews
+        marginBottom: 2,
       },
       h2: {
         color: itemTheme.textPrimary,
         fontSize: 15,
-        lineHeight: 19,
+        lineHeight: 21,
         fontWeight: "bold" as const,
         marginTop: 0,
-        marginBottom: 2, // Minimal spacing for compact previews
+        marginBottom: 2,
       },
       h3: {
         color: itemTheme.textPrimary,
         fontSize: 14,
-        lineHeight: 18,
+        lineHeight: 20,
         fontWeight: "bold" as const,
         marginTop: 0,
-        marginBottom: 2, // Minimal spacing for compact previews
+        marginBottom: 2,
       },
       ul: {
         color: itemTheme.textPrimary,
         marginLeft: 0,
-        paddingLeft: 10, // Reduced indentation
+        paddingLeft: 10,
         marginTop: 0,
-        marginBottom: 2, // Minimal spacing for compact previews
+        marginBottom: 2,
       },
       ol: {
         color: itemTheme.textPrimary,
         marginLeft: 0,
-        paddingLeft: 10, // Reduced indentation
+        paddingLeft: 10,
         marginTop: 0,
-        marginBottom: 2, // Minimal spacing for compact previews
+        marginBottom: 2,
       },
       li: {
         color: itemTheme.textPrimary,
-        fontSize: 14,
-        lineHeight: 18, // Compact for previews
-        marginBottom: 1, // Minimal spacing for compact previews
-        paddingLeft: 6, // Better gap between bullet/number and text
+        fontSize: 13, // Match body text
+        lineHeight: 18,
+        marginBottom: 1,
+        paddingLeft: 6,
       },
     }),
     [itemTheme.textPrimary]
@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
   },
   preview: {
     lineHeight: 18,
-    fontSize: 14,
+    fontSize: 13, // Smaller for compact previews
   },
   fadeOverlay: {
     position: "absolute",

@@ -1,5 +1,610 @@
+diff --git a/android/src/main/java/com/swmansion/enriched/spans/EnrichedH1Span.kt b/android/src/main/java/com/swmansion/enriched/spans/EnrichedH1Span.kt
+index c2b28e3f39365abad65ac913730cb803ab335f0d..63dfa7eba2984f38e676e73a3c57efada3f6ae28 100644
+--- a/android/src/main/java/com/swmansion/enriched/spans/EnrichedH1Span.kt
++++ b/android/src/main/java/com/swmansion/enriched/spans/EnrichedH1Span.kt
+@@ -1,12 +1,15 @@
+ package com.swmansion.enriched.spans
+ 
++import android.graphics.Paint
+ import android.graphics.Typeface
+ import android.text.TextPaint
+ import android.text.style.AbsoluteSizeSpan
++import android.text.style.LineHeightSpan
+ import com.swmansion.enriched.spans.interfaces.EnrichedHeadingSpan
+ import com.swmansion.enriched.styles.HtmlStyle
++import kotlin.math.ceil
+ 
+-class EnrichedH1Span(private val style: HtmlStyle) : AbsoluteSizeSpan(style.h1FontSize), EnrichedHeadingSpan {
++class EnrichedH1Span(private val style: HtmlStyle) : AbsoluteSizeSpan(style.h1FontSize), EnrichedHeadingSpan, LineHeightSpan {
+   override fun updateDrawState(tp: TextPaint) {
+     super.updateDrawState(tp)
+     val bold = style.h1Bold
+@@ -14,4 +17,34 @@ class EnrichedH1Span(private val style: HtmlStyle) : AbsoluteSizeSpan(style.h1Fo
+       tp.typeface = Typeface.create(tp.typeface, Typeface.BOLD)
+     }
+   }
++
++  override fun chooseHeight(
++    text: CharSequence?,
++    start: Int,
++    end: Int,
++    spanstartv: Int,
++    lineHeight: Int,
++    fm: Paint.FontMetricsInt
++  ) {
++    val lineSpacing = style.h1LineSpacing
++    if (lineSpacing > 0) {
++      val addedSpacing = ceil(lineSpacing).toInt()
++      fm.descent += addedSpacing
++      fm.bottom += addedSpacing
++    }
++
++    val spacingBefore = style.h1SpacingBefore
++    if (spacingBefore > 0 && start == 0) {
++      val addedSpacing = ceil(spacingBefore).toInt()
++      fm.top -= addedSpacing
++      fm.ascent -= addedSpacing
++    }
++
++    val spacingAfter = style.h1SpacingAfter
++    if (spacingAfter > 0) {
++      val addedSpacing = ceil(spacingAfter).toInt()
++      fm.descent += addedSpacing
++      fm.bottom += addedSpacing
++    }
++  }
+ }
+diff --git a/android/src/main/java/com/swmansion/enriched/spans/EnrichedH2Span.kt b/android/src/main/java/com/swmansion/enriched/spans/EnrichedH2Span.kt
+index 736fe08cddadcfcb5dfa08313e40aba01d159f3a..94644c818c93df70e6ab75bec921b7f9988ae0a3 100644
+--- a/android/src/main/java/com/swmansion/enriched/spans/EnrichedH2Span.kt
++++ b/android/src/main/java/com/swmansion/enriched/spans/EnrichedH2Span.kt
+@@ -1,12 +1,15 @@
+ package com.swmansion.enriched.spans
+ 
++import android.graphics.Paint
+ import android.graphics.Typeface
+ import android.text.TextPaint
+ import android.text.style.AbsoluteSizeSpan
++import android.text.style.LineHeightSpan
+ import com.swmansion.enriched.spans.interfaces.EnrichedHeadingSpan
+ import com.swmansion.enriched.styles.HtmlStyle
++import kotlin.math.ceil
+ 
+-class EnrichedH2Span(private val htmlStyle: HtmlStyle) : AbsoluteSizeSpan(htmlStyle.h2FontSize), EnrichedHeadingSpan {
++class EnrichedH2Span(private val htmlStyle: HtmlStyle) : AbsoluteSizeSpan(htmlStyle.h2FontSize), EnrichedHeadingSpan, LineHeightSpan {
+   override fun updateDrawState(tp: TextPaint) {
+     super.updateDrawState(tp)
+     val bold = htmlStyle.h2Bold
+@@ -14,4 +17,34 @@ class EnrichedH2Span(private val htmlStyle: HtmlStyle) : AbsoluteSizeSpan(htmlSt
+       tp.typeface = Typeface.create(tp.typeface, Typeface.BOLD)
+     }
+   }
++
++  override fun chooseHeight(
++    text: CharSequence?,
++    start: Int,
++    end: Int,
++    spanstartv: Int,
++    lineHeight: Int,
++    fm: Paint.FontMetricsInt
++  ) {
++    val lineSpacing = htmlStyle.h2LineSpacing
++    if (lineSpacing > 0) {
++      val addedSpacing = ceil(lineSpacing).toInt()
++      fm.descent += addedSpacing
++      fm.bottom += addedSpacing
++    }
++
++    val spacingBefore = htmlStyle.h2SpacingBefore
++    if (spacingBefore > 0 && start == 0) {
++      val addedSpacing = ceil(spacingBefore).toInt()
++      fm.top -= addedSpacing
++      fm.ascent -= addedSpacing
++    }
++
++    val spacingAfter = htmlStyle.h2SpacingAfter
++    if (spacingAfter > 0) {
++      val addedSpacing = ceil(spacingAfter).toInt()
++      fm.descent += addedSpacing
++      fm.bottom += addedSpacing
++    }
++  }
+ }
+diff --git a/android/src/main/java/com/swmansion/enriched/spans/EnrichedH3Span.kt b/android/src/main/java/com/swmansion/enriched/spans/EnrichedH3Span.kt
+index 151acf65647482d2ed98cca3e9f770873fb98a51..97d5f921cb0f81cd05fa99db345952d0f201da42 100644
+--- a/android/src/main/java/com/swmansion/enriched/spans/EnrichedH3Span.kt
++++ b/android/src/main/java/com/swmansion/enriched/spans/EnrichedH3Span.kt
+@@ -1,12 +1,15 @@
+ package com.swmansion.enriched.spans
+ 
++import android.graphics.Paint
+ import android.graphics.Typeface
+ import android.text.TextPaint
+ import android.text.style.AbsoluteSizeSpan
++import android.text.style.LineHeightSpan
+ import com.swmansion.enriched.spans.interfaces.EnrichedHeadingSpan
+ import com.swmansion.enriched.styles.HtmlStyle
++import kotlin.math.ceil
+ 
+-class EnrichedH3Span(private val htmlStyle: HtmlStyle) : AbsoluteSizeSpan(htmlStyle.h3FontSize), EnrichedHeadingSpan {
++class EnrichedH3Span(private val htmlStyle: HtmlStyle) : AbsoluteSizeSpan(htmlStyle.h3FontSize), EnrichedHeadingSpan, LineHeightSpan {
+   override fun updateDrawState(tp: TextPaint) {
+     super.updateDrawState(tp)
+     val bold = htmlStyle.h3Bold
+@@ -14,4 +17,34 @@ class EnrichedH3Span(private val htmlStyle: HtmlStyle) : AbsoluteSizeSpan(htmlSt
+       tp.typeface = Typeface.create(tp.typeface, Typeface.BOLD)
+     }
+   }
++
++  override fun chooseHeight(
++    text: CharSequence?,
++    start: Int,
++    end: Int,
++    spanstartv: Int,
++    lineHeight: Int,
++    fm: Paint.FontMetricsInt
++  ) {
++    val lineSpacing = htmlStyle.h3LineSpacing
++    if (lineSpacing > 0) {
++      val addedSpacing = ceil(lineSpacing).toInt()
++      fm.descent += addedSpacing
++      fm.bottom += addedSpacing
++    }
++
++    val spacingBefore = htmlStyle.h3SpacingBefore
++    if (spacingBefore > 0 && start == 0) {
++      val addedSpacing = ceil(spacingBefore).toInt()
++      fm.top -= addedSpacing
++      fm.ascent -= addedSpacing
++    }
++
++    val spacingAfter = htmlStyle.h3SpacingAfter
++    if (spacingAfter > 0) {
++      val addedSpacing = ceil(spacingAfter).toInt()
++      fm.descent += addedSpacing
++      fm.bottom += addedSpacing
++    }
++  }
+ }
+diff --git a/android/src/main/java/com/swmansion/enriched/spans/EnrichedOrderedListSpan.kt b/android/src/main/java/com/swmansion/enriched/spans/EnrichedOrderedListSpan.kt
+index 55b916780ed41eedb6392bd870d1056ba72df0ca..cb20ace09147dc12ccac0ac8c426d09edda2adae 100644
+--- a/android/src/main/java/com/swmansion/enriched/spans/EnrichedOrderedListSpan.kt
++++ b/android/src/main/java/com/swmansion/enriched/spans/EnrichedOrderedListSpan.kt
+@@ -4,20 +4,18 @@ import android.graphics.Canvas
+ import android.graphics.Paint
+ import android.graphics.Typeface
+ import android.text.Layout
+-import android.text.TextPaint
++import android.text.Spanned
+ import android.text.style.LeadingMarginSpan
+-import android.text.style.MetricAffectingSpan
++import android.text.style.LineHeightSpan
+ import com.swmansion.enriched.spans.interfaces.EnrichedParagraphSpan
+ import com.swmansion.enriched.styles.HtmlStyle
++import kotlin.math.ceil
++import kotlin.math.roundToInt
+ 
+-class EnrichedOrderedListSpan(private var index: Int, private val htmlStyle: HtmlStyle) : MetricAffectingSpan(), LeadingMarginSpan, EnrichedParagraphSpan {
+-  override fun updateMeasureState(p0: TextPaint) {
+-    // Do nothing, but inform layout that this span affects text metrics
+-  }
+-
+-  override fun updateDrawState(p0: TextPaint?) {
+-    // Do nothing, but inform layout that this span affects text metrics
+-  }
++class EnrichedOrderedListSpan(private var index: Int, private val htmlStyle: HtmlStyle) : LeadingMarginSpan, LineHeightSpan, EnrichedParagraphSpan {
++  // Cache whether this is the first item in the list to avoid repeated lookups
++  private var isFirstItemCached: Boolean? = null
++  private var cacheCheckedForText: CharSequence? = null
+ 
+   override fun getLeadingMargin(first: Boolean): Int {
+     return htmlStyle.olMarginLeft + htmlStyle.olGapWidth
+@@ -78,4 +76,115 @@ class EnrichedOrderedListSpan(private var index: Int, private val htmlStyle: Htm
+   fun setIndex(i: Int) {
+     index = i
+   }
++
++  override fun chooseHeight(
++    text: CharSequence?,
++    start: Int,
++    end: Int,
++    spanstartv: Int,
++    lineHeight: Int,
++    fm: Paint.FontMetricsInt
++  ) {
++    // Early return if nothing to do
++    if (text == null) return
++
++    val spacingBefore = htmlStyle.olSpacingBefore
++    val spacingAfter = htmlStyle.olSpacingAfter
++    val listLineHeight = htmlStyle.olLineSpacing
++    val itemSpacing = htmlStyle.olItemSpacing
++
++    // Early return if no spacing to apply
++    if (spacingBefore <= 0 && spacingAfter <= 0 && listLineHeight <= 0 && itemSpacing <= 0) return
++
++    val spannedText = text as? Spanned ?: return
++    val isFirstLineOfSpan = spannedText.getSpanStart(this) == start
++
++    // Apply absolute line height first using approach similar to LineHeightSpan.Standard
++    // but with better centering for list items
++    if (listLineHeight > 0) {
++      val desiredHeight = listLineHeight.roundToInt()
++      val currentHeight = fm.descent - fm.ascent
++
++      if (currentHeight > 0 && desiredHeight != currentHeight) {
++        // Maintain the baseline position ratio to keep text centered
++        // Calculate what percentage of the original height is above/below baseline
++        val ascentRatio = fm.ascent.toFloat() / currentHeight
++        val descentRatio = fm.descent.toFloat() / currentHeight
++
++        // Apply those ratios to the new desired height
++        fm.ascent = (desiredHeight * ascentRatio).roundToInt()
++        fm.descent = (desiredHeight * descentRatio).roundToInt()
++
++        // Adjust top/bottom to match
++        fm.top = fm.ascent
++        fm.bottom = fm.descent
++      }
++    }
++
++    // Apply spacing before AFTER line height, but only on the first item of the list
++    // Check if the previous paragraph (before the newline) was also a list item
++    if (isFirstLineOfSpan && spacingBefore > 0) {
++      // Use cached value if available for the same text
++      val isFirstItem = if (cacheCheckedForText === text && isFirstItemCached != null) {
++        isFirstItemCached!!
++      } else {
++        val spanStart = spannedText.getSpanStart(this)
++
++        // Look backwards to find the previous paragraph
++        // List items are separated by newlines, so check the character before the newline
++        val hasPreviousListItem = if (spanStart > 1) {
++          // Check if char at spanStart-1 is newline, and if so check spanStart-2 for list span
++          val prevChar = text[spanStart - 1]
++          if (prevChar == '\n') {
++            // Check the character before the newline
++            val previousSpans = spannedText.getSpans(spanStart - 2, spanStart - 2, EnrichedOrderedListSpan::class.java)
++            previousSpans.isNotEmpty()
++          } else {
++            // No newline separator, check directly before
++            val previousSpans = spannedText.getSpans(spanStart - 1, spanStart - 1, EnrichedOrderedListSpan::class.java)
++            previousSpans.isNotEmpty()
++          }
++        } else {
++          false
++        }
++
++        val result = !hasPreviousListItem
++        // Cache the result
++        isFirstItemCached = result
++        cacheCheckedForText = text
++        result
++      }
++
++      // Only apply spacingBefore if this is the first list item
++      if (isFirstItem) {
++        val addedSpacing = ceil(spacingBefore).toInt()
++        fm.ascent -= addedSpacing
++        fm.top -= addedSpacing
++      }
++    }
++
++    // Apply item spacing and spacing after on the last line only
++    val isLastLine = end >= text.length || text[end - 1] == '\n'
++    if (isLastLine) {
++      var totalSpacing = 0f
++
++      // Add item spacing between list items
++      if (itemSpacing > 0) {
++        totalSpacing += itemSpacing
++      }
++
++      // Add spacing after on the very last line of the list
++      // (This would need logic to detect if it's the last item in the list)
++      // For now, just add it to every list item's last line
++      if (spacingAfter > 0) {
++        totalSpacing += spacingAfter
++      }
++
++      if (totalSpacing > 0) {
++        val addedSpacing = ceil(totalSpacing).toInt()
++        fm.descent += addedSpacing
++        fm.bottom += addedSpacing
++      }
++    }
++  }
+ }
+diff --git a/android/src/main/java/com/swmansion/enriched/spans/EnrichedUnorderedListSpan.kt b/android/src/main/java/com/swmansion/enriched/spans/EnrichedUnorderedListSpan.kt
+index 9235a8ba243c908db638827e0bc75b22ccd2eb19..c5db0a75f3ac2eef597614b739ecd8d30c2808f8 100644
+--- a/android/src/main/java/com/swmansion/enriched/spans/EnrichedUnorderedListSpan.kt
++++ b/android/src/main/java/com/swmansion/enriched/spans/EnrichedUnorderedListSpan.kt
+@@ -4,21 +4,18 @@ import android.graphics.Canvas
+ import android.graphics.Paint
+ import android.text.Layout
+ import android.text.Spanned
+-import android.text.TextPaint
+ import android.text.style.LeadingMarginSpan
+-import android.text.style.MetricAffectingSpan
++import android.text.style.LineHeightSpan
+ import com.swmansion.enriched.spans.interfaces.EnrichedParagraphSpan
+ import com.swmansion.enriched.styles.HtmlStyle
++import kotlin.math.ceil
++import kotlin.math.roundToInt
+ 
+ // https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/core/java/android/text/style/BulletSpan.java
+-class EnrichedUnorderedListSpan(private val htmlStyle: HtmlStyle) : MetricAffectingSpan(), LeadingMarginSpan, EnrichedParagraphSpan {
+-  override fun updateMeasureState(p0: TextPaint) {
+-    // Do nothing, but inform layout that this span affects text metrics
+-  }
+-
+-  override fun updateDrawState(p0: TextPaint?) {
+-    // Do nothing, but inform layout that this span affects text metrics
+-  }
++class EnrichedUnorderedListSpan(private val htmlStyle: HtmlStyle) : LeadingMarginSpan, LineHeightSpan, EnrichedParagraphSpan {
++  // Cache whether this is the first item in the list to avoid repeated lookups
++  private var isFirstItemCached: Boolean? = null
++  private var cacheCheckedForText: CharSequence? = null
+ 
+   override fun getLeadingMargin(p0: Boolean): Int {
+     return htmlStyle.ulBulletSize + htmlStyle.ulGapWidth + htmlStyle.ulMarginLeft
+@@ -40,6 +37,7 @@ class EnrichedUnorderedListSpan(private val htmlStyle: HtmlStyle) : MetricAffect
+   ) {
+     val spannedText = text as Spanned
+ 
++    // Only draw bullet on the first line of this list item
+     if (spannedText.getSpanStart(this) == start) {
+       val style = paint.style
+       val oldColor = paint.color
+@@ -47,7 +45,13 @@ class EnrichedUnorderedListSpan(private val htmlStyle: HtmlStyle) : MetricAffect
+       paint.style = Paint.Style.FILL
+ 
+       val bulletRadius = htmlStyle.ulBulletSize / 2f
+-      val yPosition = (top + bottom) / 2f
++
++      // Center bullet vertically using the text metrics
++      // Use baseline as the anchor point and position relative to the font metrics
++      // This ensures the bullet is centered with the actual text height, not the line box
++      val fm = paint.fontMetricsInt
++      val textCenter = baseline + (fm.ascent + fm.descent) / 2f
++      val yPosition = textCenter
+       val xPosition = x + dir * bulletRadius + htmlStyle.ulMarginLeft
+ 
+       canvas.drawCircle(xPosition, yPosition, bulletRadius, paint)
+@@ -56,4 +60,115 @@ class EnrichedUnorderedListSpan(private val htmlStyle: HtmlStyle) : MetricAffect
+       paint.style = style
+     }
+   }
++
++  override fun chooseHeight(
++    text: CharSequence?,
++    start: Int,
++    end: Int,
++    spanstartv: Int,
++    lineHeight: Int,
++    fm: Paint.FontMetricsInt
++  ) {
++    // Early return if nothing to do
++    if (text == null) return
++
++    val spacingBefore = htmlStyle.ulSpacingBefore
++    val spacingAfter = htmlStyle.ulSpacingAfter
++    val listLineHeight = htmlStyle.ulLineSpacing
++    val itemSpacing = htmlStyle.ulItemSpacing
++
++    // Early return if no spacing to apply
++    if (spacingBefore <= 0 && spacingAfter <= 0 && listLineHeight <= 0 && itemSpacing <= 0) return
++
++    val spannedText = text as? Spanned ?: return
++    val isFirstLineOfSpan = spannedText.getSpanStart(this) == start
++
++    // Apply absolute line height first using approach similar to LineHeightSpan.Standard
++    // but with better centering for list items
++    if (listLineHeight > 0) {
++      val desiredHeight = listLineHeight.roundToInt()
++      val currentHeight = fm.descent - fm.ascent
++
++      if (currentHeight > 0 && desiredHeight != currentHeight) {
++        // Maintain the baseline position ratio to keep text centered
++        // Calculate what percentage of the original height is above/below baseline
++        val ascentRatio = fm.ascent.toFloat() / currentHeight
++        val descentRatio = fm.descent.toFloat() / currentHeight
++
++        // Apply those ratios to the new desired height
++        fm.ascent = (desiredHeight * ascentRatio).roundToInt()
++        fm.descent = (desiredHeight * descentRatio).roundToInt()
++
++        // Adjust top/bottom to match
++        fm.top = fm.ascent
++        fm.bottom = fm.descent
++      }
++    }
++
++    // Apply spacing before AFTER line height, but only on the first item of the list
++    // Check if the previous paragraph (before the newline) was also a list item
++    if (isFirstLineOfSpan && spacingBefore > 0) {
++      // Use cached value if available for the same text
++      val isFirstItem = if (cacheCheckedForText === text && isFirstItemCached != null) {
++        isFirstItemCached!!
++      } else {
++        val spanStart = spannedText.getSpanStart(this)
++
++        // Look backwards to find the previous paragraph
++        // List items are separated by newlines, so check the character before the newline
++        val hasPreviousListItem = if (spanStart > 1) {
++          // Check if char at spanStart-1 is newline, and if so check spanStart-2 for list span
++          val prevChar = text[spanStart - 1]
++          if (prevChar == '\n') {
++            // Check the character before the newline
++            val previousSpans = spannedText.getSpans(spanStart - 2, spanStart - 2, EnrichedUnorderedListSpan::class.java)
++            previousSpans.isNotEmpty()
++          } else {
++            // No newline separator, check directly before
++            val previousSpans = spannedText.getSpans(spanStart - 1, spanStart - 1, EnrichedUnorderedListSpan::class.java)
++            previousSpans.isNotEmpty()
++          }
++        } else {
++          false
++        }
++
++        val result = !hasPreviousListItem
++        // Cache the result
++        isFirstItemCached = result
++        cacheCheckedForText = text
++        result
++      }
++
++      // Only apply spacingBefore if this is the first list item
++      if (isFirstItem) {
++        val addedSpacing = ceil(spacingBefore).toInt()
++        fm.ascent -= addedSpacing
++        fm.top -= addedSpacing
++      }
++    }
++
++    // Apply item spacing and spacing after on the last line only
++    val isLastLine = end >= text.length || text[end - 1] == '\n'
++    if (isLastLine) {
++      var totalSpacing = 0f
++
++      // Add item spacing between list items
++      if (itemSpacing > 0) {
++        totalSpacing += itemSpacing
++      }
++
++      // Add spacing after on the very last line of the list
++      // (This would need logic to detect if it's the last item in the list)
++      // For now, just add it to every list item's last line
++      if (spacingAfter > 0) {
++        totalSpacing += spacingAfter
++      }
++
++      if (totalSpacing > 0) {
++        val addedSpacing = ceil(totalSpacing).toInt()
++        fm.descent += addedSpacing
++        fm.bottom += addedSpacing
++      }
++    }
++  }
+ }
+diff --git a/android/src/main/java/com/swmansion/enriched/styles/HtmlStyle.kt b/android/src/main/java/com/swmansion/enriched/styles/HtmlStyle.kt
+index 8a4b9088fd06a93c2205e2f8fa51efc73f2c43cb..ab5740f2ef96648bc232743a9de6aa8963e277e3 100644
+--- a/android/src/main/java/com/swmansion/enriched/styles/HtmlStyle.kt
++++ b/android/src/main/java/com/swmansion/enriched/styles/HtmlStyle.kt
+@@ -21,12 +21,25 @@ class HtmlStyle {
+   // JS passes them as a prop - so they are initialized after the constructor is called.
+   var h1FontSize: Int = 72
+   var h1Bold: Boolean = false
++  var h1LineSpacing: Float = 0f
++  var h1SpacingBefore: Float = 0f
++  var h1SpacingAfter: Float = 0f
+ 
+   var h2FontSize: Int = 64
+   var h2Bold: Boolean = false
++  var h2LineSpacing: Float = 0f
++  var h2SpacingBefore: Float = 0f
++  var h2SpacingAfter: Float = 0f
+ 
+   var h3FontSize: Int = 56
+   var h3Bold: Boolean = false
++  var h3LineSpacing: Float = 0f
++  var h3SpacingBefore: Float = 0f
++  var h3SpacingAfter: Float = 0f
++
++  var pLineSpacing: Float = 0f
++  var pSpacingBefore: Float = 0f
++  var pSpacingAfter: Float = 0f
+ 
+   var blockquoteColor: Int? = null
+   var blockquoteBorderColor: Int = Color.BLACK
+@@ -37,11 +50,19 @@ class HtmlStyle {
+   var olMarginLeft: Int = 24
+   var olMarkerFontWeight: Int? = null
+   var olMarkerColor: Int? = null
++  var olLineSpacing: Float = 0f
++  var olItemSpacing: Float = 0f
++  var olSpacingBefore: Float = 0f
++  var olSpacingAfter: Float = 0f
+ 
+   var ulGapWidth: Int = 16
+   var ulMarginLeft: Int = 24
+   var ulBulletSize: Int = 8
+   var ulBulletColor: Int = Color.BLACK
++  var ulLineSpacing: Float = 0f
++  var ulItemSpacing: Float = 0f
++  var ulSpacingBefore: Float = 0f
++  var ulSpacingAfter: Float = 0f
+ 
+   var imgWidth: Int = 200
+   var imgHeight: Int = 200
+@@ -71,14 +92,28 @@ class HtmlStyle {
+     val h1Style = style.getMap("h1")
+     h1FontSize = parseFloat(h1Style, "fontSize").toInt()
+     h1Bold = h1Style?.getBoolean("bold") == true
++    h1LineSpacing = parseOptionalFloat(h1Style, "lineSpacing") ?: 0f
++    h1SpacingBefore = parseOptionalFloat(h1Style, "spacingBefore") ?: 0f
++    h1SpacingAfter = parseOptionalFloat(h1Style, "spacingAfter") ?: 0f
+ 
+     val h2Style = style.getMap("h2")
+     h2FontSize = parseFloat(h2Style, "fontSize").toInt()
+     h2Bold = h2Style?.getBoolean("bold") == true
++    h2LineSpacing = parseOptionalFloat(h2Style, "lineSpacing") ?: 0f
++    h2SpacingBefore = parseOptionalFloat(h2Style, "spacingBefore") ?: 0f
++    h2SpacingAfter = parseOptionalFloat(h2Style, "spacingAfter") ?: 0f
+ 
+     val h3Style = style.getMap("h3")
+     h3FontSize = parseFloat(h3Style, "fontSize").toInt()
+     h3Bold = h3Style?.getBoolean("bold") == true
++    h3LineSpacing = parseOptionalFloat(h3Style, "lineSpacing") ?: 0f
++    h3SpacingBefore = parseOptionalFloat(h3Style, "spacingBefore") ?: 0f
++    h3SpacingAfter = parseOptionalFloat(h3Style, "spacingAfter") ?: 0f
++
++    val pStyle = style.getMap("p")
++    pLineSpacing = parseOptionalFloat(pStyle, "lineSpacing") ?: 0f
++    pSpacingBefore = parseOptionalFloat(pStyle, "spacingBefore") ?: 0f
++    pSpacingAfter = parseOptionalFloat(pStyle, "spacingAfter") ?: 0f
+ 
+     val blockquoteStyle = style.getMap("blockquote")
+     blockquoteColor = parseOptionalColor(blockquoteStyle, "color")
+@@ -93,12 +128,20 @@ class HtmlStyle {
+     olGapWidth = parseFloat(olStyle, "gapWidth").toInt()
+     olMarkerColor = parseOptionalColor(olStyle, "markerColor")
+     olMarkerFontWeight = parseOptionalFontWeight(olStyle, "markerFontWeight")
++    olLineSpacing = parseOptionalFloat(olStyle, "lineSpacing") ?: 0f
++    olItemSpacing = parseOptionalFloat(olStyle, "itemSpacing") ?: 0f
++    olSpacingBefore = parseOptionalFloat(olStyle, "spacingBefore") ?: 0f
++    olSpacingAfter = parseOptionalFloat(olStyle, "spacingAfter") ?: 0f
+ 
+     val ulStyle = style.getMap("ul")
+     ulBulletColor = parseColor(ulStyle, "bulletColor")
+     ulGapWidth = parseFloat(ulStyle, "gapWidth").toInt()
+     ulMarginLeft = parseFloat(ulStyle, "marginLeft").toInt()
+     ulBulletSize = parseFloat(ulStyle, "bulletSize").toInt()
++    ulLineSpacing = parseOptionalFloat(ulStyle, "lineSpacing") ?: 0f
++    ulItemSpacing = parseOptionalFloat(ulStyle, "itemSpacing") ?: 0f
++    ulSpacingBefore = parseOptionalFloat(ulStyle, "spacingBefore") ?: 0f
++    ulSpacingAfter = parseOptionalFloat(ulStyle, "spacingAfter") ?: 0f
+ 
+     val imgStyle = style.getMap("img")
+     imgWidth = parseFloat(imgStyle, "width").toInt()
+@@ -128,6 +171,15 @@ class HtmlStyle {
+     return ceil(PixelUtil.toPixelFromSP(fontSize))
+   }
+ 
++  private fun parseOptionalFloat(map: ReadableMap?, key: String): Float? {
++    if (map == null) return null
++    if (!map.hasKey(key)) return null
++    if (map.isNull(key)) return null
++
++    val value = map.getDouble(key)
++    return ceil(PixelUtil.toPixelFromSP(value))
++  }
++
+   private fun parseColorWithOpacity(map: ReadableMap?, key: String, opacity: Int): Int {
+     val color = parseColor(map, key)
+     return withOpacity(color, opacity)
 diff --git a/android/src/main/java/com/swmansion/enriched/styles/ListStyles.kt b/android/src/main/java/com/swmansion/enriched/styles/ListStyles.kt
-index c419955b92593fbd534a8cc7b330f104991aace7..b8fa0deed79a486fa9c6642c7d396bcab66a8881 100644
+index c419955b92593fbd534a8cc7b330f104991aace7..1b193e53d3ae163afa3636f7355d7de4d1979b5e 100644
 --- a/android/src/main/java/com/swmansion/enriched/styles/ListStyles.kt
 +++ b/android/src/main/java/com/swmansion/enriched/styles/ListStyles.kt
 @@ -124,8 +124,9 @@ class ListStyles(private val view: EnrichedTextInputView) {
@@ -14,3 +619,1250 @@ index c419955b92593fbd534a8cc7b330f104991aace7..b8fa0deed79a486fa9c6642c7d396bca
        removeSpansForRange(s, start, end, config.clazz)
        return
      }
+@@ -139,6 +140,8 @@ class ListStyles(private val view: EnrichedTextInputView) {
+     }
+ 
+     if (!isBackspace && isNewLine && isPreviousParagraphList(s, start, config.clazz)) {
++      // Remove any existing spans first (prevents double indent when pressing Enter between bullets)
++      removeSpansForRange(s, start, end, config.clazz)
+       s.insert(cursorPosition, "\u200B")
+       setSpan(s, name, start, end + 1)
+       // Inform that new span has been added
+diff --git a/ios/EnrichedTextInputView.mm b/ios/EnrichedTextInputView.mm
+index d588ab0fc41d68c92b3e6c23e793dfea83602734..05d83c3ddc3776236d257a5f878c3a8ca2df104a 100644
+--- a/ios/EnrichedTextInputView.mm
++++ b/ios/EnrichedTextInputView.mm
+@@ -226,7 +226,22 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+     [newConfig setH1Bold:newViewProps.htmlStyle.h1.bold];
+     stylePropChanged = YES;
+   }
+-  
++
++  if(newViewProps.htmlStyle.h1.lineSpacing != oldViewProps.htmlStyle.h1.lineSpacing) {
++    [newConfig setH1LineSpacing:newViewProps.htmlStyle.h1.lineSpacing];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.h1.spacingBefore != oldViewProps.htmlStyle.h1.spacingBefore) {
++    [newConfig setH1SpacingBefore:newViewProps.htmlStyle.h1.spacingBefore];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.h1.spacingAfter != oldViewProps.htmlStyle.h1.spacingAfter) {
++    [newConfig setH1SpacingAfter:newViewProps.htmlStyle.h1.spacingAfter];
++    stylePropChanged = YES;
++  }
++
+   if(newViewProps.htmlStyle.h2.fontSize != oldViewProps.htmlStyle.h2.fontSize) {
+     [newConfig setH2FontSize:newViewProps.htmlStyle.h2.fontSize];
+     stylePropChanged = YES;
+@@ -236,7 +251,22 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+     [newConfig setH2Bold:newViewProps.htmlStyle.h2.bold];
+     stylePropChanged = YES;
+   }
+-  
++
++  if(newViewProps.htmlStyle.h2.lineSpacing != oldViewProps.htmlStyle.h2.lineSpacing) {
++    [newConfig setH2LineSpacing:newViewProps.htmlStyle.h2.lineSpacing];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.h2.spacingBefore != oldViewProps.htmlStyle.h2.spacingBefore) {
++    [newConfig setH2SpacingBefore:newViewProps.htmlStyle.h2.spacingBefore];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.h2.spacingAfter != oldViewProps.htmlStyle.h2.spacingAfter) {
++    [newConfig setH2SpacingAfter:newViewProps.htmlStyle.h2.spacingAfter];
++    stylePropChanged = YES;
++  }
++
+   if(newViewProps.htmlStyle.h3.fontSize != oldViewProps.htmlStyle.h3.fontSize) {
+     [newConfig setH3FontSize:newViewProps.htmlStyle.h3.fontSize];
+     stylePropChanged = YES;
+@@ -246,7 +276,37 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+     [newConfig setH3Bold:newViewProps.htmlStyle.h3.bold];
+     stylePropChanged = YES;
+   }
+-  
++
++  if(newViewProps.htmlStyle.h3.lineSpacing != oldViewProps.htmlStyle.h3.lineSpacing) {
++    [newConfig setH3LineSpacing:newViewProps.htmlStyle.h3.lineSpacing];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.h3.spacingBefore != oldViewProps.htmlStyle.h3.spacingBefore) {
++    [newConfig setH3SpacingBefore:newViewProps.htmlStyle.h3.spacingBefore];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.h3.spacingAfter != oldViewProps.htmlStyle.h3.spacingAfter) {
++    [newConfig setH3SpacingAfter:newViewProps.htmlStyle.h3.spacingAfter];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.p.lineSpacing != oldViewProps.htmlStyle.p.lineSpacing) {
++    [newConfig setPLineSpacing:newViewProps.htmlStyle.p.lineSpacing];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.p.spacingBefore != oldViewProps.htmlStyle.p.spacingBefore) {
++    [newConfig setPSpacingBefore:newViewProps.htmlStyle.p.spacingBefore];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.p.spacingAfter != oldViewProps.htmlStyle.p.spacingAfter) {
++    [newConfig setPSpacingAfter:newViewProps.htmlStyle.p.spacingAfter];
++    stylePropChanged = YES;
++  }
++
+   if(newViewProps.htmlStyle.blockquote.borderColor != oldViewProps.htmlStyle.blockquote.borderColor) {
+     if(isColorMeaningful(newViewProps.htmlStyle.blockquote.borderColor)) {
+       [newConfig setBlockquoteBorderColor:RCTUIColorFromSharedColor(newViewProps.htmlStyle.blockquote.borderColor)];
+@@ -317,7 +377,27 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+     }
+     stylePropChanged = YES;
+   }
+-  
++
++  if(newViewProps.htmlStyle.ol.lineSpacing != oldViewProps.htmlStyle.ol.lineSpacing) {
++    [newConfig setOrderedListLineSpacing:newViewProps.htmlStyle.ol.lineSpacing];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.ol.itemSpacing != oldViewProps.htmlStyle.ol.itemSpacing) {
++    [newConfig setOrderedListItemSpacing:newViewProps.htmlStyle.ol.itemSpacing];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.ol.spacingBefore != oldViewProps.htmlStyle.ol.spacingBefore) {
++    [newConfig setOrderedListSpacingBefore:newViewProps.htmlStyle.ol.spacingBefore];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.ol.spacingAfter != oldViewProps.htmlStyle.ol.spacingAfter) {
++    [newConfig setOrderedListSpacingAfter:newViewProps.htmlStyle.ol.spacingAfter];
++    stylePropChanged = YES;
++  }
++
+   if(newViewProps.htmlStyle.ul.bulletColor != oldViewProps.htmlStyle.ul.bulletColor) {
+     if(isColorMeaningful(newViewProps.htmlStyle.ul.bulletColor)) {
+       [newConfig setUnorderedListBulletColor:RCTUIColorFromSharedColor(newViewProps.htmlStyle.ul.bulletColor)];
+@@ -339,7 +419,27 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+     [newConfig setUnorderedListMarginLeft:newViewProps.htmlStyle.ul.marginLeft];
+     stylePropChanged = YES;
+   }
+-  
++
++  if(newViewProps.htmlStyle.ul.lineSpacing != oldViewProps.htmlStyle.ul.lineSpacing) {
++    [newConfig setUnorderedListLineSpacing:newViewProps.htmlStyle.ul.lineSpacing];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.ul.itemSpacing != oldViewProps.htmlStyle.ul.itemSpacing) {
++    [newConfig setUnorderedListItemSpacing:newViewProps.htmlStyle.ul.itemSpacing];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.ul.spacingBefore != oldViewProps.htmlStyle.ul.spacingBefore) {
++    [newConfig setUnorderedListSpacingBefore:newViewProps.htmlStyle.ul.spacingBefore];
++    stylePropChanged = YES;
++  }
++
++  if(newViewProps.htmlStyle.ul.spacingAfter != oldViewProps.htmlStyle.ul.spacingAfter) {
++    [newConfig setUnorderedListSpacingAfter:newViewProps.htmlStyle.ul.spacingAfter];
++    stylePropChanged = YES;
++  }
++
+   if(newViewProps.htmlStyle.a.color != oldViewProps.htmlStyle.a.color) {
+     if(isColorMeaningful(newViewProps.htmlStyle.a.color)) {
+       [newConfig setLinkColor:RCTUIColorFromSharedColor(newViewProps.htmlStyle.a.color)];
+diff --git a/ios/config/InputConfig.h b/ios/config/InputConfig.h
+index cd12910c6920b08e42238632f0e79551f1df289e..1ca7a59230c73b8676f5865a86202ffc701a9c3f 100644
+--- a/ios/config/InputConfig.h
++++ b/ios/config/InputConfig.h
+@@ -21,14 +21,38 @@
+ - (void)setH1FontSize:(CGFloat)newValue;
+ - (BOOL)h1Bold;
+ - (void)setH1Bold:(BOOL)newValue;
++- (CGFloat)h1LineSpacing;
++- (void)setH1LineSpacing:(CGFloat)newValue;
++- (CGFloat)h1SpacingBefore;
++- (void)setH1SpacingBefore:(CGFloat)newValue;
++- (CGFloat)h1SpacingAfter;
++- (void)setH1SpacingAfter:(CGFloat)newValue;
+ - (CGFloat)h2FontSize;
+ - (void)setH2FontSize:(CGFloat)newValue;
+ - (BOOL)h2Bold;
+ - (void)setH2Bold:(BOOL)newValue;
++- (CGFloat)h2LineSpacing;
++- (void)setH2LineSpacing:(CGFloat)newValue;
++- (CGFloat)h2SpacingBefore;
++- (void)setH2SpacingBefore:(CGFloat)newValue;
++- (CGFloat)h2SpacingAfter;
++- (void)setH2SpacingAfter:(CGFloat)newValue;
+ - (CGFloat)h3FontSize;
+ - (void)setH3FontSize:(CGFloat)newValue;
+ - (BOOL)h3Bold;
+ - (void)setH3Bold:(BOOL)newValue;
++- (CGFloat)h3LineSpacing;
++- (void)setH3LineSpacing:(CGFloat)newValue;
++- (CGFloat)h3SpacingBefore;
++- (void)setH3SpacingBefore:(CGFloat)newValue;
++- (CGFloat)h3SpacingAfter;
++- (void)setH3SpacingAfter:(CGFloat)newValue;
++- (CGFloat)pLineSpacing;
++- (void)setPLineSpacing:(CGFloat)newValue;
++- (CGFloat)pSpacingBefore;
++- (void)setPSpacingBefore:(CGFloat)newValue;
++- (CGFloat)pSpacingAfter;
++- (void)setPSpacingAfter:(CGFloat)newValue;
+ - (UIColor *)blockquoteBorderColor;
+ - (void)setBlockquoteBorderColor:(UIColor *)newValue;
+ - (CGFloat)blockquoteBorderWidth;
+@@ -50,6 +74,14 @@
+ - (UIColor *)orderedListMarkerColor;
+ - (void)setOrderedListMarkerColor:(UIColor *)newValue;
+ - (UIFont *)orderedListMarkerFont;
++- (CGFloat)orderedListLineSpacing;
++- (void)setOrderedListLineSpacing:(CGFloat)newValue;
++- (CGFloat)orderedListItemSpacing;
++- (void)setOrderedListItemSpacing:(CGFloat)newValue;
++- (CGFloat)orderedListSpacingBefore;
++- (void)setOrderedListSpacingBefore:(CGFloat)newValue;
++- (CGFloat)orderedListSpacingAfter;
++- (void)setOrderedListSpacingAfter:(CGFloat)newValue;
+ - (UIColor *)unorderedListBulletColor;
+ - (void)setUnorderedListBulletColor:(UIColor *)newValue;
+ - (CGFloat)unorderedListBulletSize;
+@@ -58,6 +90,14 @@
+ - (void)setUnorderedListGapWidth:(CGFloat)newValue;
+ - (CGFloat)unorderedListMarginLeft;
+ - (void)setUnorderedListMarginLeft:(CGFloat)newValue;
++- (CGFloat)unorderedListLineSpacing;
++- (void)setUnorderedListLineSpacing:(CGFloat)newValue;
++- (CGFloat)unorderedListItemSpacing;
++- (void)setUnorderedListItemSpacing:(CGFloat)newValue;
++- (CGFloat)unorderedListSpacingBefore;
++- (void)setUnorderedListSpacingBefore:(CGFloat)newValue;
++- (CGFloat)unorderedListSpacingAfter;
++- (void)setUnorderedListSpacingAfter:(CGFloat)newValue;
+ - (UIColor *)linkColor;
+ - (void)setLinkColor:(UIColor *)newValue;
+ - (TextDecorationLineEnum)linkDecorationLine;
+diff --git a/ios/config/InputConfig.mm b/ios/config/InputConfig.mm
+index 00f0903c11aba30561089fd445c5fd8eca61dc20..c34fc9c2f064d65c2bf9441c814f6e25c3c15c61 100644
+--- a/ios/config/InputConfig.mm
++++ b/ios/config/InputConfig.mm
+@@ -13,10 +13,22 @@ @implementation InputConfig {
+   NSSet<NSNumber*> *_mentionIndicators;
+   CGFloat _h1FontSize;
+   BOOL _h1Bold;
++  CGFloat _h1LineSpacing;
++  CGFloat _h1SpacingBefore;
++  CGFloat _h1SpacingAfter;
+   CGFloat _h2FontSize;
+   BOOL _h2Bold;
++  CGFloat _h2LineSpacing;
++  CGFloat _h2SpacingBefore;
++  CGFloat _h2SpacingAfter;
+   CGFloat _h3FontSize;
+   BOOL _h3Bold;
++  CGFloat _h3LineSpacing;
++  CGFloat _h3SpacingBefore;
++  CGFloat _h3SpacingAfter;
++  CGFloat _pLineSpacing;
++  CGFloat _pSpacingBefore;
++  CGFloat _pSpacingAfter;
+   UIColor *_blockquoteBorderColor;
+   CGFloat _blockquoteBorderWidth;
+   CGFloat _blockquoteGapWidth;
+@@ -29,10 +41,18 @@ @implementation InputConfig {
+   UIColor *_orderedListMarkerColor;
+   UIFont *_orderedListMarkerFont;
+   BOOL _olMarkerFontNeedsRecreation;
++  CGFloat _orderedListLineSpacing;
++  CGFloat _orderedListItemSpacing;
++  CGFloat _orderedListSpacingBefore;
++  CGFloat _orderedListSpacingAfter;
+   UIColor *_unorderedListBulletColor;
+   CGFloat _unorderedListBulletSize;
+   CGFloat _unorderedListGapWidth;
+   CGFloat _unorderedListMarginLeft;
++  CGFloat _unorderedListLineSpacing;
++  CGFloat _unorderedListItemSpacing;
++  CGFloat _unorderedListSpacingBefore;
++  CGFloat _unorderedListSpacingAfter;
+   UIColor *_linkColor;
+   TextDecorationLineEnum _linkDecorationLine;
+   NSDictionary *_mentionProperties;
+@@ -57,10 +77,22 @@ - (id)copyWithZone:(NSZone *)zone {
+   copy->_mentionIndicators = [_mentionIndicators copy];
+   copy->_h1FontSize = _h1FontSize;
+   copy->_h1Bold = _h1Bold;
++  copy->_h1LineSpacing = _h1LineSpacing;
++  copy->_h1SpacingBefore = _h1SpacingBefore;
++  copy->_h1SpacingAfter = _h1SpacingAfter;
+   copy->_h2FontSize = _h2FontSize;
+   copy->_h2Bold = _h2Bold;
++  copy->_h2LineSpacing = _h2LineSpacing;
++  copy->_h2SpacingBefore = _h2SpacingBefore;
++  copy->_h2SpacingAfter = _h2SpacingAfter;
+   copy->_h3FontSize = _h3FontSize;
+   copy->_h3Bold = _h3Bold;
++  copy->_h3LineSpacing = _h3LineSpacing;
++  copy->_h3SpacingBefore = _h3SpacingBefore;
++  copy->_h3SpacingAfter = _h3SpacingAfter;
++  copy->_pLineSpacing = _pLineSpacing;
++  copy->_pSpacingBefore = _pSpacingBefore;
++  copy->_pSpacingAfter = _pSpacingAfter;
+   copy->_blockquoteBorderColor = [_blockquoteBorderColor copy];
+   copy->_blockquoteBorderWidth = _blockquoteBorderWidth;
+   copy->_blockquoteGapWidth = _blockquoteGapWidth;
+@@ -72,10 +104,18 @@ - (id)copyWithZone:(NSZone *)zone {
+   copy->_orderedListMarkerFontWeight = [_orderedListMarkerFontWeight copy];
+   copy->_orderedListMarkerColor = [_orderedListMarkerColor copy];
+   copy->_orderedListMarkerFont = [_orderedListMarkerFont copy];
++  copy->_orderedListLineSpacing = _orderedListLineSpacing;
++  copy->_orderedListItemSpacing = _orderedListItemSpacing;
++  copy->_orderedListSpacingBefore = _orderedListSpacingBefore;
++  copy->_orderedListSpacingAfter = _orderedListSpacingAfter;
+   copy->_unorderedListBulletColor = [_unorderedListBulletColor copy];
+   copy->_unorderedListBulletSize = _unorderedListBulletSize;
+   copy->_unorderedListGapWidth = _unorderedListGapWidth;
+   copy->_unorderedListMarginLeft = _unorderedListMarginLeft;
++  copy->_unorderedListLineSpacing = _unorderedListLineSpacing;
++  copy->_unorderedListItemSpacing = _unorderedListItemSpacing;
++  copy->_unorderedListSpacingBefore = _unorderedListSpacingBefore;
++  copy->_unorderedListSpacingAfter = _unorderedListSpacingAfter;
+   copy->_linkColor = [_linkColor copy];
+   copy->_linkDecorationLine = [_linkDecorationLine copy];
+   copy->_mentionProperties = [_mentionProperties mutableCopy];
+@@ -176,6 +216,30 @@ - (void)setH1Bold:(BOOL)newValue {
+   _h1Bold = newValue;
+ }
+ 
++- (CGFloat)h1LineSpacing {
++  return _h1LineSpacing;
++}
++
++- (void)setH1LineSpacing:(CGFloat)newValue {
++  _h1LineSpacing = newValue;
++}
++
++- (CGFloat)h1SpacingBefore {
++  return _h1SpacingBefore;
++}
++
++- (void)setH1SpacingBefore:(CGFloat)newValue {
++  _h1SpacingBefore = newValue;
++}
++
++- (CGFloat)h1SpacingAfter {
++  return _h1SpacingAfter;
++}
++
++- (void)setH1SpacingAfter:(CGFloat)newValue {
++  _h1SpacingAfter = newValue;
++}
++
+ - (CGFloat)h2FontSize {
+   return _h2FontSize;
+ }
+@@ -192,6 +256,30 @@ - (void)setH2Bold:(BOOL)newValue {
+   _h2Bold = newValue;
+ }
+ 
++- (CGFloat)h2LineSpacing {
++  return _h2LineSpacing;
++}
++
++- (void)setH2LineSpacing:(CGFloat)newValue {
++  _h2LineSpacing = newValue;
++}
++
++- (CGFloat)h2SpacingBefore {
++  return _h2SpacingBefore;
++}
++
++- (void)setH2SpacingBefore:(CGFloat)newValue {
++  _h2SpacingBefore = newValue;
++}
++
++- (CGFloat)h2SpacingAfter {
++  return _h2SpacingAfter;
++}
++
++- (void)setH2SpacingAfter:(CGFloat)newValue {
++  _h2SpacingAfter = newValue;
++}
++
+ - (CGFloat)h3FontSize {
+   return _h3FontSize;
+ }
+@@ -208,6 +296,54 @@ - (void)setH3Bold:(BOOL)newValue {
+   _h3Bold = newValue;
+ }
+ 
++- (CGFloat)h3LineSpacing {
++  return _h3LineSpacing;
++}
++
++- (void)setH3LineSpacing:(CGFloat)newValue {
++  _h3LineSpacing = newValue;
++}
++
++- (CGFloat)h3SpacingBefore {
++  return _h3SpacingBefore;
++}
++
++- (void)setH3SpacingBefore:(CGFloat)newValue {
++  _h3SpacingBefore = newValue;
++}
++
++- (CGFloat)h3SpacingAfter {
++  return _h3SpacingAfter;
++}
++
++- (void)setH3SpacingAfter:(CGFloat)newValue {
++  _h3SpacingAfter = newValue;
++}
++
++- (CGFloat)pLineSpacing {
++  return _pLineSpacing;
++}
++
++- (void)setPLineSpacing:(CGFloat)newValue {
++  _pLineSpacing = newValue;
++}
++
++- (CGFloat)pSpacingBefore {
++  return _pSpacingBefore;
++}
++
++- (void)setPSpacingBefore:(CGFloat)newValue {
++  _pSpacingBefore = newValue;
++}
++
++- (CGFloat)pSpacingAfter {
++  return _pSpacingAfter;
++}
++
++- (void)setPSpacingAfter:(CGFloat)newValue {
++  _pSpacingAfter = newValue;
++}
++
+ - (UIColor *)blockquoteBorderColor {
+   return _blockquoteBorderColor;
+ }
+@@ -345,6 +481,70 @@ - (void)setUnorderedListMarginLeft:(CGFloat)newValue {
+   _unorderedListMarginLeft = newValue;
+ }
+ 
++- (CGFloat)unorderedListLineSpacing {
++  return _unorderedListLineSpacing;
++}
++
++- (void)setUnorderedListLineSpacing:(CGFloat)newValue {
++  _unorderedListLineSpacing = newValue;
++}
++
++- (CGFloat)unorderedListItemSpacing {
++  return _unorderedListItemSpacing;
++}
++
++- (void)setUnorderedListItemSpacing:(CGFloat)newValue {
++  _unorderedListItemSpacing = newValue;
++}
++
++- (CGFloat)unorderedListSpacingBefore {
++  return _unorderedListSpacingBefore;
++}
++
++- (void)setUnorderedListSpacingBefore:(CGFloat)newValue {
++  _unorderedListSpacingBefore = newValue;
++}
++
++- (CGFloat)unorderedListSpacingAfter {
++  return _unorderedListSpacingAfter;
++}
++
++- (void)setUnorderedListSpacingAfter:(CGFloat)newValue {
++  _unorderedListSpacingAfter = newValue;
++}
++
++- (CGFloat)orderedListLineSpacing {
++  return _orderedListLineSpacing;
++}
++
++- (void)setOrderedListLineSpacing:(CGFloat)newValue {
++  _orderedListLineSpacing = newValue;
++}
++
++- (CGFloat)orderedListItemSpacing {
++  return _orderedListItemSpacing;
++}
++
++- (void)setOrderedListItemSpacing:(CGFloat)newValue {
++  _orderedListItemSpacing = newValue;
++}
++
++- (CGFloat)orderedListSpacingBefore {
++  return _orderedListSpacingBefore;
++}
++
++- (void)setOrderedListSpacingBefore:(CGFloat)newValue {
++  _orderedListSpacingBefore = newValue;
++}
++
++- (CGFloat)orderedListSpacingAfter {
++  return _orderedListSpacingAfter;
++}
++
++- (void)setOrderedListSpacingAfter:(CGFloat)newValue {
++  _orderedListSpacingAfter = newValue;
++}
++
+ - (UIColor *)linkColor {
+   return _linkColor;
+ }
+diff --git a/ios/generated/RNEnrichedTextInputViewSpec/Props.h b/ios/generated/RNEnrichedTextInputViewSpec/Props.h
+index 365e247361bbc459fc900aca779d1b475f0ec8da..2c940e45eec87f67f4e36594d5b2248bd9d69178 100644
+--- a/ios/generated/RNEnrichedTextInputViewSpec/Props.h
++++ b/ios/generated/RNEnrichedTextInputViewSpec/Props.h
+@@ -21,6 +21,9 @@ namespace facebook::react {
+ struct EnrichedTextInputViewHtmlStyleH1Struct {
+   Float fontSize{0.0};
+   bool bold{false};
++  Float lineSpacing{0.0};
++  Float spacingBefore{0.0};
++  Float spacingAfter{0.0};
+ 
+ #ifdef RN_SERIALIZABLE_STATE
+   bool operator==(const EnrichedTextInputViewHtmlStyleH1Struct&) const = default;
+@@ -29,6 +32,9 @@ struct EnrichedTextInputViewHtmlStyleH1Struct {
+     folly::dynamic result = folly::dynamic::object();
+     result["fontSize"] = fontSize;
+     result["bold"] = bold;
++    result["lineSpacing"] = lineSpacing;
++    result["spacingBefore"] = spacingBefore;
++    result["spacingAfter"] = spacingAfter;
+     return result;
+   }
+ #endif
+@@ -45,6 +51,18 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+   if (tmp_bold != map.end()) {
+     fromRawValue(context, tmp_bold->second, result.bold);
+   }
++  auto tmp_lineSpacing = map.find("lineSpacing");
++  if (tmp_lineSpacing != map.end()) {
++    fromRawValue(context, tmp_lineSpacing->second, result.lineSpacing);
++  }
++  auto tmp_spacingBefore = map.find("spacingBefore");
++  if (tmp_spacingBefore != map.end()) {
++    fromRawValue(context, tmp_spacingBefore->second, result.spacingBefore);
++  }
++  auto tmp_spacingAfter = map.find("spacingAfter");
++  if (tmp_spacingAfter != map.end()) {
++    fromRawValue(context, tmp_spacingAfter->second, result.spacingAfter);
++  }
+ }
+ 
+ static inline std::string toString(const EnrichedTextInputViewHtmlStyleH1Struct &value) {
+@@ -60,6 +78,9 @@ static inline folly::dynamic toDynamic(const EnrichedTextInputViewHtmlStyleH1Str
+ struct EnrichedTextInputViewHtmlStyleH2Struct {
+   Float fontSize{0.0};
+   bool bold{false};
++  Float lineSpacing{0.0};
++  Float spacingBefore{0.0};
++  Float spacingAfter{0.0};
+ 
+ #ifdef RN_SERIALIZABLE_STATE
+   bool operator==(const EnrichedTextInputViewHtmlStyleH2Struct&) const = default;
+@@ -68,6 +89,9 @@ struct EnrichedTextInputViewHtmlStyleH2Struct {
+     folly::dynamic result = folly::dynamic::object();
+     result["fontSize"] = fontSize;
+     result["bold"] = bold;
++    result["lineSpacing"] = lineSpacing;
++    result["spacingBefore"] = spacingBefore;
++    result["spacingAfter"] = spacingAfter;
+     return result;
+   }
+ #endif
+@@ -84,6 +108,18 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+   if (tmp_bold != map.end()) {
+     fromRawValue(context, tmp_bold->second, result.bold);
+   }
++  auto tmp_lineSpacing = map.find("lineSpacing");
++  if (tmp_lineSpacing != map.end()) {
++    fromRawValue(context, tmp_lineSpacing->second, result.lineSpacing);
++  }
++  auto tmp_spacingBefore = map.find("spacingBefore");
++  if (tmp_spacingBefore != map.end()) {
++    fromRawValue(context, tmp_spacingBefore->second, result.spacingBefore);
++  }
++  auto tmp_spacingAfter = map.find("spacingAfter");
++  if (tmp_spacingAfter != map.end()) {
++    fromRawValue(context, tmp_spacingAfter->second, result.spacingAfter);
++  }
+ }
+ 
+ static inline std::string toString(const EnrichedTextInputViewHtmlStyleH2Struct &value) {
+@@ -99,6 +135,9 @@ static inline folly::dynamic toDynamic(const EnrichedTextInputViewHtmlStyleH2Str
+ struct EnrichedTextInputViewHtmlStyleH3Struct {
+   Float fontSize{0.0};
+   bool bold{false};
++  Float lineSpacing{0.0};
++  Float spacingBefore{0.0};
++  Float spacingAfter{0.0};
+ 
+ #ifdef RN_SERIALIZABLE_STATE
+   bool operator==(const EnrichedTextInputViewHtmlStyleH3Struct&) const = default;
+@@ -107,6 +146,9 @@ struct EnrichedTextInputViewHtmlStyleH3Struct {
+     folly::dynamic result = folly::dynamic::object();
+     result["fontSize"] = fontSize;
+     result["bold"] = bold;
++    result["lineSpacing"] = lineSpacing;
++    result["spacingBefore"] = spacingBefore;
++    result["spacingAfter"] = spacingAfter;
+     return result;
+   }
+ #endif
+@@ -123,6 +165,18 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+   if (tmp_bold != map.end()) {
+     fromRawValue(context, tmp_bold->second, result.bold);
+   }
++  auto tmp_lineSpacing = map.find("lineSpacing");
++  if (tmp_lineSpacing != map.end()) {
++    fromRawValue(context, tmp_lineSpacing->second, result.lineSpacing);
++  }
++  auto tmp_spacingBefore = map.find("spacingBefore");
++  if (tmp_spacingBefore != map.end()) {
++    fromRawValue(context, tmp_spacingBefore->second, result.spacingBefore);
++  }
++  auto tmp_spacingAfter = map.find("spacingAfter");
++  if (tmp_spacingAfter != map.end()) {
++    fromRawValue(context, tmp_spacingAfter->second, result.spacingAfter);
++  }
+ }
+ 
+ static inline std::string toString(const EnrichedTextInputViewHtmlStyleH3Struct &value) {
+@@ -135,6 +189,51 @@ static inline folly::dynamic toDynamic(const EnrichedTextInputViewHtmlStyleH3Str
+ }
+ #endif
+ 
++struct EnrichedTextInputViewHtmlStylePStruct {
++  Float lineSpacing{0.0};
++  Float spacingBefore{0.0};
++  Float spacingAfter{0.0};
++
++#ifdef RN_SERIALIZABLE_STATE
++  bool operator==(const EnrichedTextInputViewHtmlStylePStruct&) const = default;
++
++  folly::dynamic toDynamic() const {
++    folly::dynamic result = folly::dynamic::object();
++    result["lineSpacing"] = lineSpacing;
++    result["spacingBefore"] = spacingBefore;
++    result["spacingAfter"] = spacingAfter;
++    return result;
++  }
++#endif
++};
++
++static inline void fromRawValue(const PropsParserContext& context, const RawValue &value, EnrichedTextInputViewHtmlStylePStruct &result) {
++  auto map = (std::unordered_map<std::string, RawValue>)value;
++
++  auto tmp_lineSpacing = map.find("lineSpacing");
++  if (tmp_lineSpacing != map.end()) {
++    fromRawValue(context, tmp_lineSpacing->second, result.lineSpacing);
++  }
++  auto tmp_spacingBefore = map.find("spacingBefore");
++  if (tmp_spacingBefore != map.end()) {
++    fromRawValue(context, tmp_spacingBefore->second, result.spacingBefore);
++  }
++  auto tmp_spacingAfter = map.find("spacingAfter");
++  if (tmp_spacingAfter != map.end()) {
++    fromRawValue(context, tmp_spacingAfter->second, result.spacingAfter);
++  }
++}
++
++static inline std::string toString(const EnrichedTextInputViewHtmlStylePStruct &value) {
++  return "[Object EnrichedTextInputViewHtmlStylePStruct]";
++}
++
++#ifdef RN_SERIALIZABLE_STATE
++static inline folly::dynamic toDynamic(const EnrichedTextInputViewHtmlStylePStruct &value) {
++  return value.toDynamic();
++}
++#endif
++
+ struct EnrichedTextInputViewHtmlStyleBlockquoteStruct {
+   SharedColor borderColor{};
+   Float borderWidth{0.0};
+@@ -353,6 +452,10 @@ struct EnrichedTextInputViewHtmlStyleOlStruct {
+   Float marginLeft{0.0};
+   std::string markerFontWeight{};
+   SharedColor markerColor{};
++  Float lineSpacing{0.0};
++  Float itemSpacing{0.0};
++  Float spacingBefore{0.0};
++  Float spacingAfter{0.0};
+ 
+ #ifdef RN_SERIALIZABLE_STATE
+   bool operator==(const EnrichedTextInputViewHtmlStyleOlStruct&) const = default;
+@@ -363,6 +466,10 @@ struct EnrichedTextInputViewHtmlStyleOlStruct {
+     result["marginLeft"] = marginLeft;
+     result["markerFontWeight"] = markerFontWeight;
+     result["markerColor"] = ::facebook::react::toDynamic(markerColor);
++    result["lineSpacing"] = lineSpacing;
++    result["itemSpacing"] = itemSpacing;
++    result["spacingBefore"] = spacingBefore;
++    result["spacingAfter"] = spacingAfter;
+     return result;
+   }
+ #endif
+@@ -387,6 +494,22 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+   if (tmp_markerColor != map.end()) {
+     fromRawValue(context, tmp_markerColor->second, result.markerColor);
+   }
++  auto tmp_lineSpacing = map.find("lineSpacing");
++  if (tmp_lineSpacing != map.end()) {
++    fromRawValue(context, tmp_lineSpacing->second, result.lineSpacing);
++  }
++  auto tmp_itemSpacing = map.find("itemSpacing");
++  if (tmp_itemSpacing != map.end()) {
++    fromRawValue(context, tmp_itemSpacing->second, result.itemSpacing);
++  }
++  auto tmp_spacingBefore = map.find("spacingBefore");
++  if (tmp_spacingBefore != map.end()) {
++    fromRawValue(context, tmp_spacingBefore->second, result.spacingBefore);
++  }
++  auto tmp_spacingAfter = map.find("spacingAfter");
++  if (tmp_spacingAfter != map.end()) {
++    fromRawValue(context, tmp_spacingAfter->second, result.spacingAfter);
++  }
+ }
+ 
+ static inline std::string toString(const EnrichedTextInputViewHtmlStyleOlStruct &value) {
+@@ -404,6 +527,10 @@ struct EnrichedTextInputViewHtmlStyleUlStruct {
+   Float bulletSize{0.0};
+   Float marginLeft{0.0};
+   Float gapWidth{0.0};
++  Float lineSpacing{0.0};
++  Float itemSpacing{0.0};
++  Float spacingBefore{0.0};
++  Float spacingAfter{0.0};
+ 
+ #ifdef RN_SERIALIZABLE_STATE
+   bool operator==(const EnrichedTextInputViewHtmlStyleUlStruct&) const = default;
+@@ -414,6 +541,10 @@ struct EnrichedTextInputViewHtmlStyleUlStruct {
+     result["bulletSize"] = bulletSize;
+     result["marginLeft"] = marginLeft;
+     result["gapWidth"] = gapWidth;
++    result["lineSpacing"] = lineSpacing;
++    result["itemSpacing"] = itemSpacing;
++    result["spacingBefore"] = spacingBefore;
++    result["spacingAfter"] = spacingAfter;
+     return result;
+   }
+ #endif
+@@ -438,6 +569,22 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+   if (tmp_gapWidth != map.end()) {
+     fromRawValue(context, tmp_gapWidth->second, result.gapWidth);
+   }
++  auto tmp_lineSpacing = map.find("lineSpacing");
++  if (tmp_lineSpacing != map.end()) {
++    fromRawValue(context, tmp_lineSpacing->second, result.lineSpacing);
++  }
++  auto tmp_itemSpacing = map.find("itemSpacing");
++  if (tmp_itemSpacing != map.end()) {
++    fromRawValue(context, tmp_itemSpacing->second, result.itemSpacing);
++  }
++  auto tmp_spacingBefore = map.find("spacingBefore");
++  if (tmp_spacingBefore != map.end()) {
++    fromRawValue(context, tmp_spacingBefore->second, result.spacingBefore);
++  }
++  auto tmp_spacingAfter = map.find("spacingAfter");
++  if (tmp_spacingAfter != map.end()) {
++    fromRawValue(context, tmp_spacingAfter->second, result.spacingAfter);
++  }
+ }
+ 
+ static inline std::string toString(const EnrichedTextInputViewHtmlStyleUlStruct &value) {
+@@ -454,6 +601,7 @@ struct EnrichedTextInputViewHtmlStyleStruct {
+   EnrichedTextInputViewHtmlStyleH1Struct h1{};
+   EnrichedTextInputViewHtmlStyleH2Struct h2{};
+   EnrichedTextInputViewHtmlStyleH3Struct h3{};
++  EnrichedTextInputViewHtmlStylePStruct p{};
+   EnrichedTextInputViewHtmlStyleBlockquoteStruct blockquote{};
+   EnrichedTextInputViewHtmlStyleCodeblockStruct codeblock{};
+   EnrichedTextInputViewHtmlStyleCodeStruct code{};
+@@ -471,6 +619,7 @@ struct EnrichedTextInputViewHtmlStyleStruct {
+     result["h1"] = ::facebook::react::toDynamic(h1);
+     result["h2"] = ::facebook::react::toDynamic(h2);
+     result["h3"] = ::facebook::react::toDynamic(h3);
++    result["p"] = ::facebook::react::toDynamic(p);
+     result["blockquote"] = ::facebook::react::toDynamic(blockquote);
+     result["codeblock"] = ::facebook::react::toDynamic(codeblock);
+     result["code"] = ::facebook::react::toDynamic(code);
+@@ -499,6 +648,10 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+   if (tmp_h3 != map.end()) {
+     fromRawValue(context, tmp_h3->second, result.h3);
+   }
++  auto tmp_p = map.find("p");
++  if (tmp_p != map.end()) {
++    fromRawValue(context, tmp_p->second, result.p);
++  }
+   auto tmp_blockquote = map.find("blockquote");
+   if (tmp_blockquote != map.end()) {
+     fromRawValue(context, tmp_blockquote->second, result.blockquote);
+diff --git a/ios/styles/H1Style.mm b/ios/styles/H1Style.mm
+index 9a8c4dedd1693d6ccca44e2a75148874102c491d..b80db1be6761f492986b090f6f6dc6fd354b94ff 100644
+--- a/ios/styles/H1Style.mm
++++ b/ios/styles/H1Style.mm
+@@ -7,4 +7,7 @@ - (CGFloat)getHeadingFontSize { return [((EnrichedTextInputView *)input)->config
+ - (BOOL)isHeadingBold {
+   return [((EnrichedTextInputView *)input)->config h1Bold];
+ }
++- (CGFloat)getHeadingLineSpacing { return [((EnrichedTextInputView *)input)->config h1LineSpacing]; }
++- (CGFloat)getHeadingSpacingBefore { return [((EnrichedTextInputView *)input)->config h1SpacingBefore]; }
++- (CGFloat)getHeadingSpacingAfter { return [((EnrichedTextInputView *)input)->config h1SpacingAfter]; }
+ @end
+diff --git a/ios/styles/H2Style.mm b/ios/styles/H2Style.mm
+index 1913c2f30bcc1679f089c65b32dd70c355ce50f3..a4ab3d12615c9a64c8ab3ac5620d98ecd578c4b1 100644
+--- a/ios/styles/H2Style.mm
++++ b/ios/styles/H2Style.mm
+@@ -7,4 +7,7 @@ - (CGFloat)getHeadingFontSize { return [((EnrichedTextInputView *)input)->config
+ - (BOOL)isHeadingBold {
+   return [((EnrichedTextInputView *)input)->config h2Bold];
+ }
++- (CGFloat)getHeadingLineSpacing { return [((EnrichedTextInputView *)input)->config h2LineSpacing]; }
++- (CGFloat)getHeadingSpacingBefore { return [((EnrichedTextInputView *)input)->config h2SpacingBefore]; }
++- (CGFloat)getHeadingSpacingAfter { return [((EnrichedTextInputView *)input)->config h2SpacingAfter]; }
+ @end
+diff --git a/ios/styles/H3Style.mm b/ios/styles/H3Style.mm
+index f7b55bc7fb368dfe01dc2c3fa1ae7abc153a814f..e2900aaf86ed40fbde8e24e8710c0acc30154f17 100644
+--- a/ios/styles/H3Style.mm
++++ b/ios/styles/H3Style.mm
+@@ -7,4 +7,7 @@ - (CGFloat)getHeadingFontSize { return [((EnrichedTextInputView *)input)->config
+ - (BOOL)isHeadingBold {
+   return [((EnrichedTextInputView *)input)->config h3Bold];
+ }
++- (CGFloat)getHeadingLineSpacing { return [((EnrichedTextInputView *)input)->config h3LineSpacing]; }
++- (CGFloat)getHeadingSpacingBefore { return [((EnrichedTextInputView *)input)->config h3SpacingBefore]; }
++- (CGFloat)getHeadingSpacingAfter { return [((EnrichedTextInputView *)input)->config h3SpacingAfter]; }
+ @end
+diff --git a/ios/styles/HeadingStyleBase.mm b/ios/styles/HeadingStyleBase.mm
+index 4d3beacabe762b70ba448eb9298c55d30a0fbc93..127a557f0f4765502b500ec10aca44996680facc 100644
+--- a/ios/styles/HeadingStyleBase.mm
++++ b/ios/styles/HeadingStyleBase.mm
+@@ -10,6 +10,9 @@ @implementation HeadingStyleBase
+ + (StyleType)getStyleType { return None; }
+ - (CGFloat)getHeadingFontSize { return 0; }
+ - (BOOL)isHeadingBold { return false; }
++- (CGFloat)getHeadingLineSpacing { return 0; }
++- (CGFloat)getHeadingSpacingBefore { return 0; }
++- (CGFloat)getHeadingSpacingAfter { return 0; }
+ 
+ - (EnrichedTextInputView *)typedInput {
+   return (EnrichedTextInputView *)input;
+@@ -35,6 +38,8 @@ - (void)applyStyle:(NSRange)range {
+ // the range will already be the proper full paragraph/s range
+ - (void)addAttributes:(NSRange)range {
+   [[self typedInput]->textView.textStorage beginEditing];
++
++  // Apply font attributes
+   [[self typedInput]->textView.textStorage enumerateAttribute:NSFontAttributeName inRange:range options:0
+     usingBlock:^(id  _Nullable value, NSRange range, BOOL * _Nonnull stop) {
+       UIFont *font = (UIFont *)value;
+@@ -47,31 +52,84 @@ - (void)addAttributes:(NSRange)range {
+       }
+     }
+   ];
++
++  // Apply paragraph spacing attributes
++  [[self typedInput]->textView.textStorage enumerateAttribute:NSParagraphStyleAttributeName inRange:range options:0
++    usingBlock:^(id  _Nullable value, NSRange range, BOOL * _Nonnull stop) {
++      NSMutableParagraphStyle *pStyle = [(NSParagraphStyle *)value mutableCopy];
++      if(pStyle == nullptr) {
++        pStyle = [[NSMutableParagraphStyle alloc] init];
++      }
++
++      CGFloat lineSpacing = [self getHeadingLineSpacing];
++      CGFloat spacingBefore = [self getHeadingSpacingBefore];
++      CGFloat spacingAfter = [self getHeadingSpacingAfter];
++
++      if(lineSpacing > 0) {
++        pStyle.lineSpacing = lineSpacing;
++      }
++      if(spacingBefore > 0) {
++        pStyle.paragraphSpacingBefore = spacingBefore;
++      }
++      if(spacingAfter > 0) {
++        pStyle.paragraphSpacing = spacingAfter;
++      }
++
++      [[self typedInput]->textView.textStorage addAttribute:NSParagraphStyleAttributeName value:pStyle range:range];
++    }
++  ];
++
+   [[self typedInput]->textView.textStorage endEditing];
+-  
++
+   // also toggle typing attributes
+   [self addTypingAttributes];
+ }
+ 
+ // will always be called on empty paragraphs so only typing attributes can be changed
+ - (void)addTypingAttributes {
+-  UIFont *currentFontAttr = (UIFont *)[self typedInput]->textView.typingAttributes[NSFontAttributeName];
++  NSMutableDictionary *newTypingAttrs = [[self typedInput]->textView.typingAttributes mutableCopy];
++
++  // Apply font attributes
++  UIFont *currentFontAttr = (UIFont *)newTypingAttrs[NSFontAttributeName];
+   if(currentFontAttr != nullptr) {
+-    NSMutableDictionary *newTypingAttrs = [[self typedInput]->textView.typingAttributes mutableCopy];
+     UIFont *newFont = [currentFontAttr setSize:[self getHeadingFontSize]];
+     if([self isHeadingBold]) {
+       newFont = [newFont setBold];
+     }
+     newTypingAttrs[NSFontAttributeName] = newFont;
+-    [self typedInput]->textView.typingAttributes = newTypingAttrs;
+   }
++
++  // Apply paragraph spacing attributes
++  NSMutableParagraphStyle *pStyle = [newTypingAttrs[NSParagraphStyleAttributeName] mutableCopy];
++  if(pStyle == nullptr) {
++    pStyle = [[NSMutableParagraphStyle alloc] init];
++  }
++
++  CGFloat lineSpacing = [self getHeadingLineSpacing];
++  CGFloat spacingBefore = [self getHeadingSpacingBefore];
++  CGFloat spacingAfter = [self getHeadingSpacingAfter];
++
++  if(lineSpacing > 0) {
++    pStyle.lineSpacing = lineSpacing;
++  }
++  if(spacingBefore > 0) {
++    pStyle.paragraphSpacingBefore = spacingBefore;
++  }
++  if(spacingAfter > 0) {
++    pStyle.paragraphSpacing = spacingAfter;
++  }
++
++  newTypingAttrs[NSParagraphStyleAttributeName] = pStyle;
++  [self typedInput]->textView.typingAttributes = newTypingAttrs;
+ }
+ 
+ // we need to remove the style from the whole paragraph
+ - (void)removeAttributes:(NSRange)range {
+   NSRange paragraphRange = [[self typedInput]->textView.textStorage.string paragraphRangeForRange:range];
+-  
++
+   [[self typedInput]->textView.textStorage beginEditing];
++
++  // Remove font attributes
+   [[self typedInput]->textView.textStorage enumerateAttribute:NSFontAttributeName inRange:paragraphRange options:0
+     usingBlock:^(id  _Nullable value, NSRange range, BOOL * _Nonnull stop) {
+       if([self styleCondition:value :range]) {
+@@ -83,19 +141,45 @@ - (void)removeAttributes:(NSRange)range {
+       }
+     }
+   ];
++
++  // Remove paragraph spacing attributes
++  [[self typedInput]->textView.textStorage enumerateAttribute:NSParagraphStyleAttributeName inRange:paragraphRange options:0
++    usingBlock:^(id  _Nullable value, NSRange range, BOOL * _Nonnull stop) {
++      NSMutableParagraphStyle *pStyle = [(NSParagraphStyle *)value mutableCopy];
++      if(pStyle != nullptr) {
++        pStyle.lineSpacing = 0;
++        pStyle.paragraphSpacingBefore = 0;
++        pStyle.paragraphSpacing = 0;
++        [[self typedInput]->textView.textStorage addAttribute:NSParagraphStyleAttributeName value:pStyle range:range];
++      }
++    }
++  ];
++
+   [[self typedInput]->textView.textStorage endEditing];
+-  
+-  // typing attributes still need to be removed
+-  UIFont *currentFontAttr = (UIFont *)[self typedInput]->textView.typingAttributes[NSFontAttributeName];
++
++  // Remove typing attributes
++  NSMutableDictionary *newTypingAttrs = [[self typedInput]->textView.typingAttributes mutableCopy];
++
++  // Remove font
++  UIFont *currentFontAttr = (UIFont *)newTypingAttrs[NSFontAttributeName];
+   if(currentFontAttr != nullptr) {
+-    NSMutableDictionary *newTypingAttrs = [[self typedInput]->textView.typingAttributes mutableCopy];
+     UIFont *newFont = [currentFontAttr setSize:[[[self typedInput]->config primaryFontSize] floatValue]];
+     if([self isHeadingBold]) {
+       newFont = [newFont removeBold];
+     }
+     newTypingAttrs[NSFontAttributeName] = newFont;
+-    [self typedInput]->textView.typingAttributes = newTypingAttrs;
+   }
++
++  // Remove paragraph spacing
++  NSMutableParagraphStyle *pStyle = [newTypingAttrs[NSParagraphStyleAttributeName] mutableCopy];
++  if(pStyle != nullptr) {
++    pStyle.lineSpacing = 0;
++    pStyle.paragraphSpacingBefore = 0;
++    pStyle.paragraphSpacing = 0;
++    newTypingAttrs[NSParagraphStyleAttributeName] = pStyle;
++  }
++
++  [self typedInput]->textView.typingAttributes = newTypingAttrs;
+ }
+ 
+ - (void)removeTypingAttributes {
+diff --git a/ios/styles/OrderedListStyle.mm b/ios/styles/OrderedListStyle.mm
+index c4234a45a1bd41c53576454208631fd0d7b74916..5a76e64ecbe987901214bee4305e6bbf8b6b4a0a 100644
+--- a/ios/styles/OrderedListStyle.mm
++++ b/ios/styles/OrderedListStyle.mm
+@@ -64,6 +64,21 @@ - (void)addAttributes:(NSRange)range {
+         pStyle.textLists = @[numberBullet];
+         pStyle.headIndent = [self getHeadIndent];
+         pStyle.firstLineHeadIndent = [self getHeadIndent];
++
++        // Apply list spacing
++        CGFloat lineHeight = [_input->config orderedListLineSpacing];
++        CGFloat itemSpacing = [_input->config orderedListItemSpacing];
++
++        if(lineHeight > 0) {
++          pStyle.maximumLineHeight = lineHeight;
++          pStyle.minimumLineHeight = lineHeight;
++        }
++        if(itemSpacing != 0) {
++          pStyle.paragraphSpacing = itemSpacing;
++        }
++        // Note: spacingBefore/After should be handled at the block level,
++        // not per-item, to avoid adding space before every item
++
+         [_input->textView.textStorage addAttribute:NSParagraphStyleAttributeName value:pStyle range:range];
+       }
+     ];
+@@ -86,6 +101,19 @@ - (void)addAttributes:(NSRange)range {
+   pStyle.textLists = @[numberBullet];
+   pStyle.headIndent = [self getHeadIndent];
+   pStyle.firstLineHeadIndent = [self getHeadIndent];
++
++  // Apply list spacing to typing attributes
++  CGFloat lineHeight = [_input->config orderedListLineSpacing];
++  CGFloat itemSpacing = [_input->config orderedListItemSpacing];
++
++  if(lineHeight > 0) {
++    pStyle.maximumLineHeight = lineHeight;
++    pStyle.minimumLineHeight = lineHeight;
++  }
++  if(itemSpacing != 0) {
++    pStyle.paragraphSpacing = itemSpacing;
++  }
++
+   typingAttrs[NSParagraphStyleAttributeName] = pStyle;
+   _input->textView.typingAttributes = typingAttrs;
+ }
+diff --git a/ios/styles/UnorderedListStyle.mm b/ios/styles/UnorderedListStyle.mm
+index c550b5e47893d5363d2c4ac508ff2559635ef2a6..406e5d76b391705f80e0dbad4881c2cae3a23027 100644
+--- a/ios/styles/UnorderedListStyle.mm
++++ b/ios/styles/UnorderedListStyle.mm
+@@ -64,6 +64,21 @@ - (void)addAttributes:(NSRange)range {
+         pStyle.textLists = @[bullet];
+         pStyle.headIndent = [self getHeadIndent];
+         pStyle.firstLineHeadIndent = [self getHeadIndent];
++
++        // Apply list spacing
++        CGFloat lineHeight = [_input->config unorderedListLineSpacing];
++        CGFloat itemSpacing = [_input->config unorderedListItemSpacing];
++
++        if(lineHeight > 0) {
++          pStyle.maximumLineHeight = lineHeight;
++          pStyle.minimumLineHeight = lineHeight;
++        }
++        if(itemSpacing != 0) {
++          pStyle.paragraphSpacing = itemSpacing;
++        }
++        // Note: spacingBefore/After should be handled at the block level,
++        // not per-item, to avoid adding space before every bullet
++
+         [_input->textView.textStorage addAttribute:NSParagraphStyleAttributeName value:pStyle range:range];
+       }
+     ];
+@@ -86,6 +101,19 @@ - (void)addAttributes:(NSRange)range {
+   pStyle.textLists = @[bullet];
+   pStyle.headIndent = [self getHeadIndent];
+   pStyle.firstLineHeadIndent = [self getHeadIndent];
++
++  // Apply list spacing to typing attributes
++  CGFloat lineHeight = [_input->config unorderedListLineSpacing];
++  CGFloat itemSpacing = [_input->config unorderedListItemSpacing];
++
++  if(lineHeight > 0) {
++    pStyle.maximumLineHeight = lineHeight;
++    pStyle.minimumLineHeight = lineHeight;
++  }
++  if(itemSpacing != 0) {
++    pStyle.paragraphSpacing = itemSpacing;
++  }
++
+   typingAttrs[NSParagraphStyleAttributeName] = pStyle;
+   _input->textView.typingAttributes = typingAttrs;
+ }
+diff --git a/src/EnrichedTextInput.tsx b/src/EnrichedTextInput.tsx
+index 07f2d2fe20c58b0a303a317e43fc7b120aa6428b..1ab5f8ad80742595b6ce3156fefb910c6f04607c 100644
+--- a/src/EnrichedTextInput.tsx
++++ b/src/EnrichedTextInput.tsx
+@@ -70,14 +70,28 @@ export interface HtmlStyle {
+   h1?: {
+     fontSize?: number;
+     bold?: boolean;
++    lineSpacing?: number;
++    spacingBefore?: number;
++    spacingAfter?: number;
+   };
+   h2?: {
+     fontSize?: number;
+     bold?: boolean;
++    lineSpacing?: number;
++    spacingBefore?: number;
++    spacingAfter?: number;
+   };
+   h3?: {
+     fontSize?: number;
+     bold?: boolean;
++    lineSpacing?: number;
++    spacingBefore?: number;
++    spacingAfter?: number;
++  };
++  p?: {
++    lineSpacing?: number;
++    spacingBefore?: number;
++    spacingAfter?: number;
+   };
+   blockquote?: {
+     borderColor?: ColorValue;
+@@ -108,12 +122,20 @@ export interface HtmlStyle {
+     marginLeft?: number;
+     markerFontWeight?: TextStyle['fontWeight'];
+     markerColor?: ColorValue;
++    lineSpacing?: number;
++    itemSpacing?: number;
++    spacingBefore?: number;
++    spacingAfter?: number;
+   };
+   ul?: {
+     bulletColor?: ColorValue;
+     bulletSize?: number;
+     marginLeft?: number;
+     gapWidth?: number;
++    lineSpacing?: number;
++    itemSpacing?: number;
++    spacingBefore?: number;
++    spacingAfter?: number;
+   };
+ }
+ 
+diff --git a/src/EnrichedTextInputNativeComponent.ts b/src/EnrichedTextInputNativeComponent.ts
+index e0b94320152bc517f7d2aea6b9dcf12d6cd9cf36..7c22fe2192090eaa566df1c93e6a7677863867fb 100644
+--- a/src/EnrichedTextInputNativeComponent.ts
++++ b/src/EnrichedTextInputNativeComponent.ts
+@@ -74,14 +74,28 @@ export interface HtmlStyleInternal {
+   h1?: {
+     fontSize?: Float;
+     bold?: boolean;
++    lineSpacing?: Float;
++    spacingBefore?: Float;
++    spacingAfter?: Float;
+   };
+   h2?: {
+     fontSize?: Float;
+     bold?: boolean;
++    lineSpacing?: Float;
++    spacingBefore?: Float;
++    spacingAfter?: Float;
+   };
+   h3?: {
+     fontSize?: Float;
+     bold?: boolean;
++    lineSpacing?: Float;
++    spacingBefore?: Float;
++    spacingAfter?: Float;
++  };
++  p?: {
++    lineSpacing?: Float;
++    spacingBefore?: Float;
++    spacingAfter?: Float;
+   };
+   blockquote?: {
+     borderColor?: ColorValue;
+@@ -114,12 +128,18 @@ export interface HtmlStyleInternal {
+     marginLeft?: Float;
+     markerFontWeight?: string;
+     markerColor?: ColorValue;
++    itemSpacing?: Float;
++    spacingBefore?: Float;
++    spacingAfter?: Float;
+   };
+   ul?: {
+     bulletColor?: ColorValue;
+     bulletSize?: Float;
+     marginLeft?: Float;
+     gapWidth?: Float;
++    itemSpacing?: Float;
++    spacingBefore?: Float;
++    spacingAfter?: Float;
+   };
+ }
+ 
+diff --git a/src/normalizeHtmlStyle.ts b/src/normalizeHtmlStyle.ts
+index 96a7053eaa5a8da9045ba0b82fc06538bbd8eac9..7d9a9c465da1a4fc85ad3bebfbf1aa8547bd5fa1 100644
+--- a/src/normalizeHtmlStyle.ts
++++ b/src/normalizeHtmlStyle.ts
+@@ -9,14 +9,28 @@ const defaultStyle: Required<HtmlStyle> = {
+   h1: {
+     fontSize: 32,
+     bold: false,
++    lineSpacing: undefined,
++    spacingBefore: undefined,
++    spacingAfter: undefined,
+   },
+   h2: {
+     fontSize: 24,
+     bold: false,
++    lineSpacing: undefined,
++    spacingBefore: undefined,
++    spacingAfter: undefined,
+   },
+   h3: {
+     fontSize: 20,
+     bold: false,
++    lineSpacing: undefined,
++    spacingBefore: undefined,
++    spacingAfter: undefined,
++  },
++  p: {
++    lineSpacing: undefined,
++    spacingBefore: undefined,
++    spacingAfter: undefined,
+   },
+   blockquote: {
+     borderColor: 'darkgray',
+@@ -51,12 +65,18 @@ const defaultStyle: Required<HtmlStyle> = {
+     marginLeft: 16,
+     markerFontWeight: undefined,
+     markerColor: undefined,
++    itemSpacing: undefined,
++    spacingBefore: undefined,
++    spacingAfter: undefined,
+   },
+   ul: {
+     bulletColor: 'black',
+     bulletSize: 8,
+     marginLeft: 16,
+     gapWidth: 16,
++    itemSpacing: undefined,
++    spacingBefore: undefined,
++    spacingAfter: undefined,
+   },
+ };
+ 
