@@ -566,6 +566,7 @@ export function AIChatComposer({
   ]);
 
   // Pre-parse markdown to HTML outside of render callback
+  // DB writes are throttled to 300ms to prevent RenderHtml performance warnings
   const parsedMessages = useMemo(() => {
     const generationStatus = entry?.generationStatus;
 

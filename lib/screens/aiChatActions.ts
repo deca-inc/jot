@@ -192,18 +192,16 @@ async function queueBackgroundGeneration(
     let lastFullResponse = "";
     let tokenCount = 0;
     let lastWriteTime = Date.now();
-    const DEBOUNCE_MS = 500; // Write to DB every 500ms
+    const DEBOUNCE_MS = 300; // Write to DB every 300ms (prevents RenderHtml warnings)
 
     const listeners = {
       onToken: async (token: string) => {
         tokenCount++;
         lastFullResponse += token;
 
-        // Debounced writes every 500ms or every 100 chars
+        // Debounced writes - only time-based to prevent too-frequent updates
         const now = Date.now();
-        const shouldWrite =
-          now - lastWriteTime >= DEBOUNCE_MS ||
-          lastFullResponse.length % 100 === 0;
+        const shouldWrite = now - lastWriteTime >= DEBOUNCE_MS;
 
         if (shouldWrite) {
           try {
@@ -452,18 +450,16 @@ export async function generateAIResponse(
     let lastFullResponse = "";
     let tokenCount = 0;
     let lastWriteTime = Date.now();
-    const DEBOUNCE_MS = 500; // Write to DB every 500ms
+    const DEBOUNCE_MS = 300; // Write to DB every 300ms (prevents RenderHtml warnings)
 
     const listeners = {
       onToken: async (token: string) => {
         tokenCount++;
         lastFullResponse += token;
 
-        // Debounced writes every 500ms or every 100 chars
+        // Debounced writes - only time-based to prevent too-frequent updates
         const now = Date.now();
-        const shouldWrite =
-          now - lastWriteTime >= DEBOUNCE_MS ||
-          lastFullResponse.length % 100 === 0;
+        const shouldWrite = now - lastWriteTime >= DEBOUNCE_MS;
 
         if (shouldWrite) {
           try {
