@@ -69,6 +69,213 @@ export interface AIChatComposerProps {
 // Stable empty arrays to avoid re-renders
 const EMPTY_BLOCKS: Block[] = [];
 
+// Memoized user message component to prevent unnecessary re-renders
+const UserMessageBubble = React.memo(
+  ({
+    block,
+    chipBg,
+    chipText,
+    textPrimary,
+  }: {
+    block: Block;
+    chipBg?: string;
+    chipText?: string;
+    textPrimary: string;
+  }) => {
+    const messageContent = block.type === "markdown" ? block.content : "";
+
+    return (
+      <View style={[styles.messageBubble, styles.userMessage]}>
+        <View
+          style={[
+            styles.messageContent,
+            {
+              backgroundColor: chipBg || "rgba(0, 0, 0, 0.1)",
+            },
+          ]}
+        >
+          <Text
+            variant="body"
+            style={{
+              color: chipText || textPrimary,
+            }}
+          >
+            {messageContent || " "}
+          </Text>
+        </View>
+      </View>
+    );
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison - only re-render if content actually changed
+    const prevContent = prevProps.block.type === "markdown" ? prevProps.block.content : "";
+    const nextContent = nextProps.block.type === "markdown" ? nextProps.block.content : "";
+    return prevContent === nextContent &&
+           prevProps.chipBg === nextProps.chipBg &&
+           prevProps.chipText === nextProps.chipText &&
+           prevProps.textPrimary === nextProps.textPrimary;
+  }
+);
+
+// Memoized assistant message component to prevent unnecessary re-renders
+const AssistantMessage = React.memo(
+  ({
+    block,
+    isGenerating,
+    textSecondary,
+    textPrimary,
+    htmlContentWidth,
+    htmlTagsStyles,
+    customRenderers,
+  }: {
+    block: Block;
+    isGenerating: boolean;
+    textSecondary: string;
+    textPrimary: string;
+    htmlContentWidth: number;
+    htmlTagsStyles: any;
+    customRenderers: any;
+  }) => {
+    const messageContent = block.type === "markdown" ? block.content : "";
+
+    // Parse content inside the component so it only happens when this specific message changes
+    const parsed = React.useMemo(() => {
+      // For non-generating messages, skip think tag processing entirely
+      if (!isGenerating) {
+        const cleanContent = stripThinkTags(messageContent);
+        let htmlContent: string | null = null;
+
+        if (cleanContent.trim().length > 0) {
+          try {
+            htmlContent = marked.parse(cleanContent) as string;
+          } catch (error) {
+            console.error("[AssistantMessage] Error parsing markdown:", error);
+          }
+        }
+
+        return {
+          htmlContent,
+          hasThinkTags: false,
+          thinkContent: "",
+          contentWithoutThinkTags: cleanContent,
+        };
+      }
+
+      // Only process think tags for generating messages
+      const hasThinkTag = messageContent.includes('<think>');
+      const hasClosedThinkTag = messageContent.includes('</think>');
+
+      let thinkContent = "";
+      let contentAfterThink = "";
+
+      if (hasThinkTag) {
+        const thinkMatch = messageContent.match(/<think>([\s\S]*?)(<\/think>|$)/);
+        thinkContent = thinkMatch ? thinkMatch[1].trim() : "";
+
+        if (thinkContent.length > 200) {
+          thinkContent = "..." + thinkContent.slice(-200);
+        }
+
+        if (hasClosedThinkTag) {
+          const afterThinkMatch = messageContent.match(/<\/think>([\s\S]*)/);
+          contentAfterThink = afterThinkMatch ? afterThinkMatch[1].trim() : "";
+        }
+      } else {
+        contentAfterThink = messageContent;
+      }
+
+      const hasActualContent = contentAfterThink.trim().length > 0;
+
+      let htmlContent: string | null = null;
+      if (hasActualContent) {
+        try {
+          htmlContent = marked.parse(contentAfterThink) as string;
+        } catch (error) {
+          console.error("[AssistantMessage] Error parsing markdown:", error);
+        }
+      }
+
+      return {
+        htmlContent,
+        hasThinkTags: hasThinkTag && !!thinkContent,
+        thinkContent,
+        contentWithoutThinkTags: contentAfterThink,
+      };
+    }, [messageContent, isGenerating]);
+
+    return (
+      <View style={styles.assistantMessageFullWidth}>
+        {/* Show thinking card if generating and has think content */}
+        {isGenerating && parsed.hasThinkTags && parsed.thinkContent && (
+          <View
+            style={[
+              styles.thinkingCard,
+              {
+                backgroundColor: textSecondary + "15",
+                borderColor: textSecondary + "30",
+              },
+            ]}
+          >
+            <Text
+              variant="caption"
+              style={[
+                styles.thinkingText,
+                { color: textSecondary },
+              ]}
+              numberOfLines={2}
+            >
+              {parsed.thinkContent}
+            </Text>
+          </View>
+        )}
+
+        {/* Show actual content */}
+        {isGenerating && !parsed.htmlContent && !parsed.thinkContent ? (
+          <Text
+            variant="body"
+            style={{
+              color: textSecondary,
+              fontStyle: "italic",
+            }}
+          >
+            Thinking...
+          </Text>
+        ) : parsed.htmlContent ? (
+          <RenderHtml
+            contentWidth={htmlContentWidth}
+            source={{ html: parsed.htmlContent }}
+            tagsStyles={htmlTagsStyles}
+            renderers={customRenderers}
+            ignoredDomTags={['think']}
+          />
+        ) : (
+          parsed.contentWithoutThinkTags && (
+            <Text
+              variant="body"
+              style={{
+                color: textPrimary,
+              }}
+            >
+              {parsed.contentWithoutThinkTags}
+            </Text>
+          )
+        )}
+      </View>
+    );
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison - only re-render if content or isGenerating changed
+    const prevContent = prevProps.block.type === "markdown" ? prevProps.block.content : "";
+    const nextContent = nextProps.block.type === "markdown" ? nextProps.block.content : "";
+    return prevContent === nextContent &&
+           prevProps.isGenerating === nextProps.isGenerating &&
+           prevProps.textSecondary === nextProps.textSecondary &&
+           prevProps.textPrimary === nextProps.textPrimary &&
+           prevProps.htmlContentWidth === nextProps.htmlContentWidth;
+    // Note: htmlTagsStyles and customRenderers are stable objects, no need to check
+  }
+);
+
 export function AIChatComposer({
   entryId,
   initialTitle = "",
@@ -584,205 +791,44 @@ export function AIChatComposer({
     isSubmitting,
   ]);
 
-  // Pre-parse markdown to HTML outside of render callback
-  // DB writes are throttled to 300ms to prevent RenderHtml performance warnings
-  const parsedMessages = useMemo(() => {
-    const generationStatus = entry?.generationStatus;
-
-    return blocksWithPlaceholder.map((block, index) => {
+  // Render item for FlatList - memoized to prevent unnecessary re-renders
+  // Parsing happens inside the memoized components so only changed messages are re-parsed
+  const renderMessage: ListRenderItem<Block> = useCallback(
+    ({ item: block, index }) => {
       const isUser = block.role === "user";
-      const messageContent = block.type === "markdown" ? block.content : "";
       const isLastMessage = index === blocksWithPlaceholder.length - 1;
 
       // Check if generation is in progress
+      const generationStatus = entry?.generationStatus;
       const isGenerationInProgress = generationStatus === "generating" || isLLMLoading;
       const isGenerating = !isUser && isLastMessage && isGenerationInProgress;
-
-      // For non-generating messages, skip think tag processing entirely
-      if (!isGenerating) {
-        const cleanContent = stripThinkTags(messageContent);
-        let htmlContent: string | null = null;
-
-        if (!isUser && cleanContent.trim().length > 0) {
-          try {
-            htmlContent = marked.parse(cleanContent) as string;
-          } catch (error) {
-            console.error("[AIChatComposer] Error parsing markdown:", error);
-          }
-        }
-
-        return {
-          htmlContent,
-          isGenerating: false,
-          hasThinkTags: false,
-          thinkContent: "",
-          contentWithoutThinkTags: cleanContent,
-        };
-      }
-
-      // Only process think tags for generating messages
-      const hasThinkTag = messageContent.includes('<think>');
-      const hasClosedThinkTag = messageContent.includes('</think>');
-
-      let thinkContent = "";
-      let contentAfterThink = "";
-
-      if (hasThinkTag) {
-        // Extract thinking content (everything between <think> and </think>, or to end if unclosed)
-        const thinkMatch = messageContent.match(/<think>([\s\S]*?)(<\/think>|$)/);
-        thinkContent = thinkMatch ? thinkMatch[1].trim() : "";
-
-        // Get last ~200 characters for display (enough for ~2 visual lines)
-        // This won't cause scroll issues anymore since we track visible content length
-        if (thinkContent.length > 200) {
-          thinkContent = "..." + thinkContent.slice(-200);
-        }
-
-        // Only show content that comes AFTER the closing </think> tag
-        if (hasClosedThinkTag) {
-          const afterThinkMatch = messageContent.match(/<\/think>([\s\S]*)/);
-          contentAfterThink = afterThinkMatch ? afterThinkMatch[1].trim() : "";
-        }
-        // If think tag is unclosed, there's no actual content yet
-      } else {
-        // No think tags at all, show all content
-        contentAfterThink = messageContent;
-      }
-
-      const hasActualContent = contentAfterThink.trim().length > 0;
-
-      let htmlContent: string | null = null;
-      if (!isUser && hasActualContent) {
-        try {
-          htmlContent = marked.parse(contentAfterThink) as string;
-        } catch (error) {
-          console.error("[AIChatComposer] Error parsing markdown:", error);
-        }
-      }
-
-      return {
-        htmlContent,
-        isGenerating,
-        hasThinkTags: hasThinkTag && !!thinkContent,
-        thinkContent,
-        contentWithoutThinkTags: contentAfterThink,
-      };
-    });
-  }, [
-    blocksWithPlaceholder,
-    isLLMLoading,
-    entry?.generationStatus,
-  ]);
-
-  // Render item for FlatList
-  const renderMessage: ListRenderItem<Block> = useCallback(
-    ({ item: message, index }) => {
-      const isUser = message.role === "user";
-      const messageContent = message.type === "markdown" ? message.content : "";
-      const {
-        htmlContent,
-        isGenerating,
-        contentWithoutThinkTags,
-        hasThinkTags,
-        thinkContent,
-      } = parsedMessages[index] || {
-        htmlContent: null,
-        isGenerating: false,
-        contentWithoutThinkTags: "",
-        hasThinkTags: false,
-        thinkContent: "",
-      };
 
       // User messages get a bubble, AI messages are full width
       if (isUser) {
         return (
-          <View style={[styles.messageBubble, styles.userMessage]}>
-            <View
-              style={[
-                styles.messageContent,
-                {
-                  backgroundColor: seasonalTheme.chipBg || "rgba(0, 0, 0, 0.1)",
-                },
-              ]}
-            >
-              <Text
-                variant="body"
-                style={{
-                  color: seasonalTheme.chipText || seasonalTheme.textPrimary,
-                }}
-              >
-                {messageContent || " "}
-              </Text>
-            </View>
-          </View>
+          <UserMessageBubble
+            block={block}
+            chipBg={seasonalTheme.chipBg}
+            chipText={seasonalTheme.chipText}
+            textPrimary={seasonalTheme.textPrimary}
+          />
         );
       }
 
       // AI messages: full width, no bubble
       return (
-        <View style={styles.assistantMessageFullWidth}>
-          {/* Show thinking card if generating and has think content */}
-          {isGenerating && hasThinkTags && thinkContent && (
-            <View
-              style={[
-                styles.thinkingCard,
-                {
-                  backgroundColor: seasonalTheme.textSecondary + "15",
-                  borderColor: seasonalTheme.textSecondary + "30",
-                },
-              ]}
-            >
-              <Text
-                variant="caption"
-                style={[
-                  styles.thinkingText,
-                  { color: seasonalTheme.textSecondary },
-                ]}
-                numberOfLines={2}
-              >
-                {thinkContent}
-              </Text>
-            </View>
-          )}
-
-          {/* Show actual content */}
-          {isGenerating && !htmlContent && !thinkContent ? (
-            // Show "Thinking..." only if we have no content to display yet
-            <Text
-              variant="body"
-              style={{
-                color: seasonalTheme.textSecondary,
-                fontStyle: "italic",
-              }}
-            >
-              Thinking...
-            </Text>
-          ) : htmlContent ? (
-            // Show actual response content (without think tags)
-            <RenderHtml
-              contentWidth={htmlContentWidth}
-              source={{ html: htmlContent }}
-              tagsStyles={htmlTagsStyles}
-              renderers={customRenderers}
-              ignoredDomTags={['think']}
-            />
-          ) : (
-            // Fallback text if no HTML content
-            contentWithoutThinkTags && (
-              <Text
-                variant="body"
-                style={{
-                  color: seasonalTheme.textPrimary,
-                }}
-              >
-                {contentWithoutThinkTags}
-              </Text>
-            )
-          )}
-        </View>
+        <AssistantMessage
+          block={block}
+          isGenerating={isGenerating}
+          textSecondary={seasonalTheme.textSecondary}
+          textPrimary={seasonalTheme.textPrimary}
+          htmlContentWidth={htmlContentWidth}
+          htmlTagsStyles={htmlTagsStyles}
+          customRenderers={customRenderers}
+        />
       );
     },
-    [parsedMessages, seasonalTheme, htmlContentWidth, htmlTagsStyles, customRenderers]
+    [blocksWithPlaceholder.length, entry?.generationStatus, isLLMLoading, seasonalTheme, htmlContentWidth, htmlTagsStyles, customRenderers]
   );
 
   const keyExtractor = useCallback((item: Block, index: number) => {
