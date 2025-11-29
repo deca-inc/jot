@@ -18,16 +18,16 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.6",
-    "expo": "~54.0.20",
+    "expo": "~54.0.25",
     "expo-application": "^7.0.7",
-    "expo-background-fetch": "^14.0.7",
-    "expo-background-task": "^1.0.8",
+    "expo-background-fetch": "~14.0.8",
+    "expo-background-task": "~1.0.9",
     "expo-blur": "~15.0.7",
     "expo-build-properties": "^1.0.9",
     "expo-crypto": "~15.0.7",
     "expo-device": "^8.0.9",
-    "expo-file-system": "^19.0.17",
-    "expo-glass-effect": "~0.1.6",
+    "expo-file-system": "~19.0.19",
+    "expo-glass-effect": "~0.1.7",
     "expo-linear-gradient": "^15.0.7",
     "expo-localization": "^17.0.7",
     "expo-secure-store": "~15.0.7",
@@ -59,7 +59,19 @@
   "private": true,
   "pnpm": {
     "patchedDependencies": {
-      "react-native-enriched@0.1.6": "patches/react-native-enriched@0.1.6.patch"
+      "react-native-enriched@0.1.6": "patches/react-native-enriched@0.1.6.patch",
+      "react-native-executorch@0.5.15": "patches/react-native-executorch@0.5.15.patch"
+    },
+    "overrides": {
+      "expo": "~54.0.25",
+      "expo-file-system": "~19.0.19",
+      "@expo/fingerprint": "0.15.2",
+      "@expo/vector-icons": "15.0.3",
+      "expo-asset": "12.0.9",
+      "expo-constants": "18.0.10",
+      "expo-font": "14.0.9",
+      "expo-keep-awake": "15.0.7",
+      "expo-modules-core": "3.0.23"
     }
   }
 }
