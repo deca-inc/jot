@@ -31,6 +31,10 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "releaseStatus": "draft"
+      }
+    }
   }
 }
