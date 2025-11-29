@@ -22,8 +22,8 @@ patchedDependencies:
 
 dependencies:
   '@deca-inc/react-native-enriched':
-    specifier: ^0.1.6-deca.1
-    version: 0.1.6-deca.1(react-native@0.81.5)(react@19.1.0)
+    specifier: ^0.1.6-deca.3
+    version: 0.1.6-deca.3(react-native@0.81.5)(react@19.1.0)
   '@tanstack/react-query':
     specifier: ^5.90.6
     version: 5.90.11(react@19.1.0)
@@ -1162,8 +1162,8 @@ packages:
       - react-native
     dev: false
 
-  /@deca-inc/react-native-enriched@0.1.6-deca.1(react-native@0.81.5)(react@19.1.0):
-    resolution: {integrity: sha512-TWvdflD4i3qsVxbp7AFOf8F1fLUa+bR4NOw/Qi730QoNicLjFUQtq0Lj+de6IVdrv+WZj1FDYW0affHqCihd7w==}
+  /@deca-inc/react-native-enriched@0.1.6-deca.3(react-native@0.81.5)(react@19.1.0):
+    resolution: {integrity: sha512-Dz0ZszlyTCIIN4Eoe0aq48or7zqomuS/TXgExJ+J150Dd7M/TNQUHQLx+pbmBsytYDjkKC6E6fFnPuOadPKFog==}
     peerDependencies:
       react: '*'
       react-native: '*'
