@@ -22,7 +22,7 @@ patchedDependencies:
 
 dependencies:
   '@deca-inc/react-native-enriched':
-    specifier: ^0.1.6-deca.3
+    specifier: 0.1.6-deca.3
     version: 0.1.6-deca.3(react-native@0.81.5)(react@19.1.0)
   '@tanstack/react-query':
     specifier: ^5.90.6
