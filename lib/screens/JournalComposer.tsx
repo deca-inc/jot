@@ -24,7 +24,7 @@ import {
   EnrichedTextInput,
   type EnrichedTextInputInstance,
   type OnChangeStateEvent,
-} from "react-native-enriched";
+} from "@deca-inc/react-native-enriched";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useEntry, useUpdateEntry } from "../db/useEntries";
