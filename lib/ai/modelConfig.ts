@@ -230,9 +230,10 @@ export const DEFAULT_MODEL = Qwen3_1_7B;
 
 /**
  * Default system prompt for AI conversations
+ * Note: /no_think suffix disables reasoning mode for Qwen models
  */
 export const DEFAULT_SYSTEM_PROMPT =
-  "You're a thoughtful, AI assistant is both concise and thorough. When unsure about the user's intentions you should clarify. When unsure about a fact, you should indicate so. You should not present bias in your answers politically. Your answers should be well balanced, truthful, and informative.";
+  "/no_think You're a thoughtful, AI assistant is both concise and thorough. When unsure about the user's intentions you should clarify. When unsure about a fact, you should indicate so. You should not present bias in your answers politically. Your answers should be well balanced, truthful, and informative.";
 
 /**
  * System prompt for title generation

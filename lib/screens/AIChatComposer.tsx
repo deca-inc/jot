@@ -135,6 +135,7 @@ export function AIChatComposer({
 
   // Local state for input only
   const [newMessage, setNewMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Refs for UI only
   const flatListRef = useRef<FlatList<Block>>(null);
@@ -173,11 +174,17 @@ export function AIChatComposer({
     Alert.alert("AI Error", llmError);
   }
 
-  // Scroll to bottom helper
-  const scrollToBottom = useCallback((animated: boolean = true) => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated });
-    }, 100);
+  // Track user's intent to stay at bottom
+  // Once user reaches bottom, assume they want to stay there until they scroll up
+  const shouldStickToBottomRef = useRef(true); // Start true so initial messages scroll
+  const previousContentHeightRef = useRef(0);
+  // Track if user is actively touching the scroll view
+  const isUserTouchingRef = useRef(false);
+
+  // Helper to enable stick-to-bottom (used after user sends a message)
+  const scrollToBottom = useCallback(() => {
+    shouldStickToBottomRef.current = true;
+    // The useLayoutEffect will handle the actual scrolling on next render
   }, []);
 
   // Track keyboard visibility and height on both platforms
@@ -492,6 +499,14 @@ export function AIChatComposer({
     [dismissGenerationFromHook, clearCurrentPrompt]
   );
 
+  // Reset isSubmitting when generation is actually in progress or completes
+  useEffect(() => {
+    const isGenerating = entry?.generationStatus === "generating" || isLLMLoading;
+    if (isGenerating || entry?.generationStatus === "completed") {
+      setIsSubmitting(false);
+    }
+  }, [entry?.generationStatus, isLLMLoading]);
+
   // Check if generation is in progress when returning to chat
   // The actions layer handles all the background work, so we just need to
   // check status and show the resume prompt if needed
@@ -526,10 +541,11 @@ export function AIChatComposer({
   }, [entryId]);
 
   const handleSendMessage = useCallback(async () => {
-    if (!newMessage.trim() || !llm) return;
+    if (!newMessage.trim() || !llm || isSubmitting) return;
 
     const messageText = newMessage.trim();
     setNewMessage("");
+    setIsSubmitting(true);
 
     // Queue work via action system and redirect if needed
     try {
@@ -554,7 +570,9 @@ export function AIChatComposer({
           error instanceof Error ? error.message : String(error)
         }`
       );
+      setIsSubmitting(false);
     }
+    // Don't reset isSubmitting in finally - let the generation status change handle it
   }, [
     newMessage,
     entryId,
@@ -563,6 +581,7 @@ export function AIChatComposer({
     actionContext,
     llm,
     scrollToBottom,
+    isSubmitting,
   ]);
 
   // Pre-parse markdown to HTML outside of render callback
@@ -614,7 +633,7 @@ export function AIChatComposer({
         thinkContent = thinkMatch ? thinkMatch[1].trim() : "";
 
         // Get last ~200 characters for display (enough for ~2 visual lines)
-        // numberOfLines={2} will handle the actual visual truncation
+        // This won't cause scroll issues anymore since we track visible content length
         if (thinkContent.length > 200) {
           thinkContent = "..." + thinkContent.slice(-200);
         }
@@ -835,9 +854,52 @@ export function AIChatComposer({
         updateCellsBatchingPeriod={50}
         initialNumToRender={20}
         windowSize={21}
-        onContentSizeChange={() => {
-          // Auto-scroll to bottom when content size changes
-          scrollToBottom();
+        onScrollBeginDrag={() => {
+          isUserTouchingRef.current = true;
+        }}
+        onScrollEndDrag={() => {
+          isUserTouchingRef.current = false;
+        }}
+        onMomentumScrollEnd={() => {
+          isUserTouchingRef.current = false;
+        }}
+        onScroll={(event) => {
+          // Only change auto-scroll behavior if user is actively touching
+          if (!isUserTouchingRef.current) {
+            return;
+          }
+
+          // Track user intent based on scroll position
+          const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+          const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+
+          // User scrolled significantly away (>100px) - disable auto-scroll
+          if (distanceFromBottom > 100) {
+            if (shouldStickToBottomRef.current) {
+              shouldStickToBottomRef.current = false;
+            }
+          }
+          // User scrolled back to bottom (<20px) - re-enable auto-scroll
+          else if (distanceFromBottom < 20) {
+            if (!shouldStickToBottomRef.current) {
+              shouldStickToBottomRef.current = true;
+              // Trigger immediate scroll to ensure we're at the bottom
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }
+          }
+        }}
+        scrollEventThrottle={400} // Check scroll position every 400ms
+        onContentSizeChange={(width, height) => {
+          // Track actual rendered content height and scroll when it grows
+          if (height > previousContentHeightRef.current && shouldStickToBottomRef.current) {
+            if (flatListRef.current) {
+              // Use scrollToOffset with actual height to ensure we're at the bottom
+              // This is more reliable than scrollToEnd() during rapid updates
+              flatListRef.current.scrollToOffset({ offset: height, animated: false });
+            }
+          }
+
+          previousContentHeightRef.current = height;
         }}
         onLayout={() => {
           // Scroll to bottom on initial layout if we have messages
@@ -905,7 +967,10 @@ export function AIChatComposer({
             !newMessage.trim() ||
             !llm ||
             createEntry.isPending ||
-            updateEntry.isPending
+            updateEntry.isPending ||
+            entry?.generationStatus === "generating" ||
+            isLLMLoading ||
+            isSubmitting
           }
           style={[
             styles.sendButton,
@@ -914,7 +979,10 @@ export function AIChatComposer({
                 newMessage.trim() &&
                 llm &&
                 !createEntry.isPending &&
-                !updateEntry.isPending
+                !updateEntry.isPending &&
+                entry?.generationStatus !== "generating" &&
+                !isLLMLoading &&
+                !isSubmitting
                   ? seasonalTheme.chipBg
                   : seasonalTheme.textSecondary + "20",
             },
