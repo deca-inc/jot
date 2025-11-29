@@ -53,8 +53,8 @@ dependencies:
     specifier: ~15.0.7
     version: 15.0.7(expo@54.0.21)
   expo-sqlite:
-    specifier: ~16.0.8
-    version: 16.0.8(expo@54.0.21)(react-native@0.81.5)(react@19.1.0)
+    specifier: ~16.0.9
+    version: 16.0.9(expo@54.0.21)(react-native@0.81.5)(react@19.1.0)
   expo-status-bar:
     specifier: ~3.0.8
     version: 3.0.8(react-native@0.81.5)(react@19.1.0)
@@ -4032,8 +4032,8 @@ packages:
     engines: {node: '>=20.16.0'}
     dev: false
 
-  /expo-sqlite@16.0.8(expo@54.0.21)(react-native@0.81.5)(react@19.1.0):
-    resolution: {integrity: sha512-xw776gFgH4ZM5oGs0spSLNmkHO/kJ/EuRXGzE4/22yII9EmG84vm7aM/M2aEb8taBTqwhSGYUpkwkRT5YFFmsg==}
+  /expo-sqlite@16.0.9(expo@54.0.21)(react-native@0.81.5)(react@19.1.0):
+    resolution: {integrity: sha512-pMT52pTko539yZZQUZYfGiAYxQvpTUZIp/dwi2+IidSjPWB2wJi96ByaoNAzxmucarsYZN1F46C1Le6eT2VLkA==}
     peerDependencies:
       expo: '*'
       react: '*'
