@@ -64,6 +64,9 @@ module.exports = ({ config }) => {
           android: {
             packagingOptions: {
               pickFirst: ['**/libcrypto.so', '**/libssl.so']
+            },
+            manifestPlaceholders: {
+              'android.max_page_size': '4096'
             }
           }
         }
