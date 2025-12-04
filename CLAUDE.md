@@ -496,3 +496,52 @@ All blocks support:
 5. **Privacy first** - All AI inference on-device, no content leaves device without explicit user action
 6. **Keep blocks flat** - No nesting in the block structure
 7. **Avoid over-engineering** - Only make changes that are directly requested or clearly necessary
+
+---
+
+## Developing react-native-enriched
+
+The journal app uses a forked version of `@deca-inc/react-native-enriched` located at `../react-native-enriched`. This is a native iOS/Android rich text editor component.
+
+### Setup & Building
+
+The enriched repo requires Node v20.19.0 (specified in `.nvmrc`). To build:
+
+```bash
+cd /path/to/react-native-enriched
+source ~/.nvm/nvm.sh && nvm use
+yarn prepare  # Builds TypeScript, generates codegen
+```
+
+### Linking to Journal for Development
+
+The journal's `package.json` uses `file:../react-native-enriched` to link the local package.
+
+**Important**: pnpm copies files instead of symlinking. After making native code changes (iOS `.mm`/`.h` or Android `.kt` files), you must reinstall the package in journal:
+
+```bash
+cd /path/to/journal
+rm -rf node_modules/@deca-inc/react-native-enriched
+pnpm install
+pnpm ios  # Rebuilds and runs the app
+```
+
+### Architecture Notes
+
+- The editor is a single `UITextView` (iOS) / `EditText` (Android) with styled `NSAttributedString` ranges
+- There are no discrete block elements - it's all one text view with different attributes applied to ranges
+- Paragraphs are text ranges separated by newline characters
+- `NSParagraphStyle` properties like `paragraphSpacing` affect the line that contains the paragraph end
+- Cursor/caret height is controlled by overriding `caretRectForPosition:` in `InputTextView.mm`
+
+### Key Files
+
+- `ios/inputTextView/InputTextView.mm` - UITextView subclass, handles copy/paste/caret
+- `ios/styles/HeadingStyleBase.mm` - Base heading style implementation
+- `ios/config/InputConfig.mm` - Style configuration storage
+- `android/src/main/java/com/swmansion/enriched/spans/` - Android span implementations
+- `src/EnrichedTextInputNativeComponent.ts` - TypeScript interface (drives codegen)
+
+### Running Long Commands
+
+For long-running commands like `pnpm ios` or `pnpm run android`, defer to the user to run them. You can run and immediately check output if you need to verify compilation works or understand logs, but generally let the user handle long-running processes.

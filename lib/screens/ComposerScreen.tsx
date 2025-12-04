@@ -33,9 +33,6 @@ export function ComposerScreen({
     entryId
   );
   const hasLoadedEntryRef = useRef<number | null>(null);
-  const journalComposerForceSaveRef = useRef<(() => Promise<void>) | null>(
-    null
-  );
 
   // Load existing entry if entryId is provided (only once per entryId)
   useEffect(() => {
@@ -126,15 +123,10 @@ export function ComposerScreen({
   // Use fullScreen mode for journal entries (same as when creating new), or if explicitly set
   const shouldUseFullScreen = fullScreen || entryType === "journal";
 
-  // Handle cancel with force save for journal entries
-  // Define BEFORE any conditional returns to keep hook order stable
-  const handleJournalCancel = useCallback(async () => {
-    // Force save before canceling if there's a save function
-    if (journalComposerForceSaveRef.current) {
-      await journalComposerForceSaveRef.current();
-    }
-    // Call parent's onCancel (which may be async)
-    await onCancel?.();
+  // Handle cancel for journal entries - just pass through to parent
+  // JournalComposer handles fire-and-forget save internally
+  const handleJournalCancel = useCallback(() => {
+    onCancel?.();
   }, [onCancel]);
 
   // Memoize onSave handler for AI chat to prevent re-renders
@@ -179,7 +171,6 @@ export function ComposerScreen({
           entryId={actualEntryId}
           onSave={onSave}
           onCancel={handleJournalCancel}
-          forceSaveRef={journalComposerForceSaveRef}
         />
       );
     }

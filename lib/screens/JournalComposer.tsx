@@ -30,23 +30,19 @@ import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useEntry, useUpdateEntry } from "../db/useEntries";
 import { debounce } from "../utils/debounce";
 import { FloatingComposerHeader } from "../components";
-import { saveJournalContent, repairHtml } from "./journalActions";
+import { saveJournalContent } from "./journalActions";
 import { useTrackScreenView } from "../analytics";
 
 export interface JournalComposerProps {
   entryId: number;
   onSave?: (entryId: number) => void;
   onCancel?: () => void;
-  onBeforeCancel?: () => Promise<void>; // Called before onCancel - parent can call forceSave
-  forceSaveRef?: React.MutableRefObject<(() => Promise<void>) | null>; // Ref to expose forceSave to parent
 }
 
 export function JournalComposer({
   entryId,
   onSave,
   onCancel,
-  onBeforeCancel,
-  forceSaveRef: externalForceSaveRef,
 }: JournalComposerProps) {
   const seasonalTheme = useSeasonalTheme();
 
@@ -73,9 +69,6 @@ export function JournalComposer({
 
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
-
-  const onBeforeCancelRef = useRef(onBeforeCancel);
-  onBeforeCancelRef.current = onBeforeCancel;
 
   const [htmlContent, setHtmlContent] = useState(""); // Track current editor content for debounced save
   const [editorState, setEditorState] = useState<OnChangeStateEvent | null>(
@@ -142,9 +135,7 @@ export function JournalComposer({
         if (isDeletingRef.current || !entryId || !htmlToSave.trim()) return;
 
         try {
-          // Repair HTML before saving
-          const repairedHtml = repairHtml(htmlToSave);
-          await saveJournalContent(entryId, repairedHtml, "", actionContext);
+          await saveJournalContent(entryId, htmlToSave, "", actionContext);
         } catch (error) {
           console.error("[JournalComposer] Error saving:", error);
         }
@@ -220,42 +211,23 @@ export function JournalComposer({
     (debouncedSave as any).cancel();
   }, [debouncedSave]);
 
-  // Force save immediately (flushes debounced save)
-  const forceSave = useCallback(async (): Promise<void> => {
-    if (isDeletingRef.current || !htmlContent.trim()) return;
-
-    // Cancel pending debounced save and save immediately
+  // Handle back button - fire-and-forget save, navigate immediately
+  const handleBackPress = useCallback(() => {
+    // Cancel any pending debounced saves
     (debouncedSave as any).cancel();
 
-    try {
-      const repairedHtml = repairHtml(htmlContent);
-      await saveJournalContent(entryId, repairedHtml, "", actionContext);
-    } catch (error) {
-      console.error("[JournalComposer] Error force saving:", error);
+    // Fire-and-forget save - don't block navigation
+    if (htmlContent.trim() && !isDeletingRef.current) {
+      saveJournalContent(entryId, htmlContent, "", actionContext).catch(
+        (error) => {
+          console.error("[JournalComposer] Error saving on back:", error);
+        }
+      );
     }
-  }, [htmlContent, entryId, actionContext, debouncedSave]);
 
-  // Store forceSave in ref for parent access
-  const internalForceSaveRef = useRef<typeof forceSave | null>(null);
-  useEffect(() => {
-    internalForceSaveRef.current = forceSave;
-    // Also update external ref if provided
-    if (externalForceSaveRef) {
-      externalForceSaveRef.current = forceSave;
-    }
-  }, [forceSave, externalForceSaveRef]);
-
-  // Handle back button - force save before canceling
-  const handleBackPress = useCallback(async () => {
-    // If parent provided onBeforeCancel, call it (it will use our forceSave)
-    if (onBeforeCancelRef.current) {
-      await onBeforeCancelRef.current();
-    } else {
-      // Otherwise, force save directly
-      await forceSave();
-    }
+    // Navigate immediately
     onCancelRef.current?.();
-  }, [forceSave]); // Only depends on forceSave now
+  }, [htmlContent, entryId, actionContext, debouncedSave]);
 
   // Show UI shell immediately - content loads progressively
   return (
