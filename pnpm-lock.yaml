@@ -22,8 +22,8 @@ patchedDependencies:
 
 dependencies:
   '@deca-inc/react-native-enriched':
-    specifier: 0.1.6-deca.3
-    version: 0.1.6-deca.3(react-native@0.81.5)(react@19.1.0)
+    specifier: file:../react-native-enriched
+    version: file:../react-native-enriched(react-native@0.81.5)(react@19.1.0)
   '@tanstack/react-query':
     specifier: ^5.90.6
     version: 5.90.11(react@19.1.0)
@@ -88,7 +88,7 @@ dependencies:
     specifier: ^2.2.3
     version: 2.2.3(marked@17.0.1)
   posthog-react-native:
-    specifier: ^4.11.0
+    specifier: ^4.14.0
     version: 4.14.0(expo-application@7.0.7)(expo-device@8.0.9)(expo-file-system@19.0.19)(expo-localization@17.0.7)(react-native-safe-area-context@5.6.2)(react-native-svg@15.12.1)
   react:
     specifier: 19.1.0
@@ -1160,16 +1160,6 @@ packages:
     transitivePeerDependencies:
       - react
       - react-native
-    dev: false
-
-  /@deca-inc/react-native-enriched@0.1.6-deca.3(react-native@0.81.5)(react@19.1.0):
-    resolution: {integrity: sha512-Dz0ZszlyTCIIN4Eoe0aq48or7zqomuS/TXgExJ+J150Dd7M/TNQUHQLx+pbmBsytYDjkKC6E6fFnPuOadPKFog==}
-    peerDependencies:
-      react: '*'
-      react-native: '*'
-    dependencies:
-      react: 19.1.0
-      react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
     dev: false
 
   /@esbuild/aix-ppc64@0.25.12:
@@ -6610,4 +6600,16 @@ packages:
 
   /zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+    dev: false
+
+  file:../react-native-enriched(react-native@0.81.5)(react@19.1.0):
+    resolution: {directory: ../react-native-enriched, type: directory}
+    id: file:../react-native-enriched
+    name: '@deca-inc/react-native-enriched'
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+    dependencies:
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
     dev: false

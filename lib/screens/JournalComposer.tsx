@@ -326,43 +326,54 @@ export function JournalComposer({
             }}
             htmlStyle={{
               h1: {
-                fontSize: 37, // Golden ratio: 18 × 1.618²
+                fontSize: 37,
                 bold: true,
-                lineSpacing: 11,
-                spacingBefore: 47,
-                spacingAfter: 18,
+                lineHeight: 44,
+                spacingAfter: 12,
               },
               h2: {
-                fontSize: 29, // Golden ratio: 18 × 1.618
+                fontSize: 29,
                 bold: true,
-                lineSpacing: 11,
-                spacingBefore: 37,
-                spacingAfter: 18,
+                lineHeight: 36,
+                spacingAfter: 10,
               },
               h3: {
-                fontSize: 23, // Golden ratio scale
+                fontSize: 23,
                 bold: true,
-                lineSpacing: 11,
-                spacingBefore: 29,
-                spacingAfter: 11,
+                lineHeight: 30,
+                spacingAfter: 8,
               },
               ul: {
                 bulletColor: seasonalTheme.textPrimary,
-                bulletSize: 8,
-                marginLeft: 18,
-                gapWidth: 18,
-                lineSpacing: 25, // Match base lineHeight
-                itemSpacing: 6,
-                spacingBefore: 29,
+                bulletSize: 6,
+                marginLeft: 16,
+                gapWidth: 12,
+                lineHeight: 25,
+                itemSpacing: 4,
+                spacingAfter: 16,
               },
               ol: {
                 markerColor: seasonalTheme.textPrimary,
                 markerFontWeight: "normal",
-                marginLeft: 18,
-                gapWidth: 18,
-                lineSpacing: 25, // Match base lineHeight
-                itemSpacing: 6,
-                spacingBefore: 29,
+                marginLeft: 16,
+                gapWidth: 12,
+                lineHeight: 25,
+                itemSpacing: 4,
+                spacingAfter: 16,
+              },
+              checklist: {
+                checkedColor: seasonalTheme.textPrimary,
+                uncheckedColor: seasonalTheme.textSecondary,
+                checkmarkColor: seasonalTheme.isDark ? "#0f172a" : "#ffffff",
+                boxSize: 16,
+                marginLeft: 8,
+                gapWidth: 12,
+                lineHeight: 25,
+                itemSpacing: 4,
+                spacingAfter: 16,
+              },
+              p: {
+                spacingAfter: 12,
               },
             }}
             placeholder="Start writing..."
@@ -605,6 +616,22 @@ export function JournalComposer({
                     123
                   </RNText>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleChecklist()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isChecklist && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="checkbox-outline"
+                    size={iconSize}
+                    color={seasonalTheme.textPrimary}
+                  />
+                </TouchableOpacity>
               </View>
             </GlassView>
           ) : (
@@ -814,6 +841,22 @@ export function JournalComposer({
                   >
                     123
                   </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.toggleChecklist()}
+                  style={[
+                    styles.toolbarButton,
+                    editorState?.isChecklist && {
+                      backgroundColor: seasonalTheme.textPrimary + "18",
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="checkbox-outline"
+                    size={iconSize}
+                    color={seasonalTheme.textPrimary}
+                  />
                 </TouchableOpacity>
               </View>
             </View>

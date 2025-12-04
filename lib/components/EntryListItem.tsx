@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import RenderHtml from "react-native-render-html";
+import RenderHtml, { HTMLElementModel, HTMLContentModel } from "react-native-render-html";
 import { marked } from "marked";
 import { Text } from "./Text";
 import { Card } from "./Card";
@@ -261,6 +261,64 @@ function EntryListItemComponent({
         marginBottom: 1,
         paddingLeft: 6,
       },
+      // Checklist support
+      checklist: {
+        color: itemTheme.textPrimary,
+        marginLeft: 0,
+        paddingLeft: 0,
+        marginTop: 0,
+        marginBottom: 0,
+      },
+      cli: {
+        color: itemTheme.textPrimary,
+        fontSize: 13,
+        lineHeight: 16,
+        marginBottom: 0,
+        marginTop: 0,
+        paddingLeft: 0,
+      },
+    }),
+    [itemTheme.textPrimary]
+  );
+
+  // Custom renderers for checklist items
+  const htmlRenderers = React.useMemo(
+    () => ({
+      checklist: ({ TDefaultRenderer, ...props }: any) => {
+        return <TDefaultRenderer {...props} />;
+      },
+      cli: ({ tnode }: any) => {
+        const isChecked = tnode?.attributes?.checked === "true";
+        // Extract text content from tnode
+        const textContent = tnode?.children?.[0]?.data || tnode?.data || "";
+        return (
+          <View style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            marginBottom: 1,
+          }}>
+            <Text style={{
+              fontSize: 12,
+              color: itemTheme.textPrimary,
+              lineHeight: 18,
+              marginRight: 6,
+              marginLeft: Platform.OS === "android" && !isChecked ? -3 : 0,
+            }}>
+              {isChecked ? "☑" : "☐"}
+            </Text>
+            <Text style={{
+              flex: 1,
+              fontSize: 13,
+              lineHeight: 18,
+              color: itemTheme.textPrimary,
+              textDecorationLine: isChecked ? "line-through" : "none",
+              opacity: isChecked ? 0.6 : 1,
+            }}>
+              {textContent}
+            </Text>
+          </View>
+        );
+      },
     }),
     [itemTheme.textPrimary]
   );
@@ -493,6 +551,17 @@ function EntryListItemComponent({
                     source={{ html: htmlContent }}
                     tagsStyles={htmlTagsStyles}
                     ignoredDomTags={["think"]}
+                    renderers={htmlRenderers}
+                    customHTMLElementModels={{
+                      checklist: HTMLElementModel.fromCustomModel({
+                        tagName: "checklist",
+                        contentModel: HTMLContentModel.block,
+                      }),
+                      cli: HTMLElementModel.fromCustomModel({
+                        tagName: "cli",
+                        contentModel: HTMLContentModel.mixed,
+                      }),
+                    }}
                   />
                 ) : (
                   <Text

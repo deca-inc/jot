@@ -17,7 +17,7 @@
     "download:models": "tsx scripts/downloadModels.ts"
   },
   "dependencies": {
-    "@deca-inc/react-native-enriched": "0.1.6-deca.3",
+    "@deca-inc/react-native-enriched": "file:../react-native-enriched",
     "@tanstack/react-query": "^5.90.6",
     "expo": "~54.0.25",
     "expo-application": "^7.0.7",
@@ -39,7 +39,7 @@
     "highlight.js": "^11.11.1",
     "marked": "^17.0.0",
     "marked-highlight": "^2.2.3",
-    "posthog-react-native": "^4.11.0",
+    "posthog-react-native": "^4.14.0",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-argon2": "^3.0.0",
