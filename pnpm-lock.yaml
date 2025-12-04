@@ -22,8 +22,8 @@ patchedDependencies:
 
 dependencies:
   '@deca-inc/react-native-enriched':
-    specifier: file:../react-native-enriched
-    version: file:../react-native-enriched(react-native@0.81.5)(react@19.1.0)
+    specifier: ^0.1.6-deca.5
+    version: 0.1.6-deca.5(react-native@0.81.5)(react@19.1.0)
   '@tanstack/react-query':
     specifier: ^5.90.6
     version: 5.90.11(react@19.1.0)
@@ -1160,6 +1160,16 @@ packages:
     transitivePeerDependencies:
       - react
       - react-native
+    dev: false
+
+  /@deca-inc/react-native-enriched@0.1.6-deca.5(react-native@0.81.5)(react@19.1.0):
+    resolution: {integrity: sha512-0lMX6/I0qharmLlas1b1hkBl3LG0XmBGNi1FkO9hHEjCCXpDxXQmn1BxhsLHhzMyqIoe7CWlpiVay1iP2fQjPg==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+    dependencies:
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
     dev: false
 
   /@esbuild/aix-ppc64@0.25.12:
@@ -6600,16 +6610,4 @@ packages:
 
   /zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
-    dev: false
-
-  file:../react-native-enriched(react-native@0.81.5)(react@19.1.0):
-    resolution: {directory: ../react-native-enriched, type: directory}
-    id: file:../react-native-enriched
-    name: '@deca-inc/react-native-enriched'
-    peerDependencies:
-      react: '*'
-      react-native: '*'
-    dependencies:
-      react: 19.1.0
-      react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
     dev: false
