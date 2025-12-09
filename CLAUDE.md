@@ -505,25 +505,47 @@ The journal app uses a forked version of `@deca-inc/react-native-enriched` locat
 
 ### Setup & Building
 
-The enriched repo requires Node v20.19.0 (specified in `.nvmrc`). To build:
+The enriched repo uses **pnpm** (not yarn or npm) and requires Node v20.19.0 (specified in `.nvmrc`). To build:
 
 ```bash
 cd /path/to/react-native-enriched
 source ~/.nvm/nvm.sh && nvm use
-yarn prepare  # Builds TypeScript, generates codegen
+pnpm install
+pnpm prepare  # Builds TypeScript, generates codegen
+```
+
+To run the example app:
+
+```bash
+cd example
+pnpm start --reset-cache  # Start Metro bundler
+pnpm ios                   # Run iOS app
+pnpm android               # Run Android app
 ```
 
 ### Linking to Journal for Development
 
-The journal's `package.json` uses `file:../react-native-enriched` to link the local package.
-
-**Important**: pnpm copies files instead of symlinking. After making native code changes (iOS `.mm`/`.h` or Android `.kt` files), you must reinstall the package in journal:
+Use `pnpm link` to create a proper symlink so changes are reflected immediately:
 
 ```bash
+# First, link the package globally from react-native-enriched
+cd /path/to/react-native-enriched
+source ~/.nvm/nvm.sh && nvm use
+pnpm link --global
+
+# Then link it into journal
 cd /path/to/journal
-rm -rf node_modules/@deca-inc/react-native-enriched
-pnpm install
-pnpm ios  # Rebuilds and runs the app
+pnpm link --global @deca-inc/react-native-enriched
+```
+
+This creates a symlink at `node_modules/@deca-inc/react-native-enriched` pointing to the local repo. Changes to native code (iOS `.mm`/`.h` or Android `.kt` files) are immediately available - just rebuild the app.
+
+**After making TypeScript changes**, run `pnpm prepare` in the enriched repo to rebuild.
+
+**To verify the link is working:**
+```bash
+ls -la node_modules/@deca-inc/react-native-enriched
+# Should show a symlink, not a directory
 ```
 
 ### Architecture Notes
