@@ -139,6 +139,76 @@ export async function createJournalEntry(
 }
 
 /**
+ * Prepare journal content for saving - extracts blocks and title from HTML
+ */
+function prepareJournalContent(
+  htmlContent: string,
+  title: string
+): { blocks: Block[]; finalTitle: string } | null {
+  // Strip HTML to check if there's actual content
+  const textContent = htmlContent.replace(/<[^>]*>/g, "").trim();
+  if (!textContent) {
+    return null;
+  }
+
+  // HTML is already repaired by caller
+  const cleanHtml = htmlContent.trim();
+
+  // Store HTML as single html block (new format)
+  const blocks: Block[] = [
+    {
+      type: "html",
+      content: cleanHtml,
+    },
+  ];
+
+  // Use title if set, otherwise use content preview
+  const finalTitle =
+    title.trim() ||
+    textContent.slice(0, 50) + (textContent.length > 50 ? "..." : "") ||
+    "Untitled";
+
+  return { blocks, finalTitle };
+}
+
+/**
+ * Action: Save journal entry content (fire-and-forget)
+ *
+ * Does NOT wait for the database write to complete - truly non-blocking.
+ * Use this when navigating away and you don't need to wait for the save.
+ */
+export function saveJournalContentFireAndForget(
+  entryId: number,
+  htmlContent: string,
+  title: string,
+  context: JournalActionContext
+): void {
+  const { updateEntry } = context;
+
+  const prepared = prepareJournalContent(htmlContent, title);
+  if (!prepared) {
+    return;
+  }
+
+  // Fire and forget - don't await, don't wrap in Promise
+  updateEntry.mutate(
+    {
+      id: entryId,
+      input: {
+        title: prepared.finalTitle,
+        blocks: prepared.blocks,
+      },
+      skipCacheUpdate: true,
+    },
+    {
+      onError: (error: Error) => {
+        console.error("[Journal Action] Error in fire-and-forget save:", error);
+      },
+    }
+  );
+}
+
+/**
  * Action: Save journal entry content
  *
  * Handles HTML sanitization and block conversion
@@ -150,39 +220,21 @@ export async function saveJournalContent(
   title: string,
   context: JournalActionContext
 ): Promise<void> {
-  const { updateEntry, onSave } = context;
+  const { updateEntry } = context;
 
   try {
-    // Strip HTML to check if there's actual content
-    const textContent = htmlContent.replace(/<[^>]*>/g, "").trim();
-    if (!textContent) {
+    const prepared = prepareJournalContent(htmlContent, title);
+    if (!prepared) {
       return;
     }
-
-    // HTML is already repaired by caller
-    let cleanHtml = htmlContent.trim();
-
-    // Store HTML as single html block (new format)
-    const blocks: Block[] = [
-      {
-        type: "html",
-        content: cleanHtml,
-      },
-    ];
-
-    // Use title if set, otherwise use content preview
-    const finalTitle =
-      title.trim() ||
-      textContent.slice(0, 50) + (textContent.length > 50 ? "..." : "") ||
-      "Untitled";
 
     await new Promise<void>((resolve, reject) => {
       updateEntry.mutate(
         {
           id: entryId,
           input: {
-            title: finalTitle,
-            blocks,
+            title: prepared.finalTitle,
+            blocks: prepared.blocks,
           },
           skipCacheUpdate: true, // Don't update cache to prevent HTML escaping in editor
         },

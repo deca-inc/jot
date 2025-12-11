@@ -54,13 +54,14 @@ type Filter = "all" | "journal" | "ai_chat" | "favorites";
 
 export interface HomeScreenProps {
   refreshKey?: number;
+  isVisible?: boolean;
   onOpenFullEditor?: (initialText?: string) => void;
   onOpenSettings?: () => void;
   onOpenEntryEditor?: (entryId: number) => void;
 }
 
 export function HomeScreen(props: HomeScreenProps = {}) {
-  const { onOpenFullEditor, onOpenSettings, onOpenEntryEditor } = props;
+  const { onOpenFullEditor, onOpenSettings, onOpenEntryEditor, isVisible = true } = props;
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
@@ -277,6 +278,17 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       }
     }
   }, [composerMode, journalData, aiData]);
+
+  // Refetch when screen becomes visible (after navigating back)
+  const wasVisibleRef = useRef(isVisible);
+  useEffect(() => {
+    if (isVisible && !wasVisibleRef.current) {
+      // Screen just became visible - refetch data
+      journalRegularQuery.refetch();
+      aiRegularQuery.refetch();
+    }
+    wasVisibleRef.current = isVisible;
+  }, [isVisible, journalRegularQuery, aiRegularQuery]);
 
   // Use refs to stabilize mutation callbacks
   const toggleFavoriteMutationRef = useRef(toggleFavoriteMutation);

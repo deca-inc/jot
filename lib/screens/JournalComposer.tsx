@@ -12,7 +12,7 @@ import { useEntry, useUpdateEntry } from "../db/useEntries";
 import { debounce } from "../utils/debounce";
 import { FloatingComposerHeader, QuillRichEditor } from "../components";
 import type { QuillRichEditorRef } from "../components";
-import { saveJournalContent } from "./journalActions";
+import { saveJournalContent, saveJournalContentFireAndForget } from "./journalActions";
 import { useTrackScreenView } from "../analytics";
 import { convertBlockToHtml, convertEnrichedHtmlToQuill } from "../utils/htmlUtils";
 
@@ -89,7 +89,7 @@ export function JournalComposer({
       // Otherwise, convert markdown block to HTML
       const htmlBlockConverted = convertBlockToHtml(markdownBlock);
       lastLoadTimeRef.current = Date.now();
-      return htmlBlockConverted.content || "<p></p>";
+      return ("content" in htmlBlockConverted ? htmlBlockConverted.content : null) || "<p></p>";
     }
 
     // Empty or no content
@@ -147,14 +147,10 @@ export function JournalComposer({
     // Cancel any pending debounced saves
     (debouncedSave as any).cancel();
 
-    // Fire-and-forget save - don't block navigation
+    // Fire-and-forget save - truly non-blocking, doesn't wait for DB
     const currentContent = htmlContentRef.current;
     if (currentContent.trim() && !isDeletingRef.current) {
-      saveJournalContent(entryId, currentContent, "", actionContext).catch(
-        (error) => {
-          console.error("[JournalComposer] Error saving on back:", error);
-        }
-      );
+      saveJournalContentFireAndForget(entryId, currentContent, "", actionContext);
     }
 
     // Navigate immediately

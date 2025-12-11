@@ -338,6 +338,55 @@ export function SimpleNavigation() {
 
   const seasonalTheme = useSeasonalTheme();
 
+  // Render overlay screen (everything except home)
+  const renderOverlayScreen = () => {
+    switch (currentScreen) {
+      case "settings":
+        return (
+          <SettingsScreen
+            onNavigateToPlayground={handleNavigateToPlayground}
+            onNavigateToQuillEditor={handleNavigateToQuillEditor}
+            onBack={handleSettingsBack}
+          />
+        );
+      case "playground":
+        return <ComponentPlaygroundScreen onBack={handlePlaygroundBack} />;
+      case "quillEditor":
+        return <QuillEditorScreen onBack={handleQuillEditorBack} />;
+      case "composer":
+        return (
+          <ComposerScreen
+            initialType={composerEntryType}
+            onSave={handleComposerSave}
+            onCancel={handleComposerCancel}
+          />
+        );
+      case "fullEditor":
+        fullEditorOnCancelRef.current = handleFullEditorCancel;
+        return (
+          <ComposerScreen
+            entryId={fullEditorEntryId}
+            onSave={handleFullEditorSave}
+            onCancel={handleFullEditorCancel}
+            fullScreen={true}
+          />
+        );
+      case "entryEditor":
+        entryEditorOnCancelRef.current = handleEntryEditorCancel;
+        return (
+          <ComposerScreen
+            entryId={editingEntryId}
+            onSave={handleEntryEditorSave}
+            onCancel={handleEntryEditorCancel}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  const isHomeScreen = currentScreen === "home";
+
   return (
     <SafeAreaView
       style={[
@@ -350,17 +399,34 @@ export function SimpleNavigation() {
       }}
     >
       <View style={styles.container}>
-        <Animated.View
-          style={[
-            styles.content,
-            {
-              transform: [{ translateX: swipeX }],
-            },
-          ]}
-          {...(panResponderRef.current?.panHandlers || {})}
+        {/* HomeScreen is always mounted but hidden when not active */}
+        <View
+          style={[styles.content, !isHomeScreen && styles.hidden]}
+          pointerEvents={isHomeScreen ? "auto" : "none"}
         >
-          {renderScreen()}
-        </Animated.View>
+          <HomeScreen
+            refreshKey={homeRefreshKey}
+            isVisible={isHomeScreen}
+            onOpenFullEditor={handleOpenFullEditor}
+            onOpenSettings={handleOpenSettings}
+            onOpenEntryEditor={handleOpenEntryEditor}
+          />
+        </View>
+
+        {/* Overlay screens render on top when not on home */}
+        {!isHomeScreen && (
+          <Animated.View
+            style={[
+              styles.overlayContent,
+              {
+                transform: [{ translateX: swipeX }],
+              },
+            ]}
+            {...(panResponderRef.current?.panHandlers || {})}
+          >
+            {renderOverlayScreen()}
+          </Animated.View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -374,6 +440,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    flex: 1,
+  },
+  hidden: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+  },
+  overlayContent: {
+    ...StyleSheet.absoluteFillObject,
     flex: 1,
   },
 });
