@@ -15,6 +15,7 @@ import {
   SettingsScreen,
   ComponentPlaygroundScreen,
   ComposerScreen,
+  QuillEditorScreen,
 } from "../screens";
 import { useCreateEntry } from "../db/useEntries";
 
@@ -22,6 +23,7 @@ type Screen =
   | "home"
   | "settings"
   | "playground"
+  | "quillEditor"
   | "composer"
   | "fullEditor"
   | "entryEditor";
@@ -58,6 +60,8 @@ export function SimpleNavigation() {
     if (currentScreen === "settings") {
       setCurrentScreen("home");
     } else if (currentScreen === "playground") {
+      setCurrentScreen("settings");
+    } else if (currentScreen === "quillEditor") {
       setCurrentScreen("settings");
     } else if (currentScreen === "composer") {
       setCurrentScreen("home");
@@ -170,6 +174,10 @@ export function SimpleNavigation() {
     setCurrentScreen("playground");
   }, []);
 
+  const handleNavigateToQuillEditor = useCallback(() => {
+    setCurrentScreen("quillEditor");
+  }, []);
+
   const handleOpenComposer = useCallback((type?: "journal" | "ai_chat") => {
     setComposerEntryType(type);
     setCurrentScreen("composer");
@@ -196,15 +204,14 @@ export function SimpleNavigation() {
     const content = (initialText || "").trim();
 
     // Create HTML block with H1 for the first letter/text
-    // MUST wrap in <html> tags - editor needs them to render properly
     const htmlContent =
       content.length > 0
-        ? `<html><h1>${content}</h1></html>`
-        : "<html><h1></h1></html>"; // Empty H1 to start
+        ? `<h1>${content}</h1>`
+        : "<p></p>"; // Empty paragraph to start
 
     const blocks = [
       {
-        type: "markdown" as const,
+        type: "html" as const,
         content: htmlContent,
       },
     ];
@@ -263,6 +270,10 @@ export function SimpleNavigation() {
     setCurrentScreen("settings");
   }, []);
 
+  const handleQuillEditorBack = useCallback(() => {
+    setCurrentScreen("settings");
+  }, []);
+
   const renderScreen = () => {
     switch (currentScreen) {
       case "home":
@@ -278,11 +289,14 @@ export function SimpleNavigation() {
         return (
           <SettingsScreen
             onNavigateToPlayground={handleNavigateToPlayground}
+            onNavigateToQuillEditor={handleNavigateToQuillEditor}
             onBack={handleSettingsBack}
           />
         );
       case "playground":
         return <ComponentPlaygroundScreen onBack={handlePlaygroundBack} />;
+      case "quillEditor":
+        return <QuillEditorScreen onBack={handleQuillEditorBack} />;
       case "composer":
         return (
           <ComposerScreen

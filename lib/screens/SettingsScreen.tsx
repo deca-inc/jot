@@ -30,11 +30,13 @@ import { useTrackScreenView, useTrackEvent } from "../analytics";
 
 interface SettingsScreenProps {
   onNavigateToPlayground?: () => void;
+  onNavigateToQuillEditor?: () => void;
   onBack?: () => void;
 }
 
 export function SettingsScreen({
   onNavigateToPlayground,
+  onNavigateToQuillEditor,
   onBack,
 }: SettingsScreenProps) {
   const theme = useTheme();
@@ -467,8 +469,40 @@ export function SettingsScreen({
               Developer tools and utilities
             </Text>
 
-            {/* Component Playground */}
+            {/* Quill Editor Test */}
             <View style={[styles.adminItem, styles.adminItemFirst]}>
+              <View style={styles.sectionText}>
+                <Text
+                  variant="body"
+                  style={[
+                    styles.adminItemTitle,
+                    { color: seasonalTheme.textPrimary },
+                  ]}
+                >
+                  Quill Editor Test
+                </Text>
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.adminItemDescription,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  Test WebView-based rich text editor
+                </Text>
+              </View>
+              <Button
+                variant="secondary"
+                size="sm"
+                label="Open Quill Editor"
+                onPress={onNavigateToQuillEditor}
+              >
+                Open
+              </Button>
+            </View>
+
+            {/* Component Playground */}
+            <View style={styles.adminItem}>
               <View style={styles.sectionText}>
                 <Text
                   variant="body"

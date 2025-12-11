@@ -91,23 +91,20 @@ export async function createJournalEntry(
   try {
     console.log("[Journal Action] Creating new journal entry");
 
-    // Convert initial content to blocks
+    // Convert initial content to blocks (always use html type)
     const blocks: Block[] = [];
     if (initialContent.trim()) {
-      // If content has HTML tags, store as markdown block
+      // If content has HTML tags, store as-is
       if (initialContent.includes("<")) {
         blocks.push({
-          type: "markdown",
+          type: "html",
           content: initialContent,
         });
       } else {
-        // Plain text - wrap in paragraph and <html> tags as editor expects
+        // Plain text - wrap in paragraph tags
         blocks.push({
-          type: "markdown",
-          content: `<html><h1>${initialContent.replace(
-            /\n/g,
-            "<br>"
-          )}</h1></html>`,
+          type: "html",
+          content: `<h1>${initialContent.replace(/\n/g, "<br>")}</h1>`,
         });
       }
     }
@@ -165,10 +162,10 @@ export async function saveJournalContent(
     // HTML is already repaired by caller
     let cleanHtml = htmlContent.trim();
 
-    // Store HTML as single markdown block
+    // Store HTML as single html block (new format)
     const blocks: Block[] = [
       {
-        type: "markdown",
+        type: "html",
         content: cleanHtml,
       },
     ];
@@ -272,9 +269,9 @@ export async function deleteJournalEntry(
  */
 export function blocksToContent(blocks: Block[], type: string): string {
   if (type === "journal") {
-    // For journal entries, join markdown content
+    // For journal entries, join html or markdown content
     return blocks
-      .filter((b) => b.type === "markdown")
+      .filter((b) => b.type === "html" || b.type === "markdown")
       .map((b) => b.content)
       .join("\n\n");
   } else {

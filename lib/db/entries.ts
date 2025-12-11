@@ -38,6 +38,11 @@ export type Block =
       role?: "user" | "assistant" | "system";
     }
   | {
+      type: "html";
+      content: string;
+      role?: "user" | "assistant" | "system";
+    }
+  | {
       type: "table";
       headers?: string[];
       rows: string[][];
@@ -109,7 +114,7 @@ export function extractPreviewText(blocks: Block[]): string {
       if (block.content.trim()) {
         return block.content;
       }
-    } else if (block.type === "markdown") {
+    } else if (block.type === "markdown" || block.type === "html") {
       if (block.content.trim()) {
         // Strip HTML tags for preview
         const strippedHtml = block.content

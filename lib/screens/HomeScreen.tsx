@@ -353,13 +353,12 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           await createEntryRef.current.mutateAsync({
             type: "journal",
             title: text.slice(0, 50) + (text.length > 50 ? "..." : ""),
-            blocks: text
-              .split("\n\n")
-              .filter((p) => p.trim())
-              .map((p) => ({
-                type: "paragraph" as const,
-                content: p.trim(),
-              })),
+            blocks: [
+              {
+                type: "html" as const,
+                content: `<p>${text}</p>`,
+              },
+            ],
             tags: [],
             attachments: [],
             isFavorite: false,

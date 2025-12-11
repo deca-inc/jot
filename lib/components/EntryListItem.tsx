@@ -83,46 +83,56 @@ function EntryListItemComponent({
     [updateEntryMutation, deleteEntryMutation]
   );
 
-  // Check if we should render markdown
-  // For AI chats, use assistant's response for preview; otherwise use first markdown block
-  const markdownBlock = React.useMemo(() => {
+  // Check if we should render HTML/markdown
+  // For AI chats, use assistant's response for preview; otherwise use first html or markdown block
+  const htmlOrMarkdownBlock = React.useMemo(() => {
     if (entry.type === "ai_chat") {
       // Find the first assistant message (AI response)
-      return entry.blocks.find((b) => b.role === "assistant" && b.type === "markdown");
+      return entry.blocks.find((b) => b.role === "assistant" && (b.type === "markdown" || b.type === "html"));
     }
-    return entry.blocks.find((b) => b.type === "markdown");
+    // Look for html block first (new format), then fall back to markdown (legacy)
+    return entry.blocks.find((b) => b.type === "html") || entry.blocks.find((b) => b.type === "markdown");
   }, [entry.blocks, entry.type]);
 
-  // For AI chats, always try to render markdown if we have an assistant block
+  // For AI chats, always try to render HTML if we have an assistant block
+  // For journal entries with html blocks, always render as HTML
   // For other entries, check if content includes HTML tags
-  const shouldRenderMarkdown = React.useMemo(() => {
-    if (entry.type === "ai_chat" && markdownBlock) {
-      return true; // Always render AI responses as markdown
+  const shouldRenderHtml = React.useMemo(() => {
+    if (entry.type === "ai_chat" && htmlOrMarkdownBlock) {
+      return true; // Always render AI responses as HTML/markdown
     }
-    return markdownBlock && markdownBlock.content.includes("<");
-  }, [entry.type, markdownBlock]);
+    if (htmlOrMarkdownBlock?.type === "html") {
+      return true; // Always render html blocks as HTML
+    }
+    return htmlOrMarkdownBlock && htmlOrMarkdownBlock.content.includes("<");
+  }, [entry.type, htmlOrMarkdownBlock]);
 
-  // Strip <think> tags from markdown content and convert to HTML for preview rendering
+  // Strip <think> tags from content and convert to HTML for preview rendering
   const htmlContent = React.useMemo(() => {
-    if (!markdownBlock) return "";
+    if (!htmlOrMarkdownBlock) return "";
 
-    const cleanedMarkdown = markdownBlock.content
+    const cleanedContent = htmlOrMarkdownBlock.content
       .replace(/<think>[\s\S]*?<\/think>/g, "") // Remove complete <think>...</think> blocks
       .replace(/<\/?think>/g, "") // Remove any remaining <think> or </think> tags
       .trim();
 
-    // For AI chats, parse markdown to HTML
-    if (shouldRenderMarkdown && cleanedMarkdown) {
+    // For html blocks, use content as-is (already HTML)
+    if (htmlOrMarkdownBlock.type === "html") {
+      return cleanedContent;
+    }
+
+    // For markdown blocks in AI chats, parse markdown to HTML
+    if (shouldRenderHtml && cleanedContent) {
       try {
-        return marked.parse(cleanedMarkdown) as string;
+        return marked.parse(cleanedContent) as string;
       } catch (error) {
         console.error("[EntryListItem] Error parsing markdown:", error);
-        return cleanedMarkdown; // Fallback to plain text
+        return cleanedContent; // Fallback to plain text
       }
     }
 
-    return cleanedMarkdown;
-  }, [markdownBlock, shouldRenderMarkdown]);
+    return cleanedContent;
+  }, [htmlOrMarkdownBlock, shouldRenderHtml]);
 
   const itemTheme = React.useMemo(
     () =>
@@ -543,9 +553,9 @@ function EntryListItemComponent({
               </Text>
             )}
 
-            {previewText || shouldRenderMarkdown ? (
+            {previewText || shouldRenderHtml ? (
               <View style={styles.previewContainer}>
-                {shouldRenderMarkdown && htmlContent ? (
+                {shouldRenderHtml && htmlContent ? (
                   <RenderHtml
                     contentWidth={htmlContentWidth}
                     source={{ html: htmlContent }}
