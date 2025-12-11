@@ -22,6 +22,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { GlassView } from "expo-glass-effect";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns } from "../theme";
+import { showKeyboard } from "../../modules/keyboard-module/src";
+
+// Toolbar height: minHeight (44) + paddingVertical (xs * 2) + margins
+const TOOLBAR_HEIGHT = 44 + spacingPatterns.xs * 2 + spacingPatterns.xs;
 
 export interface QuillRichEditorRef {
   getHtml: () => Promise<string | undefined>;
@@ -37,6 +41,7 @@ interface QuillRichEditorProps {
   onBlur?: () => void;
   editorPadding?: number;
   autoFocus?: boolean;
+  hideToolbar?: boolean;
 }
 
 export const QuillRichEditor = forwardRef<
@@ -51,6 +56,7 @@ export const QuillRichEditor = forwardRef<
     onBlur,
     editorPadding = spacingPatterns.screen,
     autoFocus = false,
+    hideToolbar = false,
   },
   ref
 ) {
@@ -98,6 +104,12 @@ export const QuillRichEditor = forwardRef<
       // Small delay to ensure editor is ready
       const timer = setTimeout(() => {
         editorRef.current?.focus();
+        // On Android, WebView focus doesn't open keyboard - use native module
+        if (Platform.OS === "android") {
+          setTimeout(() => {
+            showKeyboard();
+          }, 100);
+        }
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -601,10 +613,6 @@ export const QuillRichEditor = forwardRef<
           styles.editorContainer,
           {
             paddingBottom: !isKeyboardVisible ? editorPadding : 0,
-            marginBottom:
-              Platform.OS === "android" && isKeyboardVisible
-                ? keyboardHeight + insets.bottom
-                : 0,
           },
         ]}
       >
@@ -685,20 +693,30 @@ export const QuillRichEditor = forwardRef<
                 }, 100);
               }, true); // Capture phase
             })();
+
+            // Auto-focus the editor on load if requested
+            ${autoFocus ? `
+            (function() {
+              // Wait for quill to be ready, then focus
+              setTimeout(function() {
+                if (typeof quill !== 'undefined') {
+                  quill.focus();
+                }
+              }, 100);
+            })();
+            ` : ''}
           `}
         />
       </View>
 
       {/* Floating Toolbar */}
-      {isKeyboardVisible && (
+      {isKeyboardVisible && !hideToolbar && (
         <Animated.View
           style={[
             styles.floatingToolbar,
             {
-              bottom:
-                Platform.OS === "android"
-                  ? keyboardHeight + insets.bottom
-                  : keyboardHeight + 4,
+              // Position above keyboard on both platforms
+              bottom: keyboardHeight + (Platform.OS === "android" ? 20 : 4),
               opacity: toolbarAnimation,
               transform: [
                 {

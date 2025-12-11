@@ -14,7 +14,7 @@ import { FloatingComposerHeader, QuillRichEditor } from "../components";
 import type { QuillRichEditorRef } from "../components";
 import { saveJournalContent, saveJournalContentFireAndForget } from "./journalActions";
 import { useTrackScreenView } from "../analytics";
-import { convertBlockToHtml, convertEnrichedHtmlToQuill } from "../utils/htmlUtils";
+import { convertBlockToHtml, convertEnrichedHtmlToQuill, isHtmlContentEmpty } from "../utils/htmlUtils";
 
 export interface JournalComposerProps {
   entryId: number;
@@ -96,6 +96,11 @@ export function JournalComposer({
     return "<p></p>";
   }, [entry]);
 
+  // Determine if content is empty (for autoFocus and toolbar visibility)
+  const isContentEmpty = useMemo(() => {
+    return isHtmlContentEmpty(initialContent);
+  }, [initialContent]);
+
   // Create action context for journal operations (stable object that accesses current refs)
   const actionContext = useMemo(
     () => ({
@@ -176,14 +181,13 @@ export function JournalComposer({
   );
 
   // Show UI shell immediately - content loads progressively
+  // Note: Not using KeyboardAvoidingView - QuillRichEditor handles keyboard positioning
   return (
-    <KeyboardAvoidingView
+    <View
       style={[
         styles.container,
         { backgroundColor: seasonalTheme.gradient.middle },
       ]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={0}
     >
       {/* Floating Header Buttons */}
       <FloatingComposerHeader
@@ -209,12 +213,12 @@ export function JournalComposer({
             initialHtml={initialContent}
             placeholder="Start writing..."
             onChangeHtml={handleChangeHtml}
-            autoFocus={true}
+            autoFocus={isContentEmpty}
             editorPadding={spacingPatterns.screen}
           />
         )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

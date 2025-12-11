@@ -25,6 +25,23 @@ export function isHtmlContent(content: string): boolean {
 }
 
 /**
+ * Check if HTML content is effectively empty (no actual text content)
+ * Handles empty HTML tags like <p></p>, <p><br></p>, whitespace, etc.
+ */
+export function isHtmlContentEmpty(html: string): boolean {
+  if (!html) return true;
+
+  // Strip all HTML tags
+  const textContent = html
+    .replace(/<br\s*\/?>/gi, "") // Remove <br> tags
+    .replace(/<[^>]*>/g, "") // Remove all other HTML tags
+    .replace(/&nbsp;/gi, " ") // Convert &nbsp; to space
+    .trim();
+
+  return textContent.length === 0;
+}
+
+/**
  * Convert a markdown block to an html block, or return as-is if already html
  */
 export function convertBlockToHtml(block: Block): Block {
