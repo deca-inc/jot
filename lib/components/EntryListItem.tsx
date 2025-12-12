@@ -329,8 +329,64 @@ function EntryListItemComponent({
           </View>
         );
       },
+      // Custom renderer for Quill checklist format: <ul data-checked="true/false"><li>...</li></ul>
+      ul: ({ tnode, TDefaultRenderer, ...props }: any) => {
+        const dataChecked = tnode?.attributes?.["data-checked"];
+        // If not a checklist, use default renderer
+        if (dataChecked === undefined) {
+          return <TDefaultRenderer tnode={tnode} {...props} />;
+        }
+
+        const isChecked = dataChecked === "true";
+        // Get all li children and render them as checklist items
+        const children = tnode?.children || [];
+
+        return (
+          <View style={{ marginBottom: 2 }}>
+            {children.map((child: any, index: number) => {
+              // Extract text from li element
+              const extractText = (node: any): string => {
+                if (node?.data) return node.data;
+                if (node?.children) {
+                  return node.children.map(extractText).join("");
+                }
+                return "";
+              };
+              const textContent = extractText(child);
+
+              return (
+                <View key={index} style={{
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  marginBottom: 1,
+                }}>
+                  <Text style={{
+                    fontSize: 12,
+                    color: itemTheme.textPrimary,
+                    lineHeight: 18,
+                    marginRight: 6,
+                    marginLeft: Platform.OS === "android" && !isChecked ? -3 : 0,
+                  }}>
+                    {isChecked ? "☑" : "☐"}
+                  </Text>
+                  <Text style={{
+                    flex: 1,
+                    fontSize: 13,
+                    lineHeight: 18,
+                    color: isChecked ? itemTheme.textSecondary : itemTheme.textPrimary,
+                    textDecorationLine: isChecked ? "line-through" : "none",
+                    opacity: isChecked ? 0.6 : 1,
+                  }}>
+                    {textContent}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        );
+      },
     }),
-    [itemTheme.textPrimary]
+    [itemTheme.textPrimary, itemTheme.textSecondary]
   );
 
   const htmlContentWidth = React.useMemo(

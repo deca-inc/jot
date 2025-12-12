@@ -12,7 +12,7 @@ import { useEntry, useUpdateEntry } from "../db/useEntries";
 import { debounce } from "../utils/debounce";
 import { FloatingComposerHeader, QuillRichEditor } from "../components";
 import type { QuillRichEditorRef } from "../components";
-import { saveJournalContent, saveJournalContentFireAndForget } from "./journalActions";
+import { saveJournalContent } from "./journalActions";
 import { useTrackScreenView } from "../analytics";
 import { convertBlockToHtml, convertEnrichedHtmlToQuill, isHtmlContentEmpty } from "../utils/htmlUtils";
 
@@ -147,18 +147,22 @@ export function JournalComposer({
     (debouncedSave as any).cancel();
   }, [debouncedSave]);
 
-  // Handle back button - fire-and-forget save, navigate immediately
-  const handleBackPress = useCallback(() => {
+  // Handle back button - save before navigating to keep state consistent
+  const handleBackPress = useCallback(async () => {
     // Cancel any pending debounced saves
     (debouncedSave as any).cancel();
 
-    // Fire-and-forget save - truly non-blocking, doesn't wait for DB
+    // Save content and wait for it to complete before navigating
     const currentContent = htmlContentRef.current;
     if (currentContent.trim() && !isDeletingRef.current) {
-      saveJournalContentFireAndForget(entryId, currentContent, "", actionContext);
+      try {
+        await saveJournalContent(entryId, currentContent, "", actionContext);
+      } catch (error) {
+        console.error("[JournalComposer] Error saving on back:", error);
+      }
     }
 
-    // Navigate immediately
+    // Navigate after save completes
     onCancelRef.current?.();
   }, [entryId, actionContext, debouncedSave]);
 
