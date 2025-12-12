@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -435,6 +436,81 @@ export function SettingsScreen({
           </View>
         </Card>
 
+        {/* Links Section */}
+        <View style={styles.linksSection}>
+          <TouchableOpacity
+            style={styles.linkItem}
+            onPress={() => Linking.openURL("https://jot-ai.app")}
+            activeOpacity={0.7}
+          >
+            <Text
+              variant="body"
+              style={[styles.linkText, { color: seasonalTheme.textSecondary }]}
+            >
+              About
+            </Text>
+            <Ionicons
+              name="open-outline"
+              size={16}
+              color={seasonalTheme.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.linkItem}
+            onPress={() => Linking.openURL("https://jot.canny.io/features-bugs")}
+            activeOpacity={0.7}
+          >
+            <Text
+              variant="body"
+              style={[styles.linkText, { color: seasonalTheme.textSecondary }]}
+            >
+              Features & Feedback
+            </Text>
+            <Ionicons
+              name="open-outline"
+              size={16}
+              color={seasonalTheme.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.linkItem}
+            onPress={() => Linking.openURL("https://jot-ai.app/terms")}
+            activeOpacity={0.7}
+          >
+            <Text
+              variant="body"
+              style={[styles.linkText, { color: seasonalTheme.textSecondary }]}
+            >
+              Terms & Conditions
+            </Text>
+            <Ionicons
+              name="open-outline"
+              size={16}
+              color={seasonalTheme.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.linkItem}
+            onPress={() => Linking.openURL("https://jot-ai.app/privacy")}
+            activeOpacity={0.7}
+          >
+            <Text
+              variant="body"
+              style={[styles.linkText, { color: seasonalTheme.textSecondary }]}
+            >
+              Privacy Policy
+            </Text>
+            <Ionicons
+              name="open-outline"
+              size={16}
+              color={seasonalTheme.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
         {/* Admin Section - Dev Only */}
         {isComponentPlaygroundEnabled() && (
           <Card
@@ -726,5 +802,21 @@ const styles = StyleSheet.create({
   },
   pendingDownloadsContainer: {
     marginTop: spacingPatterns.md,
+  },
+  linksSection: {
+    marginTop: spacingPatterns.lg,
+    marginBottom: spacingPatterns.md,
+    alignItems: "center",
+  },
+  linkItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 40,
+    paddingHorizontal: spacingPatterns.md,
+    gap: spacingPatterns.xs,
+  },
+  linkText: {
+    fontSize: 14,
   },
 });
