@@ -7,6 +7,7 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "node": "22.12.0",
       "pnpm": "8.8.0",
       "env": {
@@ -15,6 +16,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "node": "22.12.0",
       "pnpm": "8.8.0",
       "env": {
@@ -23,6 +25,7 @@
     },
     "production": {
       "autoIncrement": true,
+      "channel": "production",
       "node": "22.12.0",
       "pnpm": "8.8.0",
       "env": {

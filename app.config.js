@@ -6,7 +6,7 @@ module.exports = ({ config }) => {
     name: isDev ? "Jot (Dev)" : "Jot",
     owner: "beta-zeta-inc",
     slug: "jot",
-    version: "1.0.2",
+    version: "1.0.3",
     orientation: "portrait",
     icon: isDev ? "./assets/icon-dev.png" : "./assets/icon.png",
     userInterfaceStyle: "light",
@@ -74,6 +74,12 @@ module.exports = ({ config }) => {
         },
       ],
     ],
+    updates: {
+      url: "https://u.expo.dev/0218f474-abc5-4575-ab99-0fa81a34e435",
+    },
+    runtimeVersion: {
+      policy: "appVersion",
+    },
     extra: {
       eas: {
         projectId: "0218f474-abc5-4575-ab99-0fa81a34e435",
