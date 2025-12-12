@@ -178,6 +178,10 @@ export function QuillEditorScreen({ onBack }: QuillEditorScreenProps = {}) {
             placeholder: "Start writing...",
             modules: {
               toolbar: false,
+              // Disable matchVisual to prevent Quill from inserting extra line breaks
+              // before lists when loading HTML (GitHub issue #2905)
+              // Note: Must be a string as react-native-cn-quill injects it directly into JS
+              clipboard: "{ matchVisual: false }",
             },
           }}
           webview={{
@@ -197,6 +201,106 @@ export function QuillEditorScreen({ onBack }: QuillEditorScreenProps = {}) {
               });
             }
           }}
+          customJS={`
+            // Fix for Quill mobile checkbox bug (issues #3781, #2031)
+            // On mobile, touch events cause checkbox to toggle twice
+            // Solution: Completely take over checkbox click handling
+            (function() {
+              var lastToggleTime = 0;
+              var lastToggleTarget = null;
+              var DEBOUNCE_MS = 300;
+
+              // Find the checklist li element from any click target
+              function findChecklistLi(target) {
+                var el = target;
+                while (el && el !== document.body) {
+                  if (el.tagName === 'LI') {
+                    var ul = el.parentElement;
+                    if (ul && ul.hasAttribute('data-checked')) {
+                      return { li: el, ul: ul };
+                    }
+                  }
+                  el = el.parentElement;
+                }
+                return null;
+              }
+
+              // Toggle checkbox state
+              function toggleCheckbox(li, ul) {
+                var now = Date.now();
+
+                // Debounce: prevent double-toggle on same element
+                if (lastToggleTarget === li && now - lastToggleTime < DEBOUNCE_MS) {
+                  return;
+                }
+                lastToggleTime = now;
+                lastToggleTarget = li;
+
+                // Read current state directly from DOM attribute (source of truth)
+                var currentChecked = ul.getAttribute('data-checked');
+                var newValue = currentChecked === 'true' ? 'unchecked' : 'checked';
+
+                // Find the blot and get the correct index
+                try {
+                  // Try finding blot from the li element first
+                  var blot = Quill.find(li);
+
+                  // If not found on li, try the ul (some Quill versions map differently)
+                  if (!blot) {
+                    blot = Quill.find(ul);
+                  }
+
+                  // If still not found, try finding from text node inside
+                  if (!blot && li.firstChild) {
+                    blot = Quill.find(li.firstChild, true);
+                  }
+
+                  if (blot && quill) {
+                    var index = quill.getIndex(blot);
+                    // Use formatLine to change just this line's list format
+                    quill.formatLine(index, 1, 'list', newValue, 'user');
+                  } else {
+                    // Fallback: try to find index by walking DOM and counting
+                    console.log('Could not find blot, trying DOM-based index calculation');
+                    var allContent = quill.root.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, blockquote, pre');
+                    var lineIndex = 0;
+                    for (var i = 0; i < allContent.length; i++) {
+                      if (allContent[i] === li) {
+                        quill.formatLine(lineIndex, 1, 'list', newValue, 'user');
+                        break;
+                      }
+                      // Add the length of text content plus 1 for the newline
+                      lineIndex += (allContent[i].textContent || '').length + 1;
+                    }
+                  }
+                } catch (err) {
+                  console.log('Checkbox toggle error:', err);
+                }
+              }
+
+              // Intercept touch events to prevent Quill's native handler
+              document.addEventListener('touchstart', function(e) {
+                var result = findChecklistLi(e.target);
+                if (result) {
+                  // Prevent the touchstart from triggering Quill's native handlers
+                  // This stops both touchstart AND the synthetic mousedown that follows
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                  toggleCheckbox(result.li, result.ul);
+                }
+              }, true);
+
+              // Also handle regular mouse clicks (for desktop/testing)
+              document.addEventListener('mousedown', function(e) {
+                var result = findChecklistLi(e.target);
+                if (result) {
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                  toggleCheckbox(result.li, result.ul);
+                }
+              }, true);
+            })();
+          `}
           customStyles={[
             `
             * {

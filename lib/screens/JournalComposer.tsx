@@ -62,7 +62,13 @@ export function JournalComposer({
     if (htmlBlock) {
       lastLoadTimeRef.current = Date.now();
       // Still convert in case it was saved with old format checklists
-      return convertEnrichedHtmlToQuill(htmlBlock.content) || "<p></p>";
+      const converted = convertEnrichedHtmlToQuill(htmlBlock.content) || "<p></p>";
+      // Debug: Log loaded content to catch unexpected changes
+      if (htmlBlock.content.includes('data-checked="true"')) {
+        console.log('[JournalComposer] Loading HTML from DB:', htmlBlock.content);
+        console.log('[JournalComposer] After conversion:', converted);
+      }
+      return converted;
     }
 
     // Fall back to markdown block (legacy format) and convert to HTML

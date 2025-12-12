@@ -81,30 +81,6 @@ export function convertBlocksToHtml(blocks: Block[]): Block[] {
 }
 
 /**
- * Repair common HTML issues from Quill editor output
- * Based on the existing repairHtml function in journalActions.ts
- */
-export function repairQuillHtml(html: string): string {
-  if (!html || !html.trim()) {
-    return "<p></p>";
-  }
-
-  let cleanHtml = html;
-
-  // Remove malformed <p> tags around block elements
-  cleanHtml = cleanHtml.replace(/<p>(<(?:ul|ol|h[1-6]|blockquote|pre)[^>]*>)/gi, "$1");
-  cleanHtml = cleanHtml.replace(/(<\/(?:ul|ol|h[1-6]|blockquote|pre)>)<\/p>/gi, "$1");
-
-  // Remove empty <li> tags that can cause issues
-  cleanHtml = cleanHtml.replace(/<li>\s*<\/li>/g, "");
-
-  // Normalize whitespace but preserve intentional line breaks
-  cleanHtml = cleanHtml.replace(/\n\s*\n/g, "\n");
-
-  return cleanHtml;
-}
-
-/**
  * Convert old react-native-enriched checklist format to Quill format
  *
  * Old format: <checklist><cli checked="true">Item</cli><cli checked="false">Item2</cli></checklist>

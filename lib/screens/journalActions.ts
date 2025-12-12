@@ -14,50 +14,6 @@
 
 import { Block } from "../db/entries";
 
-/**
- * Repairs and sanitizes HTML from the editor
- * Fixes common issues like malformed tags, improper nesting, etc.
- */
-export function repairHtml(html: string): string {
-  let cleaned = html.trim();
-
-  // DON'T strip <html> wrapper - keep it throughout the flow
-  // Editor outputs it and needs it back on input
-
-  // Fix: Remove <p> tags that are wrapping block-level elements
-  // This fixes the bug where every tag gets wrapped in <p>
-  cleaned = cleaned.replace(/<p>\s*(<h[1-6]>)/gi, "$1");
-  cleaned = cleaned.replace(/<p>\s*(<\/h[1-6]>)/gi, "$1");
-  cleaned = cleaned.replace(/<p>\s*(<ul>)/gi, "$1");
-  cleaned = cleaned.replace(/<p>\s*(<ol>)/gi, "$1");
-  cleaned = cleaned.replace(/<p>\s*(<li>)/gi, "$1");
-  cleaned = cleaned.replace(/<p>\s*(<\/li>)/gi, "$1");
-  cleaned = cleaned.replace(/(<\/ul>)\s*<\/p>/gi, "$1");
-  cleaned = cleaned.replace(/(<\/ol>)\s*<\/p>/gi, "$1");
-  cleaned = cleaned.replace(/(<\/h[1-6]>)\s*<\/p>/gi, "$1");
-
-  // Don't remove <br> tags - they represent intentional blank lines
-  // Also don't remove empty <p></p> tags for the same reason
-  // The editor uses these for spacing
-
-  // Remove list items with only empty headings (rendering bug)
-  cleaned = cleaned.replace(/<li>\s*<h[1-6]>\s*<\/h[1-6]>\s*<\/li>/gi, "");
-
-  // CRITICAL: Remove empty <li></li> tags - they cause editor to escape ALL HTML on reload!
-  cleaned = cleaned.replace(/<li>\s*<\/li>/gi, "");
-
-  // Clean up empty lists
-  cleaned = cleaned.replace(/<ul>\s*<\/ul>/gi, "");
-  cleaned = cleaned.replace(/<ol>\s*<\/ol>/gi, "");
-
-  // Fix: if content ends with a list, append empty paragraph to prevent rendering bugs
-  if (cleaned.match(/<\/(ul|ol)>\s*$/i)) {
-    cleaned = cleaned + "<p></p>";
-  }
-
-  return cleaned;
-}
-
 export interface JournalActionContext {
   // React Query mutations
   createEntry: any;
@@ -153,6 +109,11 @@ function prepareJournalContent(
 
   // HTML is already repaired by caller
   const cleanHtml = htmlContent.trim();
+
+  // Debug: Log what's being saved
+  if (cleanHtml.includes('data-checked="true"')) {
+    console.log('[journalActions] Saving HTML with checked item:', cleanHtml);
+  }
 
   // Store HTML as single html block (new format)
   const blocks: Block[] = [
