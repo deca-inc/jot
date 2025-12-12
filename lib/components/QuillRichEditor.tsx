@@ -221,10 +221,6 @@ export const QuillRichEditor = forwardRef<
   // Handle HTML change - called directly by Quill when content changes
   const handleHtmlChange = useCallback(
     (data: { html: string }) => {
-      // Debug: Log HTML output to catch unexpected changes
-      if (data.html.includes('data-checked="true"')) {
-        console.log('[QuillRichEditor] HTML with checked item:', data.html);
-      }
       onChangeHtml?.(data.html);
     },
     [onChangeHtml]

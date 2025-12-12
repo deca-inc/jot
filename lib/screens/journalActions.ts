@@ -110,11 +110,6 @@ function prepareJournalContent(
   // HTML is already repaired by caller
   const cleanHtml = htmlContent.trim();
 
-  // Debug: Log what's being saved
-  if (cleanHtml.includes('data-checked="true"')) {
-    console.log('[journalActions] Saving HTML with checked item:', cleanHtml);
-  }
-
   // Store HTML as single html block (new format)
   const blocks: Block[] = [
     {
