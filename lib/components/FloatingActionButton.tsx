@@ -278,36 +278,27 @@ export function FloatingActionButton({
           }}
         >
           <Animated.View
-            style={{
-              shadowColor: "#000",
-              shadowOpacity,
-              shadowRadius,
-              shadowOffset: { width: 0, height: 6 },
-              elevation,
-            }}
+            style={Platform.select({
+              ios: {
+                shadowColor: "#000",
+                shadowOpacity,
+                shadowRadius,
+                shadowOffset: { width: 0, height: 6 },
+              },
+              android: {},
+            })}
           >
             <TouchableOpacity
               onPress={handlePress}
               style={[
                 styles.button,
                 {
-                  backgroundColor: seasonalTheme.chipBg,
+                  backgroundColor: seasonalTheme.isDark ? "#1C1C1E" : "#FFFFFF",
+                  elevation: Platform.OS === "android" ? 8 : 0,
                 },
               ]}
               activeOpacity={0.8}
             >
-              {/* Solid backdrop layer to ensure full opacity */}
-              <View
-                style={[
-                  StyleSheet.absoluteFill,
-                  {
-                    backgroundColor: seasonalTheme.isDark
-                      ? "#1C1C1E"
-                      : "#FFFFFF",
-                    borderRadius: 28,
-                  },
-                ]}
-              />
               <Animated.View style={{ transform: [{ rotate }] }}>
                 <Ionicons name="add" size={28} color={seasonalTheme.chipText} />
               </Animated.View>
