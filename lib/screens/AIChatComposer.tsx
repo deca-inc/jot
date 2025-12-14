@@ -842,8 +842,6 @@ export function AIChatComposer({
     { icon: "bulb-outline" as const, text: "Help me brainstorm ideas for..." },
     { icon: "heart-outline" as const, text: "I want to reflect on how I'm feeling" },
     { icon: "compass-outline" as const, text: "I'm trying to make a decision about..." },
-    { icon: "book-outline" as const, text: "Summarize my recent journal entries" },
-    { icon: "trending-up-outline" as const, text: "What patterns do you see in my writing?" },
   ], []);
 
   const handlePromptSuggestionPress = useCallback((suggestion: string) => {
