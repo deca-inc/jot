@@ -836,15 +836,82 @@ export function AIChatComposer({
     return `${index}-${content?.length || 0}`;
   }, []);
 
+  // Prompt suggestions for empty AI chat
+  const promptSuggestions = useMemo(() => [
+    { icon: "sunny-outline" as const, text: "How can I make today meaningful?" },
+    { icon: "bulb-outline" as const, text: "Help me brainstorm ideas for..." },
+    { icon: "heart-outline" as const, text: "I want to reflect on how I'm feeling" },
+    { icon: "compass-outline" as const, text: "I'm trying to make a decision about..." },
+    { icon: "book-outline" as const, text: "Summarize my recent journal entries" },
+    { icon: "trending-up-outline" as const, text: "What patterns do you see in my writing?" },
+  ], []);
+
+  const handlePromptSuggestionPress = useCallback((suggestion: string) => {
+    setNewMessage(suggestion);
+    chatInputRef.current?.focus();
+  }, []);
+
   const ListEmptyComponent = useCallback(() => {
     return (
       <View style={styles.emptyChat}>
-        <Text variant="body" style={{ color: seasonalTheme.textSecondary }}>
-          Start a conversation with your AI assistant...
+        <Text
+          variant="h3"
+          style={{
+            color: seasonalTheme.textPrimary,
+            marginBottom: spacingPatterns.sm,
+            textAlign: "center",
+          }}
+        >
+          Start a conversation
         </Text>
+        <Text
+          variant="body"
+          style={{
+            color: seasonalTheme.textSecondary,
+            marginBottom: spacingPatterns.lg,
+            textAlign: "center",
+          }}
+        >
+          Your private AI is here to help you reflect, brainstorm, and think through anything on your mind.
+        </Text>
+        <View style={styles.suggestionGrid}>
+          {promptSuggestions.map((suggestion, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.suggestionCard,
+                {
+                  backgroundColor: seasonalTheme.chipBg,
+                  borderColor: seasonalTheme.textSecondary + "20",
+                },
+              ]}
+              onPress={() => handlePromptSuggestionPress(suggestion.text)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={suggestion.icon}
+                size={20}
+                color={seasonalTheme.chipText}
+                style={{ marginBottom: spacingPatterns.xs }}
+              />
+              <Text
+                variant="caption"
+                style={{
+                  color: seasonalTheme.textPrimary,
+                  textAlign: "center",
+                  fontSize: 13,
+                  lineHeight: 18,
+                }}
+                numberOfLines={2}
+              >
+                {suggestion.text}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     );
-  }, [seasonalTheme]);
+  }, [seasonalTheme, promptSuggestions, handlePromptSuggestionPress]);
 
   // Footer component for incomplete generation prompt
   const ListFooterComponent = useCallback(() => {
@@ -1068,6 +1135,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacingPatterns.xl * 2,
+    paddingHorizontal: spacingPatterns.md,
+  },
+  suggestionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: spacingPatterns.sm,
+    width: "100%",
+    maxWidth: 400,
+  },
+  suggestionCard: {
+    width: "47%",
+    padding: spacingPatterns.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 80,
   },
   messageBubble: {
     marginBottom: spacingPatterns.md,

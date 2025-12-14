@@ -15,6 +15,8 @@ import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTrackEvent } from "../analytics";
 
+export type EntryTypeFilter = "all" | "journal" | "ai_chat";
+
 export interface SearchDropdownProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -25,6 +27,8 @@ export interface SearchDropdownProps {
   onDateFilterChange: (filter: "all" | "today" | "week" | "month") => void;
   favoritesOnly: boolean;
   onFavoritesToggle: () => void;
+  entryTypeFilter?: EntryTypeFilter;
+  onEntryTypeFilterChange?: (filter: EntryTypeFilter) => void;
   onOpenSettings?: () => void;
 }
 
@@ -38,6 +42,8 @@ export function SearchDropdown({
   onDateFilterChange,
   favoritesOnly,
   onFavoritesToggle,
+  entryTypeFilter = "all",
+  onEntryTypeFilterChange,
   onOpenSettings,
 }: SearchDropdownProps) {
   const seasonalTheme = useSeasonalTheme();
@@ -79,7 +85,7 @@ export function SearchDropdown({
 
   const maxHeight = heightAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 200],
+    outputRange: [0, 260],
   });
 
   const marginTop = heightAnim.interpolate({
@@ -135,7 +141,7 @@ export function SearchDropdown({
             styles.iconButton,
             {
               backgroundColor:
-                showFilters || dateFilter !== "all" || favoritesOnly
+                showFilters || dateFilter !== "all" || favoritesOnly || entryTypeFilter !== "all"
                   ? seasonalTheme.textPrimary + "15"
                   : "transparent",
             },
@@ -173,6 +179,79 @@ export function SearchDropdown({
         pointerEvents={showFilters ? "auto" : "none"}
       >
         <View style={styles.filtersContainer}>
+            {/* Entry Type Filter */}
+            {onEntryTypeFilterChange && (
+              <View style={styles.filterSection}>
+                <Text
+                  variant="caption"
+                  style={{
+                    color: seasonalTheme.textSecondary,
+                    marginBottom: spacingPatterns.xxs,
+                    fontSize: 11,
+                  }}
+                >
+                  Entry Type
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filterChips}
+                >
+                  {(["all", "journal", "ai_chat"] as const).map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      onPress={() => {
+                        onEntryTypeFilterChange(type);
+                        trackEvent("Filter Entry Type", { type });
+                      }}
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor:
+                            entryTypeFilter === type
+                              ? seasonalTheme.textPrimary + "15"
+                              : "transparent",
+                          borderColor:
+                            entryTypeFilter === type
+                              ? seasonalTheme.textPrimary
+                              : seasonalTheme.textSecondary + "30",
+                        },
+                      ]}
+                    >
+                      <View style={styles.filterChipContent}>
+                        <Ionicons
+                          name={
+                            type === "all"
+                              ? "apps-outline"
+                              : type === "journal"
+                              ? "book-outline"
+                              : "chatbubbles-outline"
+                          }
+                          size={14}
+                          color={seasonalTheme.textPrimary}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: seasonalTheme.textPrimary,
+                            fontWeight: entryTypeFilter === type ? "600" : "400",
+                            fontSize: 12,
+                          }}
+                        >
+                          {type === "all"
+                            ? "All"
+                            : type === "journal"
+                            ? "Journal"
+                            : "AI Chat"}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
             {/* Date Filter */}
             <View style={styles.filterSection}>
               <Text
@@ -342,6 +421,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacingPatterns.xxs,
     borderRadius: borderRadius.full,
     borderWidth: 1,
+  },
+  filterChipContent: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   favoritesToggle: {
     flexDirection: "row",
