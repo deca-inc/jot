@@ -187,21 +187,23 @@ function EntryListItemComponent({
   }, [itemTheme.cardBg]);
 
   // Memoize RenderHtml props to prevent re-renders
+  // Using consistent spacing: no margins on block elements, let natural flow handle spacing
   const htmlTagsStyles = React.useMemo(
     () => ({
       body: {
         color: itemTheme.textPrimary,
-        fontSize: 13, // Smaller for compact previews
-        lineHeight: 18,
+        fontSize: 14,
+        lineHeight: 20,
         margin: 0,
         padding: 0,
       },
       p: {
         color: itemTheme.textPrimary,
-        fontSize: 13,
-        lineHeight: 18,
-        marginTop: 0,
-        marginBottom: 2, // Minimal spacing for compact previews
+        fontSize: 14,
+        lineHeight: 20,
+        margin: 0,
+        padding: 0,
+        marginBottom: 4,
       },
       b: { color: itemTheme.textPrimary, fontWeight: "bold" as const },
       strong: {
@@ -228,64 +230,69 @@ function EntryListItemComponent({
       },
       h1: {
         color: itemTheme.textPrimary,
-        fontSize: 16, // Still distinct but compact
+        fontSize: 16,
         lineHeight: 22,
         fontWeight: "bold" as const,
-        marginTop: 0,
-        marginBottom: 2,
+        margin: 0,
+        marginBottom: 4,
       },
       h2: {
         color: itemTheme.textPrimary,
         fontSize: 15,
         lineHeight: 21,
         fontWeight: "bold" as const,
-        marginTop: 0,
-        marginBottom: 2,
+        margin: 0,
+        marginBottom: 4,
       },
       h3: {
         color: itemTheme.textPrimary,
         fontSize: 14,
         lineHeight: 20,
         fontWeight: "bold" as const,
-        marginTop: 0,
-        marginBottom: 2,
+        margin: 0,
+        marginBottom: 4,
       },
       ul: {
         color: itemTheme.textPrimary,
-        marginLeft: 0,
-        paddingLeft: 10,
         marginTop: 0,
-        marginBottom: 2,
+        marginBottom: 4,
+        marginLeft: 0,
+        marginRight: 0,
+        paddingLeft: 0,
+        paddingRight: 0,
       },
       ol: {
         color: itemTheme.textPrimary,
-        marginLeft: 0,
-        paddingLeft: 10,
         marginTop: 0,
-        marginBottom: 2,
+        marginBottom: 4,
+        marginLeft: 0,
+        marginRight: 0,
+        paddingLeft: 0,
+        paddingRight: 0,
       },
       li: {
         color: itemTheme.textPrimary,
-        fontSize: 13, // Match body text
-        lineHeight: 18,
-        marginBottom: 1,
-        paddingLeft: 6,
+        fontSize: 14,
+        lineHeight: 20,
+        marginTop: 0,
+        marginBottom: 2,
+        marginLeft: 0,
+        marginRight: 0,
+        paddingLeft: 0,
+        paddingRight: 0,
       },
       // Checklist support
       checklist: {
         color: itemTheme.textPrimary,
-        marginLeft: 0,
-        paddingLeft: 0,
-        marginTop: 0,
-        marginBottom: 0,
+        margin: 0,
+        padding: 0,
       },
       cli: {
         color: itemTheme.textPrimary,
-        fontSize: 13,
-        lineHeight: 16,
-        marginBottom: 0,
-        marginTop: 0,
-        paddingLeft: 0,
+        fontSize: 14,
+        lineHeight: 20,
+        margin: 0,
+        padding: 0,
       },
     }),
     [itemTheme.textPrimary]
@@ -305,21 +312,23 @@ function EntryListItemComponent({
           <View style={{
             flexDirection: "row",
             alignItems: "flex-start",
-            marginBottom: 1,
+            marginBottom: 2,
+            marginLeft: 0,
+            paddingLeft: 0,
           }}>
             <Text style={{
-              fontSize: 12,
+              fontSize: 14,
               color: itemTheme.textPrimary,
-              lineHeight: 18,
-              marginRight: 6,
-              marginLeft: Platform.OS === "android" && !isChecked ? -3 : 0,
+              lineHeight: 20,
+              width: 24,
+              textAlign: "center",
             }}>
               {isChecked ? "☑" : "☐"}
             </Text>
             <Text style={{
               flex: 1,
-              fontSize: 13,
-              lineHeight: 18,
+              fontSize: 14,
+              lineHeight: 20,
               color: itemTheme.textPrimary,
               textDecorationLine: isChecked ? "line-through" : "none",
               opacity: isChecked ? 0.6 : 1,
@@ -329,53 +338,142 @@ function EntryListItemComponent({
           </View>
         );
       },
-      // Custom renderer for Quill checklist format: <ul data-checked="true/false"><li>...</li></ul>
+      // Custom renderer for ul - handles both checklists and regular bullet lists
       ul: ({ tnode, TDefaultRenderer, ...props }: any) => {
         const dataChecked = tnode?.attributes?.["data-checked"];
-        // If not a checklist, use default renderer
-        if (dataChecked === undefined) {
-          return <TDefaultRenderer tnode={tnode} {...props} />;
-        }
-
-        const isChecked = dataChecked === "true";
-        // Get all li children and render them as checklist items
         const children = tnode?.children || [];
 
-        return (
-          <View style={{ marginBottom: 2 }}>
-            {children.map((child: any, index: number) => {
-              // Extract text from li element
-              const extractText = (node: any): string => {
-                if (node?.data) return node.data;
-                if (node?.children) {
-                  return node.children.map(extractText).join("");
-                }
-                return "";
-              };
-              const textContent = extractText(child);
+        // Extract text from any node
+        const extractText = (node: any): string => {
+          if (node?.data) return node.data;
+          if (node?.children) {
+            return node.children.map(extractText).join("");
+          }
+          return "";
+        };
 
+        // Checklist format: <ul data-checked="true/false"><li>...</li></ul>
+        if (dataChecked !== undefined) {
+          const isChecked = dataChecked === "true";
+          return (
+            <View style={{
+              marginTop: 0,
+              marginBottom: 4,
+              marginLeft: 0,
+              marginRight: 0,
+            }}>
+              {children.map((child: any, index: number) => {
+                const textContent = extractText(child);
+                return (
+                  <View key={index} style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    marginBottom: 2,
+                  }}>
+                    <Text style={{
+                      fontSize: 14,
+                      color: itemTheme.textPrimary,
+                      lineHeight: 20,
+                      width: 24,
+                      textAlign: "center",
+                    }}>
+                      {isChecked ? "☑" : "☐"}
+                    </Text>
+                    <Text style={{
+                      flex: 1,
+                      fontSize: 14,
+                      lineHeight: 20,
+                      color: isChecked ? itemTheme.textSecondary : itemTheme.textPrimary,
+                      textDecorationLine: isChecked ? "line-through" : "none",
+                      opacity: isChecked ? 0.6 : 1,
+                    }}>
+                      {textContent}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          );
+        }
+
+        // Regular bullet list
+        return (
+          <View style={{
+            marginTop: 0,
+            marginBottom: 4,
+            marginLeft: 8,
+            marginRight: 0,
+          }}>
+            {children.filter((child: any) => child?.tagName === "li").map((child: any, index: number) => {
+              const textContent = extractText(child);
               return (
                 <View key={index} style={{
                   flexDirection: "row",
                   alignItems: "flex-start",
-                  marginBottom: 1,
+                  marginBottom: 2,
                 }}>
                   <Text style={{
-                    fontSize: 12,
+                    fontSize: 14,
                     color: itemTheme.textPrimary,
-                    lineHeight: 18,
-                    marginRight: 6,
-                    marginLeft: Platform.OS === "android" && !isChecked ? -3 : 0,
+                    lineHeight: 20,
+                    width: 20,
                   }}>
-                    {isChecked ? "☑" : "☐"}
+                    •
                   </Text>
                   <Text style={{
                     flex: 1,
-                    fontSize: 13,
-                    lineHeight: 18,
-                    color: isChecked ? itemTheme.textSecondary : itemTheme.textPrimary,
-                    textDecorationLine: isChecked ? "line-through" : "none",
-                    opacity: isChecked ? 0.6 : 1,
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: itemTheme.textPrimary,
+                  }}>
+                    {textContent}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        );
+      },
+      // Custom renderer for ol - numbered lists
+      ol: ({ tnode }: any) => {
+        const children = tnode?.children || [];
+
+        const extractText = (node: any): string => {
+          if (node?.data) return node.data;
+          if (node?.children) {
+            return node.children.map(extractText).join("");
+          }
+          return "";
+        };
+
+        return (
+          <View style={{
+            marginTop: 0,
+            marginBottom: 4,
+            marginLeft: 8,
+            marginRight: 0,
+          }}>
+            {children.filter((child: any) => child?.tagName === "li").map((child: any, index: number) => {
+              const textContent = extractText(child);
+              return (
+                <View key={index} style={{
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  marginBottom: 2,
+                }}>
+                  <Text style={{
+                    fontSize: 14,
+                    color: itemTheme.textPrimary,
+                    lineHeight: 20,
+                    width: 24,
+                  }}>
+                    {index + 1}.
+                  </Text>
+                  <Text style={{
+                    flex: 1,
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: itemTheme.textPrimary,
                   }}>
                     {textContent}
                   </Text>
@@ -941,8 +1039,8 @@ const styles = StyleSheet.create({
     paddingRight: 70, // Space for icons on right (reduced from 80)
   },
   preview: {
-    lineHeight: 18,
-    fontSize: 13, // Smaller for compact previews
+    lineHeight: 20,
+    fontSize: 14,
   },
   fadeOverlay: {
     position: "absolute",
