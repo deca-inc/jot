@@ -145,7 +145,7 @@ export function FloatingActionButton({
   });
 
   // Position from bottom
-  const bottomPosition = 24 + (insets.bottom > 0 ? insets.bottom : 0);
+  const bottomPosition = insets.bottom > 0 ? insets.bottom : 0;
 
   return (
     <>

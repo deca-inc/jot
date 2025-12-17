@@ -630,10 +630,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: spacingPatterns.screen,
+    paddingHorizontal: spacingPatterns.screen,
+    paddingTop: 8,
+    paddingBottom: spacingPatterns.screen,
   },
   contentEmpty: {
-    padding: spacingPatterns.screen,
+    paddingHorizontal: spacingPatterns.screen,
+    paddingTop: 8,
+    paddingBottom: spacingPatterns.screen,
     flexGrow: 1,
   },
   emptyState: {

@@ -366,6 +366,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
     paddingHorizontal: spacingPatterns.screen,
     paddingTop: spacingPatterns.sm,
+    paddingBottom: 8,
   },
   searchBar: {
     flexDirection: "row",
