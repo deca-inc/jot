@@ -7,11 +7,11 @@
 ### Key Features
 - **Entries + AI Convos**: Unified timeline combining manual journal entries and conversations with a personal AI.
 - **Entry Types**: Journal Entry and AI Chat. AI summarization offered on Journal Entries.
-- **Search**: Full-text and semantic (AI) search across all content.
-- **Encryption**: Local encryption at rest; zero-knowledge optional cloud backups.
-- **Local AI**: On-device inference for summarization, Q&A, insight extraction.
-- **Import/Export**: JSON/Markdown export; portable backups.
-- **Trial & Purchase**: 7-day free trial, then $45 lifetime license (per user/device policy TBD).
+- **Search**: Full-text search across all content. *Semantic (AI) search planned.*
+- **Encryption**: Local database encryption at rest (SQLCipher). *Zero-knowledge cloud backups planned.*
+- **Local AI**: On-device inference for AI conversations. *Summarization and insight extraction planned.*
+- **Import/Export (Planned)**: JSON/Markdown export; portable backups.
+- **Trial & Purchase (Planned)**: 7-day free trial, then $45 lifetime license (per user/device policy TBD).
 - **P2 (Later)**: Selective sharing/export of content with optional additional encryption.
 
 ### Non-Goals (v1)

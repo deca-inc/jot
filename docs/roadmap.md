@@ -1,19 +1,30 @@
 ## Roadmap
 
-### v1 (Foundations)
-- Local SQLite + FTS5, schema + migrations
-- Editor + timeline (entries + AI convos)
-- Local encryption and key unlock flow
+### Currently Implemented
+- Local SQLite + FTS5, schema + migrations ✓
+- Editor + timeline (entries + AI convos) ✓
+- Local database encryption (SQLCipher) ✓
+- Master key generation and Keychain storage ✓
+- Lexical (full-text) search ✓
+- On-device AI chat via local LLM ✓
+- Model download and management ✓
+
+### Next (In Progress, in no particular order)
+- Countdowns
+- Pinning
+- Reminders & Tasks
+- Voice recording (paid - maybe)
+- Voice transcription (paid - maybe)
 - Basic backups (local file, iCloud Drive)
-- Lexical search; initial embeddings; basic AI summaries (on-device)
-- Trial + purchase
-
-### v1.1
+- Encryption settings UI
+- Initial embeddings and semantic search
+- LLM Chat within a Note
+- RAG across your notes (paid - maybe)
 - Import/export polish; tags and favorites UX
-- Better AI prompts and templates
-- Backup scheduler, integrity checks
-
-### v2
-- Multi-device sync (CRDT), conflict resolution
-- Advanced analytics/insights fully on-device
-- Additional backup providers and incremental diffs
+- Attachment support with encryption
+- Tablet/Desktop Support
+- Multi-device sync w/ conflict resolution
+- Accessibility & Nagivation
+- E2EE sharing with other users
+- Custom Themes (paid)
+- Remote Large Models via Vercel AI SDK or Hugging Face Inference SDK Integration

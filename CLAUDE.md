@@ -45,12 +45,12 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 
 #### Key Features
 - **Entries + AI Convos**: Unified timeline combining manual journal entries and conversations with a personal AI.
-- **Entry Types**: Journal Entry and AI Chat. AI summarization offered on Journal Entries.
-- **Search**: Full-text and semantic (AI) search across all content.
-- **Encryption**: Local encryption at rest; zero-knowledge optional cloud backups.
-- **Local AI**: On-device inference for summarization, Q&A, insight extraction.
-- **Import/Export**: JSON/Markdown export; portable backups.
-- **Trial & Purchase**: 7-day free trial, then $45 lifetime license.
+- **Entry Types**: Journal Entry and AI Chat. *AI summarization planned.*
+- **Search**: Full-text search across all content. *Semantic (AI) search planned.*
+- **Encryption**: Local database encryption at rest (SQLCipher). *Zero-knowledge cloud backups planned.*
+- **Local AI**: On-device inference for AI conversations. *Summarization, Q&A, insight extraction planned.*
+- **Import/Export (Planned)**: JSON/Markdown export; portable backups.
+- **Trial & Purchase (Planned)**: 7-day free trial, then $45 lifetime license.
 
 #### Non-Goals (v1)
 - Multi-user collaboration
@@ -69,12 +69,12 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 - **Composer**:
   - Journal Entry: Rich block-based editor (checkboxes, lists, tables, images, embeds, code blocks) - WYSIWYG with low latency
   - AI Chat: Markdown-based editor/display
-- **Search**: Unified search bar with tabs: All, Semantic, Filters. Keyboard-first.
+- **Search**: Unified search bar with filters. *Keyboard navigation and semantic tabs planned.*
 - **Settings**: Encryption, backups, AI model, license, import/export.
 
 #### Interaction Principles
 - **Zero friction**: Minimal modals; optimistic UI; autosave.
-- **Accessible**: Full keyboard navigation; prefers-reduced-motion; high contrast mode.
+- **Accessible (Planned)**: *Full keyboard navigation, prefers-reduced-motion, and high contrast mode are planned.*
 - **Trust**: Clear encryption states; explicit backup confirmation; no hidden sync.
 
 ---
@@ -91,7 +91,8 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 - **Files**: Attachments stored under app data directory. Metadata in DB.
 - **Schema versioning**: Migration table; deterministic up/down migrations.
 
-### Backup Integrations (Optional)
+### Backup Integrations (Planned)
+*Backup functionality is not yet implemented. The following describes the planned strategy:*
 - Providers: Google Drive, Dropbox, iCloud Drive, Local file export.
 - Backups are encrypted client-side with user key; providers see only ciphertext.
 - Strategy: Periodic snapshot with incremental diffs; verify integrity with checksum.
@@ -466,9 +467,10 @@ All blocks support:
 
 ### Data at Rest
 - **DB Encryption**: Encrypt the entire SQLite storage file as a whole (opaque to most of the system). This keeps the encryption layer separate from the application logic.
-- **Files**: Each attachment encrypted with random file key; keys wrapped by master key.
+- **Files (Planned)**: Each attachment encrypted with random file key; keys wrapped by master key. *Note: Attachments feature not yet implemented.*
 
-### Backups
+### Backups (Planned)
+*Backup functionality is not yet implemented. The following describes the planned strategy:*
 - Client-side encryption before upload. Zero-knowledge providers.
 - Integrity: HMAC over archive manifest; per-file checksums.
 

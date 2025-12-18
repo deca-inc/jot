@@ -9,7 +9,8 @@
 - **Files**: Attachments stored under app data directory. Metadata in DB.
 - **Schema versioning**: Migration table; deterministic up/down migrations.
 
-### Backup Integrations (Optional)
+### Backup Integrations (Planned)
+*Backup functionality is not yet implemented. The following describes the planned strategy:*
 - Providers: Google Drive, Dropbox, iCloud Drive, Local file export.
 - Approach: Possibly allow users to point to a file/directory location (needs verification for mobile).
 - Backups are encrypted client-side with user key; providers see only ciphertext.

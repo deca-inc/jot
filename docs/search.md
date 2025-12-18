@@ -1,12 +1,14 @@
 ## Search
 
-### Lexical
+### Lexical (Implemented)
 - FTS5 across entries and AI messages; support prefix, phrase, tag filters, date ranges.
 
-### Semantic
+### Semantic (Planned)
+*Semantic search is not yet implemented. The following describes the planned strategy:*
 - Embedding index built in background. Hybrid scoring: `alpha * lexical + (1-alpha) * vector`.
 - RAG pipeline for AI Q&A: retrieve top-k chunks, re-rank, generate.
 
 ### UX
-- Single omnibar with tabs: All, Semantic, Filters. Keyboard-first navigation.
+- Single omnibar with filters.
 - Snippet previews with highlighted terms; jump-to in timeline.
+- *Keyboard-first navigation and semantic search tab planned.*

@@ -142,7 +142,8 @@ const BlocksArraySchema = z.array(BlockSchema);
   - If scale requires optimization later, can migrate to FAISS-like index
 - Attachments stored as files; referenced by path in Entry.attachments[].
 
-### File Formats
+### File Formats (Planned)
+*Export and backup functionality is not yet implemented. The following describes the planned strategy:*
 - **Export**: JSON bundle + attachments folder; optional Markdown per entry.
 - **Backup**: Encrypted TAR/ZIP of DB + attachments + metadata.json.
 - **P2: P2P Transfer**: Easy device-to-device transfer protocol (QR code, local network, or direct connection) for seamless migration between devices without cloud services.

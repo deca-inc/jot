@@ -12,9 +12,10 @@
 
 ### Data at Rest
 - **DB Encryption**: Encrypt the entire SQLite storage file as a whole (opaque to most of the system). This keeps the encryption layer separate from the application logic.
-- **Files**: Each attachment encrypted with random file key; keys wrapped by master key.
+- **Files (Planned)**: Each attachment encrypted with random file key; keys wrapped by master key. *Note: Attachments feature not yet implemented.*
 
-### Backups
+### Backups (Planned)
+*Backup functionality is not yet implemented. The following describes the planned strategy:*
 - Client-side encryption before upload. Zero-knowledge providers.
 - Integrity: HMAC over archive manifest; per-file checksums.
 
