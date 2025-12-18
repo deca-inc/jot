@@ -189,7 +189,7 @@ export function QuillEditorScreen({ onBack }: QuillEditorScreenProps = {}) {
           }}
           onSelectionChange={(data) => {
             if (data.range) {
-              editorRef.current?.getFormat().then((format: any) => {
+              editorRef.current?.getFormat(data.range).then((format: any) => {
                 setFormatState({
                   bold: !!format.bold,
                   italic: !!format.italic,
