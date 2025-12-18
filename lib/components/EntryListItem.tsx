@@ -104,12 +104,12 @@ function EntryListItemComponent({
     if (htmlOrMarkdownBlock?.type === "html") {
       return true; // Always render html blocks as HTML
     }
-    return htmlOrMarkdownBlock && htmlOrMarkdownBlock.content.includes("<");
+    return htmlOrMarkdownBlock && 'content' in htmlOrMarkdownBlock && htmlOrMarkdownBlock.content.includes("<");
   }, [entry.type, htmlOrMarkdownBlock]);
 
   // Strip <think> tags from content and convert to HTML for preview rendering
   const htmlContent = React.useMemo(() => {
-    if (!htmlOrMarkdownBlock) return "";
+    if (!htmlOrMarkdownBlock || !('content' in htmlOrMarkdownBlock)) return "";
 
     const cleanedContent = htmlOrMarkdownBlock.content
       .replace(/<think>[\s\S]*?<\/think>/g, "") // Remove complete <think>...</think> blocks

@@ -14,6 +14,7 @@
 import { Block } from "../db/entries";
 import { llmQueue, llmManager, blocksToLlmMessages } from "../ai/ModelProvider";
 import { entryKeys } from "../db/useEntries";
+import { TITLE_GENERATION_SYSTEM_PROMPT } from "../ai/modelConfig";
 
 /**
  * Strip <think> tags from AI response

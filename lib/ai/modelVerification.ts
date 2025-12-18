@@ -58,8 +58,8 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
   // Check model file
   const modelInfo = await FileSystem.getInfoAsync(modelPath);
   const modelFileResult = {
-    exists: modelInfo.exists && (modelInfo.size || 0) > 0,
-    size: modelInfo.size,
+    exists: modelInfo.exists && (modelInfo.exists ? (modelInfo.size || 0) > 0 : false),
+    size: modelInfo.exists ? modelInfo.size : undefined,
     path: modelPath,
   };
 
@@ -68,8 +68,8 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
   if (tokenizerPath) {
     const tokenizerInfo = await FileSystem.getInfoAsync(tokenizerPath);
     tokenizerFileResult = {
-      exists: tokenizerInfo.exists && (tokenizerInfo.size || 0) > 0,
-      size: tokenizerInfo.size,
+      exists: tokenizerInfo.exists && (tokenizerInfo.exists ? (tokenizerInfo.size || 0) > 0 : false),
+      size: tokenizerInfo.exists ? tokenizerInfo.size : undefined,
       path: tokenizerPath,
     };
   }
@@ -79,19 +79,19 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
   if (configPath) {
     const configInfo = await FileSystem.getInfoAsync(configPath);
     configFileResult = {
-      exists: configInfo.exists && (configInfo.size || 0) > 0,
-      size: configInfo.size,
+      exists: configInfo.exists && (configInfo.exists ? (configInfo.size || 0) > 0 : false),
+      size: configInfo.exists ? configInfo.size : undefined,
       path: configPath,
     };
   }
 
   const allExist =
     modelFileResult.exists &&
-    (!tokenizerPath || tokenizerFileResult?.exists) &&
-    (!configPath || configFileResult?.exists);
+    (!tokenizerPath || (tokenizerFileResult?.exists ?? false)) &&
+    (!configPath || (configFileResult?.exists ?? false));
 
   return {
-    exists: allExist,
+    exists: allExist as boolean,
     details: {
       modelFile: modelFileResult,
       tokenizerFile: tokenizerFileResult,

@@ -107,9 +107,9 @@ export function PendingDownloads() {
             key={`${download.modelId}-${download.fileType}`}
             style={[
               styles.downloadItem,
-              { 
+              {
                 backgroundColor: seasonalTheme.cardBg,
-                borderColor: seasonalTheme.border,
+                borderColor: seasonalTheme.textSecondary + '30',
               }
             ]}
           >
@@ -124,7 +124,7 @@ export function PendingDownloads() {
                 variant="caption"
                 style={[styles.downloadSubtitle, { color: seasonalTheme.textSecondary }]}
               >
-                {download.progress ? `${Math.round((download.bytesWritten / download.bytesTotal) * 100)}% • ` : ''}
+                {download.bytesTotal > 0 ? `${Math.round((download.bytesWritten / download.bytesTotal) * 100)}% • ` : ''}
                 {ageInDays > 0 ? `${ageInDays} day${ageInDays > 1 ? 's' : ''} ago` : 'Today'}
               </Text>
               
@@ -133,7 +133,7 @@ export function PendingDownloads() {
                 <View
                   style={[
                     styles.progressBarBg,
-                    { backgroundColor: seasonalTheme.border }
+                    { backgroundColor: seasonalTheme.textSecondary + '30' }
                   ]}
                 >
                   <View
