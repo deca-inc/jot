@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  View,
   StyleSheet,
   Modal,
   Pressable,
@@ -19,45 +18,8 @@ export interface DialogProps {
 }
 
 /**
- * Helper function to make a color more opaque
- * Extracts RGB values and sets alpha to a higher value
- */
-function makeOpaque(color: string, alpha: number = 0.95): string {
-  // Handle rgba format
-  if (color.startsWith("rgba")) {
-    const match = color.match(/[\d.]+/g);
-    if (match && match.length >= 3) {
-      const r = match[0];
-      const g = match[1];
-      const b = match[2];
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-  }
-  // Handle rgb format
-  if (color.startsWith("rgb")) {
-    const match = color.match(/\d+/g);
-    if (match && match.length >= 3) {
-      const r = match[0];
-      const g = match[1];
-      const b = match[2];
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-  }
-  // Handle hex format
-  if (color.startsWith("#")) {
-    const hex = color.replace("#", "");
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-  // Fallback: return original color
-  return color;
-}
-
-/**
- * Reusable Dialog/Menu component with proper Android styling
- * Handles transparency, dark mode, and elevation correctly
+ * Reusable Dialog/Menu component with proper theming
+ * Uses gradient.middle for a solid, theme-aware background in both light and dark modes
  */
 export function Dialog({
   visible,
@@ -68,11 +30,10 @@ export function Dialog({
 }: DialogProps) {
   const seasonalTheme = useSeasonalTheme();
 
-  // Make background more opaque for better visibility
-  const dialogBackground =
-    Platform.OS === "android"
-      ? seasonalTheme.gradient.middle
-      : makeOpaque(seasonalTheme.cardBg, 0.95);
+  // Use gradient.middle for a solid, theme-aware background
+  // cardBg is translucent white in both light/dark modes, which doesn't work for dialogs
+  // gradient.middle provides the correct solid color for the current theme
+  const dialogBackground = seasonalTheme.gradient.middle;
 
   return (
     <Modal

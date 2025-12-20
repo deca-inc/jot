@@ -16,7 +16,7 @@ import { Text } from "./Text";
 import { Card } from "./Card";
 import { Dialog } from "./Dialog";
 import { MenuItem } from "./MenuItem";
-import { useTheme } from "../theme/ThemeProvider";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { Entry, extractPreviewText } from "../db/entries";
 import { type SeasonalTheme } from "../theme/seasonalTheme";
@@ -39,10 +39,14 @@ function EntryListItemComponent({
   entry,
   onPress,
   onToggleFavorite,
-  seasonalTheme,
+  seasonalTheme: seasonalThemeProp,
 }: EntryListItemProps) {
-  const theme = useTheme();
+  const seasonalThemeFromContext = useSeasonalTheme();
   const { width } = useWindowDimensions();
+
+  // Use prop if provided, otherwise fall back to context
+  // This ensures correct theming even when prop is undefined
+  const seasonalTheme = seasonalThemeProp ?? seasonalThemeFromContext;
 
   // For AI chats, show the assistant's response if available, otherwise show user's message
   const previewText = React.useMemo(() => {
@@ -134,16 +138,8 @@ function EntryListItemComponent({
     return cleanedContent;
   }, [htmlOrMarkdownBlock, shouldRenderHtml]);
 
-  const itemTheme = React.useMemo(
-    () =>
-      seasonalTheme || {
-        cardBg: "rgba(255, 255, 255, 0.55)",
-        textPrimary: theme.colors.textPrimary,
-        textSecondary: theme.colors.textSecondary,
-        subtleGlow: { shadowColor: "#000", shadowOpacity: 0.12 },
-      },
-    [seasonalTheme, theme.colors.textPrimary, theme.colors.textSecondary]
-  );
+  // seasonalTheme is now always defined (from prop or context)
+  const itemTheme = seasonalTheme;
 
   // Extract RGB values from cardBg for gradient (works with rgba, rgb, and hex)
   const gradientColors = React.useMemo(() => {
