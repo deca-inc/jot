@@ -5,6 +5,7 @@ import React, {
   useImperativeHandle,
   forwardRef,
   useCallback,
+  useMemo,
 } from "react";
 import {
   View,
@@ -15,6 +16,9 @@ import {
   Animated,
   useWindowDimensions,
   ScrollView,
+  PanResponder,
+  type GestureResponderEvent,
+  type PanResponderGestureState,
 } from "react-native";
 import { Text as RNText } from "react-native";
 import QuillEditor from "react-native-cn-quill";
@@ -216,6 +220,43 @@ export const QuillRichEditor = forwardRef<
       formatState.list === "unchecked" || formatState.list === "checked";
     editorRef.current?.format("list", isChecklist ? false : "unchecked");
   }, [formatState.list]);
+
+  // PanResponder for toolbar swipe-down to dismiss keyboard
+  // Allows horizontal scrolling but detects vertical swipe to dismiss
+  const toolbarPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        // Capture phase - intercept before children (ScrollView) get it
+        onMoveShouldSetPanResponderCapture: (
+          _evt: GestureResponderEvent,
+          gestureState: PanResponderGestureState
+        ) => {
+          const { dx, dy } = gestureState;
+          // Activate if moving down and vertical movement > horizontal movement
+          const isVerticalSwipe = dy > 15 && Math.abs(dy) > Math.abs(dx) * 2;
+          return isVerticalSwipe;
+        },
+        onPanResponderGrant: () => {
+          // Gesture started
+        },
+        onPanResponderRelease: (
+          _evt: GestureResponderEvent,
+          gestureState: PanResponderGestureState
+        ) => {
+          // Dismiss keyboard if swiped down enough
+          if (gestureState.dy > 20) {
+            // Blur the editor to dismiss WebView keyboard
+            editorRef.current?.blur();
+            Keyboard.dismiss();
+          }
+        },
+        onPanResponderTerminate: () => {
+          // Gesture was interrupted
+        },
+      }),
+    []
+  );
 
   // Handle HTML change - called directly by Quill when content changes
   const handleHtmlChange = useCallback(
@@ -766,9 +807,10 @@ export const QuillRichEditor = forwardRef<
         />
       </View>
 
-      {/* Floating Toolbar */}
+      {/* Floating Toolbar - swipe down to dismiss keyboard */}
       {isKeyboardVisible && !hideToolbar && (
         <Animated.View
+          {...toolbarPanResponder.panHandlers}
           style={[
             styles.floatingToolbar,
             {
