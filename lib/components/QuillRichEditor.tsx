@@ -14,10 +14,10 @@ import {
   Keyboard,
   Animated,
   useWindowDimensions,
+  ScrollView,
 } from "react-native";
 import { Text as RNText } from "react-native";
 import QuillEditor from "react-native-cn-quill";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassView } from "expo-glass-effect";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -61,7 +61,6 @@ export const QuillRichEditor = forwardRef<
   ref
 ) {
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
   const editorRef = useRef<QuillEditor>(null);
   const { width: screenWidth } = useWindowDimensions();
 
@@ -791,28 +790,36 @@ export const QuillRichEditor = forwardRef<
             <GlassView
               glassEffectStyle="regular"
               tintColor={seasonalTheme.cardBg}
-              style={[styles.glassToolbar, styles.floatingToolbarIOS]}
+              style={[
+                styles.toolbarContainer,
+                // Solid background as fallback when GlassView doesn't render blur
+                { backgroundColor: seasonalTheme.cardBg },
+              ]}
             >
-              <View
-                style={[
-                  styles.toolbarContent,
-                  { backgroundColor: seasonalTheme.cardBg + "F0" },
-                ]}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.toolbarScrollView}
+                contentContainerStyle={styles.toolbarContent}
               >
                 {renderToolbarButtons()}
-              </View>
+              </ScrollView>
             </GlassView>
           ) : (
             <View
               style={[
-                styles.androidToolbar,
-                styles.floatingToolbarAndroid,
+                styles.toolbarContainer,
                 { backgroundColor: seasonalTheme.cardBg },
               ]}
             >
-              <View style={styles.toolbarContent}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.toolbarScrollView}
+                contentContainerStyle={styles.toolbarContent}
+              >
                 {renderToolbarButtons()}
-              </View>
+              </ScrollView>
             </View>
           )}
         </Animated.View>
@@ -837,38 +844,32 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 1000,
   },
-  glassToolbar: {
-    overflow: "hidden",
-  },
-  floatingToolbarIOS: {
-    marginHorizontal: spacingPatterns.md + 4,
-    marginBottom: spacingPatterns.xs,
-    borderRadius: 100,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 5,
-    overflow: "hidden",
-  },
-  androidToolbar: {
-    // Android gets a solid background with rounded pill shape
-  },
-  floatingToolbarAndroid: {
+  toolbarContainer: {
     borderRadius: 100,
     marginHorizontal: spacingPatterns.md + 4,
     marginBottom: spacingPatterns.xs,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  toolbarScrollView: {
+    borderRadius: 100,
   },
   toolbarContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: spacingPatterns.xs,
+    flexGrow: 1,
+    paddingHorizontal: spacingPatterns.sm,
     paddingVertical: spacingPatterns.xs,
     minHeight: 44,
     gap: spacingPatterns.xxs,
