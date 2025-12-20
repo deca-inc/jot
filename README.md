@@ -57,7 +57,6 @@ This project is source-available under a restrictive license.
 
 **Not permitted:**
 - Redistribution (modified or unmodified)
-- Publishing forks
 - Commercial use
 - Derivative works for distribution
 
