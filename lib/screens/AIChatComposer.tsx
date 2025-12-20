@@ -108,12 +108,16 @@ const UserMessageBubble = React.memo(
   },
   (prevProps, nextProps) => {
     // Custom comparison - only re-render if content actually changed
-    const prevContent = prevProps.block.type === "markdown" ? prevProps.block.content : "";
-    const nextContent = nextProps.block.type === "markdown" ? nextProps.block.content : "";
-    return prevContent === nextContent &&
-           prevProps.chipBg === nextProps.chipBg &&
-           prevProps.chipText === nextProps.chipText &&
-           prevProps.textPrimary === nextProps.textPrimary;
+    const prevContent =
+      prevProps.block.type === "markdown" ? prevProps.block.content : "";
+    const nextContent =
+      nextProps.block.type === "markdown" ? nextProps.block.content : "";
+    return (
+      prevContent === nextContent &&
+      prevProps.chipBg === nextProps.chipBg &&
+      prevProps.chipText === nextProps.chipText &&
+      prevProps.textPrimary === nextProps.textPrimary
+    );
   }
 );
 
@@ -162,14 +166,16 @@ const AssistantMessage = React.memo(
       }
 
       // Only process think tags for generating messages
-      const hasThinkTag = messageContent.includes('<think>');
-      const hasClosedThinkTag = messageContent.includes('</think>');
+      const hasThinkTag = messageContent.includes("<think>");
+      const hasClosedThinkTag = messageContent.includes("</think>");
 
       let thinkContent = "";
       let contentAfterThink = "";
 
       if (hasThinkTag) {
-        const thinkMatch = messageContent.match(/<think>([\s\S]*?)(<\/think>|$)/);
+        const thinkMatch = messageContent.match(
+          /<think>([\s\S]*?)(<\/think>|$)/
+        );
         thinkContent = thinkMatch ? thinkMatch[1].trim() : "";
 
         if (thinkContent.length > 200) {
@@ -218,10 +224,7 @@ const AssistantMessage = React.memo(
           >
             <Text
               variant="caption"
-              style={[
-                styles.thinkingText,
-                { color: textSecondary },
-              ]}
+              style={[styles.thinkingText, { color: textSecondary }]}
               numberOfLines={2}
             >
               {parsed.thinkContent}
@@ -246,7 +249,7 @@ const AssistantMessage = React.memo(
             source={{ html: parsed.htmlContent }}
             tagsStyles={htmlTagsStyles}
             renderers={customRenderers}
-            ignoredDomTags={['think']}
+            ignoredDomTags={["think"]}
           />
         ) : (
           parsed.contentWithoutThinkTags && (
@@ -265,13 +268,17 @@ const AssistantMessage = React.memo(
   },
   (prevProps, nextProps) => {
     // Custom comparison - only re-render if content or isGenerating changed
-    const prevContent = prevProps.block.type === "markdown" ? prevProps.block.content : "";
-    const nextContent = nextProps.block.type === "markdown" ? nextProps.block.content : "";
-    return prevContent === nextContent &&
-           prevProps.isGenerating === nextProps.isGenerating &&
-           prevProps.textSecondary === nextProps.textSecondary &&
-           prevProps.textPrimary === nextProps.textPrimary &&
-           prevProps.htmlContentWidth === nextProps.htmlContentWidth;
+    const prevContent =
+      prevProps.block.type === "markdown" ? prevProps.block.content : "";
+    const nextContent =
+      nextProps.block.type === "markdown" ? nextProps.block.content : "";
+    return (
+      prevContent === nextContent &&
+      prevProps.isGenerating === nextProps.isGenerating &&
+      prevProps.textSecondary === nextProps.textSecondary &&
+      prevProps.textPrimary === nextProps.textPrimary &&
+      prevProps.htmlContentWidth === nextProps.htmlContentWidth
+    );
     // Note: htmlTagsStyles and customRenderers are stable objects, no need to check
   }
 );
@@ -551,9 +558,9 @@ export function AIChatComposer({
   // Custom renderer to handle inline code vs block code differently
   const customRenderers = useMemo(
     () => ({
-      code: ({TDefaultRenderer, tnode, style, ...props}: any) => {
+      code: ({ TDefaultRenderer, tnode, style, ...props }: any) => {
         // Check if this code element is inside a pre element (block code)
-        const isBlockCode = tnode.parent?.tagName === 'pre';
+        const isBlockCode = tnode.parent?.tagName === "pre";
 
         if (isBlockCode) {
           // Block code - no additional styling, pre handles it
@@ -569,13 +576,13 @@ export function AIChatComposer({
           borderRadius: 3,
         };
 
-        return <TDefaultRenderer tnode={tnode} style={inlineStyle} {...props} />;
+        return (
+          <TDefaultRenderer tnode={tnode} style={inlineStyle} {...props} />
+        );
       },
     }),
     [seasonalTheme.textSecondary]
   );
-
-
 
   const queryClient = useQueryClient();
 
@@ -708,7 +715,8 @@ export function AIChatComposer({
 
   // Reset isSubmitting when generation is actually in progress or completes
   useEffect(() => {
-    const isGenerating = entry?.generationStatus === "generating" || isLLMLoading;
+    const isGenerating =
+      entry?.generationStatus === "generating" || isLLMLoading;
     if (isGenerating || entry?.generationStatus === "completed") {
       setIsSubmitting(false);
     }
@@ -800,7 +808,8 @@ export function AIChatComposer({
 
       // Check if generation is in progress
       const generationStatus = entry?.generationStatus;
-      const isGenerationInProgress = generationStatus === "generating" || isLLMLoading;
+      const isGenerationInProgress =
+        generationStatus === "generating" || isLLMLoading;
       const isGenerating = !isUser && isLastMessage && isGenerationInProgress;
 
       // User messages get a bubble, AI messages are full width
@@ -828,7 +837,15 @@ export function AIChatComposer({
         />
       );
     },
-    [blocksWithPlaceholder.length, entry?.generationStatus, isLLMLoading, seasonalTheme, htmlContentWidth, htmlTagsStyles, customRenderers]
+    [
+      blocksWithPlaceholder.length,
+      entry?.generationStatus,
+      isLLMLoading,
+      seasonalTheme,
+      htmlContentWidth,
+      htmlTagsStyles,
+      customRenderers,
+    ]
   );
 
   const keyExtractor = useCallback((item: Block, index: number) => {
@@ -837,12 +854,24 @@ export function AIChatComposer({
   }, []);
 
   // Prompt suggestions for empty AI chat
-  const promptSuggestions = useMemo(() => [
-    { icon: "sunny-outline" as const, text: "How can I make today meaningful?" },
-    { icon: "bulb-outline" as const, text: "Help me brainstorm ideas for..." },
-    { icon: "heart-outline" as const, text: "I want to reflect on how I'm feeling" },
-    { icon: "compass-outline" as const, text: "I'm trying to make a decision about..." },
-  ], []);
+  const promptSuggestions = useMemo(
+    () => [
+      {
+        icon: "sunny-outline" as const,
+        text: "Summarize this article for me. ",
+      },
+      { icon: "bulb-outline" as const, text: "Help me brainstorm ideas for " },
+      {
+        icon: "heart-outline" as const,
+        text: "I want to reflect on how I'm feeling ",
+      },
+      {
+        icon: "compass-outline" as const,
+        text: "I'm trying to make a decision about ",
+      },
+    ],
+    []
+  );
 
   const handlePromptSuggestionPress = useCallback((suggestion: string) => {
     setNewMessage(suggestion);
@@ -870,7 +899,8 @@ export function AIChatComposer({
             textAlign: "center",
           }}
         >
-          Your private AI is here to help you reflect, brainstorm, and think through anything on your mind.
+          Your private AI is here to help you reflect, brainstorm, and think
+          through anything on your mind.
         </Text>
         <View style={styles.suggestionGrid}>
           {promptSuggestions.map((suggestion, index) => (
@@ -981,8 +1011,10 @@ export function AIChatComposer({
           }
 
           // Track user intent based on scroll position
-          const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-          const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+          const { layoutMeasurement, contentOffset, contentSize } =
+            event.nativeEvent;
+          const distanceFromBottom =
+            contentSize.height - layoutMeasurement.height - contentOffset.y;
 
           // User scrolled significantly away (>100px) - disable auto-scroll
           if (distanceFromBottom > 100) {
@@ -1002,11 +1034,17 @@ export function AIChatComposer({
         scrollEventThrottle={400} // Check scroll position every 400ms
         onContentSizeChange={(width, height) => {
           // Track actual rendered content height and scroll when it grows
-          if (height > previousContentHeightRef.current && shouldStickToBottomRef.current) {
+          if (
+            height > previousContentHeightRef.current &&
+            shouldStickToBottomRef.current
+          ) {
             if (flatListRef.current) {
               // Use scrollToOffset with actual height to ensure we're at the bottom
               // This is more reliable than scrollToEnd() during rapid updates
-              flatListRef.current.scrollToOffset({ offset: height, animated: false });
+              flatListRef.current.scrollToOffset({
+                offset: height,
+                animated: false,
+              });
             }
           }
 
