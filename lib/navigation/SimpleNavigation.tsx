@@ -250,16 +250,29 @@ export function SimpleNavigation() {
     setCurrentScreen("entryEditor");
   }, []);
 
+  // Open a new AI chat without creating an entry first
+  // Entry will be created when user sends their first message
+  const handleCreateNewAIChat = useCallback(() => {
+    setEditingEntryId(undefined);
+    setComposerEntryType("ai_chat");
+    setCurrentScreen("entryEditor");
+  }, []);
+
   const handleEntryEditorSave = useCallback((entryId: number) => {
     // Don't navigate away on save for journal entries (they auto-save)
     // Only navigate for AI chat or if explicitly closing
     // React Query cache handles the update automatically
-  }, []);
+    // Update editingEntryId when a new entry is created (e.g., from new AI chat)
+    if (!editingEntryId && entryId) {
+      setEditingEntryId(entryId);
+    }
+  }, [editingEntryId]);
 
   const handleEntryEditorCancel = useCallback(async () => {
     // React Query cache handles any updates automatically
     setCurrentScreen("home");
     setEditingEntryId(undefined);
+    setComposerEntryType(undefined);
   }, []);
 
   const handleSettingsBack = useCallback(() => {
@@ -320,6 +333,7 @@ export function SimpleNavigation() {
         return (
           <ComposerScreen
             entryId={editingEntryId}
+            initialType={composerEntryType}
             onSave={handleEntryEditorSave}
             onCancel={handleEntryEditorCancel}
           />
@@ -331,6 +345,7 @@ export function SimpleNavigation() {
             onOpenFullEditor={handleOpenFullEditor}
             onOpenSettings={handleOpenSettings}
             onOpenEntryEditor={handleOpenEntryEditor}
+            onCreateNewAIChat={handleCreateNewAIChat}
           />
         );
     }
@@ -376,6 +391,7 @@ export function SimpleNavigation() {
         return (
           <ComposerScreen
             entryId={editingEntryId}
+            initialType={composerEntryType}
             onSave={handleEntryEditorSave}
             onCancel={handleEntryEditorCancel}
           />
@@ -410,6 +426,7 @@ export function SimpleNavigation() {
             onOpenFullEditor={handleOpenFullEditor}
             onOpenSettings={handleOpenSettings}
             onOpenEntryEditor={handleOpenEntryEditor}
+            onCreateNewAIChat={handleCreateNewAIChat}
           />
         </View>
 

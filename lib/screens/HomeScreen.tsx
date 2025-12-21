@@ -47,10 +47,11 @@ export interface HomeScreenProps {
   onOpenFullEditor?: (initialText?: string) => void;
   onOpenSettings?: () => void;
   onOpenEntryEditor?: (entryId: number) => void;
+  onCreateNewAIChat?: () => void;
 }
 
 export function HomeScreen(props: HomeScreenProps = {}) {
-  const { onOpenFullEditor, onOpenSettings, onOpenEntryEditor, isVisible = true } = props;
+  const { onOpenFullEditor, onOpenSettings, onOpenEntryEditor, onCreateNewAIChat, isVisible = true } = props;
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
 
@@ -233,7 +234,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     }
   }, [onOpenFullEditor]);
 
-  const handleCreateAIChat = useCallback(async () => {
+  const handleCreateAIChat = useCallback(() => {
     setFabMenuOpen(false);
 
     // Check if AI model is available
@@ -259,25 +260,11 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       return;
     }
 
-    try {
-      // Create a new AI chat entry and navigate to it
-      const entry = await createEntryRef.current.mutateAsync({
-        type: "ai_chat",
-        title: "New Chat",
-        blocks: [],
-        tags: [],
-        attachments: [],
-        isFavorite: false,
-      });
-
-      // Navigate to the new chat
-      if (onOpenEntryEditorRef.current) {
-        onOpenEntryEditorRef.current(entry.id);
-      }
-    } catch (error) {
-      console.error("Error creating AI chat:", error);
+    // Navigate to new AI chat - entry will be created when user sends first message
+    if (onCreateNewAIChat) {
+      onCreateNewAIChat();
     }
-  }, [currentConfig, onOpenSettings]);
+  }, [currentConfig, onOpenSettings, onCreateNewAIChat]);
 
   const handleFABPress = useCallback(() => {
     setFabMenuOpen((prev) => !prev);

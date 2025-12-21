@@ -144,9 +144,11 @@ export function ComposerScreen({
   // If we have an entryId, show the appropriate composer immediately
   // The composer will handle loading the entry content in the background
 
-  // AI Chat conversation view - show if type is ai_chat OR if we have entryId but type is unknown
-  // When entryId is provided and type is unknown, we default to showing AIChatComposer
-  // since journal entries use fullScreen mode and would be caught by the next condition
+  // AI Chat conversation view - show if:
+  // 1. entryType is ai_chat (either loaded from entry or set via initialType)
+  // 2. We have an entryId and loaded type is not journal (default to AI chat)
+  // For new AI chats (no entryId), show AIChatComposer immediately - it will create
+  // the entry when the user sends their first message
   if (
     entryType === "ai_chat" ||
     (entryId && actualEntryId && entryType !== "journal")
