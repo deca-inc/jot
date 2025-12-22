@@ -25,24 +25,33 @@ class ModelDownloadStatusManager {
 
   /**
    * Initialize by loading persisted download state
+   *
+   * NOTE: We intentionally do NOT restore isDownloading=true on app restart.
+   * If a download was interrupted (app closed, crashed, etc.), the download
+   * is no longer actively running. The PendingDownloadBanner and PendingDownloads
+   * components handle resuming interrupted downloads via persistentDownloadManager.
+   *
+   * Restoring isDownloading=true would incorrectly show ModelDownloadIndicator
+   * as if a download is in progress when it's actually paused.
    */
   async initialize() {
     if (this.isInitialized) return;
-    
+
     try {
+      // Clear any stale download state from previous session
+      // Interrupted downloads are handled by persistentDownloadManager
       const stored = await SecureStore.getItemAsync(DOWNLOAD_STATUS_KEY);
       if (stored) {
         const status = JSON.parse(stored) as DownloadStatus;
-        // Only restore if it was actively downloading
         if (status.isDownloading) {
-          this.currentDownload = status;
-          console.log(`[ModelDownloadStatus] Restored download state for ${status.modelId}`);
+          console.log(`[ModelDownloadStatus] Clearing stale download state for ${status.modelId} (app was restarted)`);
+          await this.clearPersistedState();
         }
       }
     } catch (e) {
-      console.error('[ModelDownloadStatus] Failed to load persisted state:', e);
+      console.error('[ModelDownloadStatus] Failed to initialize:', e);
     }
-    
+
     this.isInitialized = true;
     this.notifyListeners();
   }

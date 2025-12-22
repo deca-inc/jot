@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, TouchableOpacity } from "react-native";
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "./Text";
 import { Button } from "./Button";
+import { useToast } from "./ToastProvider";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
 import { persistentDownloadManager, type DownloadMetadata } from "../ai/persistentDownloadManager";
-import { ensureModelPresent } from "../ai/modelManager";
+import { ensureModelPresent, getModelSize } from "../ai/modelManager";
 import { ALL_MODELS } from "../ai/modelConfig";
+import { useModelSettings } from "../db/modelSettings";
 
 /**
  * Shows a list of pending downloads that can be resumed
@@ -16,7 +19,11 @@ export function PendingDownloads() {
   const [pendingDownloads, setPendingDownloads] = useState<DownloadMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [resumingModelId, setResumingModelId] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<Map<string, number>>(new Map());
   const seasonalTheme = useSeasonalTheme();
+  const theme = useTheme();
+  const modelSettings = useModelSettings();
+  const { showToast } = useToast();
 
   useEffect(() => {
     loadPendingDownloads();
@@ -44,24 +51,53 @@ export function PendingDownloads() {
   const handleResume = async (download: DownloadMetadata) => {
     try {
       setResumingModelId(download.modelId);
-      
+      setDownloadProgress(prev => new Map(prev).set(download.modelId, 0));
+
       // Find the model config
       const modelConfig = ALL_MODELS.find(m => m.modelId === download.modelId);
       if (!modelConfig) {
         console.error('Model config not found:', download.modelId);
+        showToast('Model configuration not found', 'error');
         return;
       }
 
       // Resume the download by calling ensureModelPresent
       // This will automatically resume from where it left off
-      await ensureModelPresent(modelConfig);
-      
+      const result = await ensureModelPresent(modelConfig, (progress) => {
+        // Update progress for this model
+        setDownloadProgress(prev => {
+          const next = new Map(prev);
+          next.set(download.modelId, Math.round(progress * 100));
+          return next;
+        });
+      });
+
+      // Get final size and save to model settings (same as ModelManagement)
+      const size = await getModelSize(modelConfig);
+
+      await modelSettings.addDownloadedModel({
+        modelId: modelConfig.modelId,
+        downloadedAt: Date.now(),
+        ptePath: result.ptePath,
+        tokenizerPath: result.tokenizerPath,
+        tokenizerConfigPath: result.tokenizerConfigPath,
+        size,
+      });
+
+      showToast(`${modelConfig.displayName} downloaded successfully`, 'success');
+
       // Reload pending downloads to update UI
       await loadPendingDownloads();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to resume download:', error);
+      showToast(error?.message || 'Failed to resume download', 'error');
     } finally {
       setResumingModelId(null);
+      setDownloadProgress(prev => {
+        const next = new Map(prev);
+        next.delete(download.modelId);
+        return next;
+      });
     }
   };
 
@@ -101,7 +137,11 @@ export function PendingDownloads() {
       {pendingDownloads.map((download) => {
         const isResuming = resumingModelId === download.modelId;
         const ageInDays = Math.floor((Date.now() - download.startedAt) / (1000 * 60 * 60 * 24));
-        
+        const currentProgress = downloadProgress.get(download.modelId);
+        const displayProgress = currentProgress !== undefined
+          ? currentProgress
+          : (download.bytesTotal > 0 ? Math.round((download.bytesWritten / download.bytesTotal) * 100) : 0);
+
         return (
           <View
             key={`${download.modelId}-${download.fileType}`}
@@ -109,7 +149,7 @@ export function PendingDownloads() {
               styles.downloadItem,
               {
                 backgroundColor: seasonalTheme.cardBg,
-                borderColor: seasonalTheme.textSecondary + '30',
+                borderColor: isResuming ? theme.colors.accent : seasonalTheme.textSecondary + '30',
               }
             ]}
           >
@@ -124,12 +164,14 @@ export function PendingDownloads() {
                 variant="caption"
                 style={[styles.downloadSubtitle, { color: seasonalTheme.textSecondary }]}
               >
-                {download.bytesTotal > 0 ? `${Math.round((download.bytesWritten / download.bytesTotal) * 100)}% • ` : ''}
-                {ageInDays > 0 ? `${ageInDays} day${ageInDays > 1 ? 's' : ''} ago` : 'Today'}
+                {isResuming
+                  ? `${displayProgress}% • Downloading`
+                  : (displayProgress > 0 ? `${displayProgress}% • ` : '') +
+                    (ageInDays > 0 ? `${ageInDays} day${ageInDays > 1 ? 's' : ''} ago` : 'Today')}
               </Text>
-              
+
               {/* Progress bar */}
-              {download.bytesTotal > 0 && (
+              {(displayProgress > 0 || isResuming) && (
                 <View
                   style={[
                     styles.progressBarBg,
@@ -140,8 +182,8 @@ export function PendingDownloads() {
                     style={[
                       styles.progressBarFill,
                       {
-                        width: `${(download.bytesWritten / download.bytesTotal) * 100}%`,
-                        backgroundColor: seasonalTheme.textSecondary + '60',
+                        width: `${displayProgress}%`,
+                        backgroundColor: isResuming ? theme.colors.accent : seasonalTheme.textSecondary + '60',
                       },
                     ]}
                   />
@@ -155,25 +197,30 @@ export function PendingDownloads() {
                 disabled={isResuming}
                 style={[
                   styles.actionButton,
-                  { 
-                    backgroundColor: seasonalTheme.textPrimary + '15',
+                  {
+                    backgroundColor: isResuming ? theme.colors.accent + '20' : seasonalTheme.textPrimary + '15',
                   }
                 ]}
               >
-                <Ionicons
-                  name={isResuming ? "hourglass-outline" : "play"}
-                  size={18}
-                  color={seasonalTheme.textPrimary}
-                />
+                {isResuming ? (
+                  <ActivityIndicator size="small" color={theme.colors.accent} />
+                ) : (
+                  <Ionicons
+                    name="play"
+                    size={18}
+                    color={seasonalTheme.textPrimary}
+                  />
+                )}
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 onPress={() => handleCancel(download)}
                 disabled={isResuming}
                 style={[
                   styles.actionButton,
-                  { 
+                  {
                     backgroundColor: '#FF6B6B15',
+                    opacity: isResuming ? 0.5 : 1,
                   }
                 ]}
               >

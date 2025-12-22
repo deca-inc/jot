@@ -19,6 +19,7 @@ import {
   Text,
   EntryListItem,
   ModelDownloadIndicator,
+  PendingDownloadBanner,
   FloatingActionButton,
   SearchDropdown,
 } from "../components";
@@ -572,8 +573,11 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           onOpenSettings={onOpenSettings}
         />
 
-        {/* Model download indicator */}
+        {/* Model download indicator (active downloads) */}
         <ModelDownloadIndicator />
+
+        {/* Pending download banner (paused/interrupted downloads) */}
+        <PendingDownloadBanner />
 
         {/* Unified entries list */}
         <FlatList

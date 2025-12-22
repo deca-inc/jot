@@ -9,6 +9,7 @@ export * from "./FloatingComposerHeader";
 export * from "./ModelManagement";
 export * from "./ModelDownloadIndicator";
 export * from "./PendingDownloads";
+export * from "./PendingDownloadBanner";
 export * from "./Dialog";
 export * from "./MenuItem";
 export * from "./Toast";
