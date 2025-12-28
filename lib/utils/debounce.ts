@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 /**
  * Create a debounced function that delays execution until after
@@ -98,4 +98,38 @@ export function useDebounce<T>(value: T, delay: number): T {
   }, [value, delay]);
 
   return debouncedValue;
+}
+
+/**
+ * Hook to throttle a value - updates at most once per interval.
+ * Uses a polling approach to avoid effect cleanup issues.
+ */
+export function useThrottle<T>(value: T, interval: number): T {
+  const [throttledValue, setThrottledValue] = useState<T>(value);
+  const latestValueRef = useRef<T>(value);
+  const lastEmittedRef = useRef<T>(value);
+  const initializedRef = useRef(false);
+  latestValueRef.current = value;
+
+  // Use interval-based polling
+  useEffect(() => {
+    // Set initial value only once
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      lastEmittedRef.current = latestValueRef.current;
+      setThrottledValue(latestValueRef.current);
+    }
+
+    const intervalId = setInterval(() => {
+      // Only update state if value actually changed
+      if (latestValueRef.current !== lastEmittedRef.current) {
+        lastEmittedRef.current = latestValueRef.current;
+        setThrottledValue(latestValueRef.current);
+      }
+    }, interval);
+
+    return () => clearInterval(intervalId);
+  }, [interval]); // Only re-create interval if interval changes
+
+  return throttledValue;
 }

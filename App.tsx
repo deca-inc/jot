@@ -10,17 +10,20 @@ import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
 import { OnboardingFlow } from "./lib/navigation/OnboardingFlow";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
 import { ModelProvider } from "./lib/ai/ModelProvider";
+import { LLMProvider } from "./lib/ai/LLMProvider";
 import { OnboardingSettingsRepository } from "./lib/db/onboardingSettings";
 import { ConditionalPostHogProvider } from "./lib/analytics/PostHogProvider";
 import { ToastProvider } from "./lib/components/ToastProvider";
 
-// Suppress harmless iOS system warnings
+// Suppress harmless warnings
 LogBox.ignoreLogs([
   "CHHapticPattern", // CoreHaptics warnings in iOS simulator
   "Error creating CHHapticPattern", // UIKitCore haptic feedback errors
   "_UIKBFeedbackGenerator", // Keyboard feedback generator warnings
   "TextInputUI", // TextInput accumulator timing warnings
   "Background tasks are not supported on iOS simulators", // Expected simulator limitation
+  "You seem to update props of the", // RenderHTML throttling warning (we handle this internally)
+  "You seem to update the renderers prop", // RenderHTML throttling warning
 ]);
 
 // Create a query client with optimized cache settings for better performance
@@ -130,18 +133,20 @@ function OnboardingWrapper() {
 
   return (
     <ModelProvider>
-      <ThemeProvider>
-        <SeasonalThemeProvider>
-          <ToastProvider>
-            <StatusBarController />
-            {showOnboarding ? (
-              <OnboardingFlow onComplete={handleOnboardingComplete} />
-            ) : (
-              <SimpleNavigation />
-            )}
-          </ToastProvider>
-        </SeasonalThemeProvider>
-      </ThemeProvider>
+      <LLMProvider>
+        <ThemeProvider>
+          <SeasonalThemeProvider>
+            <ToastProvider>
+              <StatusBarController />
+              {showOnboarding ? (
+                <OnboardingFlow onComplete={handleOnboardingComplete} />
+              ) : (
+                <SimpleNavigation />
+              )}
+            </ToastProvider>
+          </SeasonalThemeProvider>
+        </ThemeProvider>
+      </LLMProvider>
     </ModelProvider>
   );
 }

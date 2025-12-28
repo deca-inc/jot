@@ -10,7 +10,6 @@ import {
   StyleSheet,
   TextInput,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
   Alert,
@@ -23,11 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import RenderHtml from "react-native-render-html";
 import { marked } from "marked";
 import { Text, FloatingComposerHeader } from "../components";
-import { GenerationResumptionPrompt } from "../components/GenerationResumptionPrompt";
 import { useTrackScreenView } from "../analytics";
-import { useGenerationResumption } from "../ai/useGenerationResumption";
-import { llmQueue } from "../ai/ModelProvider";
-import { useQueryClient } from "@tanstack/react-query";
 
 // Configure marked for simple rendering
 marked.setOptions({
@@ -38,25 +33,21 @@ marked.setOptions({
 import { spacingPatterns, borderRadius } from "../theme";
 import { Block } from "../db/entries";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useLLMForConvo } from "../ai/ModelProvider";
 import {
   useEntry,
   useCreateEntry,
   useUpdateEntry,
-  useDeleteEntry,
 } from "../db/useEntries";
-import {
-  sendMessageWithResponse,
-  generateAIResponse,
-  type AIChatActionContext,
-  stripThinkTags,
-} from "./aiChatActions";
-import { useModelSettings } from "../db/modelSettings";
-import {
-  getModelById,
-  DEFAULT_MODEL,
-  type LlmModelConfig,
-} from "../ai/modelConfig";
+import { useAIChat } from "../ai/useAIChat";
+import { Message } from "react-native-executorch";
+
+// Helper to strip think tags from content
+function stripThinkTags(text: string): string {
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    .replace(/<\/?think>/g, "")
+    .trim();
+}
 
 export interface AIChatComposerProps {
   entryId?: number;
@@ -121,97 +112,132 @@ const UserMessageBubble = React.memo(
   }
 );
 
-// Memoized assistant message component to prevent unnecessary re-renders
+/**
+ * MarkdownRenderer - Renders markdown content as HTML
+ * Memoized to prevent unnecessary re-renders of RenderHtml
+ */
+const MarkdownRenderer = React.memo(
+  ({
+    content,
+    htmlContentWidth,
+    htmlTagsStyles,
+    customRenderers,
+  }: {
+    content: string;
+    htmlContentWidth: number;
+    htmlTagsStyles: any;
+    customRenderers: any;
+  }) => {
+    const htmlContent = React.useMemo(() => {
+      if (content.trim().length > 0) {
+        try {
+          return marked.parse(content) as string;
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    }, [content]);
+
+    if (!htmlContent) return null;
+
+    return (
+      <RenderHtml
+        contentWidth={htmlContentWidth}
+        source={{ html: htmlContent }}
+        tagsStyles={htmlTagsStyles}
+        renderers={customRenderers}
+        ignoredDomTags={["think"]}
+      />
+    );
+  },
+  (prevProps, nextProps) => prevProps.content === nextProps.content
+);
+
+/**
+ * AssistantMessage - Renders AI responses with streaming support
+ *
+ * During generation, polls streamingContentRef every 150ms to throttle updates.
+ * Handles think tags (shows thinking indicator) and strips them from final output.
+ */
 const AssistantMessage = React.memo(
   ({
     block,
     isGenerating,
+    streamingContentRef,
     textSecondary,
-    textPrimary,
     htmlContentWidth,
     htmlTagsStyles,
     customRenderers,
   }: {
     block: Block;
     isGenerating: boolean;
+    streamingContentRef: React.MutableRefObject<string>;
     textSecondary: string;
-    textPrimary: string;
     htmlContentWidth: number;
     htmlTagsStyles: any;
     customRenderers: any;
   }) => {
-    const messageContent = block.type === "markdown" ? block.content : "";
+    const blockContent = block.type === "markdown" ? block.content : "";
 
-    // Parse content inside the component so it only happens when this specific message changes
-    const parsed = React.useMemo(() => {
-      // For non-generating messages, skip think tag processing entirely
+    // Keep last streaming content to prevent flash when generation ends
+    const lastStreamingContentRef = React.useRef<string>("");
+
+    // Content to display, updated every 150ms during generation
+    const [displayContent, setDisplayContent] = React.useState(
+      isGenerating ? streamingContentRef.current : blockContent
+    );
+
+    React.useEffect(() => {
       if (!isGenerating) {
-        const cleanContent = stripThinkTags(messageContent);
-        let htmlContent: string | null = null;
+        // Use blockContent if available, otherwise use last streamed content
+        const content = blockContent || lastStreamingContentRef.current;
+        setDisplayContent(prev => prev === content ? prev : content);
+        return;
+      }
 
-        if (cleanContent.trim().length > 0) {
-          try {
-            htmlContent = marked.parse(cleanContent) as string;
-          } catch (error) {
-            console.error("[AssistantMessage] Error parsing markdown:", error);
-          }
-        }
+      // Poll streaming content every 150ms during generation
+      setDisplayContent(streamingContentRef.current);
+      const intervalId = setInterval(() => {
+        const content = streamingContentRef.current;
+        lastStreamingContentRef.current = content;
+        setDisplayContent(prev => prev === content ? prev : content);
+      }, 150);
 
+      return () => clearInterval(intervalId);
+    }, [isGenerating, blockContent, streamingContentRef]);
+
+    // Parse think tags from content
+    const parsed = React.useMemo(() => {
+      const hasThinkTag = displayContent.includes("<think>");
+      const hasClosedThinkTag = displayContent.includes("</think>");
+
+      if (!hasThinkTag) {
         return {
-          htmlContent,
-          hasThinkTags: false,
           thinkContent: "",
-          contentWithoutThinkTags: cleanContent,
+          contentAfterThink: isGenerating ? displayContent : stripThinkTags(displayContent),
+          hasThinkTags: false,
         };
       }
 
-      // Only process think tags for generating messages
-      const hasThinkTag = messageContent.includes("<think>");
-      const hasClosedThinkTag = messageContent.includes("</think>");
+      const thinkMatch = displayContent.match(/<think>([\s\S]*?)(<\/think>|$)/);
+      let thinkContent = thinkMatch ? thinkMatch[1].trim() : "";
+      if (thinkContent.length > 200) {
+        thinkContent = "..." + thinkContent.slice(-200);
+      }
 
-      let thinkContent = "";
       let contentAfterThink = "";
-
-      if (hasThinkTag) {
-        const thinkMatch = messageContent.match(
-          /<think>([\s\S]*?)(<\/think>|$)/
-        );
-        thinkContent = thinkMatch ? thinkMatch[1].trim() : "";
-
-        if (thinkContent.length > 200) {
-          thinkContent = "..." + thinkContent.slice(-200);
-        }
-
-        if (hasClosedThinkTag) {
-          const afterThinkMatch = messageContent.match(/<\/think>([\s\S]*)/);
-          contentAfterThink = afterThinkMatch ? afterThinkMatch[1].trim() : "";
-        }
-      } else {
-        contentAfterThink = messageContent;
+      if (hasClosedThinkTag) {
+        const afterMatch = displayContent.match(/<\/think>([\s\S]*)/);
+        contentAfterThink = afterMatch ? afterMatch[1].trim() : "";
       }
 
-      const hasActualContent = contentAfterThink.trim().length > 0;
-
-      let htmlContent: string | null = null;
-      if (hasActualContent) {
-        try {
-          htmlContent = marked.parse(contentAfterThink) as string;
-        } catch (error) {
-          console.error("[AssistantMessage] Error parsing markdown:", error);
-        }
-      }
-
-      return {
-        htmlContent,
-        hasThinkTags: hasThinkTag && !!thinkContent,
-        thinkContent,
-        contentWithoutThinkTags: contentAfterThink,
-      };
-    }, [messageContent, isGenerating]);
+      return { thinkContent, contentAfterThink, hasThinkTags: !!thinkContent };
+    }, [displayContent, isGenerating]);
 
     return (
       <View style={styles.assistantMessageFullWidth}>
-        {/* Show thinking card if generating and has think content */}
+        {/* Show thinking card if has think content */}
         {isGenerating && parsed.hasThinkTags && parsed.thinkContent && (
           <View
             style={[
@@ -233,53 +259,35 @@ const AssistantMessage = React.memo(
         )}
 
         {/* Show actual content */}
-        {isGenerating && !parsed.htmlContent && !parsed.thinkContent ? (
+        {isGenerating && !parsed.contentAfterThink && !parsed.thinkContent ? (
           <Text
             variant="body"
-            style={{
-              color: textSecondary,
-              fontStyle: "italic",
-            }}
+            style={{ color: textSecondary, fontStyle: "italic" }}
           >
             Thinking...
           </Text>
-        ) : parsed.htmlContent ? (
-          <RenderHtml
-            contentWidth={htmlContentWidth}
-            source={{ html: parsed.htmlContent }}
-            tagsStyles={htmlTagsStyles}
-            renderers={customRenderers}
-            ignoredDomTags={["think"]}
+        ) : parsed.contentAfterThink ? (
+          <MarkdownRenderer
+            content={parsed.contentAfterThink}
+            htmlContentWidth={htmlContentWidth}
+            htmlTagsStyles={htmlTagsStyles}
+            customRenderers={customRenderers}
           />
-        ) : (
-          parsed.contentWithoutThinkTags && (
-            <Text
-              variant="body"
-              style={{
-                color: textPrimary,
-              }}
-            >
-              {parsed.contentWithoutThinkTags}
-            </Text>
-          )
-        )}
+        ) : null}
       </View>
     );
   },
   (prevProps, nextProps) => {
-    // Custom comparison - only re-render if content or isGenerating changed
-    const prevContent =
-      prevProps.block.type === "markdown" ? prevProps.block.content : "";
-    const nextContent =
-      nextProps.block.type === "markdown" ? nextProps.block.content : "";
+    // During generation, skip re-renders - we poll internally via interval
+    if (nextProps.isGenerating) {
+      return true;
+    }
+    // Allow re-render when generation state changes or styles change
     return (
-      prevContent === nextContent &&
       prevProps.isGenerating === nextProps.isGenerating &&
       prevProps.textSecondary === nextProps.textSecondary &&
-      prevProps.textPrimary === nextProps.textPrimary &&
       prevProps.htmlContentWidth === nextProps.htmlContentWidth
     );
-    // Note: htmlTagsStyles and customRenderers are stable objects, no need to check
   }
 );
 
@@ -297,55 +305,85 @@ export function AIChatComposer({
   // Track screen view
   useTrackScreenView("AI Chat Composer");
 
+  // Track current entry ID (can change when new entry is created)
+  const [currentEntryId, setCurrentEntryId] = useState<number | undefined>(entryId);
+
+  // Use ref to track entry ID for callbacks (avoids stale closure issues)
+  const currentEntryIdRef = useRef<number | undefined>(currentEntryId);
+  currentEntryIdRef.current = currentEntryId;
+
   // React Query hooks - load entry first
-  const { data: entry } = useEntry(entryId);
+  const { data: entry } = useEntry(currentEntryId);
 
-  // Get model settings to determine which model to use
-  // CRITICAL: Load config ONCE and use ref to keep it stable
-  const modelSettings = useModelSettings();
-  const modelConfigRef = useRef<LlmModelConfig>(DEFAULT_MODEL);
-
-  // Load selected model from settings ONCE on mount
-  React.useEffect(() => {
-    async function loadSelectedModel() {
-      const selectedModelId = await modelSettings.getSelectedModelId();
-      if (selectedModelId) {
-        const config = getModelById(selectedModelId);
-        if (config) {
-          modelConfigRef.current = config;
-        }
-      }
-      // If no model selected or not found, ref already has DEFAULT_MODEL
-    }
-    loadSelectedModel();
-  }, []); // Empty deps - only run once on mount
-
-  // Use new LLM hook - pass entryId as convoId and for DB writes
-  // When AIChatComposer mounts, it attaches to existing LLM instance if generation is already running
-  // Use useRef to ensure convoId is stable across renders when there's no entryId
-  const convoIdRef = useRef(entryId ? `entry-${entryId}` : `new-${Date.now()}`);
-  const convoId = entryId ? `entry-${entryId}` : convoIdRef.current;
-
-  const {
-    llm,
-    isLoading: isLLMLoading,
-    error: llmError,
-  } = useLLMForConvo(
-    convoId,
-    entryId,
-    entry?.blocks, // Initialize with existing blocks if loading entry
-    modelConfigRef.current // Use stable ref - won't change after initial load
-  );
+  // Use ref for entry data too
+  const entryRef = useRef(entry);
+  entryRef.current = entry;
 
   const createEntry = useCreateEntry();
   const updateEntry = useUpdateEntry();
 
-  // Check for incomplete generation for this specific entry
+  // Use ref for updateEntry to avoid stale closures
+  const updateEntryRef = useRef(updateEntry);
+  updateEntryRef.current = updateEntry;
+
+  // Use the simplified AI chat hook
+  // Pass entryId and currentBlocks so it can auto-save even if component unmounts
   const {
-    currentPrompt: incompleteGenerationPrompt,
-    dismissGeneration: dismissGenerationFromHook,
-    clearCurrentPrompt,
-  } = useGenerationResumption(entryId);
+    isReady: isLLMReady,
+    isGenerating,
+    isLoading: isLLMLoading,
+    error: llmError,
+    rawResponse: streamingResponse, // Use raw response for streaming display (AssistantMessage handles think tags)
+    sendMessage: aiSendMessage,
+    setMessageHistory,
+    stop: stopGeneration,
+  } = useAIChat({
+    entryId: currentEntryId,
+    currentBlocks: entry?.blocks,
+    onResponseComplete: async (response) => {
+      // Save completed response to database
+      const entryId = currentEntryIdRef.current;
+      const currentEntry = entryRef.current;
+
+      if (entryId) {
+        const currentBlocks = currentEntry?.blocks || [];
+        // Filter out empty assistant markdown blocks, keep all others
+        const filteredBlocks = currentBlocks.filter(b => {
+          if (b.role === "assistant" && b.type === "markdown") {
+            return b.content && b.content.trim().length > 0;
+          }
+          return true;
+        });
+
+        const updatedBlocks: Block[] = [
+          ...filteredBlocks,
+          { type: "markdown", content: response, role: "assistant" },
+        ];
+
+        await updateEntryRef.current.mutateAsync({
+          id: entryId,
+          input: { blocks: updatedBlocks },
+        });
+      }
+      setIsSubmitting(false);
+    },
+    onError: (error) => {
+      Alert.alert("AI Error", error);
+      setIsSubmitting(false);
+    },
+  });
+
+  // Initialize message history from existing entry
+  useEffect(() => {
+    if (entry?.blocks) {
+      const messages: Message[] = entry.blocks
+        .filter((b): b is Extract<Block, { type: "markdown" }> & { role: "user" | "assistant" } =>
+          b.type === "markdown" && (b.role === "user" || b.role === "assistant")
+        )
+        .map((b) => ({ role: b.role, content: b.content }));
+      setMessageHistory(messages);
+    }
+  }, [entry?.id]);
 
   // Local state for input only
   const [newMessage, setNewMessage] = useState("");
@@ -357,36 +395,42 @@ export function AIChatComposer({
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
+  // Ref to store streaming content - AssistantMessage polls this without triggering re-renders
+  const streamingContentRef = useRef<string>("");
+  streamingContentRef.current = streamingResponse;
+
   // Derive displayed data from entry or fallback to initial props
   const displayedTitle = entry?.title ?? initialTitle;
   const displayedBlocks = entry?.blocks ?? initialBlocks;
 
-  // If entry has generationStatus "generating" but no assistant block yet, add a placeholder
-  // This ensures the UI shows "Thinking..." even if the assistant block hasn't been created yet
+  // Build blocks with placeholder for generating state
+  // NOTE: Don't include streamingResponse in dependencies - AssistantMessage polls via ref
   const blocksWithPlaceholder = useMemo(() => {
-    if (
-      entry?.generationStatus === "generating" &&
-      displayedBlocks.length > 0 &&
-      displayedBlocks[displayedBlocks.length - 1]?.role !== "assistant"
-    ) {
-      // Add placeholder assistant block to show "Thinking..." indicator
-      return [
-        ...displayedBlocks,
-        {
-          type: "markdown" as const,
-          content: "",
-          role: "assistant" as const,
-        },
-      ];
-    }
-    return displayedBlocks;
-  }, [displayedBlocks, entry?.generationStatus]);
+    const blocks = [...displayedBlocks];
 
-  // Show LLM errors
-  if (llmError) {
-    console.error("[AIChatComposer] LLM error:", llmError);
-    Alert.alert("AI Error", llmError);
-  }
+    // If generating, add placeholder assistant block
+    if (isGenerating) {
+      const lastBlock = blocks[blocks.length - 1];
+
+      if (lastBlock?.role === "assistant" && lastBlock.type === "markdown") {
+        // Keep existing block - AssistantMessage will use streamingContentRef
+        blocks[blocks.length - 1] = {
+          type: "markdown" as const,
+          content: "", // Content comes from streamingContentRef
+          role: "assistant" as const,
+        };
+      } else {
+        // Add placeholder assistant block
+        blocks.push({
+          type: "markdown" as const,
+          content: "", // Content comes from streamingContentRef
+          role: "assistant" as const,
+        });
+      }
+    }
+
+    return blocks;
+  }, [displayedBlocks, isGenerating]); // NOTE: streamingResponse deliberately excluded - AssistantMessage polls via ref
 
   // Track user's intent to stay at bottom
   // Once user reaches bottom, assume they want to stay there until they scroll up
@@ -584,193 +628,63 @@ export function AIChatComposer({
     [seasonalTheme.textSecondary]
   );
 
-  const queryClient = useQueryClient();
-
-  // Create action context for dispatching actions
-  const actionContext = useMemo<AIChatActionContext>(
-    () => ({
-      createEntry,
-      updateEntry,
-      queryClient, // Pass query client for accessing cache
-      setTitle: () => {}, // No-op - React Query handles title updates automatically
-      llm,
-      modelConfig: modelConfigRef.current, // Pass model config for title generation
-      onSave: (id: number) => {
-        scrollToBottom();
-        onSave?.(id);
-      },
-    }),
-    [createEntry, updateEntry, queryClient, llm, onSave, scrollToBottom]
-  );
-
-  // Custom resume handler that uses the existing llm instance
-  const handleResumeGeneration = useCallback(
-    async (generation: any) => {
-      if (!llm || !entryId) {
-        console.error("[AIChatComposer] Cannot resume: llm or entryId missing");
-        return;
-      }
-
-      // Clear the prompt immediately when resume is clicked
-      clearCurrentPrompt();
-
-      try {
-        console.log(
-          `[AIChatComposer] Resuming generation for entry ${entryId}`
-        );
-
-        // Remove only the incomplete assistant message block (last block if it's assistant)
-        // Keep all user messages intact
-        const lastBlock = displayedBlocks[displayedBlocks.length - 1];
-        const messagesForResume =
-          lastBlock && lastBlock.role === "assistant"
-            ? displayedBlocks.slice(0, -1)
-            : displayedBlocks;
-
-        // Update status to generating
-        await new Promise<void>((resolve, reject) => {
-          updateEntry.mutate(
-            {
-              id: entryId,
-              input: {
-                generationStatus: "generating",
-                generationStartedAt: Date.now(),
-              },
-            },
-            {
-              onSuccess: () => resolve(),
-              onError: reject,
-            }
-          );
-        });
-
-        // Generate response using existing llm instance
-        // This will use the listeners from useLLMForConvo to update the UI
-        await generateAIResponse(
-          messagesForResume,
-          actionContext,
-          entryId,
-          entry?.generationModelId || undefined
-        );
-
-        console.log(
-          `[AIChatComposer] Successfully resumed generation for entry ${entryId}`
-        );
-
-        // Scroll to bottom to show the generation
-        scrollToBottom();
-      } catch (error) {
-        console.error(`[AIChatComposer] Failed to resume generation:`, error);
-
-        // Mark as failed
-        try {
-          await new Promise<void>((resolve, reject) => {
-            updateEntry.mutate(
-              {
-                id: entryId,
-                input: {
-                  generationStatus: "failed",
-                },
-              },
-              {
-                onSuccess: () => resolve(),
-                onError: reject,
-              }
-            );
-          });
-        } catch (updateError) {
-          console.error(
-            "[AIChatComposer] Failed to mark as failed:",
-            updateError
-          );
-        }
-
-        Alert.alert(
-          "Resume Failed",
-          `Failed to resume generation: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-      }
-    },
-    [
-      llm,
-      entryId,
-      displayedBlocks,
-      actionContext,
-      updateEntry,
-      entry?.generationModelId,
-      scrollToBottom,
-    ]
-  );
-
-  const dismissGeneration = useCallback(
-    async (generation: any) => {
-      // Clear the prompt immediately
-      clearCurrentPrompt();
-      await dismissGenerationFromHook(generation);
-    },
-    [dismissGenerationFromHook, clearCurrentPrompt]
-  );
-
-  // Reset isSubmitting when generation is actually in progress or completes
-  useEffect(() => {
-    const isGenerating =
-      entry?.generationStatus === "generating" || isLLMLoading;
-    if (isGenerating || entry?.generationStatus === "completed") {
-      setIsSubmitting(false);
-    }
-  }, [entry?.generationStatus, isLLMLoading]);
-
-  // Check if generation is in progress when returning to chat
-  // The actions layer handles all the background work, so we just need to
-  // check status and show the resume prompt if needed
-  useEffect(() => {
-    if (
-      !entry ||
-      !entryId ||
-      entry.generationStatus !== "generating" ||
-      incompleteGenerationPrompt
-    ) {
-      return;
-    }
-
-    // Check if there's an active generation in the queue
-    const convoId = `entry-${entryId}`;
-    const currentRequestId = llmQueue.getCurrentRequestId();
-
-    // If generation is still running, just wait - actions layer handles everything
-    if (currentRequestId === convoId) {
-      return;
-    }
-  }, [entry, entryId, incompleteGenerationPrompt]);
-
-  // Note: All initial work is now handled by BottomComposer via aiChatActions
-  // before navigating to this composer. No need to queue work here.
-
+  // Simple delete handler - no cleanup needed for LLM
   const handleBeforeDelete = useCallback(() => {
-    if (!entryId) return;
+    // Stop any ongoing generation
+    if (isGenerating) {
+      stopGeneration();
+    }
+  }, [isGenerating, stopGeneration]);
 
-    // Note: We no longer delete the LLM instance - the queue system will handle cleanup
-    // The LLM will naturally finish any pending work or be garbage collected when needed
-  }, [entryId]);
+  // Use ref for aiSendMessage to avoid stale closure issues
+  const aiSendMessageRef = useRef(aiSendMessage);
+  aiSendMessageRef.current = aiSendMessage;
 
   const handleSendMessage = useCallback(async () => {
-    if (!newMessage.trim() || !llm || isSubmitting) return;
+    if (!newMessage.trim() || !isLLMReady || isSubmitting || isGenerating) return;
 
     const messageText = newMessage.trim();
     setNewMessage("");
     setIsSubmitting(true);
 
-    // Queue work via action system and redirect if needed
     try {
-      await sendMessageWithResponse(
-        messageText,
-        entryId,
-        displayedBlocks,
-        displayedTitle,
-        actionContext
-      );
+      let entryIdToUse = currentEntryId;
+
+      // If this is a new conversation, create entry first
+      if (!entryIdToUse) {
+        // Use first message as title (truncated to 60 chars)
+        const title = messageText.length > 60
+          ? messageText.substring(0, 57) + "..."
+          : messageText;
+
+        const newEntry = await createEntry.mutateAsync({
+          type: "ai_chat",
+          title,
+          blocks: [{ type: "markdown", content: messageText, role: "user" }],
+        });
+
+        entryIdToUse = newEntry.id;
+        setCurrentEntryId(newEntry.id);
+      } else {
+        // Add user message to existing entry
+        const updatedBlocks: Block[] = [
+          ...displayedBlocks,
+          { type: "markdown", content: messageText, role: "user" },
+        ];
+
+        await updateEntry.mutateAsync({
+          id: entryIdToUse,
+          input: { blocks: updatedBlocks },
+        });
+      }
+
+      // Send message through AI hook (use ref to get latest function)
+      // useAIChat will auto-register pending save since we pass entryId and currentBlocks
+      await aiSendMessageRef.current(messageText);
+
+      // Note: Don't call onSave here - it triggers navigation which can unmount
+      // the component before onResponseComplete fires. The entry is already
+      // created and the response will be saved in onResponseComplete.
 
       // Scroll to bottom and refocus input
       scrollToBottom();
@@ -787,14 +701,14 @@ export function AIChatComposer({
       );
       setIsSubmitting(false);
     }
-    // Don't reset isSubmitting in finally - let the generation status change handle it
   }, [
     newMessage,
-    entryId,
+    currentEntryId,
     displayedBlocks,
-    displayedTitle,
-    actionContext,
-    llm,
+    createEntry,
+    updateEntry,
+    isLLMReady,
+    isGenerating,
     scrollToBottom,
     isSubmitting,
   ]);
@@ -806,11 +720,8 @@ export function AIChatComposer({
       const isUser = block.role === "user";
       const isLastMessage = index === blocksWithPlaceholder.length - 1;
 
-      // Check if generation is in progress
-      const generationStatus = entry?.generationStatus;
-      const isGenerationInProgress =
-        generationStatus === "generating" || isLLMLoading;
-      const isGenerating = !isUser && isLastMessage && isGenerationInProgress;
+      // Check if this is the generating message (last assistant message while generating)
+      const isGeneratingMessage = !isUser && isLastMessage && isGenerating;
 
       // User messages get a bubble, AI messages are full width
       if (isUser) {
@@ -828,9 +739,9 @@ export function AIChatComposer({
       return (
         <AssistantMessage
           block={block}
-          isGenerating={isGenerating}
+          isGenerating={isGeneratingMessage}
+          streamingContentRef={streamingContentRef}
           textSecondary={seasonalTheme.textSecondary}
-          textPrimary={seasonalTheme.textPrimary}
           htmlContentWidth={htmlContentWidth}
           htmlTagsStyles={htmlTagsStyles}
           customRenderers={customRenderers}
@@ -839,9 +750,8 @@ export function AIChatComposer({
     },
     [
       blocksWithPlaceholder.length,
-      entry?.generationStatus,
-      isLLMLoading,
-      seasonalTheme,
+      isGenerating,
+      seasonalTheme.textSecondary,
       htmlContentWidth,
       htmlTagsStyles,
       customRenderers,
@@ -941,19 +851,6 @@ export function AIChatComposer({
     );
   }, [seasonalTheme, promptSuggestions, handlePromptSuggestionPress]);
 
-  // Footer component for incomplete generation prompt
-  const ListFooterComponent = useCallback(() => {
-    if (!incompleteGenerationPrompt) {
-      return null;
-    }
-    return (
-      <GenerationResumptionPrompt
-        generation={incompleteGenerationPrompt}
-        onResume={handleResumeGeneration}
-        onDismiss={dismissGeneration}
-      />
-    );
-  }, [incompleteGenerationPrompt, handleResumeGeneration, dismissGeneration]);
 
   // Show UI shell immediately - content will load progressively
   return (
@@ -980,7 +877,6 @@ export function AIChatComposer({
         renderItem={renderMessage}
         keyExtractor={keyExtractor}
         ListEmptyComponent={ListEmptyComponent}
-        ListFooterComponent={ListFooterComponent}
         style={styles.chatMessages}
         contentContainerStyle={[
           styles.chatMessagesContent,
@@ -1105,7 +1001,7 @@ export function AIChatComposer({
           value={newMessage}
           onChangeText={setNewMessage}
           multiline
-          editable={!isLLMLoading || !!llm}
+          editable={isLLMReady && !isGenerating}
           onSubmitEditing={handleSendMessage}
           returnKeyType="send"
           blurOnSubmit={false}
@@ -1114,11 +1010,10 @@ export function AIChatComposer({
           onPress={handleSendMessage}
           disabled={
             !newMessage.trim() ||
-            !llm ||
+            !isLLMReady ||
             createEntry.isPending ||
             updateEntry.isPending ||
-            entry?.generationStatus === "generating" ||
-            isLLMLoading ||
+            isGenerating ||
             isSubmitting
           }
           style={[
@@ -1126,11 +1021,10 @@ export function AIChatComposer({
             {
               backgroundColor:
                 newMessage.trim() &&
-                llm &&
+                isLLMReady &&
                 !createEntry.isPending &&
                 !updateEntry.isPending &&
-                entry?.generationStatus !== "generating" &&
-                !isLLMLoading &&
+                !isGenerating &&
                 !isSubmitting
                   ? seasonalTheme.chipBg
                   : seasonalTheme.textSecondary + "20",
@@ -1142,9 +1036,11 @@ export function AIChatComposer({
             size={20}
             color={
               newMessage.trim() &&
-              llm &&
+              isLLMReady &&
               !createEntry.isPending &&
-              !updateEntry.isPending
+              !updateEntry.isPending &&
+              !isGenerating &&
+              !isSubmitting
                 ? seasonalTheme.chipText || seasonalTheme.textPrimary
                 : seasonalTheme.textSecondary + "80"
             }

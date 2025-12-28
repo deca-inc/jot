@@ -98,7 +98,7 @@ documents/models/
 
 ### 4. Model Provider (`lib/ai/ModelProvider.tsx`)
 
-React context for model operations:
+React context for model initialization and verification:
 
 ```typescript
 interface ModelContextValue {
@@ -111,10 +111,13 @@ const { reloadModel, currentConfig } = useModel();
 await reloadModel(newModelConfig);
 ```
 
-The provider wraps the app and manages:
-- Current model state
-- Model reloading (unload → load)
-- LLM queue coordination
+The provider handles:
+- Model initialization on app startup
+- Verification that downloaded models still exist on disk
+- Cleanup of stale download state
+- Providing model config context for settings UI
+
+Note: Actual LLM loading and generation is handled by `LLMProvider`.
 
 ### 5. Model Management UI (`lib/components/ModelManagement.tsx`)
 
@@ -171,10 +174,7 @@ pnpm download:models --all
 1. User taps **Select** on a downloaded model
 2. Alert confirms model selection
 3. Database updates `selectedModelId`
-4. Model service reloads:
-   - Unloads current model
-   - Loads new model
-   - Updates LLM queue
+4. Model becomes active on next app restart or LLM reload
 5. Success message confirms activation
 6. Model is ready for use
 

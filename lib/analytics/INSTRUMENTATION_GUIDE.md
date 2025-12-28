@@ -133,7 +133,6 @@ export function ComposerScreen({ initialType, entryId, ... }: ComposerScreenProp
 **Files:**
 - `lib/screens/entryActions.ts`
 - `lib/screens/journalActions.ts`
-- `lib/screens/aiChatActions.ts`
 
 **Why:** These contain the business logic for entry operations. Track here to capture:
 - Entry creation
@@ -154,7 +153,7 @@ export const createJournalEntry = async (data: CreateEntryData) => {
     blockTypes: data.blocks.map(b => b.type),
     // DO NOT include content, title, or text
   });
-  
+
   // ... existing logic
 };
 ```

@@ -1,8 +1,8 @@
-# Background Task Support for Model Provider
+# Background Task Support for AI Generation
 
 ## Overview
 
-This implementation adds background task support for the AI model provider, allowing model generation to continue (within OS-imposed limits) when the app is backgrounded.
+This implementation adds background task support for AI generation, allowing model generation to continue (within OS-imposed limits) when the app is backgrounded.
 
 ## Important Limitations
 
@@ -23,17 +23,16 @@ This implementation adds background task support for the AI model provider, allo
 
 ## Implementation Details
 
-### Files Added/Modified
+### Files
 
 1. **`lib/ai/backgroundTasks.ts`**: Background task registration and management
    - Registers background fetch tasks using `expo-task-manager` and `expo-background-fetch`
    - Provides utilities to check if background tasks are available
 
-2. **`lib/ai/ModelProvider.tsx`**: Enhanced with app state monitoring
-   - Monitors app state changes (foreground/background)
+2. **`lib/ai/LLMProvider.tsx`**: Singleton LLM with background support
    - Registers background tasks on mount
-   - Provides warnings when generation occurs while backgrounded
-   - Checks background task availability
+   - Keeps LLM instance alive at app level
+   - Provides pending save mechanism for when component unmounts during generation
 
 3. **`app.json`**: Updated with background permissions
    - iOS: Added `UIBackgroundModes` for `background-fetch` and `background-processing`
@@ -41,24 +40,23 @@ This implementation adds background task support for the AI model provider, allo
 
 ### How It Works
 
-1. **On App Start**: `ModelProvider` registers background tasks when it mounts
-2. **App State Monitoring**: The provider listens for foreground/background transitions
-3. **During Generation**: The provider checks if the app is backgrounded and logs warnings
-4. **Background Execution**: The OS may allow the task to continue for a limited time
+1. **On App Start**: `LLMProvider` registers background tasks when it mounts
+2. **Single LLM Instance**: The LLM stays mounted at app level, preventing OOM and allowing background generation
+3. **Pending Save**: If component unmounts during generation, `LLMProvider` saves the response when complete
 
 ### Usage
 
-The background task support is automatic - no code changes needed in components using `useModelService()`. The ModelProvider handles:
+Background task support is automatic when using `useAIChat` or `useLLMContext`. The `LLMProvider` handles:
 
-- Background task registration/unregistration
-- App state monitoring
-- Warnings when generation might be interrupted
+- Background task registration
+- Keeping LLM alive
+- Saving responses even if chat component unmounts
 
 ### Testing Background Tasks
 
 To test background execution:
 
-1. **iOS**: 
+1. **iOS**:
    - Start a generation
    - Press home button or switch apps
    - Check logs to see if generation continues
@@ -76,12 +74,10 @@ If you need more reliable background execution:
 
 1. **Android Foreground Service**: Implement a foreground service with a persistent notification (requires more native code)
 2. **Task Persistence**: Save generation state and resume when app returns to foreground
-3. **Queue System**: Queue generation requests and process them when app is active
-4. **Push Notifications**: Notify user when generation completes if app was backgrounded
+3. **Push Notifications**: Notify user when generation completes if app was backgrounded
 
 ## References
 
 - [Expo Task Manager](https://docs.expo.dev/versions/latest/sdk/task-manager/)
 - [Expo Background Fetch](https://docs.expo.dev/versions/latest/sdk/background-fetch/)
 - [React Native AppState](https://reactnative.dev/docs/appstate)
-

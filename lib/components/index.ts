@@ -18,6 +18,4 @@ export * from "./Footer";
 export * from "./FloatingActionButton";
 export * from "./AIComposerInput";
 export * from "./SearchDropdown";
-export * from "./GenerationResumptionDialog";
-export * from "./GenerationResumptionPrompt";
 export * from "./QuillRichEditor";
