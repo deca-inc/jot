@@ -1,5 +1,5 @@
-import { useEffect, useCallback } from "react";
 import { usePostHog as usePostHogBase } from "posthog-react-native";
+import { useEffect, useCallback } from "react";
 
 /**
  * Safe wrapper around PostHog hook that handles cases when PostHog is disabled.
@@ -9,7 +9,7 @@ export function usePostHog() {
   try {
     const posthog = usePostHogBase();
     return posthog;
-  } catch (error) {
+  } catch (_error) {
     // PostHog provider not available (telemetry disabled)
     return null;
   }
@@ -30,7 +30,7 @@ export function usePostHog() {
  */
 export function useTrackScreenView(
   screenName: string,
-  properties?: Record<string, any>
+  properties?: Record<string, any>,
 ) {
   const posthog = usePostHog();
 
@@ -57,7 +57,7 @@ export function useTrackEvent() {
         posthog.capture(eventName, properties);
       }
     },
-    [posthog]
+    [posthog],
   );
 }
 
@@ -66,7 +66,7 @@ export function useTrackEvent() {
  * Removes any fields that might contain user content.
  */
 export function sanitizeProperties(
-  properties: Record<string, any>
+  properties: Record<string, any>,
 ): Record<string, any> {
   const sanitized = { ...properties };
 

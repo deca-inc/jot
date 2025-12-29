@@ -5,8 +5,8 @@
  * Downloads will continue in the background and can be resumed if interrupted.
  */
 
+import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
-import { Paths, File } from "expo-file-system";
 import * as SecureStore from 'expo-secure-store';
 
 export interface DownloadMetadata {
@@ -26,7 +26,6 @@ interface PersistedDownload {
 }
 
 const DOWNLOADS_KEY = 'persistent_downloads';
-const DOWNLOADS_DIR_KEY = 'downloads_directory';
 
 class PersistentDownloadManager {
   private activeDownloads = new Map<string, FileSystem.DownloadResumable>();
@@ -48,7 +47,7 @@ class PersistentDownloadManager {
     url: string,
     destination: string,
     fileType: DownloadMetadata['fileType'],
-    onProgress?: (progress: number, bytesWritten: number, bytesTotal: number) => void
+    onProgress?: (progress: number, bytesWritten: number, bytesTotal: number) => void,
   ): Promise<FileSystem.DownloadResumable> {
     const key = this.getDownloadKey(modelId, fileType);
     
@@ -109,7 +108,7 @@ class PersistentDownloadManager {
 
               onProgress?.(progress, downloadProgress.totalBytesWritten, downloadProgress.totalBytesExpectedToWrite);
             },
-            parsedResumeData
+            parsedResumeData,
           );
           isResuming = true;
           effectiveDestination = persisted.metadata.destination;
@@ -141,7 +140,7 @@ class PersistentDownloadManager {
               }
 
               onProgress?.(progress, totalWritten, totalExpected);
-            }
+            },
           );
           isResuming = true;
           effectiveDestination = persisted.metadata.destination;
@@ -155,7 +154,7 @@ class PersistentDownloadManager {
           await this.completeDownload(modelId, fileType);
           try {
             await FileSystem.deleteAsync(persisted.metadata.destination, { idempotent: true });
-          } catch (e) {
+          } catch (_e) {
             // Ignore delete errors
           }
         }
@@ -204,7 +203,7 @@ class PersistentDownloadManager {
         url,
         tempDestination,
         {},
-        progressCallback
+        progressCallback,
       );
     }
 
@@ -236,7 +235,7 @@ class PersistentDownloadManager {
     downloadResumable: FileSystem.DownloadResumable,
     modelId: string,
     fileType: DownloadMetadata['fileType'],
-    finalDestination: string
+    finalDestination: string,
   ): Promise<string> {
     const key = this.getDownloadKey(modelId, fileType);
     const isResuming = (downloadResumable as any)._isResuming === true;
@@ -419,7 +418,7 @@ class PersistentDownloadManager {
   private async saveDownloadState(
     key: string,
     downloadResumable: FileSystem.DownloadResumable,
-    metadata: DownloadMetadata
+    metadata: DownloadMetadata,
   ): Promise<void> {
     try {
       const resumeData = downloadResumable.savable();
@@ -440,7 +439,7 @@ class PersistentDownloadManager {
    * Resume all persisted downloads on app startup
    */
   async resumeAllDownloads(
-    onProgress?: (modelId: string, fileType: DownloadMetadata['fileType'], progress: number) => void
+    _onProgress?: (modelId: string, fileType: DownloadMetadata['fileType'], progress: number) => void,
   ): Promise<void> {
     const allDownloads = await this.loadAllPersistedDownloads();
     
@@ -511,7 +510,7 @@ class PersistentDownloadManager {
   private async concatenateFiles(
     file1Path: string,
     file2Path: string,
-    destPath: string
+    destPath: string,
   ): Promise<void> {
     const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
 

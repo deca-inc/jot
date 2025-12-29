@@ -1,16 +1,16 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect, useCallback } from "react";
 import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Text } from "./Text";
-import { useToast } from "./ToastProvider";
+import { ALL_MODELS } from "../ai/modelConfig";
+import { ensureModelPresent, getModelSize } from "../ai/modelManager";
+import { persistentDownloadManager, type DownloadMetadata } from "../ai/persistentDownloadManager";
+import { useModelDownloadStatus } from "../ai/useModelDownloadStatus";
+import { useModelSettings } from "../db/modelSettings";
+import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
-import { persistentDownloadManager, type DownloadMetadata } from "../ai/persistentDownloadManager";
-import { ensureModelPresent, getModelSize } from "../ai/modelManager";
-import { ALL_MODELS } from "../ai/modelConfig";
-import { useModelSettings } from "../db/modelSettings";
-import { useModelDownloadStatus } from "../ai/useModelDownloadStatus";
+import { Text } from "./Text";
+import { useToast } from "./ToastProvider";
 
 /**
  * A banner shown on the home screen when there are paused/pending model downloads.
@@ -118,7 +118,7 @@ export function PendingDownloadBanner() {
     <View
       style={[
         styles.container,
-        { backgroundColor: seasonalTheme.cardBg }
+        { backgroundColor: seasonalTheme.cardBg },
       ]}
     >
       <View style={styles.content}>
@@ -164,7 +164,7 @@ export function PendingDownloadBanner() {
             disabled={isResuming}
             style={[
               styles.resumeButton,
-              { backgroundColor: theme.colors.accent }
+              { backgroundColor: theme.colors.accent },
             ]}
           >
             {isResuming ? (
@@ -191,7 +191,7 @@ export function PendingDownloadBanner() {
             backgroundColor: seasonalTheme.isDark
               ? "rgba(255, 255, 255, 0.1)"
               : "rgba(0, 0, 0, 0.1)",
-          }
+          },
         ]}
       >
         <View
@@ -200,7 +200,7 @@ export function PendingDownloadBanner() {
             {
               width: `${displayProgress}%`,
               backgroundColor: theme.colors.accent,
-            }
+            },
           ]}
         />
       </View>

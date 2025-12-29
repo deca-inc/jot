@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import {
   View,
@@ -7,11 +8,10 @@ import {
   TouchableOpacity,
   PanResponder,
 } from "react-native";
-import { Text } from "./Text";
-import { Ionicons } from "@expo/vector-icons";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { spacingPatterns, borderRadius } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { Text } from "./Text";
 
 export type ToastType = "success" | "error" | "info";
 
@@ -77,7 +77,7 @@ export function Toast({
           }).start();
         }
       },
-    })
+    }),
   ).current;
 
   useEffect(() => {

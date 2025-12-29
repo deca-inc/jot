@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import React, { useState, useRef, useEffect } from "react";
 import {
   View,
@@ -9,12 +11,10 @@ import {
   Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
-import { ComposerInput } from "./ComposerInput";
+import { useTrackEvent } from "../analytics";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useTrackEvent } from "../analytics";
+import { ComposerInput } from "./ComposerInput";
 
 export interface AIComposerInputProps {
   onSubmit?: (text: string) => void;
@@ -26,7 +26,7 @@ export interface AIComposerInputProps {
 
 export function AIComposerInput({
   onSubmit,
-  isKeyboardVisible = false,
+  isKeyboardVisible: _isKeyboardVisible = false,
   visible = true,
   scrollX,
   screenWidth,
@@ -57,7 +57,7 @@ export function AIComposerInput({
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: false,
         }),
-      ])
+      ]),
     );
     pulseAnimation.start();
     return () => pulseAnimation.stop();
@@ -200,7 +200,7 @@ export function AIComposerInput({
             inputRange: [0, 100],
             outputRange: [0, hiddenOffset], // Additional offset when not visible
           }),
-          swipeTranslateY
+          swipeTranslateY,
         )
       : slideAnimation.interpolate({
           inputRange: [0, 100],

@@ -6,8 +6,8 @@ import {
   Platform,
   ViewStyle,
 } from "react-native";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 
 export interface DialogProps {
   visible: boolean;
@@ -25,7 +25,7 @@ export function Dialog({
   visible,
   onRequestClose,
   children,
-  style,
+  style: _style,
   containerStyle,
 }: DialogProps) {
   const seasonalTheme = useSeasonalTheme();

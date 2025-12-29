@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
 import { SQLiteProvider, useSQLiteContext } from "expo-sqlite";
-import { migrateTo } from "./migrations";
+import React, { useEffect, useRef, useState } from "react";
 import { logDatabasePath } from "./databasePath";
+import { migrateTo } from "./migrations";
 import "./migrations/index"; // Register all migrations
 
 const DATABASE_NAME = "journal.db";
@@ -45,12 +45,12 @@ const DatabaseInitializer: React.FC<{
         } catch (decryptError) {
           console.error(
             "Database decryption failed - key mismatch detected:",
-            decryptError
+            decryptError,
           );
           // This can happen on fresh installs where an old key exists
           // The old key will work fine with the new database
           console.log(
-            "Continuing with existing encryption key on fresh database"
+            "Continuing with existing encryption key on fresh database",
           );
         }
 
@@ -69,7 +69,6 @@ const DatabaseInitializer: React.FC<{
     };
 
     initializeDatabase();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
   if (initError) {

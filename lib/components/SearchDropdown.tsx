@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useRef, useEffect } from "react";
 import {
   View,
@@ -5,15 +6,13 @@ import {
   TouchableOpacity,
   TextInput,
   Animated,
-  Platform,
   ScrollView,
   Easing,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Text } from "./Text";
+import { useTrackEvent } from "../analytics";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useTrackEvent } from "../analytics";
+import { Text } from "./Text";
 
 export type EntryTypeFilter = "all" | "journal" | "ai_chat";
 

@@ -1,19 +1,19 @@
-import { useState, useEffect } from "react";
-import { StatusBar } from "expo-status-bar";
-import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { StatusBar } from "expo-status-bar";
+import { useState, useEffect } from "react";
 import { LogBox } from "react-native";
-import { DatabaseProvider, useDatabase } from "./lib/db/DatabaseProvider";
-import { ThemeProvider } from "./lib/theme/ThemeProvider";
-import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
-import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
-import { OnboardingFlow } from "./lib/navigation/OnboardingFlow";
-import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
-import { ModelProvider } from "./lib/ai/ModelProvider";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { LLMProvider } from "./lib/ai/LLMProvider";
-import { OnboardingSettingsRepository } from "./lib/db/onboardingSettings";
+import { ModelProvider } from "./lib/ai/ModelProvider";
 import { ConditionalPostHogProvider } from "./lib/analytics/PostHogProvider";
 import { ToastProvider } from "./lib/components/ToastProvider";
+import { DatabaseProvider, useDatabase } from "./lib/db/DatabaseProvider";
+import { OnboardingSettingsRepository } from "./lib/db/onboardingSettings";
+import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
+import { OnboardingFlow } from "./lib/navigation/OnboardingFlow";
+import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
+import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
+import { ThemeProvider } from "./lib/theme/ThemeProvider";
 
 // Suppress harmless warnings
 LogBox.ignoreLogs([

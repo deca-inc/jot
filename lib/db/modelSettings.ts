@@ -1,5 +1,5 @@
-import { useDatabase } from "./DatabaseProvider";
 import { SQLiteDatabase } from "expo-sqlite";
+import { useDatabase } from "./DatabaseProvider";
 
 export interface ModelDownloadInfo {
   modelId: string;
@@ -40,7 +40,7 @@ export class ModelSettingsRepository {
     const now = Date.now();
     await this.db.runAsync(
       `INSERT OR REPLACE INTO settings (key, value, updatedAt) VALUES (?, ?, ?)`,
-      [SETTINGS_KEY, JSON.stringify(settings), now]
+      [SETTINGS_KEY, JSON.stringify(settings), now],
     );
   }
 
@@ -66,7 +66,7 @@ export class ModelSettingsRepository {
 
     // Remove existing entry for this model if present
     settings.downloadedModels = settings.downloadedModels.filter(
-      (m) => m.modelId !== info.modelId
+      (m) => m.modelId !== info.modelId,
     );
 
     // Add new entry
@@ -80,7 +80,7 @@ export class ModelSettingsRepository {
     if (!settings) return;
 
     settings.downloadedModels = settings.downloadedModels.filter(
-      (m) => m.modelId !== modelId
+      (m) => m.modelId !== modelId,
     );
 
     // If we removed the selected model, switch to another downloaded model (or empty if none)
@@ -102,7 +102,7 @@ export class ModelSettingsRepository {
   }
 
   async getModelDownloadInfo(
-    modelId: string
+    modelId: string,
   ): Promise<ModelDownloadInfo | null> {
     const models = await this.getDownloadedModels();
     return models.find((m) => m.modelId === modelId) ?? null;

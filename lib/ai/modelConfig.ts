@@ -1,8 +1,15 @@
 // Central config for on-device LLM assets
 // Supports multiple models with quantized weights via ExecuTorch .pte format
 
+// BundledAssetSource can be:
+// - A number (Metro bundler module ID from require())
+// - An object with uri (filesystem path for large files that aren't bundled)
+export type BundledAssetSource =
+  | number
+  | { uri: string; width?: number; height?: number };
+
 export type ModelSource =
-  | { kind: "bundled"; requireId: any }
+  | { kind: "bundled"; requireId: BundledAssetSource }
   | { kind: "remote"; url: string }
   | { kind: "unavailable"; reason: string }; // For models without PTE files yet
 

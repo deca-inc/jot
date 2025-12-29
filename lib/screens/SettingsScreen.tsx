@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -9,7 +10,9 @@ import {
   Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { ALL_MODELS, type LlmModelConfig } from "../ai/modelConfig";
+import { deleteModel } from "../ai/modelManager";
+import { useTrackScreenView, useTrackEvent } from "../analytics";
 import {
   Text,
   Card,
@@ -18,16 +21,13 @@ import {
   ModelManagement,
   PendingDownloads,
 } from "../components";
-import { useTheme } from "../theme/ThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { isComponentPlaygroundEnabled } from "../utils/isDev";
-import { deleteModel } from "../ai/modelManager";
 import { useModelSettings } from "../db/modelSettings";
-import { ALL_MODELS, type LlmModelConfig } from "../ai/modelConfig";
 import { useOnboardingSettings } from "../db/onboardingSettings";
 import { useTelemetrySettings } from "../db/telemetrySettings";
-import { useTrackScreenView, useTrackEvent } from "../analytics";
+import { spacingPatterns } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
+import { isComponentPlaygroundEnabled } from "../utils/isDev";
 
 interface SettingsScreenProps {
   onNavigateToPlayground?: () => void;
@@ -49,7 +49,7 @@ export function SettingsScreen({
   const [isRemovingAllModels, setIsRemovingAllModels] = useState(false);
   const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
   const [telemetryEnabled, setTelemetryEnabled] = useState<boolean | null>(
-    null
+    null,
   );
 
   // Track screen view
@@ -88,12 +88,12 @@ export function SettingsScreen({
               // Delete each model
               for (const downloadedModel of downloadedModels) {
                 const modelConfig = ALL_MODELS.find(
-                  (m: LlmModelConfig) => m.modelId === downloadedModel.modelId
+                  (m: LlmModelConfig) => m.modelId === downloadedModel.modelId,
                 );
                 if (modelConfig) {
                   await deleteModel(modelConfig);
                   await modelSettings.removeDownloadedModel(
-                    modelConfig.modelId
+                    modelConfig.modelId,
                   );
                 }
               }
@@ -103,7 +103,7 @@ export function SettingsScreen({
               Alert.alert(
                 "Success",
                 `Removed ${downloadedModels.length} model(s) successfully.`,
-                [{ text: "OK" }]
+                [{ text: "OK" }],
               );
             } catch (error) {
               setIsRemovingAllModels(false);
@@ -111,12 +111,12 @@ export function SettingsScreen({
               Alert.alert(
                 "Error",
                 "Failed to remove all models. Please try again or remove them individually.",
-                [{ text: "OK" }]
+                [{ text: "OK" }],
               );
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -146,7 +146,7 @@ export function SettingsScreen({
               Alert.alert(
                 "Success",
                 "Onboarding has been reset. Restart the app to see the welcome screens again.",
-                [{ text: "OK" }]
+                [{ text: "OK" }],
               );
             } catch (error) {
               setIsResettingOnboarding(false);
@@ -154,12 +154,12 @@ export function SettingsScreen({
               Alert.alert(
                 "Error",
                 "Failed to reset onboarding. Please try again.",
-                [{ text: "OK" }]
+                [{ text: "OK" }],
               );
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -178,7 +178,7 @@ export function SettingsScreen({
       Alert.alert(
         "Error",
         "Failed to update telemetry setting. Please try again.",
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
     }
   };

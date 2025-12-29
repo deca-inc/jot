@@ -1,5 +1,5 @@
 import { SQLiteDatabase } from "expo-sqlite";
-import { MigrationModule, MigrationRunner } from "./migrationTypes";
+import { MigrationModule } from "./migrationTypes";
 
 interface MigrationOptions {
   verbose: boolean;
@@ -13,7 +13,7 @@ let isMigrating = false;
 async function createTablesIfNotExists(db: SQLiteDatabase) {
   // Check if migrations table exists
   const tables = await db.getAllAsync<{ name: string }>(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name = 'migrations'"
+    "SELECT name FROM sqlite_master WHERE type='table' AND name = 'migrations'",
   );
 
   if (tables.length > 0) {
@@ -31,7 +31,7 @@ async function createTablesIfNotExists(db: SQLiteDatabase) {
 }
 
 const isRejected = <T>(
-  p: PromiseSettledResult<T>
+  p: PromiseSettledResult<T>,
 ): p is PromiseRejectedResult => p.status === "rejected";
 
 // Migration registry - populated by migrations/index.ts
@@ -39,7 +39,7 @@ const migrationModules: Record<string, () => Promise<MigrationModule>> = {};
 
 export function registerMigration(
   name: string,
-  module: () => Promise<MigrationModule>
+  module: () => Promise<MigrationModule>,
 ) {
   migrationModules[name] = module;
 }
@@ -47,14 +47,14 @@ export function registerMigration(
 export async function migrateTo(
   db: SQLiteDatabase,
   migrationLimit: number = Number.POSITIVE_INFINITY,
-  options: MigrationOptions = defaultOptions
+  options: MigrationOptions = defaultOptions,
 ) {
   options.verbose && console.log("Running Migrations");
 
   // Check if migrations are already running (client-side lock)
   if (isMigrating) {
     console.error(
-      "Migrations are already running - please wait for them to complete"
+      "Migrations are already running - please wait for them to complete",
     );
     return;
   }
@@ -81,7 +81,7 @@ export async function migrateTo(
     });
 
     const pendingMigrations = migrationsToConsider.filter(
-      (name) => !existingNames.has(name)
+      (name) => !existingNames.has(name),
     );
 
     if (pendingMigrations.length === 0) {
@@ -95,12 +95,12 @@ export async function migrateTo(
 
     options.verbose &&
       console.log(
-        `- Found ${pendingMigrations.length} pending migration(s), running ${migrationsToRun.length}`
+        `- Found ${pendingMigrations.length} pending migration(s), running ${migrationsToRun.length}`,
       );
 
     // Load all migration modules
     const resolvedModules = await Promise.allSettled<MigrationModule>(
-      migrationsToRun.map((name) => migrationModules[name]())
+      migrationsToRun.map((name) => migrationModules[name]()),
     );
 
     // Wrap all migrations in a transaction
@@ -114,7 +114,7 @@ export async function migrateTo(
         }
         if (typeof mod.value.up !== "function") {
           throw new Error(
-            `[Migration Malformed Error] ${migrationsToRun[i]} does not have "up" method`
+            `[Migration Malformed Error] ${migrationsToRun[i]} does not have "up" method`,
           );
         }
 
@@ -148,14 +148,14 @@ export async function migrateTo(
 export async function migrateBack(
   db: SQLiteDatabase,
   migrationLimit: number | "batch" = "batch",
-  options: MigrationOptions = defaultOptions
+  options: MigrationOptions = defaultOptions,
 ) {
   options.verbose && console.log("Rolling Back Migrations");
 
   // Check if migrations are already running (client-side lock)
   if (isMigrating) {
     console.error(
-      "Migrations are already running - please wait for them to complete"
+      "Migrations are already running - please wait for them to complete",
     );
     return;
   }
@@ -186,13 +186,13 @@ export async function migrateBack(
     // Filter migrations to rollback - include seeds since we're rolling back
     // Only rollback migrations that actually exist in the registry
     const validMigrationsToRollback = migrationsToRollback.filter((migration) =>
-      migrationModules.hasOwnProperty(migration.name)
+      Object.prototype.hasOwnProperty.call(migrationModules, migration.name),
     );
 
     const resolvedModules = await Promise.allSettled<MigrationModule>(
       validMigrationsToRollback.map((migration) =>
-        migrationModules[migration.name]()
-      )
+        migrationModules[migration.name](),
+      ),
     );
 
     if (typeof migrationLimit === "number") {
@@ -219,7 +219,7 @@ export async function migrateBack(
         }
         if (typeof mod.value.down !== "function") {
           throw new Error(
-            `[Migration Malformed Error] ${validMigrationsToRollback[i].name} does not have "down" method`
+            `[Migration Malformed Error] ${validMigrationsToRollback[i].name} does not have "down" method`,
           );
         }
 
@@ -234,7 +234,7 @@ export async function migrateBack(
         rollbackCount += 1;
         options.verbose &&
           console.log(
-            `- ▼ ${validMigrationsToRollback[i].name} [${runEnd - runStart}ms]`
+            `- ▼ ${validMigrationsToRollback[i].name} [${runEnd - runStart}ms]`,
           );
       }
 
@@ -250,7 +250,7 @@ export async function migrateBack(
       console.log(
         `\nRan ${rollbackCount} ${
           rollbackCount === 1 ? "migration" : "migrations"
-        } rollback`
+        } rollback`,
       );
   } finally {
     // Always release the client-side lock

@@ -105,10 +105,10 @@ export function convertEnrichedChecklistToQuill(html: string): string {
         /<cli\s+checked="(true|false)"[^>]*>([\s\S]*?)<\/cli>/gi,
         (itemMatch: string, checked: string, itemContent: string) => {
           return `<ul data-checked="${checked}"><li>${itemContent.trim()}</li></ul>`;
-        }
+        },
       );
       return items;
-    }
+    },
   );
 
   // Also handle standalone <cli> tags that might not be wrapped in <checklist>
@@ -116,7 +116,7 @@ export function convertEnrichedChecklistToQuill(html: string): string {
     /<cli\s+checked="(true|false)"[^>]*>([\s\S]*?)<\/cli>/gi,
     (match, checked, content) => {
       return `<ul data-checked="${checked}"><li>${content.trim()}</li></ul>`;
-    }
+    },
   );
 
   return converted;

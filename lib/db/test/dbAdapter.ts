@@ -37,7 +37,7 @@ export function createTestDatabase(path: string): TestDatabase {
     },
     async getFirstAsync<T = any>(
       sql: string,
-      params?: any[]
+      params?: any[],
     ): Promise<T | null> {
       const stmt = db.prepare(sql);
       const result = (params ? stmt.get(...params) : stmt.get()) as

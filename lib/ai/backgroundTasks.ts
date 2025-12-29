@@ -10,8 +10,8 @@
  * but generation may still be interrupted when the app is backgrounded.
  */
 
-import * as TaskManager from "expo-task-manager";
 import * as BackgroundTask from "expo-background-task";
+import * as TaskManager from "expo-task-manager";
 
 export const BACKGROUND_GENERATION_TASK = "background-generation";
 
@@ -40,7 +40,7 @@ export function registerBackgroundTasks() {
     (err: any) => {
       const code = err?.code || err?.message || String(err);
       console.warn("[BackgroundTask] Failed to register:", code);
-    }
+    },
   );
 }
 
@@ -62,7 +62,7 @@ export async function isBackgroundTaskAvailable(): Promise<boolean> {
   try {
     const status = await BackgroundTask.getStatusAsync();
     return status === BackgroundTask.BackgroundTaskStatus.Available;
-  } catch (err) {
+  } catch (_err) {
     // If background tasks are disabled or not configured, return false gracefully
     return false;
   }

@@ -2,19 +2,17 @@ import React, { useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTrackScreenView } from "../analytics";
+import { FloatingComposerHeader, QuillRichEditor } from "../components";
+import { useEntry, useUpdateEntry } from "../db/useEntries";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useEntry, useUpdateEntry } from "../db/useEntries";
 import { debounce } from "../utils/debounce";
-import { FloatingComposerHeader, QuillRichEditor } from "../components";
-import type { QuillRichEditorRef } from "../components";
-import { saveJournalContent } from "./journalActions";
-import { useTrackScreenView } from "../analytics";
 import { convertBlockToHtml, convertEnrichedHtmlToQuill, isHtmlContentEmpty } from "../utils/htmlUtils";
+import { saveJournalContent } from "./journalActions";
+import type { QuillRichEditorRef } from "../components";
 
 export interface JournalComposerProps {
   entryId: number;
@@ -34,7 +32,7 @@ export function JournalComposer({
   const insets = useSafeAreaInsets();
 
   // Use react-query hooks
-  const { data: entry, isLoading: isLoadingEntry } = useEntry(entryId);
+  const { data: entry, isLoading: _isLoadingEntry } = useEntry(entryId);
   const updateEntryMutation = useUpdateEntry();
 
   // Stabilize mutation and callbacks with refs
@@ -114,7 +112,7 @@ export function JournalComposer({
         return onSaveRef.current;
       },
     }),
-    [] // Now stable!
+    [], // Now stable!
   );
 
   // Create debounced save function that calls journalActions
@@ -129,7 +127,7 @@ export function JournalComposer({
           console.error("[JournalComposer] Error saving:", error);
         }
       }, 1000),
-    [entryId, actionContext]
+    [entryId, actionContext],
   );
 
   // Clean up debounced function on unmount
@@ -181,7 +179,7 @@ export function JournalComposer({
       // Event-based auto-save: directly call debounced function
       debouncedSave(newHtml);
     },
-    [debouncedSave]
+    [debouncedSave],
   );
 
   // Show UI shell immediately - content loads progressively

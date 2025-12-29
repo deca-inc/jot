@@ -39,7 +39,7 @@ interface CreateJournalEntryParams {
  */
 export async function createJournalEntry(
   params: CreateJournalEntryParams,
-  context: JournalActionContext
+  context: JournalActionContext,
 ): Promise<number> {
   const { initialContent = "", initialTitle = "" } = params;
   const { createEntry, onSave } = context;
@@ -78,7 +78,7 @@ export async function createJournalEntry(
         {
           onSuccess: resolve,
           onError: reject,
-        }
+        },
       );
     });
 
@@ -99,7 +99,7 @@ export async function createJournalEntry(
  */
 function prepareJournalContent(
   htmlContent: string,
-  title: string
+  title: string,
 ): { blocks: Block[]; finalTitle: string } | null {
   // Strip HTML to check if there's actual content
   const textContent = htmlContent.replace(/<[^>]*>/g, "").trim();
@@ -137,7 +137,7 @@ export function saveJournalContentFireAndForget(
   entryId: number,
   htmlContent: string,
   title: string,
-  context: JournalActionContext
+  context: JournalActionContext,
 ): void {
   const { updateEntry } = context;
 
@@ -160,7 +160,7 @@ export function saveJournalContentFireAndForget(
       onError: (error: Error) => {
         console.error("[Journal Action] Error in fire-and-forget save:", error);
       },
-    }
+    },
   );
 }
 
@@ -174,7 +174,7 @@ export async function saveJournalContent(
   entryId: number,
   htmlContent: string,
   title: string,
-  context: JournalActionContext
+  context: JournalActionContext,
 ): Promise<void> {
   const { updateEntry } = context;
 
@@ -201,7 +201,7 @@ export async function saveJournalContent(
             resolve();
           },
           onError: reject,
-        }
+        },
       );
     });
   } catch (error) {
@@ -216,7 +216,7 @@ export async function saveJournalContent(
 export async function updateJournalTitle(
   entryId: number,
   title: string,
-  context: JournalActionContext
+  context: JournalActionContext,
 ): Promise<void> {
   const { updateEntry, onSave } = context;
 
@@ -235,7 +235,7 @@ export async function updateJournalTitle(
             resolve();
           },
           onError: reject,
-        }
+        },
       );
     });
 
@@ -252,7 +252,7 @@ export async function updateJournalTitle(
 export async function deleteJournalEntry(
   entryId: number,
   deleteEntry: any,
-  onDelete?: (entryId: number) => void
+  onDelete?: (entryId: number) => void,
 ): Promise<void> {
   try {
     await new Promise<void>((resolve, reject) => {

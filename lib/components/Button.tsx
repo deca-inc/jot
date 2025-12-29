@@ -6,11 +6,11 @@ import {
   Animated,
   AccessibilityInfo,
 } from "react-native";
-import { Text } from "./Text";
-import { useTheme } from "../theme/ThemeProvider";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { spacingPatterns, borderRadius, springPresets } from "../theme";
 import { useTrackEvent, sanitizeProperties } from "../analytics";
+import { spacingPatterns, borderRadius, springPresets } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
+import { Text } from "./Text";
 
 export interface ButtonProps extends TouchableOpacityProps {
   variant?: "primary" | "secondary" | "ghost";
@@ -44,7 +44,7 @@ export function Button({
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotionEnabled);
     const subscription = AccessibilityInfo.addEventListener(
       "reduceMotionChanged",
-      (event) => setReduceMotionEnabled(event)
+      (event) => setReduceMotionEnabled(event),
     );
     return () => subscription.remove();
   }, []);

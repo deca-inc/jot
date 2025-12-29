@@ -6,9 +6,9 @@ import {
   Animated,
   TouchableOpacity,
   Modal,
-  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTrackScreenView } from "../analytics";
 import {
   Text,
   Button,
@@ -17,11 +17,10 @@ import {
   BottomComposer,
   ThemeControl,
 } from "../components";
-import { useTheme } from "../theme/ThemeProvider";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { spacingPatterns, springPresets, borderRadius } from "../theme";
 import { useEntryRepository } from "../db/entries";
-import { useTrackScreenView } from "../analytics";
+import { spacingPatterns, springPresets, borderRadius } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
 
 type ComponentPage =
   | "typography"
@@ -51,7 +50,7 @@ interface ComponentPlaygroundScreenProps {
 export function ComponentPlaygroundScreen({
   onBack,
 }: ComponentPlaygroundScreenProps = {}) {
-  const theme = useTheme();
+  const _theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
 
@@ -689,7 +688,7 @@ function AnimationsPage({ seasonalTheme }: { seasonalTheme: any }) {
 }
 
 function SpacingPage({ seasonalTheme }: { seasonalTheme: any }) {
-  const theme = useTheme();
+  const _theme = useTheme();
   return (
     <Card
       variant="borderless"

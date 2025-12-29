@@ -73,7 +73,7 @@ export type SpringPreset = keyof typeof springPresets;
 export function createSpring(
   value: Animated.Value | Animated.ValueXY,
   toValue: number | { x: number; y: number },
-  preset: SpringPreset = "subtle"
+  preset: SpringPreset = "subtle",
 ): Animated.CompositeAnimation {
   const config = springPresets[preset];
 
@@ -159,10 +159,10 @@ export const animatedHelpers = {
    */
   createSlideIn: (direction: "up" | "down" | "left" | "right" = "up") => {
     const translateY = new Animated.Value(
-      direction === "up" ? 20 : direction === "down" ? -20 : 0
+      direction === "up" ? 20 : direction === "down" ? -20 : 0,
     );
     const translateX = new Animated.Value(
-      direction === "left" ? 20 : direction === "right" ? -20 : 0
+      direction === "left" ? 20 : direction === "right" ? -20 : 0,
     );
     const opacity = new Animated.Value(0);
 

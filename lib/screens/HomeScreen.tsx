@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import React, {
   useState,
   useCallback,
@@ -5,7 +7,6 @@ import React, {
   useMemo,
   useEffect,
 } from "react";
-import { useDebounce } from "../utils/debounce";
 import {
   View,
   StyleSheet,
@@ -14,7 +15,9 @@ import {
   ListRenderItem,
   Alert,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { DEFAULT_MODEL, getModelById } from "../ai/modelConfig";
+import { useModel } from "../ai/ModelProvider";
+import { useTrackScreenView, useTrackEvent } from "../analytics";
 import {
   Text,
   EntryListItem,
@@ -23,11 +26,8 @@ import {
   FloatingActionButton,
   SearchDropdown,
 } from "../components";
-import { useTheme } from "../theme/ThemeProvider";
-import { spacingPatterns } from "../theme";
 import { Entry } from "../db/entries";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { DEFAULT_MODEL, getModelById } from "../ai/modelConfig";
+import { useModelSettings } from "../db/modelSettings";
 import {
   useInfiniteEntries,
   useSearchEntries,
@@ -35,10 +35,10 @@ import {
   useToggleFavorite,
   useUpdateEntry,
 } from "../db/useEntries";
-import { useModel } from "../ai/ModelProvider";
-import { useTrackScreenView, useTrackEvent } from "../analytics";
-import { useModelSettings } from "../db/modelSettings";
-import { useQueryClient } from "@tanstack/react-query";
+import { spacingPatterns } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
+import { useDebounce } from "../utils/debounce";
 
 type EntryTypeFilter = "all" | "journal" | "ai_chat";
 
@@ -58,7 +58,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
   // Track screen view
   useTrackScreenView("Home");
-  const trackEvent = useTrackEvent();
+  const _trackEvent = useTrackEvent();
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [dateFilter, setDateFilter] = useState<
@@ -68,8 +68,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const [entryTypeFilter, setEntryTypeFilter] = useState<EntryTypeFilter>("all");
   const { currentConfig } = useModel();
   const modelSettings = useModelSettings();
-  const [selectedModelConfig, setSelectedModelConfig] = useState(DEFAULT_MODEL);
-  const queryClient = useQueryClient();
+  const [_selectedModelConfig, setSelectedModelConfig] = useState(DEFAULT_MODEL);
+  const _queryClient = useQueryClient();
 
   // FAB menu state
   const [fabMenuOpen, setFabMenuOpen] = useState(false);
@@ -256,7 +256,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
               }
             },
           },
-        ]
+        ],
       );
       return;
     }
@@ -280,7 +280,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       const dateKey = new Date(
         date.getFullYear(),
         date.getMonth(),
-        date.getDate()
+        date.getDate(),
       ).toISOString();
 
       if (!grouped.has(dateKey)) {
@@ -312,7 +312,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     const entryDate = new Date(
       date.getFullYear(),
       date.getMonth(),
-      date.getDate()
+      date.getDate(),
     );
 
     if (entryDate.getTime() === today.getTime()) {
@@ -326,7 +326,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     }
 
     const daysDiff = Math.floor(
-      (today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
+      (today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24),
     );
     if (daysDiff < 7) {
       return date.toLocaleDateString([], { weekday: "long" });
@@ -368,7 +368,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
         />
       );
     },
-    [seasonalTheme, formatDateHeader, handleEntryPress, handleToggleFavorite]
+    [seasonalTheme, formatDateHeader, handleEntryPress, handleToggleFavorite],
   );
 
   const keyExtractor = useCallback(
@@ -376,14 +376,14 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       item:
         | { type: "header"; dateKey: string }
         | { type: "entry"; entry: Entry },
-      index: number
+      _index: number,
     ) => {
       if (item.type === "header") {
         return `header-${item.dateKey}`;
       }
       return `entry-${item.entry.id}`;
     },
-    []
+    [],
   );
 
   const handleClearSearch = useCallback(() => {

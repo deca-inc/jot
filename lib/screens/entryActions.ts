@@ -6,8 +6,8 @@
  */
 
 import { Alert } from "react-native";
-import type { UseMutationResult } from "@tanstack/react-query";
 import type { Entry, UpdateEntryInput } from "../db/entries";
+import type { UseMutationResult } from "@tanstack/react-query";
 
 export interface EntryActionContext {
   updateEntry: UseMutationResult<
@@ -26,7 +26,7 @@ export interface EntryActionContext {
 export async function renameEntry(
   entryId: number,
   newTitle: string,
-  context: EntryActionContext
+  context: EntryActionContext,
 ): Promise<void> {
   if (!newTitle.trim()) {
     throw new Error("Title cannot be empty");
@@ -53,7 +53,7 @@ export async function deleteEntry(
     confirmTitle?: string;
     confirmMessage?: string;
     skipConfirmation?: boolean;
-  }
+  },
 ): Promise<void> {
   const {
     confirmTitle = "Delete Entry",
@@ -98,7 +98,7 @@ export async function deleteEntry(
  */
 export async function deleteEntryWithConfirmation(
   entryId: number,
-  context: EntryActionContext
+  context: EntryActionContext,
 ): Promise<void> {
   return deleteEntry(entryId, context, { skipConfirmation: false });
 }

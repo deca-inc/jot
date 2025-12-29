@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { View, StyleSheet } from "react-native";
-import { Text } from "../components";
-import { useTheme } from "../theme/ThemeProvider";
 import { useEntryRepository, EntryType } from "../db/entries";
-import { JournalComposer } from "./JournalComposer";
+import { useTheme } from "../theme/ThemeProvider";
 import { AIChatComposer } from "./AIChatComposer";
+import { JournalComposer } from "./JournalComposer";
 
 export interface ComposerScreenProps {
   onSave?: (entryId: number) => void;
@@ -27,10 +26,10 @@ export function ComposerScreen({
   const entryRepository = useEntryRepository();
   // When entryId is provided, we don't know the type yet - set to undefined initially
   const [entryType, setEntryType] = useState<EntryType | undefined>(
-    entryId ? undefined : initialType
+    entryId ? undefined : initialType,
   );
   const [actualEntryId, setActualEntryId] = useState<number | undefined>(
-    entryId
+    entryId,
   );
   const hasLoadedEntryRef = useRef<number | null>(null);
 
@@ -75,7 +74,7 @@ export function ComposerScreen({
               entry.id,
               "with",
               blocks.length,
-              "blocks"
+              "blocks",
             );
             setActualEntryId(entry.id);
           } catch (error) {
@@ -103,7 +102,7 @@ export function ComposerScreen({
             "type:",
             entry.type,
             "blocks:",
-            entry.blocks.length
+            entry.blocks.length,
           );
           hasLoadedEntryRef.current = entryId;
           setEntryType(entry.type);
@@ -117,7 +116,6 @@ export function ComposerScreen({
     };
 
     loadEntry();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryId]);
 
   // Use fullScreen mode for journal entries (same as when creating new), or if explicitly set
@@ -137,7 +135,7 @@ export function ComposerScreen({
       }
       onSave?.(newEntryId);
     },
-    [actualEntryId, onSave]
+    [actualEntryId, onSave],
   );
 
   // Show UI shell immediately

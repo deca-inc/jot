@@ -115,12 +115,12 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         console.error("[useAIChat] Generation failed:", err);
         llm.clearPendingSave();
         onErrorRef.current?.(
-          err instanceof Error ? err.message : "Generation failed"
+          err instanceof Error ? err.message : "Generation failed",
         );
         return messageHistoryRef.current;
       }
     },
-    [llm]
+    [llm],
   );
 
   /**

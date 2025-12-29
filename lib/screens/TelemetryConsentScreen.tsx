@@ -1,13 +1,13 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { Text } from "../components";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
-import { useTheme } from "../theme/ThemeProvider";
-import { useTelemetrySettings } from "../db/telemetrySettings";
 import { useTrackScreenView } from "../analytics";
+import { Text } from "../components";
+import { useTelemetrySettings } from "../db/telemetrySettings";
+import { spacingPatterns, borderRadius } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
 
 interface TelemetryConsentScreenProps {
   onContinue: () => void;

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
 import { PostHogProvider as PostHogProviderBase } from "posthog-react-native";
+import React, { useState, useEffect } from "react";
 import { useDatabase } from "../db/DatabaseProvider";
 import { TelemetrySettingsRepository } from "../db/telemetrySettings";
 
@@ -20,7 +20,7 @@ export function ConditionalPostHogProvider({
 }: ConditionalPostHogProviderProps) {
   const db = useDatabase();
   const [telemetryEnabled, setTelemetryEnabled] = useState<boolean | null>(
-    null
+    null,
   );
   const [isLoading, setIsLoading] = useState(true);
 

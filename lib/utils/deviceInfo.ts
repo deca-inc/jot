@@ -1,5 +1,5 @@
-import { Platform } from "react-native";
 import * as Device from "expo-device";
+import { Platform } from "react-native";
 
 /**
  * Get estimated device RAM in GB
@@ -81,7 +81,7 @@ export async function getCompatibleModels(): Promise<string[]> {
 
   // Find all models that fit within 20% RAM
   const suitableModels = MODEL_METADATA.filter(
-    (model) => model.ramUsageMB <= maxRAMUsageMB
+    (model) => model.ramUsageMB <= maxRAMUsageMB,
   );
 
   if (suitableModels.length === 0) {

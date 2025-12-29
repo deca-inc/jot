@@ -11,8 +11,8 @@
  */
 
 import * as SecureStore from "expo-secure-store";
-import { install } from "react-native-quick-crypto";
 import argon2 from "react-native-argon2";
+import { install } from "react-native-quick-crypto";
 
 // Install global shims (including Buffer) - this sets up global.Buffer
 install();
@@ -64,13 +64,6 @@ async function getOrCreateSalt(): Promise<string> {
 }
 
 /**
- * Convert hex string to Buffer (for react-native-quick-crypto)
- */
-function hexToBuffer(hex: string): any {
-  return Buffer.from(hex, "hex");
-}
-
-/**
  * Convert Buffer to hex string
  */
 function bufferToHex(buffer: any): string {
@@ -106,7 +99,7 @@ export async function generateMasterKey(): Promise<string> {
  * protection against specialized attack hardware compared to PBKDF2.
  */
 export async function deriveKeyFromPassphrase(
-  passphrase: string
+  passphrase: string,
 ): Promise<string> {
   const salt = await getOrCreateSalt();
 

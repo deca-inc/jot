@@ -10,11 +10,11 @@
  */
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { useModelSettings } from "../db/modelSettings";
 import { LlmModelConfig, DEFAULT_MODEL, ALL_MODELS } from "./modelConfig";
-import { persistentDownloadManager } from "./persistentDownloadManager";
 import { modelDownloadStatus } from "./modelDownloadStatus";
 import { logStorageDebugInfo, verifyAllModels } from "./modelVerification";
-import { useModelSettings } from "../db/modelSettings";
+import { persistentDownloadManager } from "./persistentDownloadManager";
 
 interface ModelContextValue {
   /** Reload model - updates settings, LLMProvider will pick up the change */
@@ -54,12 +54,12 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
         if (downloadedModels.length > 0) {
           const verification = await verifyAllModels(
             downloadedModels.map((m) => m.modelId),
-            ALL_MODELS
+            ALL_MODELS,
           );
 
           if (verification.missing.length > 0) {
             console.warn(
-              `[ModelProvider] ${verification.missing.length} model(s) missing from disk`
+              `[ModelProvider] ${verification.missing.length} model(s) missing from disk`,
             );
 
             // Clean up database entries for missing models
@@ -99,7 +99,7 @@ export function ModelProvider({ children }: { children: React.ReactNode }) {
       await modelSettings.setSelectedModelId(config.modelId);
       setCurrentConfig(config);
     },
-    [modelSettings]
+    [modelSettings],
   );
 
   const value: ModelContextValue = {

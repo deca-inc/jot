@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { GlassView } from "expo-glass-effect";
 import React, {
   useRef,
   useState,
@@ -22,14 +24,12 @@ import {
 } from "react-native";
 import { Text as RNText } from "react-native";
 import QuillEditor from "react-native-cn-quill";
-import { Ionicons } from "@expo/vector-icons";
-import { GlassView } from "expo-glass-effect";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { spacingPatterns } from "../theme";
 import { showKeyboard } from "../../modules/keyboard-module/src";
+import { spacingPatterns } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 
 // Toolbar height: minHeight (44) + paddingVertical (xs * 2) + margins
-const TOOLBAR_HEIGHT = 44 + spacingPatterns.xs * 2 + spacingPatterns.xs;
+const _TOOLBAR_HEIGHT = 44 + spacingPatterns.xs * 2 + spacingPatterns.xs;
 
 export interface QuillRichEditorRef {
   getHtml: () => Promise<string | undefined>;
@@ -62,7 +62,7 @@ export const QuillRichEditor = forwardRef<
     autoFocus = false,
     hideToolbar = false,
   },
-  ref
+  ref,
 ) {
   const seasonalTheme = useSeasonalTheme();
   const editorRef = useRef<QuillEditor>(null);
@@ -142,7 +142,7 @@ export const QuillRichEditor = forwardRef<
           duration: Platform.OS === "ios" ? 250 : 200,
           useNativeDriver: true,
         }).start();
-      }
+      },
     );
 
     const keyboardWillHide = Keyboard.addListener(
@@ -157,7 +157,7 @@ export const QuillRichEditor = forwardRef<
         }).start(() => {
           setKeyboardHeight(0);
         });
-      }
+      },
     );
 
     return () => {
@@ -170,50 +170,50 @@ export const QuillRichEditor = forwardRef<
   // Format handlers
   const toggleBold = useCallback(
     () => editorRef.current?.format("bold", !formatState.bold),
-    [formatState.bold]
+    [formatState.bold],
   );
   const toggleItalic = useCallback(
     () => editorRef.current?.format("italic", !formatState.italic),
-    [formatState.italic]
+    [formatState.italic],
   );
   const toggleUnderline = useCallback(
     () => editorRef.current?.format("underline", !formatState.underline),
-    [formatState.underline]
+    [formatState.underline],
   );
   const toggleStrike = useCallback(
     () => editorRef.current?.format("strike", !formatState.strike),
-    [formatState.strike]
+    [formatState.strike],
   );
   const toggleH1 = useCallback(
     () =>
       editorRef.current?.format("header", formatState.header === 1 ? false : 1),
-    [formatState.header]
+    [formatState.header],
   );
   const toggleH2 = useCallback(
     () =>
       editorRef.current?.format("header", formatState.header === 2 ? false : 2),
-    [formatState.header]
+    [formatState.header],
   );
   const toggleH3 = useCallback(
     () =>
       editorRef.current?.format("header", formatState.header === 3 ? false : 3),
-    [formatState.header]
+    [formatState.header],
   );
   const toggleBulletList = useCallback(
     () =>
       editorRef.current?.format(
         "list",
-        formatState.list === "bullet" ? false : "bullet"
+        formatState.list === "bullet" ? false : "bullet",
       ),
-    [formatState.list]
+    [formatState.list],
   );
   const toggleOrderedList = useCallback(
     () =>
       editorRef.current?.format(
         "list",
-        formatState.list === "ordered" ? false : "ordered"
+        formatState.list === "ordered" ? false : "ordered",
       ),
-    [formatState.list]
+    [formatState.list],
   );
   const toggleChecklist = useCallback(() => {
     const isChecklist =
@@ -230,7 +230,7 @@ export const QuillRichEditor = forwardRef<
         // Capture phase - intercept before children (ScrollView) get it
         onMoveShouldSetPanResponderCapture: (
           _evt: GestureResponderEvent,
-          gestureState: PanResponderGestureState
+          gestureState: PanResponderGestureState,
         ) => {
           const { dx, dy } = gestureState;
           // Activate if moving down and vertical movement > horizontal movement
@@ -242,7 +242,7 @@ export const QuillRichEditor = forwardRef<
         },
         onPanResponderRelease: (
           _evt: GestureResponderEvent,
-          gestureState: PanResponderGestureState
+          gestureState: PanResponderGestureState,
         ) => {
           // Dismiss keyboard if swiped down enough
           if (gestureState.dy > 20) {
@@ -255,7 +255,7 @@ export const QuillRichEditor = forwardRef<
           // Gesture was interrupted
         },
       }),
-    []
+    [],
   );
 
   // Handle HTML change - called directly by Quill when content changes
@@ -263,7 +263,7 @@ export const QuillRichEditor = forwardRef<
     (data: { html: string }) => {
       onChangeHtml?.(data.html);
     },
-    [onChangeHtml]
+    [onChangeHtml],
   );
 
   // Generate custom CSS

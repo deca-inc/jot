@@ -4,14 +4,13 @@ import {
   useQueryClient,
   useInfiniteQuery,
 } from "@tanstack/react-query";
-import { Alert } from "react-native";
+import { usePostHog, sanitizeProperties } from "../analytics";
 import {
   useEntryRepository,
   Entry,
   CreateEntryInput,
   UpdateEntryInput,
 } from "./entries";
-import { usePostHog, sanitizeProperties } from "../analytics";
 
 /**
  * Query keys for entries
@@ -193,7 +192,7 @@ export function useCreateEntry() {
             blockCount: entry.blocks.length,
             isFavorite: entry.isFavorite,
             hasAttachments: entry.attachments && entry.attachments.length > 0,
-          })
+          }),
         );
       }
       // Add to detail cache
@@ -223,7 +222,7 @@ export function useCreateEntry() {
           }
 
           return oldData;
-        }
+        },
       );
     },
   });
@@ -240,7 +239,6 @@ export function useUpdateEntry() {
     mutationFn: async ({
       id,
       input,
-      skipCacheUpdate,
     }: {
       id: number;
       input: UpdateEntryInput;
@@ -270,14 +268,14 @@ export function useUpdateEntry() {
               pages: oldData.pages.map((page: any) => ({
                 ...page,
                 entries: page.entries.map((e: Entry) =>
-                  e.id === entry.id ? entry : e
+                  e.id === entry.id ? entry : e,
                 ),
               })),
             };
           }
 
           return oldData;
-        }
+        },
       );
     },
   });
@@ -322,7 +320,7 @@ export function useDeleteEntry() {
           }
 
           return oldData;
-        }
+        },
       );
     },
   });
@@ -364,14 +362,14 @@ export function useToggleFavorite() {
               pages: oldData.pages.map((page: any) => ({
                 ...page,
                 entries: page.entries.map((e: Entry) =>
-                  e.id === entry.id ? entry : e
+                  e.id === entry.id ? entry : e,
                 ),
               })),
             };
           }
 
           return oldData;
-        }
+        },
       );
     },
   });

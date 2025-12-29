@@ -3,7 +3,10 @@
  * Combines all design tokens: colors, typography, spacing, etc.
  */
 
+import { springPresets, animatedHelpers } from "./animations";
+import { borderRadius, borderWidth } from "./borders";
 import { colors } from "./colors";
+import { spacing, spacingPatterns } from "./spacing";
 import {
   typography,
   fontSizes,
@@ -11,9 +14,6 @@ import {
   lineHeights,
   letterSpacing,
 } from "./typography";
-import { spacing, spacingPatterns } from "./spacing";
-import { borderRadius, borderWidth } from "./borders";
-import { springPresets, animatedHelpers } from "./animations";
 
 export const theme = {
   colors,

@@ -10,7 +10,7 @@ import {
  */
 export function useModelDownloadStatus(): DownloadStatus | null {
   const [status, setStatus] = useState<DownloadStatus | null>(
-    modelDownloadStatus.getCurrentDownload()
+    modelDownloadStatus.getCurrentDownload(),
   );
 
   useEffect(() => {

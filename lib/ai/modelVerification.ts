@@ -3,8 +3,8 @@
  * Helps diagnose and prevent issues with disappearing models on Android
  */
 
-import * as FileSystem from "expo-file-system/legacy";
 import { Paths } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { LlmModelConfig } from "./modelConfig";
 
 function getBaseDir(): string {
@@ -162,20 +162,20 @@ export async function logStorageDebugInfo(): Promise<void> {
   
   if (storageInfo.availableSpace) {
     console.log(
-      `Available space: ${(storageInfo.availableSpace / 1024 / 1024 / 1024).toFixed(2)} GB`
+      `Available space: ${(storageInfo.availableSpace / 1024 / 1024 / 1024).toFixed(2)} GB`,
     );
   }
   
   if (storageInfo.usedSpace) {
     console.log(
-      `Models using: ${(storageInfo.usedSpace / 1024 / 1024).toFixed(2)} MB`
+      `Models using: ${(storageInfo.usedSpace / 1024 / 1024).toFixed(2)} MB`,
     );
   }
 
   // Check if documentDirectory is being used (good) or cacheDirectory (bad)
   if (storageInfo.baseDirectory.includes("cache")) {
     console.error(
-      "⚠️  WARNING: Models are being stored in cache directory! This is NOT persistent on Android."
+      "⚠️  WARNING: Models are being stored in cache directory! This is NOT persistent on Android.",
     );
   } else {
     console.log("✅ Models are in persistent storage (documentDirectory)");
@@ -190,7 +190,7 @@ export async function logStorageDebugInfo(): Promise<void> {
  */
 export async function verifyAllModels(
   downloadedModelIds: string[],
-  allModels: LlmModelConfig[]
+  allModels: LlmModelConfig[],
 ): Promise<{
   allExist: boolean;
   missing: string[];

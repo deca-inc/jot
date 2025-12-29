@@ -14,7 +14,11 @@
     "test:migrations:down": "pnpm test:migrations down",
     "test:migrations:reset": "pnpm test:migrations reset",
     "test:migrations:status": "pnpm test:migrations status",
-    "download:models": "tsx scripts/downloadModels.ts"
+    "download:models": "tsx scripts/downloadModels.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.6",
@@ -52,11 +56,18 @@
     "react-native-webview": "^13.16.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/react": "~19.1.0",
+    "@typescript-eslint/parser": "^8.50.1",
     "better-sqlite3": "^12.4.1",
+    "eslint": "^9.39.2",
+    "eslint-plugin-import": "^2.32.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "tsx": "^4.20.6",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "typescript-eslint": "^8.50.1"
   },
   "private": true,
   "pnpm": {

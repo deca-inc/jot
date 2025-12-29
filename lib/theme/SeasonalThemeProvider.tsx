@@ -24,7 +24,7 @@ interface SeasonalThemeContextValue {
 }
 
 const SeasonalThemeContext = createContext<SeasonalThemeContextValue | null>(
-  null
+  null,
 );
 
 interface SeasonalThemeProviderProps {
@@ -42,7 +42,7 @@ export function SeasonalThemeProvider({
   // Use a stable function that doesn't need to be memoized
   const calculateThemeInternal = (
     currentSettings: ThemeSettings,
-    scheme: string | null | undefined
+    scheme: string | null | undefined,
   ) => {
     const now = new Date();
     let season: Season;
@@ -161,7 +161,7 @@ export function SeasonalThemeProvider({
       settings,
       refreshTheme,
     }),
-    [theme, settings, refreshTheme, colorScheme]
+    [theme, settings, refreshTheme, colorScheme],
   );
 
   return (
@@ -175,7 +175,7 @@ export function useSeasonalThemeContext(): SeasonalThemeContextValue {
   const context = useContext(SeasonalThemeContext);
   if (!context) {
     throw new Error(
-      "useSeasonalThemeContext must be used within a SeasonalThemeProvider"
+      "useSeasonalThemeContext must be used within a SeasonalThemeProvider",
     );
   }
   return context;

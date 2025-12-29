@@ -1,6 +1,6 @@
-import { useDatabase } from "./DatabaseProvider";
 import { SQLiteDatabase } from "expo-sqlite";
 import { type Season, type TimeOfDay } from "../theme/seasonalTheme";
+import { useDatabase } from "./DatabaseProvider";
 
 export interface ThemeSettings {
   mode: "auto" | "manual";
@@ -34,7 +34,7 @@ export class ThemeSettingsRepository {
     const now = Date.now();
     await this.db.runAsync(
       `INSERT OR REPLACE INTO settings (key, value, updatedAt) VALUES (?, ?, ?)`,
-      [SETTINGS_KEY, JSON.stringify(settings), now]
+      [SETTINGS_KEY, JSON.stringify(settings), now],
     );
   }
 }

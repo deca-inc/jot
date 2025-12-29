@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, TouchableOpacity, Modal } from "react-native";
-import { Text } from "./Text";
+import { useTrackEvent } from "../analytics";
+import { useThemeSettings } from "../db/themeSettings";
+import { spacingPatterns, borderRadius } from "../theme";
+import { type Season, type TimeOfDay } from "../theme/seasonalTheme";
 import {
   useSeasonalTheme,
   useSeasonalThemeContext,
 } from "../theme/SeasonalThemeProvider";
-import { useThemeSettings } from "../db/themeSettings";
-import { type Season, type TimeOfDay } from "../theme/seasonalTheme";
-import { spacingPatterns, borderRadius } from "../theme";
-import { useTrackEvent } from "../analytics";
+import { Text } from "./Text";
 
 interface ThemeControlProps {
   onThemeChange?: () => void;
@@ -47,7 +47,7 @@ export function ThemeControl({ onThemeChange }: ThemeControlProps = {}) {
         }
         if (settings.timeOfDay) {
           setSelectedTimeOfDay(
-            settings.timeOfDay === "system" ? "system" : settings.timeOfDay
+            settings.timeOfDay === "system" ? "system" : settings.timeOfDay,
           );
         } else if (settings.useSystemTimeOfDay) {
           setSelectedTimeOfDay("system");

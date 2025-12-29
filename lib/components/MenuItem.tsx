@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
   TouchableOpacity,
@@ -6,10 +7,9 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Text } from "./Text";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns, borderRadius } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { Text } from "./Text";
 
 export interface MenuItemProps {
   icon?: keyof typeof Ionicons.glyphMap;

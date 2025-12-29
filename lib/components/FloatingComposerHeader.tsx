@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { GlassView } from "expo-glass-effect";
 import React, { useState, useMemo } from "react";
 import {
   View,
@@ -6,14 +8,12 @@ import {
   Platform,
   Alert,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { GlassView } from "expo-glass-effect";
-import { Dialog } from "./Dialog";
-import { MenuItem } from "./MenuItem";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
 import { useDeleteEntry } from "../db/useEntries";
 import { deleteEntry, type EntryActionContext } from "../screens/entryActions";
+import { spacingPatterns, borderRadius } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { Dialog } from "./Dialog";
+import { MenuItem } from "./MenuItem";
 
 export interface FloatingComposerHeaderProps {
   entryId?: number;
@@ -43,7 +43,7 @@ export function FloatingComposerHeader({
       deleteEntry: deleteEntryMutation,
       onNavigateBack: onBack,
     }),
-    [deleteEntryMutation, onBack]
+    [deleteEntryMutation, onBack],
   );
 
   const handleDelete = async () => {

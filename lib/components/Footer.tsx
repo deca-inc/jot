@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import React, { useRef, useEffect } from "react";
 import {
   View,
@@ -7,13 +9,11 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
-import { Text } from "./Text";
+import { useTrackEvent } from "../analytics";
+import { type ComposerMode } from "../db/composerSettings";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { type ComposerMode } from "../db/composerSettings";
-import { useTrackEvent } from "../analytics";
+import { Text } from "./Text";
 
 export interface FooterProps {
   mode: ComposerMode;
@@ -28,7 +28,7 @@ export function Footer({ mode, onModeChange }: FooterProps) {
 
   // Animated values for the indicator
   const indicatorPosition = useRef(
-    new Animated.Value(mode === "journal" ? 0 : 1)
+    new Animated.Value(mode === "journal" ? 0 : 1),
   ).current;
 
   useEffect(() => {

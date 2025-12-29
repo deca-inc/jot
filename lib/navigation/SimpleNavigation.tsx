@@ -7,9 +7,7 @@ import {
   BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../theme/ThemeProvider";
-import { springPresets } from "../theme";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useCreateEntry } from "../db/useEntries";
 import {
   HomeScreen,
   SettingsScreen,
@@ -17,7 +15,9 @@ import {
   ComposerScreen,
   QuillEditorScreen,
 } from "../screens";
-import { useCreateEntry } from "../db/useEntries";
+import { springPresets } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
 
 type Screen =
   | "home"
@@ -37,10 +37,10 @@ export function SimpleNavigation() {
     number | undefined
   >(undefined);
   const [editingEntryId, setEditingEntryId] = useState<number | undefined>(
-    undefined
+    undefined,
   );
-  const [homeRefreshKey, setHomeRefreshKey] = useState(0);
-  const theme = useTheme();
+  const [_homeRefreshKey, _setHomeRefreshKey] = useState(0);
+  const _theme = useTheme();
   const createEntry = useCreateEntry();
   const swipeX = useRef(new Animated.Value(0)).current;
   const screenWidth = useRef(0);
@@ -48,10 +48,10 @@ export function SimpleNavigation() {
   // Store onCancel handlers so we can call them when swiping back
   // ComposerScreen will handle force save internally
   const fullEditorOnCancelRef = useRef<(() => void | Promise<void>) | null>(
-    null
+    null,
   );
   const entryEditorOnCancelRef = useRef<(() => void | Promise<void>) | null>(
-    null
+    null,
   );
 
   const canGoBack = currentScreen !== "home";
@@ -82,7 +82,7 @@ export function SimpleNavigation() {
   // Only handle swipe gestures from the left edge
   // This won't interfere with vertical scrolling
   const panResponderRef = useRef<ReturnType<typeof PanResponder.create> | null>(
-    null
+    null,
   );
 
   useEffect(() => {
@@ -160,7 +160,7 @@ export function SimpleNavigation() {
           return true; // Prevent default behavior (exiting app)
         }
         return false; // Allow default behavior (exit app) when on home screen
-      }
+      },
     );
 
     return () => backHandler.remove();
@@ -178,12 +178,12 @@ export function SimpleNavigation() {
     setCurrentScreen("quillEditor");
   }, []);
 
-  const handleOpenComposer = useCallback((type?: "journal" | "ai_chat") => {
+  const _handleOpenComposer = useCallback((type?: "journal" | "ai_chat") => {
     setComposerEntryType(type);
     setCurrentScreen("composer");
   }, []);
 
-  const handleComposerSave = useCallback((entryId: number) => {
+  const handleComposerSave = useCallback((_entryId: number) => {
     // Navigate back to home after saving
     // React Query cache handles the update automatically
     setCurrentScreen("home");
@@ -228,13 +228,13 @@ export function SimpleNavigation() {
 
       setFullEditorEntryId(entry.id);
       setCurrentScreen("fullEditor");
-    } catch (error) {
+    } catch (_error) {
       // Still navigate even if creation fails - ComposerScreen can handle it
       setCurrentScreen("fullEditor");
     }
   }, []);
 
-  const handleFullEditorSave = useCallback((entryId: number) => {
+  const handleFullEditorSave = useCallback((_entryId: number) => {
     // Don't navigate away - let user continue writing (auto-save handles saving)
     // React Query cache handles the update automatically
   }, []);
@@ -287,12 +287,12 @@ export function SimpleNavigation() {
     setCurrentScreen("settings");
   }, []);
 
-  const renderScreen = () => {
+  const _renderScreen = () => {
     switch (currentScreen) {
       case "home":
         return (
           <HomeScreen
-            refreshKey={homeRefreshKey}
+            refreshKey={_homeRefreshKey}
             onOpenFullEditor={handleOpenFullEditor}
             onOpenSettings={handleOpenSettings}
             onOpenEntryEditor={handleOpenEntryEditor}
@@ -341,7 +341,7 @@ export function SimpleNavigation() {
       default:
         return (
           <HomeScreen
-            refreshKey={homeRefreshKey}
+            refreshKey={_homeRefreshKey}
             onOpenFullEditor={handleOpenFullEditor}
             onOpenSettings={handleOpenSettings}
             onOpenEntryEditor={handleOpenEntryEditor}
@@ -421,7 +421,7 @@ export function SimpleNavigation() {
           pointerEvents={isHomeScreen ? "auto" : "none"}
         >
           <HomeScreen
-            refreshKey={homeRefreshKey}
+            refreshKey={_homeRefreshKey}
             isVisible={isHomeScreen}
             onOpenFullEditor={handleOpenFullEditor}
             onOpenSettings={handleOpenSettings}

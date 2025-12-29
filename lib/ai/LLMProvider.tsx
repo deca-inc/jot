@@ -9,15 +9,15 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { useLLM, Message } from "react-native-executorch";
 import { Block } from "../db/entries";
 import { useModelSettings } from "../db/modelSettings";
-import { ensureModelPresent, EnsureResult } from "./modelManager";
+import { registerBackgroundTasks } from "./backgroundTasks";
+import { truncateContext, fitsInContext } from "./contextManager";
 import {
   DEFAULT_SYSTEM_PROMPT,
   LlmModelConfig,
   DEFAULT_MODEL,
   getModelById,
 } from "./modelConfig";
-import { truncateContext, fitsInContext } from "./contextManager";
-import { registerBackgroundTasks } from "./backgroundTasks";
+import { ensureModelPresent, EnsureResult } from "./modelManager";
 
 /**
  * Pending save info - stores what we need to save response even if component unmounts
@@ -223,7 +223,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       const response = await responsePromise;
       return response;
     },
-    [llm, modelConfig.modelId]
+    [llm, modelConfig.modelId],
   );
 
   const interrupt = useCallback(() => {
@@ -257,7 +257,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       interrupt,
       registerPendingSave,
       clearPendingSave,
-    ]
+    ],
   );
 
   return (

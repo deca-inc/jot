@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -7,16 +8,15 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { Text } from "../components";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
-import { useTheme } from "../theme/ThemeProvider";
 import { ALL_MODELS } from "../ai/modelConfig";
-import { getRecommendedModel, getCompatibleModels } from "../utils/deviceInfo";
-import { useModelSettings } from "../db/modelSettings";
 import { ensureModelPresent } from "../ai/modelManager";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
+import { Text } from "../components";
+import { useModelSettings } from "../db/modelSettings";
+import { spacingPatterns, borderRadius } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
+import { getRecommendedModel, getCompatibleModels } from "../utils/deviceInfo";
 
 interface OnboardingModelSelectionScreenProps {
   onContinue: () => void;
@@ -146,7 +146,7 @@ export function OnboardingModelSelectionScreen({
   }
 
   const compatibleModels = ALL_MODELS.filter((m) =>
-    compatibleModelIds.includes(m.modelId)
+    compatibleModelIds.includes(m.modelId),
   );
 
   return (

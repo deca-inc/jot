@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -5,24 +6,22 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  ScrollView,
   Linking,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Text } from "./Text";
-import { Button } from "./Button";
-import { useToast } from "./ToastProvider";
-import { useTheme } from "../theme/ThemeProvider";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
-import { ALL_MODELS, LlmModelConfig, getModelById } from "../ai/modelConfig";
-import { useModelSettings } from "../db/modelSettings";
+import { ALL_MODELS, LlmModelConfig } from "../ai/modelConfig";
 import {
   ensureModelPresent,
   deleteModel,
   getModelSize,
 } from "../ai/modelManager";
 import { useModel } from "../ai/ModelProvider";
+import { useModelSettings } from "../db/modelSettings";
+import { spacingPatterns, borderRadius } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
+import { Button } from "./Button";
+import { Text } from "./Text";
+import { useToast } from "./ToastProvider";
 
 // Estimated file sizes in MB
 const MODEL_SIZES: Record<string, number> = {
@@ -66,8 +65,8 @@ function ModelCard({
   onDownload,
   onSelect,
   onRemove,
-  onViewDetails,
-  downloadedSize,
+  onViewDetails: _onViewDetails,
+  downloadedSize: _downloadedSize,
 }: ModelCardProps) {
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
@@ -265,10 +264,10 @@ export function ModelManagement() {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<string[]>([]);
   const [downloadingModels, setDownloadingModels] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [downloadProgress, setDownloadProgress] = useState<Map<string, number>>(
-    new Map()
+    new Map(),
   );
   const [modelSizes, setModelSizes] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -306,7 +305,7 @@ export function ModelManagement() {
     if (!model.available) {
       Alert.alert(
         "Model Not Available",
-        "This model does not have ExecuTorch PTE files available yet. Check the model page for updates."
+        "This model does not have ExecuTorch PTE files available yet. Check the model page for updates.",
       );
       return;
     }
@@ -383,12 +382,12 @@ export function ModelManagement() {
           `Failed to load ${model.displayName}: ${
             error?.message || "Unknown error"
           }`,
-          "error"
+          "error",
         );
       } finally {
         setLoadingModelId(null);
       }
-    } catch (error) {
+    } catch (_error) {
       showToast("Failed to select model", "error");
       setLoadingModelId(null);
     }
@@ -412,12 +411,12 @@ export function ModelManagement() {
 
               // Reload settings
               await loadSettings();
-            } catch (error) {
+            } catch (_error) {
               showToast("Failed to remove model", "error");
             }
           },
         },
-      ]
+      ],
     );
   };
 

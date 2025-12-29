@@ -159,7 +159,7 @@ class ModelDownloadStatusManager {
       try {
         await SecureStore.setItemAsync(
           DOWNLOAD_STATUS_KEY,
-          JSON.stringify(this.currentDownload)
+          JSON.stringify(this.currentDownload),
         );
       } catch (e) {
         console.error('[ModelDownloadStatus] Failed to persist state:', e);

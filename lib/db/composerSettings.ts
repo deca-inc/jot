@@ -1,5 +1,5 @@
-import { useDatabase } from "./DatabaseProvider";
 import { SQLiteDatabase } from "expo-sqlite";
+import { useDatabase } from "./DatabaseProvider";
 
 export type ComposerMode = "journal" | "ai";
 
@@ -32,7 +32,7 @@ export class ComposerSettingsRepository {
     const now = Date.now();
     await this.db.runAsync(
       `INSERT OR REPLACE INTO settings (key, value, updatedAt) VALUES (?, ?, ?)`,
-      [SETTINGS_KEY, JSON.stringify(settings), now]
+      [SETTINGS_KEY, JSON.stringify(settings), now],
     );
   }
 

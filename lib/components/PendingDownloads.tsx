@@ -1,16 +1,15 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Text } from "./Text";
-import { Button } from "./Button";
-import { useToast } from "./ToastProvider";
+import { ALL_MODELS } from "../ai/modelConfig";
+import { ensureModelPresent, getModelSize } from "../ai/modelManager";
+import { persistentDownloadManager, type DownloadMetadata } from "../ai/persistentDownloadManager";
+import { useModelSettings } from "../db/modelSettings";
+import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
-import { persistentDownloadManager, type DownloadMetadata } from "../ai/persistentDownloadManager";
-import { ensureModelPresent, getModelSize } from "../ai/modelManager";
-import { ALL_MODELS } from "../ai/modelConfig";
-import { useModelSettings } from "../db/modelSettings";
+import { Text } from "./Text";
+import { useToast } from "./ToastProvider";
 
 /**
  * Shows a list of pending downloads that can be resumed
@@ -150,7 +149,7 @@ export function PendingDownloads() {
               {
                 backgroundColor: seasonalTheme.cardBg,
                 borderColor: isResuming ? theme.colors.accent : seasonalTheme.textSecondary + '30',
-              }
+              },
             ]}
           >
             <View style={styles.downloadInfo}>
@@ -175,7 +174,7 @@ export function PendingDownloads() {
                 <View
                   style={[
                     styles.progressBarBg,
-                    { backgroundColor: seasonalTheme.textSecondary + '30' }
+                    { backgroundColor: seasonalTheme.textSecondary + '30' },
                   ]}
                 >
                   <View
@@ -199,7 +198,7 @@ export function PendingDownloads() {
                   styles.actionButton,
                   {
                     backgroundColor: isResuming ? theme.colors.accent + '20' : seasonalTheme.textPrimary + '15',
-                  }
+                  },
                 ]}
               >
                 {isResuming ? (
@@ -221,7 +220,7 @@ export function PendingDownloads() {
                   {
                     backgroundColor: '#FF6B6B15',
                     opacity: isResuming ? 0.5 : 1,
-                  }
+                  },
                 ]}
               >
                 <Ionicons

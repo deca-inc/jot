@@ -1,5 +1,5 @@
-import { useDatabase } from "./DatabaseProvider";
 import { SQLiteDatabase } from "expo-sqlite";
+import { useDatabase } from "./DatabaseProvider";
 
 export type EntryType = "journal" | "ai_chat";
 
@@ -151,7 +151,7 @@ export class EntryRepository {
         input.isFavorite ? 1 : 0,
         now,
         now,
-      ]
+      ],
     );
 
     const entry = await this.getById(result.lastInsertRowId);
@@ -416,7 +416,7 @@ export class EntryRepository {
     try {
       await this.db.runAsync(
         `UPDATE entries SET ${updates.join(", ")} WHERE id = ?`,
-        params
+        params,
       );
 
       const entry = await this.getById(id);
@@ -491,7 +491,7 @@ export class EntryRepository {
        WHERE generationStatus = 'generating' 
        AND generationStartedAt > ?
        ORDER BY generationStartedAt DESC`,
-      [cutoffTime]
+      [cutoffTime],
     );
 
     return results.map((row) => this.mapRowToEntry(row));

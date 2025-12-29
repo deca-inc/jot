@@ -1,3 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { marked } from "marked";
 import React, { useState, useMemo } from "react";
 import {
   View,
@@ -8,25 +11,22 @@ import {
   TextInput,
   Platform,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import RenderHtml, { HTMLElementModel, HTMLContentModel } from "react-native-render-html";
-import { marked } from "marked";
-import { Text } from "./Text";
-import { Card } from "./Card";
-import { Dialog } from "./Dialog";
-import { MenuItem } from "./MenuItem";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
+import { useTrackEvent } from "../analytics";
 import { Entry, extractPreviewText } from "../db/entries";
-import { type SeasonalTheme } from "../theme/seasonalTheme";
 import { useDeleteEntry, useUpdateEntry } from "../db/useEntries";
 import {
   renameEntry,
   deleteEntryWithConfirmation,
   type EntryActionContext,
 } from "../screens/entryActions";
-import { useTrackEvent } from "../analytics";
+import { spacingPatterns, borderRadius } from "../theme";
+import { type SeasonalTheme } from "../theme/seasonalTheme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { Card } from "./Card";
+import { Dialog } from "./Dialog";
+import { MenuItem } from "./MenuItem";
+import { Text } from "./Text";
 
 export interface EntryListItemProps {
   entry: Entry;
@@ -84,7 +84,7 @@ function EntryListItemComponent({
       updateEntry: updateEntryMutation,
       deleteEntry: deleteEntryMutation,
     }),
-    [updateEntryMutation, deleteEntryMutation]
+    [updateEntryMutation, deleteEntryMutation],
   );
 
   // Check if we should render HTML/markdown
@@ -291,7 +291,7 @@ function EntryListItemComponent({
         padding: 0,
       },
     }),
-    [itemTheme.textPrimary]
+    [itemTheme.textPrimary],
   );
 
   // Custom renderers for checklist items
@@ -335,7 +335,7 @@ function EntryListItemComponent({
         );
       },
       // Custom renderer for ul - handles both checklists and regular bullet lists
-      ul: ({ tnode, TDefaultRenderer, ...props }: any) => {
+      ul: ({ tnode }: any) => {
         const dataChecked = tnode?.attributes?.["data-checked"];
         const children = tnode?.children || [];
 
@@ -480,12 +480,12 @@ function EntryListItemComponent({
         );
       },
     }),
-    [itemTheme.textPrimary, itemTheme.textSecondary]
+    [itemTheme.textPrimary, itemTheme.textSecondary],
   );
 
   const htmlContentWidth = React.useMemo(
     () => width - spacingPatterns.screen * 2 - spacingPatterns.md * 2,
-    [width]
+    [width],
   );
 
   const formatDate = (timestamp: number): string => {
@@ -495,7 +495,7 @@ function EntryListItemComponent({
     const entryDate = new Date(
       date.getFullYear(),
       date.getMonth(),
-      date.getDate()
+      date.getDate(),
     );
 
     // If today, show time
@@ -515,7 +515,7 @@ function EntryListItemComponent({
 
     // If this week, show day name
     const daysDiff = Math.floor(
-      (today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
+      (today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24),
     );
     if (daysDiff < 7) {
       return date.toLocaleDateString([], { weekday: "long" });
@@ -876,7 +876,7 @@ function EntryListItemComponent({
 // Memoized comparison function to prevent unnecessary re-renders
 function arePropsEqual(
   prevProps: EntryListItemProps,
-  nextProps: EntryListItemProps
+  nextProps: EntryListItemProps,
 ): boolean {
   // Compare entry by checking key fields that affect rendering
   const prevEntry = prevProps.entry;

@@ -59,7 +59,7 @@ function getContextLimit(modelId: string): number {
  */
 export function fitsInContext(
   messages: LlmMessage[],
-  modelId: string
+  modelId: string,
 ): boolean {
   const limit = getContextLimit(modelId);
   const tokens = estimateMessagesTokens(messages);
@@ -74,7 +74,7 @@ export function fitsInContext(
  */
 export function truncateContext(
   messages: LlmMessage[],
-  modelId: string
+  modelId: string,
 ): LlmMessage[] {
   const limit = getContextLimit(modelId);
 

@@ -15,7 +15,7 @@ import { SQLiteDatabase } from "expo-sqlite";
  */
 export async function getDatabasePath(
   db: SQLiteDatabase,
-  databaseName: string
+  databaseName: string,
 ): Promise<string | null> {
   try {
     // expo-sqlite stores databases in the document directory
@@ -42,7 +42,7 @@ export async function getDatabasePath(
  */
 export async function logDatabasePath(
   db: SQLiteDatabase,
-  databaseName: string
+  databaseName: string,
 ): Promise<void> {
   const path = await getDatabasePath(db, databaseName);
   if (path) {

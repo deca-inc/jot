@@ -73,7 +73,7 @@ async function main() {
         } else {
           // No DB exists, run migrations first
           console.log(
-            "  No existing migrations found, running migrations with seeds first..."
+            "  No existing migrations found, running migrations with seeds first...",
           );
           db = await openTestDatabase();
           await migrateTo(db as any, Number.POSITIVE_INFINITY, {
@@ -113,12 +113,12 @@ async function main() {
           const settings = await db.getAllAsync("SELECT * FROM settings");
 
           console.log(
-            `✅ Test complete: ${entries.length} entries, ${settings.length} settings`
+            `✅ Test complete: ${entries.length} entries, ${settings.length} settings`,
           );
           console.log("📊 Sample entries:");
           for (const entry of entries) {
             console.log(
-              `  - ${entry.type}: "${entry.title}" (${entry.tags || "no tags"})`
+              `  - ${entry.type}: "${entry.title}" (${entry.tags || "no tags"})`,
             );
           }
         } catch (error) {

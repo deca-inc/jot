@@ -498,4 +498,18 @@ All blocks support:
 5. **Privacy first** - All AI inference on-device, no content leaves device without explicit user action
 6. **Keep blocks flat** - No nesting in the block structure
 7. **Avoid over-engineering** - Only make changes that are directly requested or clearly necessary
+8. **Run lint and typecheck** - After making significant changes, run `pnpm lint` and `pnpm typecheck` to catch issues early
+
+### Code Quality Commands
+- **`pnpm lint`** - Run ESLint to check for code style issues
+- **`pnpm lint:fix`** - Auto-fix ESLint issues (import sorting, trailing commas, etc.)
+- **`pnpm typecheck`** - Run TypeScript type checking without emitting files
+
+### Code Style (Enforced by ESLint)
+- **Trailing commas**: Always use trailing commas in multiline structures
+- **Import order**: Imports are auto-sorted alphabetically (builtin → external → internal → relative)
+- **Unused variables**: Prefix with `_` to indicate intentionally unused (e.g., `_unused`)
+- **Newlines**: Files must end with a newline
+
+A pre-commit hook runs `lint-staged` to automatically lint and fix staged files before each commit.
 

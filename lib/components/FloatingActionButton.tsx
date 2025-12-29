@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useRef, useEffect } from "react";
 import {
   TouchableOpacity,
@@ -9,11 +10,10 @@ import {
   Pressable,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { Text } from "./Text";
+import { useTrackEvent } from "../analytics";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useTrackEvent } from "../analytics";
+import { Text } from "./Text";
 
 export interface FloatingActionButtonProps {
   onPress: () => void;
@@ -62,7 +62,7 @@ export function FloatingActionButton({
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: false,
         }),
-      ])
+      ]),
     );
     pulseAnimation.start();
 
@@ -112,7 +112,7 @@ export function FloatingActionButton({
     outputRange: [8, 14],
   });
 
-  const elevation = glowAnimation.interpolate({
+  const _elevation = glowAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [6, 10],
   });

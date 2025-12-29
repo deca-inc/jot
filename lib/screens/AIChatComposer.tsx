@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { marked } from "marked";
 import React, {
   useState,
   useCallback,
@@ -17,29 +19,26 @@ import {
   useWindowDimensions,
   Keyboard,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Message } from "react-native-executorch";
 import RenderHtml from "react-native-render-html";
-import { marked } from "marked";
-import { Text, FloatingComposerHeader } from "../components";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAIChat } from "../ai/useAIChat";
 import { useTrackScreenView } from "../analytics";
+import { Text, FloatingComposerHeader } from "../components";
+import { Block } from "../db/entries";
+import {
+  useEntry,
+  useCreateEntry,
+  useUpdateEntry,
+} from "../db/useEntries";
+import { spacingPatterns, borderRadius } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 
 // Configure marked for simple rendering
 marked.setOptions({
   breaks: true,
   gfm: true,
 });
-
-import { spacingPatterns, borderRadius } from "../theme";
-import { Block } from "../db/entries";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import {
-  useEntry,
-  useCreateEntry,
-  useUpdateEntry,
-} from "../db/useEntries";
-import { useAIChat } from "../ai/useAIChat";
-import { Message } from "react-native-executorch";
 
 // Helper to strip think tags from content
 function stripThinkTags(text: string): string {
@@ -109,7 +108,7 @@ const UserMessageBubble = React.memo(
       prevProps.chipText === nextProps.chipText &&
       prevProps.textPrimary === nextProps.textPrimary
     );
-  }
+  },
 );
 
 /**
@@ -151,7 +150,7 @@ const MarkdownRenderer = React.memo(
       />
     );
   },
-  (prevProps, nextProps) => prevProps.content === nextProps.content
+  (prevProps, nextProps) => prevProps.content === nextProps.content,
 );
 
 /**
@@ -185,7 +184,7 @@ const AssistantMessage = React.memo(
 
     // Content to display, updated every 150ms during generation
     const [displayContent, setDisplayContent] = React.useState(
-      isGenerating ? streamingContentRef.current : blockContent
+      isGenerating ? streamingContentRef.current : blockContent,
     );
 
     React.useEffect(() => {
@@ -288,14 +287,14 @@ const AssistantMessage = React.memo(
       prevProps.textSecondary === nextProps.textSecondary &&
       prevProps.htmlContentWidth === nextProps.htmlContentWidth
     );
-  }
+  },
 );
 
 export function AIChatComposer({
   entryId,
   initialTitle = "",
   initialBlocks = EMPTY_BLOCKS,
-  onSave,
+  onSave: _onSave,
   onCancel,
 }: AIChatComposerProps) {
   const seasonalTheme = useSeasonalTheme();
@@ -331,8 +330,8 @@ export function AIChatComposer({
   const {
     isReady: isLLMReady,
     isGenerating,
-    isLoading: isLLMLoading,
-    error: llmError,
+    isLoading: _isLLMLoading,
+    error: _llmError,
     rawResponse: streamingResponse, // Use raw response for streaming display (AssistantMessage handles think tags)
     sendMessage: aiSendMessage,
     setMessageHistory,
@@ -378,7 +377,7 @@ export function AIChatComposer({
     if (entry?.blocks) {
       const messages: Message[] = entry.blocks
         .filter((b): b is Extract<Block, { type: "markdown" }> & { role: "user" | "assistant" } =>
-          b.type === "markdown" && (b.role === "user" || b.role === "assistant")
+          b.type === "markdown" && (b.role === "user" || b.role === "assistant"),
         )
         .map((b) => ({ role: b.role, content: b.content }));
       setMessageHistory(messages);
@@ -400,7 +399,7 @@ export function AIChatComposer({
   streamingContentRef.current = streamingResponse;
 
   // Derive displayed data from entry or fallback to initial props
-  const displayedTitle = entry?.title ?? initialTitle;
+  const _displayedTitle = entry?.title ?? initialTitle;
   const displayedBlocks = entry?.blocks ?? initialBlocks;
 
   // Build blocks with placeholder for generating state
@@ -591,12 +590,12 @@ export function AIChatComposer({
         whiteSpace: "pre" as const,
       },
     }),
-    [seasonalTheme.textPrimary, seasonalTheme.textSecondary]
+    [seasonalTheme.textPrimary, seasonalTheme.textSecondary],
   );
 
   const htmlContentWidth = useMemo(
     () => width - spacingPatterns.screen * 2,
-    [width]
+    [width],
   );
 
   // Custom renderer to handle inline code vs block code differently
@@ -625,7 +624,7 @@ export function AIChatComposer({
         );
       },
     }),
-    [seasonalTheme.textSecondary]
+    [seasonalTheme.textSecondary],
   );
 
   // Simple delete handler - no cleanup needed for LLM
@@ -697,7 +696,7 @@ export function AIChatComposer({
         "Error",
         `Failed to send message: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
       );
       setIsSubmitting(false);
     }
@@ -755,7 +754,7 @@ export function AIChatComposer({
       htmlContentWidth,
       htmlTagsStyles,
       customRenderers,
-    ]
+    ],
   );
 
   const keyExtractor = useCallback((item: Block, index: number) => {
@@ -780,7 +779,7 @@ export function AIChatComposer({
         text: "I'm trying to make a decision about ",
       },
     ],
-    []
+    [],
   );
 
   const handlePromptSuggestionPress = useCallback((suggestion: string) => {

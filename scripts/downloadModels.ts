@@ -10,8 +10,8 @@
  */
 
 import * as fs from "fs";
-import * as path from "path";
 import * as https from "https";
+import * as path from "path";
 
 const MODELS_DIR = path.join(__dirname, "../assets/models");
 
@@ -157,7 +157,7 @@ const MODEL_CONFIGS: ModelDownloadConfig[] = [
 function downloadFile(
   url: string,
   dest: string,
-  redirectCount = 0
+  redirectCount = 0,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     if (redirectCount > 5) {
@@ -217,12 +217,12 @@ function downloadFile(
           const percent = ((downloadedSize / totalSize) * 100).toFixed(1);
           process.stdout.write(
             `\r  ${percent}% (${(downloadedSize / 1024 / 1024).toFixed(
-              2
-            )}MB / ${(totalSize / 1024 / 1024).toFixed(2)}MB)`
+              2,
+            )}MB / ${(totalSize / 1024 / 1024).toFixed(2)}MB)`,
           );
         } else {
           process.stdout.write(
-            `\r  Downloaded: ${(downloadedSize / 1024 / 1024).toFixed(2)}MB`
+            `\r  Downloaded: ${(downloadedSize / 1024 / 1024).toFixed(2)}MB`,
           );
         }
       });
@@ -238,14 +238,18 @@ function downloadFile(
       file.on("error", (err) => {
         try {
           fs.unlinkSync(dest); // Delete the file on error
-        } catch {}
+        } catch {
+          // Ignore cleanup errors
+        }
         reject(err);
       });
 
       response.on("error", (err) => {
         try {
           fs.unlinkSync(dest);
-        } catch {}
+        } catch {
+          // Ignore cleanup errors
+        }
         reject(err);
       });
     });
@@ -253,7 +257,9 @@ function downloadFile(
     req.on("error", (err) => {
       try {
         fs.unlinkSync(dest);
-      } catch {}
+      } catch {
+        // Ignore cleanup errors
+      }
       reject(err);
     });
 
@@ -269,7 +275,7 @@ async function downloadModel(config: ModelDownloadConfig): Promise<void> {
   if (!config.available) {
     console.log(`⚠️  ${config.displayName} is not yet available for download.`);
     console.log(
-      `   ExecuTorch PTE files are not ready. Check the model page for updates.\n`
+      `   ExecuTorch PTE files are not ready. Check the model page for updates.\n`,
     );
     return;
   }
@@ -293,7 +299,7 @@ async function downloadModel(config: ModelDownloadConfig): Promise<void> {
             stats.size /
             1024 /
             1024
-          ).toFixed(2)}MB)`
+          ).toFixed(2)}MB)`,
         );
         continue;
       }
@@ -308,8 +314,8 @@ async function downloadModel(config: ModelDownloadConfig): Promise<void> {
       const stats = fs.statSync(destPath);
       console.log(
         `✓ Downloaded ${file.description} (${(stats.size / 1024 / 1024).toFixed(
-          2
-        )}MB)\n`
+          2,
+        )}MB)\n`,
       );
     } catch (error) {
       console.error(`✗ Failed to download ${file.description}:`, error);
@@ -347,7 +353,7 @@ async function main() {
         console.log(
           `  - ${m.modelId} (${
             m.available ? "Available" : "Not available yet"
-          })`
+          })`,
         );
       });
       process.exit(1);
@@ -358,7 +364,7 @@ async function main() {
   } else {
     // Default: download only Llama model
     modelsToDownload = MODEL_CONFIGS.filter(
-      (m) => m.modelId === "llama-3.2-1b-instruct"
+      (m) => m.modelId === "llama-3.2-1b-instruct",
     );
   }
 
@@ -366,7 +372,7 @@ async function main() {
   for (const config of modelsToDownload) {
     try {
       await downloadModel(config);
-    } catch (error) {
+    } catch (_error) {
       console.error(`✗ Failed to download ${config.displayName}`);
       if (!downloadAll) {
         process.exit(1);
@@ -384,10 +390,10 @@ async function main() {
   console.log("\nAvailable commands:");
   console.log("  pnpm download:models              - Download default model");
   console.log(
-    "  pnpm download:models --all        - Download all available models"
+    "  pnpm download:models --all        - Download all available models",
   );
   console.log(
-    "  pnpm download:models --model <id> - Download specific model\n"
+    "  pnpm download:models --model <id> - Download specific model\n",
   );
 
   // Explicitly exit to close any lingering network connections

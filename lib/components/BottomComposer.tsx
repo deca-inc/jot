@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -8,14 +10,12 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
-import { Text } from "./Text";
-import { ComposerInput } from "./ComposerInput";
+import { useTrackEvent } from "../analytics";
+import { type ComposerMode } from "../db/composerSettings";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { type ComposerMode } from "../db/composerSettings";
-import { useTrackEvent } from "../analytics";
+import { ComposerInput } from "./ComposerInput";
+import { Text } from "./Text";
 
 export interface BottomComposerProps {
   mode: ComposerMode;
@@ -55,7 +55,7 @@ export function BottomComposer({
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: false,
         }),
-      ])
+      ]),
     );
     pulseAnimation.start();
     return () => pulseAnimation.stop();

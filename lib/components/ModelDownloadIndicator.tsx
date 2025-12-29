@@ -1,10 +1,10 @@
 import React from "react";
 import { View, StyleSheet, ActivityIndicator } from "react-native";
-import { Text } from "./Text";
+import { useModelDownloadStatus } from "../ai/useModelDownloadStatus";
+import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
-import { spacingPatterns, borderRadius } from "../theme";
-import { useModelDownloadStatus } from "../ai/useModelDownloadStatus";
+import { Text } from "./Text";
 
 interface ModelDownloadIndicatorProps {
   variant?: "banner" | "inline";

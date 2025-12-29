@@ -71,7 +71,7 @@ const themeCache = new Map<string, SeasonalTheme>();
  */
 export function getSeasonalTheme(
   season: Season,
-  timeOfDay: TimeOfDay
+  timeOfDay: TimeOfDay,
 ): SeasonalTheme {
   const cacheKey = `v${CACHE_VERSION}:${season}-${timeOfDay}`;
   const cached = themeCache.get(cacheKey);

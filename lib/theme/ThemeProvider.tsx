@@ -1,5 +1,5 @@
 import React, { createContext, useContext, ReactNode, useMemo } from "react";
-import { useColorScheme, Platform } from "react-native";
+import { useColorScheme } from "react-native";
 import { theme, Theme } from "./index";
 
 interface ThemeContextValue extends Theme {
@@ -19,7 +19,7 @@ export function ThemeProvider({
   highContrast = false,
 }: ThemeProviderProps) {
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  const _isDark = colorScheme === "dark";
 
   // For now, we only support light mode
   // Dark mode can be added later by extending the theme
@@ -29,7 +29,7 @@ export function ThemeProvider({
       isDark: false, // Always light mode for now
       isHighContrast: highContrast,
     }),
-    [highContrast]
+    [highContrast],
   );
 
   return (

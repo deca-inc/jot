@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useRef, useState, useEffect } from "react";
 import {
   View,
@@ -10,12 +11,11 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Text as RNText } from "react-native";
-import QuillEditor, { QuillToolbar } from "react-native-cn-quill";
+import QuillEditor from "react-native-cn-quill";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { Text } from "../components";
-import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { spacingPatterns } from "../theme";
+import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 
 interface QuillEditorScreenProps {
   onBack?: () => void;
@@ -59,7 +59,7 @@ export function QuillEditorScreen({ onBack }: QuillEditorScreenProps = {}) {
           duration: Platform.OS === "ios" ? 250 : 200,
           useNativeDriver: true,
         }).start();
-      }
+      },
     );
 
     const keyboardWillHide = Keyboard.addListener(
@@ -73,7 +73,7 @@ export function QuillEditorScreen({ onBack }: QuillEditorScreenProps = {}) {
         }).start(() => {
           setKeyboardHeight(0);
         });
-      }
+      },
     );
 
     return () => {
@@ -99,12 +99,12 @@ export function QuillEditorScreen({ onBack }: QuillEditorScreenProps = {}) {
   const toggleBulletList = () =>
     editorRef.current?.format(
       "list",
-      formatState.list === "bullet" ? false : "bullet"
+      formatState.list === "bullet" ? false : "bullet",
     );
   const toggleOrderedList = () =>
     editorRef.current?.format(
       "list",
-      formatState.list === "ordered" ? false : "ordered"
+      formatState.list === "ordered" ? false : "ordered",
     );
   const toggleChecklist = () => {
     // Quill uses "unchecked" for checklist items, not "check"

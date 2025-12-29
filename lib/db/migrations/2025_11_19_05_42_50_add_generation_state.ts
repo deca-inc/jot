@@ -26,11 +26,11 @@ export const up: MigrationRunner = async (db) => {
   console.log("[Migration] Generation state tracking fields added successfully");
 };
 
-export const down: MigrationRunner = async (db) => {
+export const down: MigrationRunner = async (_db) => {
   // Note: SQLite doesn't support DROP COLUMN directly
   // We would need to recreate the table without these columns
   // For now, just log a warning
   console.warn(
-    "[Migration] Down migration not implemented - SQLite doesn't support DROP COLUMN"
+    "[Migration] Down migration not implemented - SQLite doesn't support DROP COLUMN",
   );
 };

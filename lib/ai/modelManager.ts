@@ -1,7 +1,7 @@
-import * as FileSystem from "expo-file-system/legacy";
-import { Paths } from "expo-file-system";
 import { Asset } from "expo-asset";
-import { DEFAULT_MODEL, LlmModelConfig } from "./modelConfig";
+import { Paths } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
+import { BundledAssetSource, DEFAULT_MODEL, LlmModelConfig } from "./modelConfig";
 import { modelDownloadStatus } from "./modelDownloadStatus";
 import { persistentDownloadManager } from "./persistentDownloadManager";
 
@@ -45,7 +45,7 @@ function getBaseDir(): string {
   
   // NEVER use cacheDirectory for models - Android can clear it at any time!
   throw new Error(
-    "No persistent storage directory available. documentDirectory is required for model storage."
+    "No persistent storage directory available. documentDirectory is required for model storage.",
   );
 }
 
@@ -62,12 +62,12 @@ async function ensureModelsDir(subDir?: string): Promise<string> {
 }
 
 async function ensureFromBundled(
-  source: any,
-  fileName: string
+  source: BundledAssetSource,
+  fileName: string,
 ): Promise<string> {
   try {
     // Handle file path directly (for large .pte files loaded from filesystem)
-    if (source.uri && typeof source.uri === "string") {
+    if (typeof source === "object" && "uri" in source && typeof source.uri === "string") {
       // File path from filesystem - use directly
       const fileInfo = await FileSystem.getInfoAsync(source.uri);
       if (fileInfo.exists) {
@@ -85,7 +85,8 @@ async function ensureFromBundled(
     }
 
     // Handle bundled asset (for small files like tokenizer.json)
-    const asset = Asset.fromModule(source);
+    // At this point, source must be a number (Metro module ID) since we handled the uri case above
+    const asset = Asset.fromModule(source as number);
     await asset.downloadAsync();
     // Copy to models dir with deterministic name for simplicity
     await ensureModelsDir();
@@ -96,40 +97,14 @@ async function ensureFromBundled(
       await FileSystem.copyAsync({ from: asset.localUri!, to: dest });
     }
     return dest;
-  } catch (error) {
+  } catch (_error) {
     // If bundled asset doesn't exist or fails, throw to allow fallback
     throw new Error(
-      `Bundled asset not available: ${fileName}. Run 'pnpm download:models' to download models.`
+      `Bundled asset not available: ${fileName}. Run 'pnpm download:models' to download models.`,
     );
   }
 }
 
-async function ensureFromRemote(
-  url: string,
-  fileName: string
-): Promise<string> {
-  await ensureModelsDir();
-  const dest = joinPaths(modelsDir, fileName);
-  const existing = await FileSystem.getInfoAsync(dest);
-  if (existing.exists && existing.size && existing.size > 0) {
-    return dest;
-  }
-  const tmp = dest + ".download";
-  try {
-    const res = await FileSystem.downloadAsync(url, tmp);
-    if (res.status !== 200) {
-      throw new Error(`Download failed with status ${res.status}`);
-    }
-    await FileSystem.moveAsync({ from: tmp, to: dest });
-    return dest;
-  } catch (e) {
-    // Cleanup partial
-    try {
-      await FileSystem.deleteAsync(tmp, { idempotent: true });
-    } catch {}
-    throw e;
-  }
-}
 
 async function ensureFromRemoteToFolder(
   url: string,
@@ -138,7 +113,7 @@ async function ensureFromRemoteToFolder(
   modelId: string,
   modelName: string,
   fileType: 'model' | 'tokenizer' | 'config',
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
 ): Promise<string> {
   const modelDir = await ensureModelsDir(folderName);
   const dest = joinPaths(modelDir, fileName);
@@ -161,7 +136,7 @@ async function ensureFromRemoteToFolder(
       (progress, bytesWritten, bytesTotal) => {
         onProgress?.(progress);
         console.log(`[ensureFromRemoteToFolder] Progress: ${(progress * 100).toFixed(1)}% (${bytesWritten}/${bytesTotal} bytes)`);
-      }
+      },
     );
     
     // Execute the download
@@ -169,7 +144,7 @@ async function ensureFromRemoteToFolder(
       downloadResumable,
       modelId,
       fileType,
-      dest
+      dest,
     );
     
     console.log(`[ensureFromRemoteToFolder] Download complete: ${finalPath}`);
@@ -182,7 +157,7 @@ async function ensureFromRemoteToFolder(
 
 export async function ensureModelPresent(
   config: LlmModelConfig = DEFAULT_MODEL,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
 ): Promise<EnsureResult> {
   let ptePath: string;
 
@@ -203,7 +178,7 @@ export async function ensureModelPresent(
         docModelInfo.size /
         1024 /
         1024
-      ).toFixed(2)}MB)`
+      ).toFixed(2)}MB)`,
     );
     
     // Model already exists, call onProgress with 100% immediately
@@ -217,14 +192,14 @@ export async function ensureModelPresent(
     try {
       ptePath = await ensureFromBundled(
         config.pteSource.requireId,
-        config.pteFileName
+        config.pteFileName,
       );
       if (onProgress) {
         onProgress(1.0);
       }
-    } catch (e) {
+    } catch (_e) {
       throw new Error(
-        `Bundled model not available. Run 'pnpm download:models --model ${config.modelId}' to download.`
+        `Bundled model not available. Run 'pnpm download:models --model ${config.modelId}' to download.`,
       );
     }
   } else {
@@ -250,14 +225,14 @@ export async function ensureModelPresent(
           }
           modelDownloadStatus.updateProgress(
             config.modelId,
-            Math.round(overallProgress * 100)
+            Math.round(overallProgress * 100),
           );
-        }
+        },
       );
     } catch (e) {
       modelDownloadStatus.failDownload(
         config.modelId,
-        e instanceof Error ? e.message : "Download failed"
+        e instanceof Error ? e.message : "Download failed",
       );
       throw e;
     }
@@ -268,12 +243,12 @@ export async function ensureModelPresent(
     if (config.tokenizerSource.kind === "unavailable") {
       // Skip tokenizer if unavailable
       console.warn(
-        `[ensureModelPresent] Tokenizer not available for ${config.modelId}`
+        `[ensureModelPresent] Tokenizer not available for ${config.modelId}`,
       );
     } else if (config.tokenizerSource.kind === "bundled") {
       tokenizerPath = await ensureFromBundled(
         config.tokenizerSource.requireId,
-        config.tokenizerFileName || "tokenizer.bin"
+        config.tokenizerFileName || "tokenizer.bin",
       );
     } else {
       // Tokenizer progress (10% of total, starting from 80%)
@@ -292,10 +267,10 @@ export async function ensureModelPresent(
           if (config.pteSource.kind === "remote") {
             modelDownloadStatus.updateProgress(
               config.modelId,
-              Math.round(overallProgress * 100)
+              Math.round(overallProgress * 100),
             );
           }
-        }
+        },
       );
     }
   }
@@ -305,12 +280,12 @@ export async function ensureModelPresent(
     if (config.tokenizerConfigSource.kind === "unavailable") {
       // Skip tokenizer config if unavailable
       console.warn(
-        `[ensureModelPresent] Tokenizer config not available for ${config.modelId}`
+        `[ensureModelPresent] Tokenizer config not available for ${config.modelId}`,
       );
     } else if (config.tokenizerConfigSource.kind === "bundled") {
       tokenizerConfigPath = await ensureFromBundled(
         config.tokenizerConfigSource.requireId,
-        config.tokenizerConfigFileName || "tokenizer.json"
+        config.tokenizerConfigFileName || "tokenizer.json",
       );
     } else {
       // Tokenizer config progress (10% of total, starting from 90%)
@@ -329,10 +304,10 @@ export async function ensureModelPresent(
           if (config.pteSource.kind === "remote") {
             modelDownloadStatus.updateProgress(
               config.modelId,
-              Math.round(overallProgress * 100)
+              Math.round(overallProgress * 100),
             );
           }
-        }
+        },
       );
     }
   }

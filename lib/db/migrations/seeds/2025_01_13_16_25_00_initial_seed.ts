@@ -46,7 +46,7 @@ export const up: MigrationRunner = async (db) => {
       0,
       now,
       now,
-    ]
+    ],
   );
 
   // Sample AI chat entry
@@ -77,7 +77,7 @@ export const up: MigrationRunner = async (db) => {
       0,
       now - 3600000, // 1 hour ago
       now - 3600000,
-    ]
+    ],
   );
 
   // Favorite journal entry
@@ -108,7 +108,7 @@ export const up: MigrationRunner = async (db) => {
       1, // favorite
       now - 86400000, // 1 day ago
       now - 86400000,
-    ]
+    ],
   );
 
   // Entry with code block
@@ -138,13 +138,13 @@ export const up: MigrationRunner = async (db) => {
       0,
       now - 172800000, // 2 days ago
       now - 172800000,
-    ]
+    ],
   );
 
   // Sample setting
   await db.runAsync(
     `INSERT INTO settings (key, value, updatedAt) VALUES (?, ?, ?)`,
-    ["test_setting", JSON.stringify({ enabled: true, theme: "light" }), now]
+    ["test_setting", JSON.stringify({ enabled: true, theme: "light" }), now],
   );
 };
 

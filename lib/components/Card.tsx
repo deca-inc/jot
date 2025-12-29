@@ -1,18 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
   ViewProps,
-  StyleSheet,
   Animated,
   AccessibilityInfo,
 } from "react-native";
-import { useTheme } from "../theme/ThemeProvider";
 import {
   spacingPatterns,
   borderRadius,
   borderWidth,
   springPresets,
 } from "../theme";
+import { useTheme } from "../theme/ThemeProvider";
 
 export interface CardProps extends ViewProps {
   variant?: "default" | "elevated" | "outlined" | "borderless";
@@ -45,7 +43,7 @@ export function Card({
         if (event) {
           opacity.setValue(1);
         }
-      }
+      },
     );
     return () => subscription.remove();
   }, [opacity]);
