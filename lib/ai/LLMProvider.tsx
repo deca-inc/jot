@@ -77,6 +77,10 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
   } | null>(null);
   const [pathsError, setPathsError] = useState<string | null>(null);
 
+  // Lazy loading: only load the model when first sendMessage is called
+  // This prevents blocking the main thread during app cold start
+  const [loadRequested, setLoadRequested] = useState(false);
+
   // Load selected model ID from settings
   useEffect(() => {
     modelSettings.getSelectedModelId().then((id) => {
@@ -131,17 +135,23 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Use the LLM hook - this stays mounted!
+  // preventLoad is true until both: (1) paths are ready AND (2) load is explicitly requested
+  // This prevents blocking the main thread during app cold start
   const llm = useLLM({
     model: {
       modelSource: modelPaths?.ptePath || "",
       tokenizerSource: modelPaths?.tokenizerPath || "",
       tokenizerConfigSource: modelPaths?.tokenizerConfigPath || "",
     },
-    preventLoad: !modelPaths,
+    preventLoad: !modelPaths || !loadRequested,
   });
 
   // Track response for returning from sendMessage
   const responseResolverRef = useRef<((response: string) => void) | null>(null);
+
+  // Ref to track current llm state for async polling (avoids stale closure)
+  const llmStateRef = useRef({ isReady: llm.isReady, error: llm.error });
+  llmStateRef.current = { isReady: llm.isReady, error: llm.error };
 
   // Watch for generation completion to resolve the promise AND handle pending saves
   useEffect(() => {
@@ -193,9 +203,28 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
   // Send message helper that handles context limits
   const sendMessage = useCallback(
     async (messages: Message[]): Promise<string> => {
-      if (!llm.isReady) {
-        throw new Error("Model not ready");
+      // Trigger lazy loading on first sendMessage call
+      if (!loadRequested) {
+        setLoadRequested(true);
+        // Wait a tick for state update to trigger re-render and start loading
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
+
+      // Wait for model to be ready (polling with timeout)
+      const startTime = Date.now();
+      const timeout = 60000; // 60 second timeout for model loading
+
+      while (!llmStateRef.current.isReady) {
+        if (llmStateRef.current.error) {
+          throw new Error(llmStateRef.current.error);
+        }
+        if (Date.now() - startTime > timeout) {
+          throw new Error("Model loading timed out");
+        }
+        // Wait and check again
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
       if (llm.isGenerating) {
         throw new Error("Already generating");
       }
@@ -223,7 +252,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       const response = await responsePromise;
       return response;
     },
-    [llm, modelConfig.modelId],
+    [llm, modelConfig.modelId, loadRequested],
   );
 
   const interrupt = useCallback(() => {
@@ -236,7 +265,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
     () => ({
       isReady: llm.isReady,
       isGenerating: llm.isGenerating,
-      isLoading: !llm.isReady && !llm.error && !pathsError,
+      isLoading: loadRequested && !llm.isReady && !llm.error && !pathsError,
       error: pathsError || llm.error,
       response: stripThinkTags(llm.response || ""),
       rawResponse: llm.response || "",
@@ -251,6 +280,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       llm.isGenerating,
       llm.error,
       llm.response,
+      loadRequested,
       pathsError,
       modelConfig,
       sendMessage,

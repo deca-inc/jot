@@ -81,10 +81,8 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         return messageHistoryRef.current;
       }
 
-      if (!llm.isReady) {
-        onErrorRef.current?.("Model not ready");
-        return messageHistoryRef.current;
-      }
+      // Note: We don't check llm.isReady here - the provider's sendMessage
+      // will trigger lazy loading and wait for the model to be ready
 
       let cleanedUserMessage = userMessage.trim();
       if (cleanedUserMessage.indexOf("/think") !== 0) {

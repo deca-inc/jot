@@ -330,7 +330,7 @@ export function AIChatComposer({
   // Use the simplified AI chat hook
   // Pass entryId and currentBlocks so it can auto-save even if component unmounts
   const {
-    isReady: isLLMReady,
+    isReady: _isLLMReady,
     isGenerating,
     isLoading: _isLLMLoading,
     error: _llmError,
@@ -642,7 +642,7 @@ export function AIChatComposer({
   aiSendMessageRef.current = aiSendMessage;
 
   const handleSendMessage = useCallback(async () => {
-    if (!newMessage.trim() || !isLLMReady || isSubmitting || isGenerating) return;
+    if (!newMessage.trim() || isSubmitting || isGenerating) return;
 
     const messageText = newMessage.trim();
     setNewMessage("");
@@ -705,7 +705,6 @@ export function AIChatComposer({
     displayedBlocks,
     createEntry,
     updateEntry,
-    isLLMReady,
     isGenerating,
     scrollToBottom,
     isSubmitting,
@@ -999,7 +998,7 @@ export function AIChatComposer({
           value={newMessage}
           onChangeText={setNewMessage}
           multiline
-          editable={isLLMReady && !isGenerating}
+          editable={!isGenerating}
           onSubmitEditing={handleSendMessage}
           returnKeyType="send"
           blurOnSubmit={false}
@@ -1008,7 +1007,6 @@ export function AIChatComposer({
           onPress={handleSendMessage}
           disabled={
             !newMessage.trim() ||
-            !isLLMReady ||
             createEntry.isPending ||
             updateEntry.isPending ||
             isGenerating ||
@@ -1019,7 +1017,6 @@ export function AIChatComposer({
             {
               backgroundColor:
                 newMessage.trim() &&
-                isLLMReady &&
                 !createEntry.isPending &&
                 !updateEntry.isPending &&
                 !isGenerating &&
@@ -1034,7 +1031,6 @@ export function AIChatComposer({
             size={20}
             color={
               newMessage.trim() &&
-              isLLMReady &&
               !createEntry.isPending &&
               !updateEntry.isPending &&
               !isGenerating &&
