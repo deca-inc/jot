@@ -230,11 +230,11 @@ async function createConversation() {
 For complex workflows, use the action pattern:
 
 ```typescript
-// Define action context with what actions need
+// Define action context with proper types (not `any`)
 interface ActionContext {
-  createEntry: any;
-  updateEntry: any;
-  llm: any;
+  createEntry: UseMutationResult<Entry, Error, CreateEntryInput>;
+  updateEntry: UseMutationResult<Entry, Error, UpdateEntryInput>;
+  llm: LLMService;
   onSave?: (id: number) => void;
 }
 
@@ -367,6 +367,38 @@ const handleSubmit = useCallback(
 );
 ```
 
+### TypeScript: Prefer Proper Types Over `any`
+
+**Why**: `any` disables type checking and defeats the purpose of TypeScript. It hides bugs and makes refactoring dangerous.
+
+**Hierarchy of solutions** (in order of preference):
+1. **Use proper types** - Define interfaces, use generics, leverage library types
+2. **Use `unknown`** - When you truly don't know the type, use `unknown` and narrow with type guards
+3. **Line-level disable** - If a specific line genuinely needs `any` (e.g., library interop), use `// eslint-disable-next-line @typescript-eslint/no-explicit-any` with a comment explaining why
+4. **File-level disable** - Only as absolute last resort for files with extensive library interop
+
+```typescript
+// ❌ BAD: Using any
+function handleError(error: any) {
+  console.log(error.message);
+}
+
+// ✅ GOOD: Use unknown and narrow
+function handleError(error: unknown) {
+  const err = error as { message?: string };
+  console.log(err?.message || String(error));
+}
+
+// ✅ GOOD: Use proper library types
+const handlePress: TouchableOpacityProps["onPress"] = (e) => {
+  // e is properly typed
+};
+
+// ✅ ACCEPTABLE: Line-level disable with explanation
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostHog SDK types don't export this
+const analytics = posthog as any;
+```
+
 ### Summary
 
 - **0 useEffects**: Handle everything through events and actions
@@ -377,6 +409,7 @@ const handleSubmit = useCallback(
 - **Cache static objects**: Theme objects, config maps that don't change
 - **Stabilize unstable dependencies**: Use refs for React Query mutations
 - **Update state conditionally**: Only when value actually changes
+- **Proper types over `any`**: Use real types, then `unknown`, then line-level disables, file-level only as last resort
 
 When in doubt, ask: "Can I derive this from data?" and "Can I handle this with an event?" The answer is usually yes.
 

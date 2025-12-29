@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Uses `any` for react-native-render-html renderers and dynamic message handling
 import { Ionicons } from "@expo/vector-icons";
 import { marked } from "marked";
 import React, {

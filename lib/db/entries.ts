@@ -208,7 +208,7 @@ export class EntryRepository {
     order?: "ASC" | "DESC";
   }): Promise<Entry[]> {
     let query = "SELECT * FROM entries WHERE 1=1";
-    const params: any[] = [];
+    const params: (string | number)[] = [];
 
     if (options?.type) {
       query += " AND type = ?";
@@ -294,7 +294,7 @@ export class EntryRepository {
       INNER JOIN entries_fts fts ON e.id = fts.rowid
       WHERE entries_fts MATCH ?
     `;
-    const params: any[] = [`"${searchQuery}"*`];
+    const params: (string | number)[] = [`"${searchQuery}"*`];
 
     if (options.type) {
       query += " AND e.type = ?";
@@ -359,7 +359,7 @@ export class EntryRepository {
 
     const now = Date.now();
     const updates: string[] = [];
-    const params: any[] = [];
+    const params: (string | number | null)[] = [];
 
     if (input.title !== undefined) {
       updates.push("title = ?");

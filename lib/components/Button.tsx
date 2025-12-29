@@ -94,7 +94,7 @@ export function Button({
       : seasonalTheme.textPrimary;
   };
 
-  const handlePressIn = (e: any) => {
+  const handlePressIn: TouchableOpacityProps["onPressIn"] = (e) => {
     if (shouldAnimate) {
       Animated.spring(scale, {
         toValue: 0.96,
@@ -104,7 +104,7 @@ export function Button({
     onPressIn?.(e);
   };
 
-  const handlePressOut = (e: any) => {
+  const handlePressOut: TouchableOpacityProps["onPressOut"] = (e) => {
     if (shouldAnimate) {
       Animated.spring(scale, {
         toValue: 1,
@@ -114,7 +114,7 @@ export function Button({
     onPressOut?.(e);
   };
 
-  const handlePress = (e: any) => {
+  const handlePress: TouchableOpacityProps["onPress"] = (e) => {
     // Track button click using label as event name
     const eventProperties = sanitizeProperties({
       ...metadata, // Spread metadata at root level

@@ -349,8 +349,9 @@ export function ModelManagement() {
 
       // Reload settings to update UI
       await loadSettings();
-    } catch (error: any) {
-      showToast(error?.message || "Failed to download model", "error");
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      showToast(err?.message || "Failed to download model", "error");
     } finally {
       setDownloadingModels((prev) => {
         const next = new Set(prev);
@@ -377,10 +378,11 @@ export function ModelManagement() {
       try {
         await reloadModel(model);
         showToast(`${model.displayName} is now active`, "success");
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const err = error as { message?: string };
         showToast(
           `Failed to load ${model.displayName}: ${
-            error?.message || "Unknown error"
+            err?.message || "Unknown error"
           }`,
           "error",
         );

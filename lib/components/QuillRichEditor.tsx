@@ -678,14 +678,14 @@ export const QuillRichEditor = forwardRef<
           }}
           onSelectionChange={(data) => {
             if (data.range) {
-              editorRef.current?.getFormat(data.range).then((format: any) => {
+              editorRef.current?.getFormat(data.range).then((format: Record<string, unknown>) => {
                 setFormatState({
                   bold: !!format.bold,
                   italic: !!format.italic,
                   underline: !!format.underline,
                   strike: !!format.strike,
-                  header: format.header || 0,
-                  list: format.list || null,
+                  header: (format.header as number) || 0,
+                  list: (format.list as string) || null,
                 });
               });
             }

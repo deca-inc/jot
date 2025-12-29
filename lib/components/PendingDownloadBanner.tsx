@@ -88,9 +88,10 @@ export function PendingDownloadBanner() {
 
       showToast(`${modelConfig.displayName} downloaded successfully`, 'success');
       await loadPendingDownload();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to resume download:', error);
-      showToast(error?.message || 'Failed to resume download', 'error');
+      const err = error as { message?: string };
+      showToast(err?.message || 'Failed to resume download', 'error');
     } finally {
       setIsResuming(false);
       setProgress(0);

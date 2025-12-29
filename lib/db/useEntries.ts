@@ -3,6 +3,7 @@ import {
   useMutation,
   useQueryClient,
   useInfiniteQuery,
+  InfiniteData,
 } from "@tanstack/react-query";
 import { usePostHog, sanitizeProperties } from "../analytics";
 import {
@@ -11,6 +12,14 @@ import {
   CreateEntryInput,
   UpdateEntryInput,
 } from "./entries";
+
+// Type for paginated entry results from infinite queries
+interface EntryPage {
+  entries: Entry[];
+  nextCursor?: number;
+}
+
+type InfiniteEntryData = InfiniteData<EntryPage, number | undefined>;
 
 /**
  * Query keys for entries
@@ -199,16 +208,16 @@ export function useCreateEntry() {
       queryClient.setQueryData(entryKeys.detail(entry.id), entry);
 
       // Update ALL infinite query caches directly
-      queryClient.setQueriesData(
+      queryClient.setQueriesData<InfiniteEntryData | undefined>(
         { queryKey: entryKeys.lists() },
-        (oldData: any) => {
+        (oldData) => {
           if (!oldData) return oldData;
 
           // Check if this is an infinite query
           if (oldData.pages && Array.isArray(oldData.pages)) {
             return {
               ...oldData,
-              pages: oldData.pages.map((page: any, index: number) => {
+              pages: oldData.pages.map((page, index: number) => {
                 // Add to first page
                 if (index === 0) {
                   return {
@@ -256,16 +265,16 @@ export function useUpdateEntry() {
       queryClient.setQueryData(entryKeys.detail(entry.id), entry);
 
       // Update ALL infinite query caches directly
-      queryClient.setQueriesData(
+      queryClient.setQueriesData<InfiniteEntryData | undefined>(
         { queryKey: entryKeys.lists() },
-        (oldData: any) => {
+        (oldData) => {
           if (!oldData) return oldData;
 
           // Check if this is an infinite query
           if (oldData.pages && Array.isArray(oldData.pages)) {
             return {
               ...oldData,
-              pages: oldData.pages.map((page: any) => ({
+              pages: oldData.pages.map((page) => ({
                 ...page,
                 entries: page.entries.map((e: Entry) =>
                   e.id === entry.id ? entry : e,
@@ -303,16 +312,16 @@ export function useDeleteEntry() {
       queryClient.removeQueries({ queryKey: entryKeys.detail(id) });
 
       // Update ALL infinite query caches directly
-      queryClient.setQueriesData(
+      queryClient.setQueriesData<InfiniteEntryData | undefined>(
         { queryKey: entryKeys.lists() },
-        (oldData: any) => {
+        (oldData) => {
           if (!oldData) return oldData;
 
           // Check if this is an infinite query
           if (oldData.pages && Array.isArray(oldData.pages)) {
             return {
               ...oldData,
-              pages: oldData.pages.map((page: any) => ({
+              pages: oldData.pages.map((page) => ({
                 ...page,
                 entries: page.entries.filter((entry: Entry) => entry.id !== id),
               })),
@@ -350,16 +359,16 @@ export function useToggleFavorite() {
       queryClient.setQueryData(entryKeys.detail(entry.id), entry);
 
       // Update ALL infinite query caches directly
-      queryClient.setQueriesData(
+      queryClient.setQueriesData<InfiniteEntryData | undefined>(
         { queryKey: entryKeys.lists() },
-        (oldData: any) => {
+        (oldData) => {
           if (!oldData) return oldData;
 
           // Check if this is an infinite query
           if (oldData.pages && Array.isArray(oldData.pages)) {
             return {
               ...oldData,
-              pages: oldData.pages.map((page: any) => ({
+              pages: oldData.pages.map((page) => ({
                 ...page,
                 entries: page.entries.map((e: Entry) =>
                   e.id === entry.id ? entry : e,

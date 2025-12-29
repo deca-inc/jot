@@ -1,15 +1,29 @@
 import { useState, useEffect, useRef } from "react";
 
+// Generic function type for debounce/throttle
+type AnyFunction = (...args: never[]) => unknown;
+
+interface DebouncedFunction<T extends AnyFunction> {
+  (...args: Parameters<T>): void;
+  cancel: () => void;
+  flush: (...args: Parameters<T>) => void;
+}
+
+interface ThrottledFunction<T extends AnyFunction> {
+  (...args: Parameters<T>): void;
+  cancel: () => void;
+}
+
 /**
  * Create a debounced function that delays execution until after
  * a specified wait time has elapsed since the last invocation.
  *
  * Unlike useEffect-based debouncing, this is event-driven.
  */
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends AnyFunction>(
   func: T,
   wait: number,
-): (...args: Parameters<T>) => void {
+): DebouncedFunction<T> {
   let timeout: NodeJS.Timeout | null = null;
 
   const debounced = (...args: Parameters<T>) => {
@@ -18,39 +32,37 @@ export function debounce<T extends (...args: any[]) => any>(
     }
 
     timeout = setTimeout(() => {
-      func(...args);
+      func(...(args as Parameters<T>));
       timeout = null;
     }, wait);
   };
 
-  // Add cancel method to clear pending execution
-  (debounced as any).cancel = () => {
+  debounced.cancel = () => {
     if (timeout) {
       clearTimeout(timeout);
       timeout = null;
     }
   };
 
-  // Add flush method to execute immediately
-  (debounced as any).flush = (...args: Parameters<T>) => {
+  debounced.flush = (...args: Parameters<T>) => {
     if (timeout) {
       clearTimeout(timeout);
       timeout = null;
     }
-    func(...args);
+    func(...(args as Parameters<T>));
   };
 
-  return debounced;
+  return debounced as DebouncedFunction<T>;
 }
 
 /**
  * Create a throttled function that only executes at most once
  * per specified time period.
  */
-export function throttle<T extends (...args: any[]) => any>(
+export function throttle<T extends AnyFunction>(
   func: T,
   wait: number,
-): (...args: Parameters<T>) => void {
+): ThrottledFunction<T> {
   let timeout: NodeJS.Timeout | null = null;
   let lastArgs: Parameters<T> | null = null;
 
@@ -58,19 +70,18 @@ export function throttle<T extends (...args: any[]) => any>(
     lastArgs = args;
 
     if (!timeout) {
-      func(...args);
+      func(...(args as Parameters<T>));
       timeout = setTimeout(() => {
         timeout = null;
         if (lastArgs) {
-          func(...lastArgs);
+          func(...(lastArgs as Parameters<T>));
           lastArgs = null;
         }
       }, wait);
     }
   };
 
-  // Add cancel method
-  (throttled as any).cancel = () => {
+  throttled.cancel = () => {
     if (timeout) {
       clearTimeout(timeout);
       timeout = null;
@@ -78,7 +89,7 @@ export function throttle<T extends (...args: any[]) => any>(
     }
   };
 
-  return throttled;
+  return throttled as ThrottledFunction<T>;
 }
 
 /**

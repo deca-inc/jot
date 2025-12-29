@@ -37,8 +37,9 @@ export function registerBackgroundTasks() {
   // Register background task (new API)
   // Note: This will fail until Info.plist has UIBackgroundModes with 'processing' and the app is rebuilt
   BackgroundTask.registerTaskAsync(BACKGROUND_GENERATION_TASK).catch(
-    (err: any) => {
-      const code = err?.code || err?.message || String(err);
+    (err: unknown) => {
+      const error = err as { code?: string; message?: string };
+      const code = error?.code || error?.message || String(err);
       console.warn("[BackgroundTask] Failed to register:", code);
     },
   );

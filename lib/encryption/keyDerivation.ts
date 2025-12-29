@@ -18,7 +18,7 @@ import { install } from "react-native-quick-crypto";
 install();
 
 // Use Buffer from global after install (react-native-quick-crypto sets it up)
-const Buffer = (global as any).Buffer;
+const Buffer = (global as { Buffer: typeof import("buffer").Buffer }).Buffer;
 
 const SALT_KEY = "encryption_salt";
 const DERIVED_KEY_STORAGE_KEY = "master_key_encrypted";
@@ -66,7 +66,7 @@ async function getOrCreateSalt(): Promise<string> {
 /**
  * Convert Buffer to hex string
  */
-function bufferToHex(buffer: any): string {
+function bufferToHex(buffer: Buffer): string {
   return buffer.toString("hex");
 }
 

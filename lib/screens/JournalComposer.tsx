@@ -105,9 +105,6 @@ export function JournalComposer({
       get updateEntry() {
         return updateEntryMutationRef.current;
       },
-      get createEntry() {
-        return updateEntryMutationRef.current;
-      },
       get onSave() {
         return onSaveRef.current;
       },
@@ -133,7 +130,7 @@ export function JournalComposer({
   // Clean up debounced function on unmount
   useEffect(() => {
     return () => {
-      (debouncedSave as any).cancel();
+      debouncedSave.cancel();
     };
   }, [debouncedSave]);
 
@@ -142,13 +139,13 @@ export function JournalComposer({
     isDeletingRef.current = true;
 
     // Cancel any pending debounced saves
-    (debouncedSave as any).cancel();
+    debouncedSave.cancel();
   }, [debouncedSave]);
 
   // Handle back button - save before navigating to keep state consistent
   const handleBackPress = useCallback(async () => {
     // Cancel any pending debounced saves
-    (debouncedSave as any).cancel();
+    debouncedSave.cancel();
 
     // Save content and wait for it to complete before navigating
     const currentContent = htmlContentRef.current;

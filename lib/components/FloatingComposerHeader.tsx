@@ -39,7 +39,7 @@ export function FloatingComposerHeader({
   // Action context
   const actionContext = useMemo<EntryActionContext>(
     () => ({
-      updateEntry: null as any, // Not used for delete
+      updateEntry: null as unknown as EntryActionContext["updateEntry"], // Not used for delete
       deleteEntry: deleteEntryMutation,
       onNavigateBack: onBack,
     }),

@@ -104,14 +104,16 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     switch (dateFilter) {
       case "today":
         return { dateFrom: today.getTime(), dateTo: now };
-      case "week":
+      case "week": {
         const weekAgo = new Date(today);
         weekAgo.setDate(weekAgo.getDate() - 7);
         return { dateFrom: weekAgo.getTime(), dateTo: now };
-      case "month":
+      }
+      case "month": {
         const monthAgo = new Date(today);
         monthAgo.setMonth(monthAgo.getMonth() - 1);
         return { dateFrom: monthAgo.getTime(), dateTo: now };
+      }
       default:
         return { dateFrom: undefined, dateTo: undefined };
     }

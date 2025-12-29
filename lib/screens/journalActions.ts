@@ -12,12 +12,17 @@
  * - Database as single source of truth
  */
 
-import { Block } from "../db/entries";
+import { Block, Entry, CreateEntryInput, UpdateEntryInput } from "../db/entries";
+import type { UseMutationResult } from "@tanstack/react-query";
+
+// Type for the mutation objects returned by useCreateEntry and useUpdateEntry
+type CreateEntryMutation = UseMutationResult<Entry, Error, CreateEntryInput>;
+type UpdateEntryMutation = UseMutationResult<Entry, Error, { id: number; input: UpdateEntryInput; skipCacheUpdate?: boolean }>;
 
 export interface JournalActionContext {
   // React Query mutations
-  createEntry: any;
-  updateEntry: any;
+  createEntry?: CreateEntryMutation;
+  updateEntry: UpdateEntryMutation;
 
   // Callbacks
   onSave?: (entryId: number) => void;
@@ -39,7 +44,7 @@ interface CreateJournalEntryParams {
  */
 export async function createJournalEntry(
   params: CreateJournalEntryParams,
-  context: JournalActionContext,
+  context: JournalActionContext & { createEntry: CreateEntryMutation },
 ): Promise<number> {
   const { initialContent = "", initialTitle = "" } = params;
   const { createEntry, onSave } = context;
@@ -65,7 +70,7 @@ export async function createJournalEntry(
       }
     }
 
-    const entry = await new Promise<any>((resolve, reject) => {
+    const entry = await new Promise<Entry>((resolve, reject) => {
       createEntry.mutate(
         {
           type: "journal",
@@ -246,12 +251,15 @@ export async function updateJournalTitle(
   }
 }
 
+// Type for delete mutation
+type DeleteEntryMutation = UseMutationResult<number, Error, number>;
+
 /**
  * Action: Delete journal entry
  */
 export async function deleteJournalEntry(
   entryId: number,
-  deleteEntry: any,
+  deleteEntry: DeleteEntryMutation,
   onDelete?: (entryId: number) => void,
 ): Promise<void> {
   try {

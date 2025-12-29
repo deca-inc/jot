@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Database adapter for testing
  *
  * Allows migration tests to work with both expo-sqlite (in app)
  * and better-sqlite3 (in Node.js test scripts)
+ *
+ * Uses `any` to match expo-sqlite's dynamic query interface
  */
 
 import Database from "better-sqlite3";

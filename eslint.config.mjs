@@ -68,10 +68,6 @@ export default tseslint.config(
 
       // Disable rules that conflict with the codebase style
       "@typescript-eslint/no-require-imports": "off", // Allow require() for dynamic imports
-      "@typescript-eslint/no-explicit-any": "off", // Allow any types (common in React Native/library integrations)
-      "no-empty": "off", // Allow empty blocks (intentional catch blocks)
-      "@typescript-eslint/no-unused-expressions": "off", // Allow unused expressions (common in React patterns)
-      "no-case-declarations": "off", // Allow declarations in case blocks
     },
   },
 );

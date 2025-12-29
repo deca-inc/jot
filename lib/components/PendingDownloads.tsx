@@ -87,9 +87,10 @@ export function PendingDownloads() {
 
       // Reload pending downloads to update UI
       await loadPendingDownloads();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to resume download:', error);
-      showToast(error?.message || 'Failed to resume download', 'error');
+      const err = error as { message?: string };
+      showToast(err?.message || 'Failed to resume download', 'error');
     } finally {
       setResumingModelId(null);
       setDownloadProgress(prev => {

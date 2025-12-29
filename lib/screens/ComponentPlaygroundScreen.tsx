@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Dev-only playground screen for testing components with dynamic theme values
 import React, { useState, useRef, useEffect } from "react";
 import {
   View,

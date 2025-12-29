@@ -1,8 +1,11 @@
 #!/usr/bin/env tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Migration testing script
  *
  * Run this script to test migrations in a controlled environment.
+ * Uses `any` for dynamic database query results.
+ *
  * Usage:
  *   pnpm test:migrations up
  *   pnpm test:migrations down [count]

@@ -28,9 +28,13 @@ export function usePostHog() {
  *   // ... rest of component
  * }
  */
+// Type alias for properties that can be sent to PostHog
+// Must not include undefined as PostHog's JsonType doesn't support it
+type AnalyticsProperties = Record<string, string | number | boolean | null>;
+
 export function useTrackScreenView(
   screenName: string,
-  properties?: Record<string, any>,
+  properties?: AnalyticsProperties,
 ) {
   const posthog = usePostHog();
 
@@ -52,7 +56,7 @@ export function useTrackEvent() {
   const posthog = usePostHog();
 
   return useCallback(
-    (eventName: string, properties?: Record<string, any>) => {
+    (eventName: string, properties?: AnalyticsProperties) => {
       if (posthog) {
         posthog.capture(eventName, properties);
       }
@@ -66,8 +70,8 @@ export function useTrackEvent() {
  * Removes any fields that might contain user content.
  */
 export function sanitizeProperties(
-  properties: Record<string, any>,
-): Record<string, any> {
+  properties: AnalyticsProperties,
+): AnalyticsProperties {
   const sanitized = { ...properties };
 
   // List of fields that should never be sent to analytics

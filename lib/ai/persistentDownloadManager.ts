@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Persistent Download Manager
- * 
+ *
  * Manages resumable downloads that persist across app sessions.
  * Downloads will continue in the background and can be resumed if interrupted.
+ *
+ * Uses `any` for extending expo-file-system objects with custom properties
  */
 
 import { File } from "expo-file-system";

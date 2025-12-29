@@ -7,6 +7,13 @@ interface MigrationOptions {
 }
 const defaultOptions: MigrationOptions = { verbose: true, includeSeeds: false };
 
+// Helper for conditional logging
+function log(options: MigrationOptions, ...args: unknown[]) {
+  if (options.verbose) {
+    console.log(...args);
+  }
+}
+
 // Client-side lock to prevent concurrent migrations
 let isMigrating = false;
 
@@ -49,7 +56,7 @@ export async function migrateTo(
   migrationLimit: number = Number.POSITIVE_INFINITY,
   options: MigrationOptions = defaultOptions,
 ) {
-  options.verbose && console.log("Running Migrations");
+  log(options, "Running Migrations");
 
   // Check if migrations are already running (client-side lock)
   if (isMigrating) {
@@ -85,7 +92,7 @@ export async function migrateTo(
     );
 
     if (pendingMigrations.length === 0) {
-      options.verbose && console.log("No pending migrations");
+      log(options, "No pending migrations");
       return;
     }
 
@@ -93,10 +100,10 @@ export async function migrateTo(
     const lastBatch = existing.length > 0 ? existing[0].batch : 0;
     const newBatch = lastBatch + 1;
 
-    options.verbose &&
-      console.log(
-        `- Found ${pendingMigrations.length} pending migration(s), running ${migrationsToRun.length}`,
-      );
+    log(
+      options,
+      `- Found ${pendingMigrations.length} pending migration(s), running ${migrationsToRun.length}`,
+    );
 
     // Load all migration modules
     const resolvedModules = await Promise.allSettled<MigrationModule>(
@@ -128,8 +135,7 @@ export async function migrateTo(
           newBatch,
         ]);
 
-        options.verbose &&
-          console.log(`- ▲ ${migrationsToRun[i]} [${runEnd - runStart}ms]`);
+        log(options, `- ▲ ${migrationsToRun[i]} [${runEnd - runStart}ms]`);
       }
 
       // Commit transaction if all migrations succeeded
@@ -150,7 +156,7 @@ export async function migrateBack(
   migrationLimit: number | "batch" = "batch",
   options: MigrationOptions = defaultOptions,
 ) {
-  options.verbose && console.log("Rolling Back Migrations");
+  log(options, "Rolling Back Migrations");
 
   // Check if migrations are already running (client-side lock)
   if (isMigrating) {
@@ -173,7 +179,7 @@ export async function migrateBack(
     }>("SELECT * FROM migrations ORDER BY id DESC");
 
     if (existing.length === 0) {
-      options.verbose && console.log("No migrations to roll back");
+      log(options, "No migrations to roll back");
       return;
     }
 
@@ -196,15 +202,13 @@ export async function migrateBack(
     );
 
     if (typeof migrationLimit === "number") {
-      options.verbose &&
-        console.log("- Mode: rolling back individual migrations");
-      options.verbose && console.log(`- Rollback limit: ${migrationLimit}`);
+      log(options, "- Mode: rolling back individual migrations");
+      log(options, `- Rollback limit: ${migrationLimit}`);
     } else {
-      options.verbose && console.log("- Mode: rolling back by batch");
-      options.verbose && console.log(`- Batch number: ${lastBatch}`);
+      log(options, "- Mode: rolling back by batch");
+      log(options, `- Batch number: ${lastBatch}`);
     }
-    options.verbose &&
-      console.log(`- Including seeds (always included in rollback)`);
+    log(options, `- Including seeds (always included in rollback)`);
 
     let rollbackCount = 0;
 
@@ -232,10 +236,10 @@ export async function migrateBack(
         ]);
 
         rollbackCount += 1;
-        options.verbose &&
-          console.log(
-            `- ▼ ${validMigrationsToRollback[i].name} [${runEnd - runStart}ms]`,
-          );
+        log(
+          options,
+          `- ▼ ${validMigrationsToRollback[i].name} [${runEnd - runStart}ms]`,
+        );
       }
 
       // Commit transaction if all rollbacks succeeded
@@ -246,12 +250,12 @@ export async function migrateBack(
       throw error;
     }
 
-    options.verbose &&
-      console.log(
-        `\nRan ${rollbackCount} ${
-          rollbackCount === 1 ? "migration" : "migrations"
-        } rollback`,
-      );
+    log(
+      options,
+      `\nRan ${rollbackCount} ${
+        rollbackCount === 1 ? "migration" : "migrations"
+      } rollback`,
+    );
   } finally {
     // Always release the client-side lock
     isMigrating = false;
