@@ -687,11 +687,8 @@ export function AIChatComposer({
       // the component before onResponseComplete fires. The entry is already
       // created and the response will be saved in onResponseComplete.
 
-      // Scroll to bottom and refocus input
+      // Scroll to bottom (don't auto-focus input - let user tap to continue)
       scrollToBottom();
-      setTimeout(() => {
-        chatInputRef.current?.focus();
-      }, 100);
     } catch (error) {
       console.error("[AIChatComposer] Error sending message:", error);
       Alert.alert(
