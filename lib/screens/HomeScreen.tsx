@@ -38,6 +38,7 @@ import {
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
+import { extractCountdownData, createCountdownBlock } from "../utils/countdown";
 import { useDebounce } from "../utils/debounce";
 
 type EntryTypeFilter = "all" | "journal" | "ai_chat";
@@ -47,12 +48,13 @@ export interface HomeScreenProps {
   isVisible?: boolean;
   onOpenFullEditor?: (initialText?: string) => void;
   onOpenSettings?: () => void;
-  onOpenEntryEditor?: (entryId: number) => void;
+  onOpenEntryEditor?: (entryId: number, entryType?: "journal" | "ai_chat" | "countdown") => void;
   onCreateNewAIChat?: () => void;
+  onCreateCountdown?: () => void;
 }
 
 export function HomeScreen(props: HomeScreenProps = {}) {
-  const { onOpenFullEditor, onOpenSettings, onOpenEntryEditor, onCreateNewAIChat, isVisible = true } = props;
+  const { onOpenFullEditor, onOpenSettings, onOpenEntryEditor, onCreateNewAIChat, onCreateCountdown, isVisible = true } = props;
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
 
@@ -65,6 +67,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     "all" | "today" | "week" | "month"
   >("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [showPinned, setShowPinned] = useState(true);
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [entryTypeFilter, setEntryTypeFilter] = useState<EntryTypeFilter>("all");
   const { currentConfig } = useModel();
   const modelSettings = useModelSettings();
@@ -129,6 +133,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       limit?: number;
       dateFrom?: number;
       dateTo?: number;
+      includeArchived?: boolean;
     } = {
       orderBy: "updatedAt",
       order: "DESC",
@@ -153,8 +158,13 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       options.dateTo = dateRange.dateTo;
     }
 
+    // Apply archived filter
+    if (includeArchived) {
+      options.includeArchived = true;
+    }
+
     return options;
-  }, [entryTypeFilter, favoritesOnly, dateRange]);
+  }, [entryTypeFilter, favoritesOnly, dateRange, includeArchived]);
 
   // Build search options
   const searchOptions = useMemo(() => {
@@ -164,9 +174,10 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       isFavorite: favoritesOnly ? true : undefined,
       dateFrom: dateRange.dateFrom,
       dateTo: dateRange.dateTo,
+      includeArchived: includeArchived ? true : undefined,
       limit: 20,
     };
-  }, [debouncedSearchQuery, entryTypeFilter, favoritesOnly, dateRange]);
+  }, [debouncedSearchQuery, entryTypeFilter, favoritesOnly, dateRange, includeArchived]);
 
   // Use search query when search text is present, otherwise use regular query
   const isSearching = debouncedSearchQuery.trim().length > 0;
@@ -223,9 +234,30 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     toggleFavoriteMutationRef.current.mutate(entry.id);
   }, []);
 
+  const handleResetCountup = useCallback((entry: Entry) => {
+    const countdownData = extractCountdownData(entry.blocks);
+    if (!countdownData) return;
+
+    // Create new block with reset targetDate to now
+    const newBlock = createCountdownBlock({
+      targetDate: Date.now(),
+      title: countdownData.title,
+      isCountUp: countdownData.isCountUp,
+      rewardsNote: countdownData.rewardsNote,
+      confettiEnabled: countdownData.confettiEnabled,
+    });
+
+    updateEntryRef.current.mutateAsync({
+      id: entry.id,
+      input: {
+        blocks: [newBlock],
+      },
+    });
+  }, []);
+
   const handleEntryPress = useCallback((entry: Entry) => {
     if (onOpenEntryEditorRef.current) {
-      onOpenEntryEditorRef.current(entry.id);
+      onOpenEntryEditorRef.current(entry.id, entry.type);
     }
   }, []);
 
@@ -269,15 +301,26 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     }
   }, [currentConfig, onOpenSettings, onCreateNewAIChat]);
 
+  const handleCreateCountdown = useCallback(() => {
+    setFabMenuOpen(false);
+    if (onCreateCountdown) {
+      onCreateCountdown();
+    }
+  }, [onCreateCountdown]);
+
   const handleFABPress = useCallback(() => {
     setFabMenuOpen((prev) => !prev);
   }, []);
 
-  // Group entries by day for section headers
+  // Group entries by day for section headers, with pinned items at the top
   const groupedData = useMemo(() => {
+    // Separate pinned and non-pinned entries
+    const pinnedEntries = showPinned ? entries.filter((e) => e.isPinned) : [];
+    const nonPinnedEntries = entries.filter((e) => !e.isPinned);
+
     const grouped = new Map<string, Entry[]>();
 
-    entries.forEach((entry) => {
+    nonPinnedEntries.forEach((entry) => {
       const date = new Date(entry.updatedAt);
       const dateKey = new Date(
         date.getFullYear(),
@@ -293,8 +336,18 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
     // Convert to flat list with headers
     const flatData: Array<
-      { type: "header"; dateKey: string } | { type: "entry"; entry: Entry }
+      { type: "header"; dateKey: string } | { type: "entry"; entry: Entry } | { type: "pinnedSpacer" }
     > = [];
+
+    // Add pinned entries at the top (no header - rely on pin icon)
+    if (pinnedEntries.length > 0) {
+      flatData.push({ type: "pinnedSpacer" });
+      pinnedEntries.forEach((entry) => {
+        flatData.push({ type: "entry", entry });
+      });
+    }
+
+    // Add date-grouped entries
     Array.from(grouped.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
       .forEach(([dateKey, dayEntries]) => {
@@ -305,7 +358,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       });
 
     return flatData;
-  }, [entries]);
+  }, [entries, showPinned]);
 
   const formatDateHeader = useCallback((dateKey: string): string => {
     const date = new Date(dateKey);
@@ -344,9 +397,14 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
   // Render item for FlatList
   const renderItem: ListRenderItem<
-    { type: "header"; dateKey: string } | { type: "entry"; entry: Entry }
+    { type: "header"; dateKey: string } | { type: "entry"; entry: Entry } | { type: "pinnedSpacer" }
   > = useCallback(
     ({ item }) => {
+      if (item.type === "pinnedSpacer") {
+        // Spacer to add top margin for pinned section
+        return <View style={{ height: spacingPatterns.lg / 2 }} />;
+      }
+
       if (item.type === "header") {
         return (
           <Text
@@ -366,20 +424,25 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           entry={item.entry}
           onPress={handleEntryPress}
           onToggleFavorite={handleToggleFavorite}
+          onResetCountup={handleResetCountup}
           seasonalTheme={seasonalTheme}
         />
       );
     },
-    [seasonalTheme, formatDateHeader, handleEntryPress, handleToggleFavorite],
+    [seasonalTheme, formatDateHeader, handleEntryPress, handleToggleFavorite, handleResetCountup],
   );
 
   const keyExtractor = useCallback(
     (
       item:
         | { type: "header"; dateKey: string }
-        | { type: "entry"; entry: Entry },
+        | { type: "entry"; entry: Entry }
+        | { type: "pinnedSpacer" },
       _index: number,
     ) => {
+      if (item.type === "pinnedSpacer") {
+        return "pinned-spacer";
+      }
       if (item.type === "header") {
         return `header-${item.dateKey}`;
       }
@@ -570,6 +633,10 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           onDateFilterChange={setDateFilter}
           favoritesOnly={favoritesOnly}
           onFavoritesToggle={() => setFavoritesOnly(!favoritesOnly)}
+          showPinned={showPinned}
+          onShowPinnedToggle={() => setShowPinned(!showPinned)}
+          includeArchived={includeArchived}
+          onIncludeArchivedToggle={() => setIncludeArchived(!includeArchived)}
           entryTypeFilter={entryTypeFilter}
           onEntryTypeFilterChange={setEntryTypeFilter}
           onOpenSettings={onOpenSettings}
@@ -608,6 +675,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           isOpen={fabMenuOpen}
           onCreateJournal={handleCreateJournalEntry}
           onCreateAIChat={handleCreateAIChat}
+          onCreateCountdown={handleCreateCountdown}
           onClose={() => setFabMenuOpen(false)}
         />
       </View>

@@ -20,6 +20,7 @@ export interface FloatingActionButtonProps {
   isOpen?: boolean;
   onCreateJournal?: () => void;
   onCreateAIChat?: () => void;
+  onCreateCountdown?: () => void;
   onClose?: () => void;
 }
 
@@ -28,6 +29,7 @@ export function FloatingActionButton({
   isOpen = false,
   onCreateJournal,
   onCreateAIChat,
+  onCreateCountdown,
   onClose,
 }: FloatingActionButtonProps) {
   const seasonalTheme = useSeasonalTheme();
@@ -102,6 +104,11 @@ export function FloatingActionButton({
     onCreateAIChat?.();
   };
 
+  const handleCreateCountdown = () => {
+    trackEvent("FAB Menu Item", { action: "create_countdown" });
+    onCreateCountdown?.();
+  };
+
   const shadowOpacity = glowAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [seasonalTheme.isDark ? 0.4 : 0.15, seasonalTheme.isDark ? 0.6 : 0.25],
@@ -123,15 +130,20 @@ export function FloatingActionButton({
     outputRange: ["0deg", "45deg"],
   });
 
-  // Menu item animations
+  // Menu item animations (stacked from bottom: journal -70, AI chat -130, countdown -190)
   const journalTranslateY = menuAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -130],
+    outputRange: [0, -70],
   });
 
   const aiChatTranslateY = menuAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -70],
+    outputRange: [0, -130],
+  });
+
+  const countdownTranslateY = menuAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -190],
   });
 
   const menuItemScale = menuAnim.interpolate({
@@ -267,6 +279,63 @@ export function FloatingActionButton({
               style={{ color: seasonalTheme.textPrimary, fontWeight: "600" }}
             >
               New Chat
+            </Text>
+          </Animated.View>
+        </Animated.View>
+
+        {/* Countdown menu item */}
+        <Animated.View
+          style={[
+            styles.menuItem,
+            {
+              transform: [
+                { translateY: countdownTranslateY },
+                { scale: menuItemScale },
+              ],
+              opacity: menuItemOpacity,
+            },
+          ]}
+          pointerEvents={isOpen ? "auto" : "none"}
+        >
+          <TouchableOpacity
+            onPress={handleCreateCountdown}
+            style={[
+              styles.menuItemButton,
+              { backgroundColor: seasonalTheme.chipBg },
+            ]}
+            activeOpacity={0.8}
+          >
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: seasonalTheme.isDark ? "#1C1C1E" : "#FFFFFF",
+                  borderRadius: 24,
+                },
+              ]}
+            />
+            <Ionicons
+              name="timer-outline"
+              size={22}
+              color={seasonalTheme.chipText}
+            />
+          </TouchableOpacity>
+          <Animated.View
+            style={[
+              styles.menuLabel,
+              {
+                backgroundColor: seasonalTheme.isDark
+                  ? "rgba(30, 30, 30, 0.95)"
+                  : "rgba(255, 255, 255, 0.95)",
+                opacity: menuItemOpacity,
+              },
+            ]}
+          >
+            <Text
+              variant="caption"
+              style={{ color: seasonalTheme.textPrimary, fontWeight: "600" }}
+            >
+              New Countdown
             </Text>
           </Animated.View>
         </Animated.View>

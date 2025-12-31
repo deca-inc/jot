@@ -15,6 +15,7 @@ import {
   ComposerScreen,
   QuillEditorScreen,
 } from "../screens";
+import { CountdownComposer } from "../screens/CountdownComposer";
 import { springPresets } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -26,7 +27,8 @@ type Screen =
   | "quillEditor"
   | "composer"
   | "fullEditor"
-  | "entryEditor";
+  | "entryEditor"
+  | "countdownComposer";
 
 export function SimpleNavigation() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("home");
@@ -37,6 +39,9 @@ export function SimpleNavigation() {
     number | undefined
   >(undefined);
   const [editingEntryId, setEditingEntryId] = useState<number | undefined>(
+    undefined,
+  );
+  const [countdownEntryId, setCountdownEntryId] = useState<number | undefined>(
     undefined,
   );
   const [_homeRefreshKey, _setHomeRefreshKey] = useState(0);
@@ -51,6 +56,9 @@ export function SimpleNavigation() {
     null,
   );
   const entryEditorOnCancelRef = useRef<(() => void | Promise<void>) | null>(
+    null,
+  );
+  const countdownOnCancelRef = useRef<(() => void | Promise<void>) | null>(
     null,
   );
 
@@ -75,6 +83,10 @@ export function SimpleNavigation() {
       // Call onCancel (ComposerScreen will handle force save internally)
       if (entryEditorOnCancelRef.current) {
         await entryEditorOnCancelRef.current();
+      }
+    } else if (currentScreen === "countdownComposer") {
+      if (countdownOnCancelRef.current) {
+        await countdownOnCancelRef.current();
       }
     }
   }, [currentScreen]);
@@ -245,9 +257,14 @@ export function SimpleNavigation() {
     setFullEditorEntryId(undefined);
   }, []);
 
-  const handleOpenEntryEditor = useCallback((entryId: number) => {
-    setEditingEntryId(entryId);
-    setCurrentScreen("entryEditor");
+  const handleOpenEntryEditor = useCallback((entryId: number, entryType?: "journal" | "ai_chat" | "countdown") => {
+    if (entryType === "countdown") {
+      setCountdownEntryId(entryId);
+      setCurrentScreen("countdownComposer");
+    } else {
+      setEditingEntryId(entryId);
+      setCurrentScreen("entryEditor");
+    }
   }, []);
 
   // Open a new AI chat without creating an entry first
@@ -273,6 +290,22 @@ export function SimpleNavigation() {
     setCurrentScreen("home");
     setEditingEntryId(undefined);
     setComposerEntryType(undefined);
+  }, []);
+
+  // Countdown composer handlers
+  const handleCreateCountdown = useCallback(() => {
+    setCountdownEntryId(undefined);
+    setCurrentScreen("countdownComposer");
+  }, []);
+
+  const handleCountdownSave = useCallback((_entryId: number) => {
+    setCurrentScreen("home");
+    setCountdownEntryId(undefined);
+  }, []);
+
+  const handleCountdownCancel = useCallback(() => {
+    setCurrentScreen("home");
+    setCountdownEntryId(undefined);
   }, []);
 
   const handleSettingsBack = useCallback(() => {
@@ -396,6 +429,15 @@ export function SimpleNavigation() {
             onCancel={handleEntryEditorCancel}
           />
         );
+      case "countdownComposer":
+        countdownOnCancelRef.current = handleCountdownCancel;
+        return (
+          <CountdownComposer
+            entryId={countdownEntryId}
+            onSave={handleCountdownSave}
+            onCancel={handleCountdownCancel}
+          />
+        );
       default:
         return null;
     }
@@ -427,6 +469,7 @@ export function SimpleNavigation() {
             onOpenSettings={handleOpenSettings}
             onOpenEntryEditor={handleOpenEntryEditor}
             onCreateNewAIChat={handleCreateNewAIChat}
+            onCreateCountdown={handleCreateCountdown}
           />
         </View>
 

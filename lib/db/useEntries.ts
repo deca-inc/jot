@@ -87,8 +87,9 @@ export function useEntry(id: number | undefined) {
  * Hook to fetch all entries with optional filters
  */
 export function useEntries(options?: {
-  type?: "journal" | "ai_chat";
+  type?: "journal" | "ai_chat" | "countdown";
   isFavorite?: boolean;
+  includeArchived?: boolean;
   tag?: string;
   limit?: number;
   offset?: number;
@@ -111,8 +112,9 @@ export function useEntries(options?: {
  * Hook to fetch entries with infinite scroll/pagination
  */
 export function useInfiniteEntries(options?: {
-  type?: "journal" | "ai_chat";
+  type?: "journal" | "ai_chat" | "countdown";
   isFavorite?: boolean;
+  includeArchived?: boolean;
   tag?: string;
   limit?: number;
   orderBy?: "createdAt" | "updatedAt";
@@ -147,8 +149,9 @@ export function useInfiniteEntries(options?: {
  */
 export function useSearchEntries(options: {
   query: string;
-  type?: "journal" | "ai_chat";
+  type?: "journal" | "ai_chat" | "countdown";
   isFavorite?: boolean;
+  includeArchived?: boolean;
   dateFrom?: number;
   dateTo?: number;
   limit?: number;
@@ -375,6 +378,153 @@ export function useToggleFavorite() {
                 ),
               })),
             };
+          }
+
+          return oldData;
+        },
+      );
+    },
+  });
+}
+
+/**
+ * Hook to toggle pinned status
+ */
+export function useTogglePinned() {
+  const entryRepository = useEntryRepository();
+  const queryClient = useQueryClient();
+  const posthog = usePostHog();
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      return entryRepository.togglePinned(id);
+    },
+    onSuccess: (entry) => {
+      // Track pin toggle
+      if (posthog) {
+        posthog.capture("entry_pinned", {
+          entryId: entry.id,
+          isPinned: entry.isPinned,
+        });
+      }
+      // Update detail cache
+      queryClient.setQueryData(entryKeys.detail(entry.id), entry);
+
+      // Invalidate list queries since sort order changes with pinning
+      queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
+    },
+  });
+}
+
+/**
+ * Hook to archive an entry
+ */
+export function useArchiveEntry() {
+  const entryRepository = useEntryRepository();
+  const queryClient = useQueryClient();
+  const posthog = usePostHog();
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      return entryRepository.archive(id);
+    },
+    onSuccess: (entry) => {
+      // Track archive
+      if (posthog) {
+        posthog.capture("entry_archived", {
+          entryId: entry.id,
+          entryType: entry.type,
+        });
+      }
+      // Update detail cache
+      queryClient.setQueryData(entryKeys.detail(entry.id), entry);
+
+      // Remove from list caches since archived entries are hidden by default
+      queryClient.setQueriesData<InfiniteEntryData | undefined>(
+        { queryKey: entryKeys.lists() },
+        (oldData) => {
+          if (!oldData) return oldData;
+
+          // Check if this is an infinite query
+          if (oldData.pages && Array.isArray(oldData.pages)) {
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page) => ({
+                ...page,
+                entries: page.entries.filter((e: Entry) => e.id !== entry.id),
+              })),
+            };
+          }
+
+          return oldData;
+        },
+      );
+    },
+  });
+}
+
+/**
+ * Hook to unarchive an entry
+ */
+export function useUnarchiveEntry() {
+  const entryRepository = useEntryRepository();
+  const queryClient = useQueryClient();
+  const posthog = usePostHog();
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      return entryRepository.unarchive(id);
+    },
+    onSuccess: (entry) => {
+      // Track unarchive
+      if (posthog) {
+        posthog.capture("entry_unarchived", {
+          entryId: entry.id,
+          entryType: entry.type,
+        });
+      }
+      // Update detail cache
+      queryClient.setQueryData(entryKeys.detail(entry.id), entry);
+
+      // Update the entry directly in all list caches so archivedAt is immediately null
+      queryClient.setQueriesData<InfiniteEntryData | undefined>(
+        { queryKey: entryKeys.lists() },
+        (oldData) => {
+          if (!oldData) return oldData;
+
+          // Check if this is an infinite query
+          if (oldData.pages && Array.isArray(oldData.pages)) {
+            // Check if entry exists in any page
+            const entryExists = oldData.pages.some((page) =>
+              page.entries.some((e: Entry) => e.id === entry.id),
+            );
+
+            if (entryExists) {
+              // Update the entry in place
+              return {
+                ...oldData,
+                pages: oldData.pages.map((page) => ({
+                  ...page,
+                  entries: page.entries.map((e: Entry) =>
+                    e.id === entry.id ? entry : e,
+                  ),
+                })),
+              };
+            } else {
+              // Entry not in cache (was filtered out), add to first page
+              return {
+                ...oldData,
+                pages: oldData.pages.map((page, index: number) => {
+                  if (index === 0) {
+                    return {
+                      ...page,
+                      entries: [entry, ...page.entries],
+                    };
+                  }
+                  return page;
+                }),
+              };
+            }
           }
 
           return oldData;

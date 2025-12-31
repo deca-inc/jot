@@ -3,7 +3,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { marked } from "marked";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -12,11 +12,14 @@ import {
   Alert,
   TextInput,
   Platform,
+  Modal,
+  Pressable,
 } from "react-native";
+import { PIConfetti, type PIConfettiMethods } from "react-native-fast-confetti";
 import RenderHtml, { HTMLElementModel, HTMLContentModel } from "react-native-render-html";
 import { useTrackEvent } from "../analytics";
 import { Entry, extractPreviewText } from "../db/entries";
-import { useDeleteEntry, useUpdateEntry } from "../db/useEntries";
+import { useDeleteEntry, useUpdateEntry, useTogglePinned, useArchiveEntry, useUnarchiveEntry } from "../db/useEntries";
 import {
   renameEntry,
   deleteEntryWithConfirmation,
@@ -25,8 +28,10 @@ import {
 import { spacingPatterns, borderRadius } from "../theme";
 import { type SeasonalTheme } from "../theme/seasonalTheme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { extractCountdownData, formatCountdown, isCountdownComplete } from "../utils/countdown";
 import { Card } from "./Card";
 import { Dialog } from "./Dialog";
+import { PinIcon } from "./icons/PinIcon";
 import { MenuItem } from "./MenuItem";
 import { Text } from "./Text";
 
@@ -34,6 +39,9 @@ export interface EntryListItemProps {
   entry: Entry;
   onPress?: (entry: Entry) => void;
   onToggleFavorite?: (entry: Entry) => void;
+  onTogglePinned?: (entry: Entry) => void;
+  onArchive?: (entry: Entry) => void;
+  onResetCountup?: (entry: Entry) => void;
   seasonalTheme?: SeasonalTheme;
 }
 
@@ -41,10 +49,13 @@ function EntryListItemComponent({
   entry,
   onPress,
   onToggleFavorite,
+  onTogglePinned,
+  onArchive,
+  onResetCountup,
   seasonalTheme: seasonalThemeProp,
 }: EntryListItemProps) {
   const seasonalThemeFromContext = useSeasonalTheme();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
 
   // Use prop if provided, otherwise fall back to context
   // This ensures correct theming even when prop is undefined
@@ -73,7 +84,11 @@ function EntryListItemComponent({
   // Menu state
   const [showMenu, setShowMenu] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showDismissDialog, setShowDismissDialog] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [renameText, setRenameText] = useState("");
+  const confettiRef = useRef<PIConfettiMethods>(null);
 
   // Mutations
   const deleteEntryMutation = useDeleteEntry();
@@ -490,46 +505,46 @@ function EntryListItemComponent({
     [width],
   );
 
-  const formatDate = (timestamp: number): string => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const entryDate = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-    );
+  // Countdown timer - force re-render every minute for countdown entries
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    if (entry.type !== "countdown") return;
+    const intervalId = setInterval(() => forceUpdate((n) => n + 1), 60000);
+    return () => clearInterval(intervalId);
+  }, [entry.type]);
 
-    // If today, show time
-    if (entryDate.getTime() === today.getTime()) {
-      return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+  // Extract countdown data for countdown entries
+  const countdownData = useMemo(() => {
+    if (entry.type !== "countdown") return null;
+    return extractCountdownData(entry.blocks);
+  }, [entry.type, entry.blocks]);
+
+  // Trigger confetti when dismiss dialog opens (if confetti is enabled)
+  useEffect(() => {
+    if (showDismissDialog && countdownData?.confettiEnabled) {
+      // Small delay to ensure dialog is visible first
+      const timer = setTimeout(() => {
+        setShowConfetti(true);
+      }, 100);
+      return () => clearTimeout(timer);
     }
+  }, [showDismissDialog, countdownData?.confettiEnabled]);
 
-    // If yesterday
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (entryDate.getTime() === yesterday.getTime()) {
-      return "Yesterday";
+  // Start confetti animation after component mounts
+  useEffect(() => {
+    if (showConfetti) {
+      // Small delay to ensure PIConfetti ref is populated after render
+      const timer = setTimeout(() => {
+        confettiRef.current?.restart();
+      }, 50);
+      return () => clearTimeout(timer);
     }
+  }, [showConfetti]);
 
-    // If this week, show day name
-    const daysDiff = Math.floor(
-      (today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    if (daysDiff < 7) {
-      return date.toLocaleDateString([], { weekday: "long" });
-    }
-
-    // Otherwise show date
-    return date.toLocaleDateString([], {
-      month: "short",
-      day: "numeric",
-      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
-    });
-  };
+  // Mutations for pinning and archiving
+  const togglePinnedMutation = useTogglePinned();
+  const archiveEntryMutation = useArchiveEntry();
+  const unarchiveEntryMutation = useUnarchiveEntry();
 
   // Event handler: Delete entry
   const handleDelete = async () => {
@@ -585,7 +600,7 @@ function EntryListItemComponent({
           },
         ]}
       >
-        {/* Floating icon in top-left corner - outside content wrapper for true floating */}
+        {/* Floating icon in top-left corner - entry type badge */}
         <View style={styles.floatingIconLeft}>
           <View
             style={[
@@ -601,7 +616,9 @@ function EntryListItemComponent({
               name={
                 entry.type === "journal"
                   ? "book-outline"
-                  : "chatbubble-ellipses-outline"
+                  : entry.type === "countdown"
+                    ? "timer-outline"
+                    : "chatbubble-ellipses-outline"
               }
               size={16}
               color={itemTheme.textPrimary}
@@ -609,33 +626,21 @@ function EntryListItemComponent({
           </View>
         </View>
 
-        {/* Floating icons cluster in top-right corner - outside content for proper z-index */}
+        {/* Floating icons in top-right corner - pin and overflow menu */}
         <View style={styles.floatingIconsRight}>
           <View style={styles.iconsRow}>
-            {onToggleFavorite && (
-              <TouchableOpacity
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onToggleFavorite(entry);
-                }}
+            {entry.isPinned && (
+              <View
                 style={[
-                  styles.badge,
+                  styles.pinBadge,
                   {
-                    backgroundColor: entry.isFavorite
-                      ? itemTheme.textSecondary + "15"
-                      : itemTheme.cardBg,
-                    borderColor: entry.isFavorite
-                      ? itemTheme.textSecondary + "40"
-                      : itemTheme.textSecondary + "20",
+                    backgroundColor: itemTheme.cardBg,
+                    borderColor: itemTheme.textSecondary + "20",
                   },
                 ]}
               >
-                <Ionicons
-                  name={entry.isFavorite ? "star" : "star-outline"}
-                  size={18}
-                  color={entry.isFavorite ? "#FFA500" : itemTheme.textPrimary}
-                />
-              </TouchableOpacity>
+                <PinIcon size={14} color={itemTheme.textSecondary} />
+              </View>
             )}
             <TouchableOpacity
               onPress={(e) => {
@@ -657,55 +662,103 @@ function EntryListItemComponent({
               />
             </TouchableOpacity>
           </View>
-
-          {/* Date badge below icon cluster */}
-          <View
-            style={[
-              styles.dateBadge,
-              {
-                backgroundColor: itemTheme.cardBg,
-                borderColor: itemTheme.textSecondary + "20",
-              },
-            ]}
-          >
-            <Text
-              variant="caption"
-              style={[styles.dateBadgeText, { color: itemTheme.textPrimary }]}
-            >
-              {formatDate(entry.updatedAt)}
-            </Text>
-          </View>
         </View>
 
-        {/* Fade overlay - positioned above content, below icons */}
-        <LinearGradient
-          colors={gradientColors}
-          locations={[0, 0.3, 0.7, 1]}
-          style={styles.fadeOverlay}
-          pointerEvents="none"
-        />
+        {/* Fade overlay - positioned above content, below icons (not shown for countdown) */}
+        {entry.type !== "countdown" && (
+          <LinearGradient
+            colors={gradientColors}
+            locations={[0, 0.3, 0.7, 1]}
+            style={styles.fadeOverlay}
+            pointerEvents="none"
+          />
+        )}
 
-        <View style={styles.cardContent}>
-          <View style={styles.contentInner}>
-            {/* Title for non-journal entries */}
-            {entry.type !== "journal" && (
+        <View style={entry.type === "countdown" ? styles.countdownCardContent : styles.cardContent}>
+          <View style={entry.type === "countdown" ? styles.countdownContentInner : styles.contentInner}>
+            {/* Countdown display - custom layout */}
+            {entry.type === "countdown" && countdownData && (
+              <View style={styles.countdownDisplay}>
+                <Text
+                  variant="caption"
+                  numberOfLines={1}
+                  style={[styles.countdownTitle, { color: itemTheme.textSecondary }]}
+                >
+                  {entry.title}
+                </Text>
+                <Text
+                  style={[
+                    styles.countdownTime,
+                    { color: itemTheme.textPrimary },
+                  ]}
+                >
+                  {formatCountdown(countdownData.targetDate, countdownData.isCountUp)}
+                </Text>
+                <Text
+                  variant="caption"
+                  style={[styles.countdownTargetDate, { color: itemTheme.textSecondary }]}
+                >
+                  {countdownData.isCountUp ? "Since " : ""}
+                  {new Date(countdownData.targetDate).toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    year: new Date(countdownData.targetDate).getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+                  })}{" "}
+                  {new Date(countdownData.targetDate).toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </Text>
+                {/* Dismiss button for completed countdowns (not countups, not already archived) */}
+                {!countdownData.isCountUp && !entry.archivedAt && isCountdownComplete(countdownData.targetDate) && (
+                  <TouchableOpacity
+                    style={[
+                      styles.dismissButton,
+                      { backgroundColor: itemTheme.textPrimary + "15" },
+                    ]}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      // Show dialog if there's a rewards note or confetti, otherwise just archive
+                      if (countdownData.rewardsNote || countdownData.confettiEnabled) {
+                        setShowDismissDialog(true);
+                      } else {
+                        if (onArchive) {
+                          onArchive(entry);
+                        } else {
+                          archiveEntryMutation.mutate(entry.id);
+                        }
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      variant="caption"
+                      style={{ color: itemTheme.textPrimary, fontWeight: "600" }}
+                    >
+                      Dismiss
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* Title for AI chat entries */}
+            {entry.type === "ai_chat" && (
               <Text
                 variant="body"
                 numberOfLines={1}
                 style={[
                   styles.title,
                   styles.conversationTitle,
-                  {
-                    color: itemTheme.textPrimary,
-                    paddingRight: 70, // Space for icons on right
-                  },
+                  { color: itemTheme.textPrimary },
                 ]}
               >
                 {entry.title}
               </Text>
             )}
 
-            {previewText || shouldRenderHtml ? (
+            {entry.type !== "countdown" && (previewText || shouldRenderHtml) ? (
               <View style={styles.previewContainer}>
                 {shouldRenderHtml && htmlContent ? (
                   <RenderHtml
@@ -777,6 +830,17 @@ function EntryListItemComponent({
 
       {/* Menu Modal */}
       <Dialog visible={showMenu} onRequestClose={() => setShowMenu(false)}>
+        {/* Reset button at top for countup entries */}
+        {entry.type === "countdown" && countdownData?.isCountUp && (
+          <MenuItem
+            icon="refresh-outline"
+            label="Reset Timer"
+            onPress={() => {
+              setShowMenu(false);
+              setShowResetDialog(true);
+            }}
+          />
+        )}
         {entry.type === "ai_chat" && (
           <MenuItem
             icon="pencil-outline"
@@ -787,6 +851,40 @@ function EntryListItemComponent({
             }}
           />
         )}
+        <MenuItem
+          icon={entry.isFavorite ? "star" : "star-outline"}
+          label={entry.isFavorite ? "Unfavorite" : "Favorite"}
+          onPress={() => {
+            setShowMenu(false);
+            onToggleFavorite?.(entry);
+          }}
+        />
+        <MenuItem
+          customIcon={<PinIcon size={20} color={itemTheme.textPrimary} />}
+          label={entry.isPinned ? "Unpin" : "Pin"}
+          onPress={() => {
+            setShowMenu(false);
+            if (onTogglePinned) {
+              onTogglePinned(entry);
+            } else {
+              togglePinnedMutation.mutate(entry.id);
+            }
+          }}
+        />
+        <MenuItem
+          icon={entry.archivedAt ? "arrow-undo-outline" : "archive-outline"}
+          label={entry.archivedAt ? "Unarchive" : "Archive"}
+          onPress={() => {
+            setShowMenu(false);
+            if (entry.archivedAt) {
+              unarchiveEntryMutation.mutate(entry.id);
+            } else if (onArchive) {
+              onArchive(entry);
+            } else {
+              archiveEntryMutation.mutate(entry.id);
+            }
+          }}
+        />
         <MenuItem
           icon="trash-outline"
           label="Delete"
@@ -871,6 +969,199 @@ function EntryListItemComponent({
           </TouchableOpacity>
         </View>
       </Dialog>
+
+      {/* Reset Timer Dialog */}
+      <Dialog
+        visible={showResetDialog}
+        onRequestClose={() => setShowResetDialog(false)}
+        containerStyle={styles.resetDialog}
+      >
+        <Text
+          variant="h3"
+          style={{
+            color: itemTheme.textPrimary,
+            marginBottom: spacingPatterns.sm,
+            textAlign: "center",
+          }}
+        >
+          Reset Timer?
+        </Text>
+        {countdownData?.rewardsNote && (
+          <Text
+            variant="body"
+            style={{
+              color: itemTheme.textSecondary,
+              marginBottom: spacingPatterns.md,
+              textAlign: "center",
+              lineHeight: 22,
+            }}
+          >
+            {countdownData.rewardsNote}
+          </Text>
+        )}
+        <Text
+          variant="caption"
+          style={{
+            color: itemTheme.textSecondary,
+            marginBottom: spacingPatterns.md,
+            textAlign: "center",
+          }}
+        >
+          This will start the timer from now.
+        </Text>
+        <View style={styles.renameButtons}>
+          <TouchableOpacity
+            style={[
+              styles.renameButton,
+              {
+                backgroundColor: itemTheme.textSecondary + "20",
+              },
+            ]}
+            onPress={() => setShowResetDialog(false)}
+          >
+            <Text style={{ color: itemTheme.textPrimary }}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.renameButton,
+              {
+                backgroundColor: itemTheme.textPrimary,
+              },
+            ]}
+            onPress={() => {
+              setShowResetDialog(false);
+              onResetCountup?.(entry);
+            }}
+          >
+            <Text
+              style={{
+                color: seasonalTheme.gradient.middle,
+                fontWeight: "600",
+              }}
+            >
+              Reset
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Dialog>
+
+      {/* Dismiss Countdown Dialog with Celebration */}
+      <Modal
+        visible={showDismissDialog}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDismissDialog(false);
+          setShowConfetti(false);
+        }}
+      >
+        <Pressable
+          style={styles.dialogOverlay}
+          onPress={() => {
+            setShowDismissDialog(false);
+            setShowConfetti(false);
+          }}
+        >
+          {/* Confetti behind dialog */}
+          {showConfetti && (
+            <View style={styles.confettiContainer} pointerEvents="none">
+              <PIConfetti
+                ref={confettiRef}
+                count={150}
+                blastPosition={{ x: width / 2, y: height / 2 - 140 }}
+                blastRadius={500}
+                blastDuration={1000}
+                fallDuration={2000}
+              />
+            </View>
+          )}
+
+          {/* Dialog content */}
+          <Pressable
+            style={[
+              styles.dismissDialog,
+              { backgroundColor: seasonalTheme.gradient.middle },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text
+              variant="h2"
+              style={{
+                color: itemTheme.textPrimary,
+                marginBottom: spacingPatterns.md,
+                textAlign: "center",
+              }}
+            >
+              🎉
+            </Text>
+            <Text
+              variant="h3"
+              style={{
+                color: itemTheme.textPrimary,
+                marginBottom: spacingPatterns.sm,
+                textAlign: "center",
+              }}
+            >
+              Countdown Complete!
+            </Text>
+            {countdownData?.rewardsNote && (
+              <Text
+                variant="body"
+                style={{
+                  color: itemTheme.textSecondary,
+                  marginBottom: spacingPatterns.lg,
+                  textAlign: "center",
+                  lineHeight: 22,
+                }}
+              >
+                {countdownData.rewardsNote}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.dismissDialogButton,
+                {
+                  backgroundColor: itemTheme.textPrimary,
+                },
+              ]}
+              onPress={() => {
+                setShowDismissDialog(false);
+                setShowConfetti(false);
+                if (onArchive) {
+                  onArchive(entry);
+                } else {
+                  archiveEntryMutation.mutate(entry.id);
+                }
+              }}
+            >
+              <Text
+                style={{
+                  color: seasonalTheme.gradient.middle,
+                  fontWeight: "600",
+                }}
+              >
+                Dismiss
+              </Text>
+            </TouchableOpacity>
+            {countdownData?.confettiEnabled && (
+              <TouchableOpacity
+                onPress={() => confettiRef.current?.restart()}
+                style={{ marginTop: spacingPatterns.md, alignSelf: "center" }}
+              >
+                <Text
+                  style={{
+                    color: itemTheme.textSecondary,
+                    fontSize: 14,
+                    textAlign: "center",
+                  }}
+                >
+                  More confetti 🎊
+                </Text>
+              </TouchableOpacity>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </TouchableOpacity>
   );
 }
@@ -889,6 +1180,7 @@ function arePropsEqual(
     prevEntry.title !== nextEntry.title ||
     prevEntry.updatedAt !== nextEntry.updatedAt ||
     prevEntry.isFavorite !== nextEntry.isFavorite ||
+    prevEntry.isPinned !== nextEntry.isPinned ||
     prevEntry.type !== nextEntry.type ||
     prevEntry.tags.length !== nextEntry.tags.length ||
     prevEntry.blocks.length !== nextEntry.blocks.length
@@ -910,7 +1202,10 @@ function arePropsEqual(
   // Compare callbacks by reference (they should be stable via useCallback)
   if (
     prevProps.onPress !== nextProps.onPress ||
-    prevProps.onToggleFavorite !== nextProps.onToggleFavorite
+    prevProps.onToggleFavorite !== nextProps.onToggleFavorite ||
+    prevProps.onTogglePinned !== nextProps.onTogglePinned ||
+    prevProps.onArchive !== nextProps.onArchive ||
+    prevProps.onResetCountup !== nextProps.onResetCountup
   ) {
     return false;
   }
@@ -970,16 +1265,16 @@ const styles = StyleSheet.create({
   },
   floatingIconLeft: {
     position: "absolute",
-    top: -6, // Negative offset to float on the corner (adjusted for smaller icon)
-    left: -6, // Negative offset to float on the corner (adjusted for smaller icon)
+    top: -6,
+    left: -6,
     zIndex: 10,
   },
   floatingIconsRight: {
     position: "absolute",
     top: spacingPatterns.xs,
     right: spacingPatterns.xs,
-    flexDirection: "column",
-    alignItems: "flex-end",
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacingPatterns.xs,
     zIndex: 10,
   },
@@ -1004,6 +1299,14 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
   },
+  pinBadge: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    width: 28,
+    height: 28,
+  },
   badgeSmall: {
     borderRadius: borderRadius.md,
     borderWidth: 1,
@@ -1019,26 +1322,54 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  dateBadge: {
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    paddingHorizontal: spacingPatterns.xs,
-    paddingVertical: spacingPatterns.xxs + 1,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 32,
-  },
-  dateBadgeText: {
-    fontSize: 11,
-  },
   previewContainer: {
     marginTop: spacingPatterns.xs,
     marginBottom: spacingPatterns.xs,
-    paddingRight: 70, // Space for icons on right (reduced from 80)
   },
   preview: {
     lineHeight: 20,
     fontSize: 14,
+  },
+  countdownCardContent: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: borderRadius.lg,
+  },
+  countdownContentInner: {
+    position: "relative",
+    zIndex: 1,
+  },
+  countdownDisplay: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: spacingPatterns.md,
+    paddingBottom: 0,
+    paddingHorizontal: spacingPatterns.lg,
+  },
+  countdownTitle: {
+    fontSize: 12,
+    fontWeight: "500",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: spacingPatterns.xs,
+  },
+  countdownTime: {
+    fontSize: 32,
+    lineHeight: 40,
+    fontWeight: "700",
+    letterSpacing: 1,
+    fontVariant: ["tabular-nums"],
+  },
+  countdownTargetDate: {
+    fontSize: 12,
+    marginTop: spacingPatterns.xs,
+    opacity: 0.7,
+  },
+  dismissButton: {
+    marginTop: spacingPatterns.sm,
+    paddingVertical: spacingPatterns.xs,
+    paddingHorizontal: spacingPatterns.md,
+    borderRadius: borderRadius.md,
   },
   fadeOverlay: {
     position: "absolute",
@@ -1067,6 +1398,47 @@ const styles = StyleSheet.create({
     width: "80%",
     maxWidth: 400,
     padding: spacingPatterns.lg,
+  },
+  resetDialog: {
+    width: "80%",
+    maxWidth: 400,
+    padding: spacingPatterns.lg,
+  },
+  dialogOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dismissDialog: {
+    width: "80%",
+    maxWidth: 400,
+    padding: spacingPatterns.lg,
+    borderRadius: borderRadius.lg,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  dismissDialogButton: {
+    paddingVertical: spacingPatterns.sm,
+    paddingHorizontal: spacingPatterns.lg,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+  },
+  confettiContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   renameInput: {
     borderWidth: 1,

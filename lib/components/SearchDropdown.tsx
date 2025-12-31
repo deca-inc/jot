@@ -12,6 +12,7 @@ import {
 import { useTrackEvent } from "../analytics";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { PinIcon } from "./icons/PinIcon";
 import { Text } from "./Text";
 
 export type EntryTypeFilter = "all" | "journal" | "ai_chat";
@@ -26,6 +27,10 @@ export interface SearchDropdownProps {
   onDateFilterChange: (filter: "all" | "today" | "week" | "month") => void;
   favoritesOnly: boolean;
   onFavoritesToggle: () => void;
+  showPinned?: boolean;
+  onShowPinnedToggle?: () => void;
+  includeArchived?: boolean;
+  onIncludeArchivedToggle?: () => void;
   entryTypeFilter?: EntryTypeFilter;
   onEntryTypeFilterChange?: (filter: EntryTypeFilter) => void;
   onOpenSettings?: () => void;
@@ -41,6 +46,10 @@ export function SearchDropdown({
   onDateFilterChange,
   favoritesOnly,
   onFavoritesToggle,
+  showPinned = true,
+  onShowPinnedToggle,
+  includeArchived = false,
+  onIncludeArchivedToggle,
   entryTypeFilter = "all",
   onEntryTypeFilterChange,
   onOpenSettings,
@@ -140,7 +149,12 @@ export function SearchDropdown({
             styles.iconButton,
             {
               backgroundColor:
-                showFilters || dateFilter !== "all" || favoritesOnly || entryTypeFilter !== "all"
+                showFilters ||
+                dateFilter !== "all" ||
+                favoritesOnly ||
+                !showPinned ||
+                includeArchived ||
+                entryTypeFilter !== "all"
                   ? seasonalTheme.textPrimary + "15"
                   : "transparent",
             },
@@ -178,80 +192,8 @@ export function SearchDropdown({
         pointerEvents={showFilters ? "auto" : "none"}
       >
         <View style={styles.filtersContainer}>
-            {/* Entry Type Filter */}
-            {onEntryTypeFilterChange && (
-              <View style={styles.filterSection}>
-                <Text
-                  variant="caption"
-                  style={{
-                    color: seasonalTheme.textSecondary,
-                    marginBottom: spacingPatterns.xxs,
-                    fontSize: 11,
-                  }}
-                >
-                  Entry Type
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.filterChips}
-                >
-                  {(["all", "journal", "ai_chat"] as const).map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      onPress={() => {
-                        onEntryTypeFilterChange(type);
-                        trackEvent("Filter Entry Type", { type });
-                      }}
-                      style={[
-                        styles.filterChip,
-                        {
-                          backgroundColor:
-                            entryTypeFilter === type
-                              ? seasonalTheme.textPrimary + "15"
-                              : "transparent",
-                          borderColor:
-                            entryTypeFilter === type
-                              ? seasonalTheme.textPrimary
-                              : seasonalTheme.textSecondary + "30",
-                        },
-                      ]}
-                    >
-                      <View style={styles.filterChipContent}>
-                        <Ionicons
-                          name={
-                            type === "all"
-                              ? "apps-outline"
-                              : type === "journal"
-                              ? "book-outline"
-                              : "chatbubbles-outline"
-                          }
-                          size={14}
-                          color={seasonalTheme.textPrimary}
-                          style={{ marginRight: 4 }}
-                        />
-                        <Text
-                          variant="caption"
-                          style={{
-                            color: seasonalTheme.textPrimary,
-                            fontWeight: entryTypeFilter === type ? "600" : "400",
-                            fontSize: 12,
-                          }}
-                        >
-                          {type === "all"
-                            ? "All"
-                            : type === "journal"
-                            ? "Journal"
-                            : "AI Chat"}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            {/* Date Filter */}
+          {/* Entry Type Filter */}
+          {onEntryTypeFilterChange && (
             <View style={styles.filterSection}>
               <Text
                 variant="caption"
@@ -261,54 +203,179 @@ export function SearchDropdown({
                   fontSize: 11,
                 }}
               >
-                Date Range
+                Entry Type
               </Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.filterChips}
               >
-                {(["all", "today", "week", "month"] as const).map((date) => (
+                {(["all", "journal", "ai_chat"] as const).map((type) => (
                   <TouchableOpacity
-                    key={date}
+                    key={type}
                     onPress={() => {
-                      onDateFilterChange(date);
-                      trackEvent("Filter Date", { range: date });
+                      onEntryTypeFilterChange(type);
+                      trackEvent("Filter Entry Type", { type });
                     }}
                     style={[
                       styles.filterChip,
                       {
                         backgroundColor:
-                          dateFilter === date
+                          entryTypeFilter === type
                             ? seasonalTheme.textPrimary + "15"
                             : "transparent",
                         borderColor:
-                          dateFilter === date
+                          entryTypeFilter === type
                             ? seasonalTheme.textPrimary
                             : seasonalTheme.textSecondary + "30",
                       },
                     ]}
                   >
-                    <Text
-                      variant="caption"
-                      style={{
-                        color: seasonalTheme.textPrimary,
-                        fontWeight: dateFilter === date ? "600" : "400",
-                        fontSize: 12,
-                      }}
-                    >
-                      {date === "all"
-                        ? "All Time"
-                        : date === "today"
-                        ? "Today"
-                        : date === "week"
-                        ? "This Week"
-                        : "This Month"}
-                    </Text>
+                    <View style={styles.filterChipContent}>
+                      <Ionicons
+                        name={
+                          type === "all"
+                            ? "apps-outline"
+                            : type === "journal"
+                            ? "book-outline"
+                            : "chatbubbles-outline"
+                        }
+                        size={14}
+                        color={seasonalTheme.textPrimary}
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text
+                        variant="caption"
+                        style={{
+                          color: seasonalTheme.textPrimary,
+                          fontWeight: entryTypeFilter === type ? "600" : "400",
+                          fontSize: 12,
+                        }}
+                      >
+                        {type === "all"
+                          ? "All"
+                          : type === "journal"
+                          ? "Journal"
+                          : "AI Chat"}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
+          )}
+
+          {/* Date Filter */}
+          <View style={styles.filterSection}>
+            <Text
+              variant="caption"
+              style={{
+                color: seasonalTheme.textSecondary,
+                marginBottom: spacingPatterns.xxs,
+                fontSize: 11,
+              }}
+            >
+              Date Range
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterChips}
+            >
+              {(["all", "today", "week", "month"] as const).map((date) => (
+                <TouchableOpacity
+                  key={date}
+                  onPress={() => {
+                    onDateFilterChange(date);
+                    trackEvent("Filter Date", { range: date });
+                  }}
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor:
+                        dateFilter === date
+                          ? seasonalTheme.textPrimary + "15"
+                          : "transparent",
+                      borderColor:
+                        dateFilter === date
+                          ? seasonalTheme.textPrimary
+                          : seasonalTheme.textSecondary + "30",
+                    },
+                  ]}
+                >
+                  <Text
+                    variant="caption"
+                    style={{
+                      color: seasonalTheme.textPrimary,
+                      fontWeight: dateFilter === date ? "600" : "400",
+                      fontSize: 12,
+                    }}
+                  >
+                    {date === "all"
+                      ? "All Time"
+                      : date === "today"
+                      ? "Today"
+                      : date === "week"
+                      ? "This Week"
+                      : "This Month"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Toggles Row */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.togglesRow}
+          >
+            {/* Pinned Toggle */}
+            {onShowPinnedToggle && (
+              <TouchableOpacity
+                onPress={() => {
+                  onShowPinnedToggle();
+                  trackEvent("Filter Pinned", {
+                    enabled: (!showPinned).toString(),
+                  });
+                }}
+                style={styles.toggleItem}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    {
+                      backgroundColor: showPinned
+                        ? seasonalTheme.textPrimary + "15"
+                        : "transparent",
+                      borderColor: showPinned
+                        ? seasonalTheme.textPrimary
+                        : seasonalTheme.textSecondary + "30",
+                    },
+                  ]}
+                >
+                  {showPinned && (
+                    <Ionicons
+                      name="checkmark-sharp"
+                      size={18}
+                      color={seasonalTheme.textPrimary}
+                      style={{ fontWeight: "bold" }}
+                    />
+                  )}
+                </View>
+                <View style={styles.toggleLabel}>
+                  <View style={{ marginRight: spacingPatterns.xs }}>
+                    <PinIcon size={16} color={seasonalTheme.textSecondary} />
+                  </View>
+                  <Text
+                    variant="body"
+                    style={{ color: seasonalTheme.textPrimary }}
+                  >
+                    Pinned
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
 
             {/* Favorites Toggle */}
             <TouchableOpacity
@@ -318,7 +385,7 @@ export function SearchDropdown({
                   enabled: (!favoritesOnly).toString(),
                 });
               }}
-              style={styles.favoritesToggle}
+              style={styles.toggleItem}
             >
               <View
                 style={[
@@ -342,19 +409,73 @@ export function SearchDropdown({
                   />
                 )}
               </View>
-              <View style={styles.favoritesLabel}>
+              <View style={styles.toggleLabel}>
                 <Ionicons
                   name="star"
                   size={16}
                   color="#FFA500"
                   style={{ marginRight: spacingPatterns.xs }}
                 />
-                <Text variant="body" style={{ color: seasonalTheme.textPrimary }}>
-                  Favorites only
+                <Text
+                  variant="body"
+                  style={{ color: seasonalTheme.textPrimary }}
+                >
+                  Favorites
                 </Text>
               </View>
             </TouchableOpacity>
-          </View>
+
+            {/* Archived Toggle */}
+            {onIncludeArchivedToggle && (
+              <TouchableOpacity
+                onPress={() => {
+                  onIncludeArchivedToggle();
+                  trackEvent("Filter Archived", {
+                    enabled: (!includeArchived).toString(),
+                  });
+                }}
+                style={styles.toggleItem}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    {
+                      backgroundColor: includeArchived
+                        ? seasonalTheme.textPrimary + "15"
+                        : "transparent",
+                      borderColor: includeArchived
+                        ? seasonalTheme.textPrimary
+                        : seasonalTheme.textSecondary + "30",
+                    },
+                  ]}
+                >
+                  {includeArchived && (
+                    <Ionicons
+                      name="checkmark-sharp"
+                      size={18}
+                      color={seasonalTheme.textPrimary}
+                      style={{ fontWeight: "bold" }}
+                    />
+                  )}
+                </View>
+                <View style={styles.toggleLabel}>
+                  <Ionicons
+                    name="archive-outline"
+                    size={16}
+                    color={seasonalTheme.textSecondary}
+                    style={{ marginRight: spacingPatterns.xs }}
+                  />
+                  <Text
+                    variant="body"
+                    style={{ color: seasonalTheme.textPrimary }}
+                  >
+                    Archived
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
       </Animated.View>
     </View>
   );
@@ -426,7 +547,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  favoritesToggle: {
+  togglesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.lg,
+  },
+  toggleItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacingPatterns.xs,
@@ -440,9 +566,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  favoritesLabel: {
+  toggleLabel: {
     flexDirection: "row",
     alignItems: "center",
   },
 });
-

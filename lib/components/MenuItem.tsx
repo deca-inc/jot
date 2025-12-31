@@ -6,6 +6,7 @@ import {
   Platform,
   ViewStyle,
   TextStyle,
+  View,
 } from "react-native";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -13,6 +14,7 @@ import { Text } from "./Text";
 
 export interface MenuItemProps {
   icon?: keyof typeof Ionicons.glyphMap;
+  customIcon?: React.ReactNode;
   iconColor?: string;
   label: string;
   onPress: () => void;
@@ -27,6 +29,7 @@ export interface MenuItemProps {
  */
 export function MenuItem({
   icon,
+  customIcon,
   iconColor,
   label,
   onPress,
@@ -55,14 +58,16 @@ export function MenuItem({
       onPress={onPress}
       activeOpacity={0.7}
     >
-      {icon && (
+      {customIcon ? (
+        <View style={styles.menuIcon}>{customIcon}</View>
+      ) : icon ? (
         <Ionicons
           name={icon}
           size={20}
           color={finalIconColor}
           style={styles.menuIcon}
         />
-      )}
+      ) : null}
       <Text
         style={[
           {

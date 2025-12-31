@@ -1,7 +1,7 @@
 import { SQLiteDatabase } from "expo-sqlite";
 import { useDatabase } from "./DatabaseProvider";
 
-export type EntryType = "journal" | "ai_chat";
+export type EntryType = "journal" | "ai_chat" | "countdown";
 
 export type Block =
   | {
@@ -58,6 +58,16 @@ export type Block =
       type: "quote";
       content: string;
       role?: "user" | "assistant" | "system";
+    }
+  | {
+      type: "countdown";
+      targetDate: number; // Unix timestamp
+      title: string;
+      isCountUp?: boolean; // true = counting up from date, false/undefined = counting down to date
+      rewardsNote?: string; // Encouragement/reward note
+      confettiEnabled?: boolean; // Whether to show confetti on completion
+      confettiTriggeredAt?: number; // Timestamp when confetti was shown (prevents re-triggering)
+      role?: "user" | "assistant" | "system";
     };
 
 export type GenerationStatus = "idle" | "generating" | "completed" | "failed";
@@ -70,6 +80,8 @@ export interface Entry {
   tags: string[];
   attachments: string[];
   isFavorite: boolean;
+  isPinned: boolean;
+  archivedAt: number | null;
   embedding: Uint8Array | null;
   embeddingModel: string | null;
   embeddingCreatedAt: number | null;
@@ -87,6 +99,7 @@ export interface CreateEntryInput {
   tags?: string[];
   attachments?: string[];
   isFavorite?: boolean;
+  isPinned?: boolean;
 }
 
 export interface UpdateEntryInput {
@@ -95,6 +108,8 @@ export interface UpdateEntryInput {
   tags?: string[];
   attachments?: string[];
   isFavorite?: boolean;
+  isPinned?: boolean;
+  archivedAt?: number | null;
   generationStatus?: GenerationStatus;
   generationStartedAt?: number | null;
   generationModelId?: string | null;
@@ -139,9 +154,15 @@ export class EntryRepository {
    */
   async create(input: CreateEntryInput): Promise<Entry> {
     const now = Date.now();
+    // Default isPinned to true for countdown entries
+    const isPinned =
+      input.isPinned !== undefined
+        ? input.isPinned
+        : input.type === "countdown";
+
     const result = await this.db.runAsync(
-      `INSERT INTO entries (type, title, blocks, tags, attachments, isFavorite, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO entries (type, title, blocks, tags, attachments, isFavorite, isPinned, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         input.type,
         input.title,
@@ -149,6 +170,7 @@ export class EntryRepository {
         JSON.stringify(input.tags || []),
         JSON.stringify(input.attachments || []),
         input.isFavorite ? 1 : 0,
+        isPinned ? 1 : 0,
         now,
         now,
       ],
@@ -176,6 +198,8 @@ export class EntryRepository {
       tags: string;
       attachments: string;
       isFavorite: number;
+      isPinned: number;
+      archivedAt: number | null;
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
@@ -199,6 +223,7 @@ export class EntryRepository {
   async getAll(options?: {
     type?: EntryType;
     isFavorite?: boolean;
+    includeArchived?: boolean;
     tag?: string;
     dateFrom?: number;
     dateTo?: number;
@@ -209,6 +234,11 @@ export class EntryRepository {
   }): Promise<Entry[]> {
     let query = "SELECT * FROM entries WHERE 1=1";
     const params: (string | number)[] = [];
+
+    // Filter out archived entries by default
+    if (!options?.includeArchived) {
+      query += " AND archivedAt IS NULL";
+    }
 
     if (options?.type) {
       query += " AND type = ?";
@@ -235,9 +265,10 @@ export class EntryRepository {
       params.push(options.dateTo);
     }
 
+    // Sort by isPinned DESC first, then by orderBy
     const orderBy = options?.orderBy || "updatedAt";
     const order = options?.order || "DESC";
-    query += ` ORDER BY ${orderBy} ${order}`;
+    query += ` ORDER BY isPinned DESC, ${orderBy} ${order}`;
 
     if (options?.limit) {
       query += " LIMIT ?";
@@ -257,6 +288,8 @@ export class EntryRepository {
       tags: string;
       attachments: string;
       isFavorite: number;
+      isPinned: number;
+      archivedAt: number | null;
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
@@ -277,6 +310,7 @@ export class EntryRepository {
     query: string;
     type?: EntryType;
     isFavorite?: boolean;
+    includeArchived?: boolean;
     dateFrom?: number;
     dateTo?: number;
     limit?: number;
@@ -295,6 +329,11 @@ export class EntryRepository {
       WHERE entries_fts MATCH ?
     `;
     const params: (string | number)[] = [`"${searchQuery}"*`];
+
+    // Filter out archived entries by default
+    if (!options.includeArchived) {
+      query += " AND e.archivedAt IS NULL";
+    }
 
     if (options.type) {
       query += " AND e.type = ?";
@@ -316,7 +355,8 @@ export class EntryRepository {
       params.push(options.dateTo);
     }
 
-    query += " ORDER BY e.updatedAt DESC";
+    // Sort by isPinned DESC first, then by updatedAt
+    query += " ORDER BY e.isPinned DESC, e.updatedAt DESC";
 
     if (options.limit) {
       query += " LIMIT ?";
@@ -336,6 +376,8 @@ export class EntryRepository {
       tags: string;
       attachments: string;
       isFavorite: number;
+      isPinned: number;
+      archivedAt: number | null;
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
@@ -384,6 +426,16 @@ export class EntryRepository {
     if (input.isFavorite !== undefined) {
       updates.push("isFavorite = ?");
       params.push(input.isFavorite ? 1 : 0);
+    }
+
+    if (input.isPinned !== undefined) {
+      updates.push("isPinned = ?");
+      params.push(input.isPinned ? 1 : 0);
+    }
+
+    if (input.archivedAt !== undefined) {
+      updates.push("archivedAt = ?");
+      params.push(input.archivedAt);
     }
 
     if (input.generationStatus !== undefined) {
@@ -464,6 +516,31 @@ export class EntryRepository {
   }
 
   /**
+   * Toggle pinned status
+   */
+  async togglePinned(id: number): Promise<Entry> {
+    const entry = await this.getById(id);
+    if (!entry) {
+      throw new Error("Entry not found");
+    }
+    return this.update(id, { isPinned: !entry.isPinned });
+  }
+
+  /**
+   * Archive an entry
+   */
+  async archive(id: number): Promise<Entry> {
+    return this.update(id, { archivedAt: Date.now() });
+  }
+
+  /**
+   * Unarchive an entry
+   */
+  async unarchive(id: number): Promise<Entry> {
+    return this.update(id, { archivedAt: null });
+  }
+
+  /**
    * Find entries with incomplete generations (status = 'generating')
    * within the last 24 hours
    */
@@ -478,6 +555,8 @@ export class EntryRepository {
       tags: string;
       attachments: string;
       isFavorite: number;
+      isPinned: number;
+      archivedAt: number | null;
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
@@ -487,8 +566,8 @@ export class EntryRepository {
       createdAt: number;
       updatedAt: number;
     }>(
-      `SELECT * FROM entries 
-       WHERE generationStatus = 'generating' 
+      `SELECT * FROM entries
+       WHERE generationStatus = 'generating'
        AND generationStartedAt > ?
        ORDER BY generationStartedAt DESC`,
       [cutoffTime],
@@ -508,6 +587,8 @@ export class EntryRepository {
     tags: string;
     attachments: string;
     isFavorite: number;
+    isPinned: number;
+    archivedAt: number | null;
     embedding: Uint8Array | null;
     embeddingModel: string | null;
     embeddingCreatedAt: number | null;
@@ -527,6 +608,8 @@ export class EntryRepository {
       tags: JSON.parse(row.tags) as string[],
       attachments: JSON.parse(row.attachments) as string[],
       isFavorite: row.isFavorite === 1,
+      isPinned: row.isPinned === 1,
+      archivedAt: row.archivedAt,
       embedding: row.embedding,
       embeddingModel: row.embeddingModel,
       embeddingCreatedAt: row.embeddingCreatedAt,
