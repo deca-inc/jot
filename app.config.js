@@ -6,7 +6,7 @@ module.exports = ({ config }) => {
     name: isDev ? "Jot (Dev)" : "Jot",
     owner: "beta-zeta-inc",
     slug: "jot",
-    version: "1.0.4",
+    version: "1.0.5",
     orientation: "portrait",
     icon: isDev ? "./assets/icon-dev.png" : "./assets/icon.png",
     userInterfaceStyle: "light",
