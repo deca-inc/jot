@@ -100,9 +100,14 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       : DEFAULT_MODEL;
   }, [selectedModelId]);
 
-  // Load model paths
+  // Load model paths - only when explicitly requested (lazy loading)
+  // This prevents auto-downloading models when user skipped onboarding
   const loadedModelIdRef = useRef<string | null>(null);
   useEffect(() => {
+    // Only load model when explicitly requested (e.g., user sends a message)
+    if (!loadRequested) {
+      return;
+    }
     if (loadedModelIdRef.current === modelConfig.modelId && modelPaths) {
       return;
     }
@@ -121,7 +126,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
         console.error("[LLMProvider] Failed to load model:", err);
         setPathsError(err instanceof Error ? err.message : "Failed to load model");
       });
-  }, [modelConfig.modelId]);
+  }, [modelConfig.modelId, loadRequested]);
 
   // Register background tasks on mount
   useEffect(() => {
