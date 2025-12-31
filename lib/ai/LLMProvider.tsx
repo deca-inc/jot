@@ -17,7 +17,7 @@ import {
   DEFAULT_MODEL,
   getModelById,
 } from "./modelConfig";
-import { ensureModelPresent, EnsureResult } from "./modelManager";
+import { ensureModelPresent } from "./modelManager";
 
 /**
  * Pending save info - stores what we need to save response even if component unmounts
@@ -104,7 +104,6 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
   // This prevents auto-downloading models when user skipped onboarding
   const loadedModelIdRef = useRef<string | null>(null);
   useEffect(() => {
-    // Only load model when explicitly requested (e.g., user sends a message)
     if (!loadRequested) {
       return;
     }
@@ -114,7 +113,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
     loadedModelIdRef.current = modelConfig.modelId;
 
     ensureModelPresent(modelConfig)
-      .then((result: EnsureResult) => {
+      .then((result) => {
         setModelPaths({
           ptePath: addFilePrefix(result.ptePath),
           tokenizerPath: addFilePrefix(result.tokenizerPath || ""),
@@ -126,7 +125,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
         console.error("[LLMProvider] Failed to load model:", err);
         setPathsError(err instanceof Error ? err.message : "Failed to load model");
       });
-  }, [modelConfig.modelId, loadRequested]);
+  }, [modelConfig, loadRequested, modelPaths]);
 
   // Register background tasks on mount
   useEffect(() => {
@@ -215,8 +214,11 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
     async (messages: Message[]): Promise<string> => {
       // Trigger lazy loading on first sendMessage call
       if (!loadRequested) {
+        // Refresh selected model from settings before loading
+        // This ensures we use the latest model (e.g., changed in settings/onboarding)
+        await refreshSelectedModel();
         setLoadRequested(true);
-        // Wait a tick for state update to trigger re-render and start loading
+        // Wait for state updates to propagate
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
 
@@ -262,7 +264,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       const response = await responsePromise;
       return response;
     },
-    [llm, modelConfig.modelId, loadRequested],
+    [llm, modelConfig.modelId, loadRequested, refreshSelectedModel],
   );
 
   const interrupt = useCallback(() => {

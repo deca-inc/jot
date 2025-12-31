@@ -91,7 +91,7 @@ export function FloatingComposerHeader({
           style={[
             styles.buttonGlass,
             needsBackgroundFallback && {
-              backgroundColor: seasonalTheme.gradient.middle + "E6", // 90% opaque fallback
+              backgroundColor: seasonalTheme.glassFallbackBg,
             },
           ]}
         >
@@ -124,7 +124,7 @@ export function FloatingComposerHeader({
             style={[
               styles.buttonGlass,
               needsBackgroundFallback && {
-                backgroundColor: seasonalTheme.gradient.middle + "E6", // 90% opaque fallback
+                backgroundColor: seasonalTheme.glassFallbackBg,
               },
             ]}
           >

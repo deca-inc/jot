@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { GlassView } from "expo-glass-effect";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import React, {
   useRef,
   useState,
@@ -30,6 +30,9 @@ import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 
 // Toolbar height: minHeight (44) + paddingVertical (xs * 2) + margins
 const _TOOLBAR_HEIGHT = 44 + spacingPatterns.xs * 2 + spacingPatterns.xs;
+
+// Check if glass effect is available (iOS 26+)
+const glassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
 
 export interface QuillRichEditorRef {
   getHtml: () => Promise<string | undefined>;
@@ -828,15 +831,12 @@ export const QuillRichEditor = forwardRef<
             },
           ]}
         >
-          {Platform.OS === "ios" ? (
+          {/* Use GlassView only when glass effect is available, otherwise use View with background */}
+          {glassAvailable ? (
             <GlassView
               glassEffectStyle="regular"
               tintColor={seasonalTheme.cardBg}
-              style={[
-                styles.toolbarContainer,
-                // Solid background as fallback when GlassView doesn't render blur (90% opaque)
-                { backgroundColor: seasonalTheme.gradient.middle + "E6" },
-              ]}
+              style={styles.toolbarContainer}
             >
               <ScrollView
                 horizontal
@@ -851,7 +851,8 @@ export const QuillRichEditor = forwardRef<
             <View
               style={[
                 styles.toolbarContainer,
-                { backgroundColor: seasonalTheme.gradient.middle + "E6" }, // 90% opaque
+                styles.toolbarFallback,
+                { backgroundColor: seasonalTheme.glassFallbackBg },
               ]}
             >
               <ScrollView
@@ -902,6 +903,13 @@ const styles = StyleSheet.create({
         elevation: 8,
       },
     }),
+  },
+  // Fallback styling when glass effect isn't available (iOS < 26 or Android)
+  toolbarFallback: {
+    borderWidth: 1,
+    borderColor: "rgba(0, 0, 0, 0.1)",
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
   },
   toolbarScrollView: {
     borderRadius: 100,

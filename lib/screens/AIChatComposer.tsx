@@ -951,7 +951,7 @@ export function AIChatComposer({
               </TouchableOpacity>
             </GlassView>
           ) : (
-            <View style={[styles.modelSelectorGlass, { backgroundColor: seasonalTheme.gradient.middle + "E6" }]}>
+            <View style={[styles.modelSelectorGlass, { backgroundColor: seasonalTheme.glassFallbackBg }]}>
               <TouchableOpacity
                 onPress={() => setShowModelSelector(true)}
                 style={styles.modelSelectorButton}

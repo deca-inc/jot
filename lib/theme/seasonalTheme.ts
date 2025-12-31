@@ -36,6 +36,8 @@ export interface SeasonalTheme {
   chipBg: string;
   chipText: string;
   cardBg: string;
+  /** Fallback background for glass effects when blur isn't available */
+  glassFallbackBg: string;
   textPrimary: string;
   textSecondary: string;
   timeOfDay: TimeOfDay;
@@ -62,8 +64,8 @@ export function getTimeOfDay(date: Date = new Date()): TimeOfDay {
 }
 
 // Cache for theme objects to prevent unnecessary re-renders
-// Version 2: Added isDark property
-const CACHE_VERSION = 2;
+// Version 3: Added glassFallbackBg property
+const CACHE_VERSION = 3;
 const themeCache = new Map<string, SeasonalTheme>();
 
 /**
@@ -100,6 +102,10 @@ export function getSeasonalTheme(
         cardBg: isNight
           ? "rgba(255, 255, 255, 0.05)"
           : "rgba(255, 255, 255, 0.55)",
+        // Glass fallback: darker green for day, lighter slate for night
+        glassFallbackBg: isNight
+          ? "rgba(51, 65, 85, 0.92)"
+          : "rgba(167, 216, 193, 0.88)",
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
         timeOfDay,
@@ -123,6 +129,10 @@ export function getSeasonalTheme(
         cardBg: isNight
           ? "rgba(255, 255, 255, 0.05)"
           : "rgba(255, 255, 255, 0.55)",
+        // Glass fallback: darker sky blue for day, lighter slate for night
+        glassFallbackBg: isNight
+          ? "rgba(51, 65, 85, 0.92)"
+          : "rgba(164, 210, 235, 0.88)",
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
         timeOfDay,
@@ -146,6 +156,10 @@ export function getSeasonalTheme(
         cardBg: isNight
           ? "rgba(255, 255, 255, 0.05)"
           : "rgba(255, 255, 255, 0.55)",
+        // Glass fallback: darker warm cream for day, lighter stone for night
+        glassFallbackBg: isNight
+          ? "rgba(68, 64, 60, 0.92)"
+          : "rgba(220, 213, 198, 0.88)",
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
         timeOfDay,
@@ -170,6 +184,10 @@ export function getSeasonalTheme(
         cardBg: isNight
           ? "rgba(255, 255, 255, 0.05)"
           : "rgba(255, 255, 255, 0.55)",
+        // Glass fallback: darker cool gray for day, lighter slate for night
+        glassFallbackBg: isNight
+          ? "rgba(51, 65, 85, 0.92)"
+          : "rgba(190, 198, 210, 0.88)",
         textPrimary: isNight ? "#f1f5f9" : "#0f172a",
         textSecondary: isNight ? "#94a3b8" : "#475569",
         timeOfDay,
