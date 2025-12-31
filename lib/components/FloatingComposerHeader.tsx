@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { GlassView } from "expo-glass-effect";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import React, { useState, useMemo } from "react";
 import {
   View,
@@ -14,6 +14,9 @@ import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { Dialog } from "./Dialog";
 import { MenuItem } from "./MenuItem";
+
+// Check if glass effect is available (iOS 26+)
+const glassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
 
 export interface FloatingComposerHeaderProps {
   entryId?: number;
@@ -66,21 +69,29 @@ export function FloatingComposerHeader({
     }
   };
 
-  const ButtonWrapper = Platform.OS === "ios" ? GlassView : View;
+  // Use GlassView only when glass effect is available, otherwise use View with background
+  const ButtonWrapper = glassAvailable ? GlassView : View;
+
+  // Apply background color when glass isn't available (Android or iOS < 26)
+  const needsBackgroundFallback = !glassAvailable;
 
   return (
     <>
       {/* Floating Back Button */}
-      <View style={[styles.floatingButton, styles.backButtonContainer]}>
+      <View style={[
+        styles.floatingButton,
+        styles.backButtonContainer,
+        needsBackgroundFallback && styles.fallbackShadow,
+      ]}>
         <ButtonWrapper
-          {...(Platform.OS === "ios" && {
+          {...(glassAvailable && {
             glassEffectStyle: "regular",
             tintColor: seasonalTheme.cardBg,
           })}
           style={[
             styles.buttonGlass,
-            Platform.OS === "android" && {
-              backgroundColor: seasonalTheme.cardBg,
+            needsBackgroundFallback && {
+              backgroundColor: seasonalTheme.gradient.middle + "E6", // 90% opaque fallback
             },
           ]}
         >
@@ -100,16 +111,20 @@ export function FloatingComposerHeader({
 
       {/* Floating Settings Button */}
       {entryId && (
-        <View style={[styles.floatingButton, styles.settingsButtonContainer]}>
+        <View style={[
+          styles.floatingButton,
+          styles.settingsButtonContainer,
+          needsBackgroundFallback && styles.fallbackShadow,
+        ]}>
           <ButtonWrapper
-            {...(Platform.OS === "ios" && {
+            {...(glassAvailable && {
               glassEffectStyle: "regular",
               tintColor: seasonalTheme.cardBg,
             })}
             style={[
               styles.buttonGlass,
-              Platform.OS === "android" && {
-                backgroundColor: seasonalTheme.cardBg,
+              needsBackgroundFallback && {
+                backgroundColor: seasonalTheme.gradient.middle + "E6", // 90% opaque fallback
               },
             ]}
           >
@@ -176,5 +191,15 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: "center",
     justifyContent: "center",
+  },
+  fallbackShadow: {
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: "rgba(0, 0, 0, 0.15)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

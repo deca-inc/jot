@@ -49,9 +49,101 @@ export interface LlmModelConfig {
 // https://huggingface.co/software-mansion
 //
 // IMPORTANT: URLs use commit hashes instead of 'main' for stability
-// - Llama models: 76ab87fe4ceb2e00c19a24b18326e9c1506f3f20
-// - Qwen models:  ae11f6fb40b8168952970e4dd84285697b5ac069
+// - SmolLM2 models: 639e46227780d93aadc18feff6d63125eec18144
+// - Llama models:   76ab87fe4ceb2e00c19a24b18326e9c1506f3f20
+// - Qwen models:    ae11f6fb40b8168952970e4dd84285697b5ac069
 // This ensures model URLs never break if files are moved/renamed on main branch
+
+// -----------------------------------------------------------------------------
+// SMOLLM2 MODELS
+// -----------------------------------------------------------------------------
+// SmolLM2 models from HuggingFace - excellent for resource-constrained devices
+// https://huggingface.co/software-mansion/react-native-executorch-smolLm-2
+// Commit hash: 639e46227780d93aadc18feff6d63125eec18144
+
+// SmolLM2 135M - Ultra lightweight for older devices
+export const SmolLM2_135M: LlmModelConfig = {
+  modelId: "smollm2-135m",
+  displayName: "SmolLM2 135M",
+  description: "8K context, ~1GB RAM. Ultra-lightweight for older devices.",
+  size: "135M",
+  quantization: "8-bit (8da4w)",
+  folderName: "smollm2-135m",
+  pteFileName: "smolLm2_135M_8da4w.pte",
+  tokenizerFileName: "tokenizer.json",
+  tokenizerConfigFileName: "tokenizer_config.json",
+  huggingFaceUrl:
+    "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2",
+  available: true,
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/smolLm-2-135M/quantized/smolLm2_135M_8da4w.pte",
+  },
+  tokenizerSource: {
+    kind: "remote",
+    url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/tokenizer.json",
+  },
+  tokenizerConfigSource: {
+    kind: "remote",
+    url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/tokenizer_config.json",
+  },
+};
+
+// SmolLM2 360M - Good balance for older devices
+export const SmolLM2_360M: LlmModelConfig = {
+  modelId: "smollm2-360m",
+  displayName: "SmolLM2 360M",
+  description: "8K context, ~2GB RAM. Good balance for older devices.",
+  size: "360M",
+  quantization: "8-bit (8da4w)",
+  folderName: "smollm2-360m",
+  pteFileName: "smolLm2_360M_8da4w.pte",
+  tokenizerFileName: "tokenizer.json",
+  tokenizerConfigFileName: "tokenizer_config.json",
+  huggingFaceUrl:
+    "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2",
+  available: true,
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/smolLm-2-360M/quantized/smolLm2_360M_8da4w.pte",
+  },
+  tokenizerSource: {
+    kind: "remote",
+    url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/tokenizer.json",
+  },
+  tokenizerConfigSource: {
+    kind: "remote",
+    url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/tokenizer_config.json",
+  },
+};
+
+// SmolLM2 1.7B - Best SmolLM2 quality
+export const SmolLM2_1_7B: LlmModelConfig = {
+  modelId: "smollm2-1.7b",
+  displayName: "SmolLM2 1.7B",
+  description: "8K context, ~4GB RAM. Best SmolLM2 quality.",
+  size: "1.7B",
+  quantization: "8-bit (8da4w)",
+  folderName: "smollm2-1.7b",
+  pteFileName: "smolLm2_1_7B_8da4w.pte",
+  tokenizerFileName: "tokenizer.json",
+  tokenizerConfigFileName: "tokenizer_config.json",
+  huggingFaceUrl:
+    "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2",
+  available: true,
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/smolLm-2-1.7B/quantized/smolLm2_1_7B_8da4w.pte",
+  },
+  tokenizerSource: {
+    kind: "remote",
+    url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/tokenizer.json",
+  },
+  tokenizerConfigSource: {
+    kind: "remote",
+    url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/tokenizer_config.json",
+  },
+};
 
 // -----------------------------------------------------------------------------
 // LLAMA 3.2 MODELS
@@ -61,8 +153,7 @@ export interface LlmModelConfig {
 export const Llama32_1B_Instruct: LlmModelConfig = {
   modelId: "llama-3.2-1b-instruct",
   displayName: "Llama 3.2 1B Instruct",
-  description:
-    "Fast and efficient 1B parameter model optimized for on-device inference. Great for quick responses and everyday tasks.",
+  description: "128K context, ~2GB RAM. Fast and multilingual (8 languages).",
   size: "1B",
   quantization: "SpinQuant",
   folderName: "llama-3.2-1b-instruct",
@@ -90,8 +181,7 @@ export const Llama32_1B_Instruct: LlmModelConfig = {
 export const Llama32_3B_Instruct: LlmModelConfig = {
   modelId: "llama-3.2-3b-instruct",
   displayName: "Llama 3.2 3B Instruct",
-  description:
-    "Higher quality 3B parameter model with improved reasoning and understanding. Better for complex tasks.",
+  description: "128K context, ~4GB RAM. Higher quality, multilingual (8 languages).",
   size: "3B",
   quantization: "SpinQuant",
   folderName: "llama-3.2-3b-instruct",
@@ -124,8 +214,7 @@ export const Llama32_3B_Instruct: LlmModelConfig = {
 export const Qwen3_0_6B: LlmModelConfig = {
   modelId: "qwen-3-0.6b",
   displayName: "Qwen 3 0.6B",
-  description:
-    "Compact and ultra-efficient 0.6B parameter model. Smallest option with fastest inference speed.",
+  description: "32K context, ~2GB RAM. Smallest Qwen with fast inference.",
   size: "0.6B",
   quantization: "8-bit (8da4w)",
   folderName: "qwen-3-0.6b",
@@ -155,8 +244,7 @@ export const Qwen3_0_6B: LlmModelConfig = {
 export const Qwen3_1_7B: LlmModelConfig = {
   modelId: "qwen-3-1.7b",
   displayName: "Qwen 3 1.7B",
-  description:
-    "Balanced 1.7B parameter model offering excellent quality with reasonable speed. Best all-around choice.",
+  description: "32K context, ~4GB RAM. Best balance of quality and speed.",
   size: "1.7B",
   quantization: "8-bit (8da4w)",
   folderName: "qwen-3-1.7b",
@@ -185,8 +273,7 @@ export const Qwen3_1_7B: LlmModelConfig = {
 export const Qwen3_4B: LlmModelConfig = {
   modelId: "qwen-3-4b",
   displayName: "Qwen 3 4B",
-  description:
-    "Powerful 4B parameter model with excellent reasoning and understanding. Best quality for on-device inference.",
+  description: "32K context, ~8GB RAM. Highest quality Qwen for on-device.",
   size: "4B",
   quantization: "8-bit (8da4w)",
   folderName: "qwen-3-4b",
@@ -219,9 +306,13 @@ export const ALL_MODELS: LlmModelConfig[] = [
   Qwen3_1_7B, // Default - best balance
   Qwen3_0_6B, // Lightweight option
   Qwen3_4B, // Highest quality
-  // Llama models (SpinQuant) - Alternative options
+  // Llama models (SpinQuant) - Good multilingual support
   Llama32_1B_Instruct,
   Llama32_3B_Instruct,
+  // SmolLM2 models - For resource-constrained/older devices
+  SmolLM2_135M, // Ultra-lightweight
+  SmolLM2_360M, // Good balance for older devices
+  SmolLM2_1_7B, // Best SmolLM2 quality
 ];
 
 export function getModelById(modelId: string): LlmModelConfig | undefined {

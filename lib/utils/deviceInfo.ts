@@ -2,107 +2,159 @@ import * as Device from "expo-device";
 import { Platform } from "react-native";
 
 /**
- * Get estimated device RAM in GB
- * Note: React Native doesn't provide exact RAM info, so we estimate based on device model
+ * Device performance tiers for model selection
+ * Based on chip generation and RAM, not arbitrary percentages
  */
-export async function getDeviceRAM(): Promise<number> {
+type DeviceTier = "high" | "mid" | "low";
+
+interface TierConfig {
+  tier: DeviceTier;
+  compatibleModels: string[];
+  recommendedModel: string;
+  description: string;
+}
+
+// Tier configurations - prioritize quality while avoiding OOM
+const TIER_CONFIGS: Record<DeviceTier, TierConfig> = {
+  high: {
+    tier: "high",
+    // High-end: M1+, A15+, 8GB+ RAM - can handle larger models
+    compatibleModels: [
+      "qwen-3-1.7b",    // Best quality
+      "qwen-3-0.6b",    // Fast option
+      "llama-3.2-1b-instruct",
+      "smollm2-1.7b",
+      "smollm2-360m",
+      "smollm2-135m",
+    ],
+    recommendedModel: "qwen-3-1.7b",
+    description: "High-end device (M1+, A15+, 8GB+ RAM)",
+  },
+  mid: {
+    tier: "mid",
+    // Mid-range: A12-A14, 4-6GB RAM - stick to smaller models
+    compatibleModels: [
+      "qwen-3-0.6b",    // Best quality for this tier
+      "llama-3.2-1b-instruct",
+      "smollm2-360m",
+      "smollm2-135m",
+    ],
+    recommendedModel: "qwen-3-0.6b",
+    description: "Mid-range device (A12-A14, 4-6GB RAM)",
+  },
+  low: {
+    tier: "low",
+    // Low-end: Older devices, limited RAM - only smallest models
+    compatibleModels: [
+      "smollm2-360m",   // Best quality for this tier
+      "smollm2-135m",   // Fallback
+    ],
+    recommendedModel: "smollm2-360m",
+    description: "Older device (limited RAM)",
+  },
+};
+
+/**
+ * Detect device performance tier based on chip/model
+ */
+export async function getDeviceTier(): Promise<DeviceTier> {
   try {
-    // For iOS, estimate based on model year (rough heuristic)
-    if (Platform.OS === "ios") {
+    if (Platform.OS === "ios" || Platform.OS === "macos") {
       const modelName = Device.modelName || "";
 
-      // High-end devices (iPhone 14 Pro+, iPhone 15+)
+      // High-end iOS devices
       if (
-        modelName.includes("iPhone 14 Pro") ||
+        // iPhone 15/16 series
         modelName.includes("iPhone 15") ||
         modelName.includes("iPhone 16") ||
-        modelName.includes("iPad Pro")
+        // iPhone 14 Pro models (A16)
+        modelName.includes("iPhone 14 Pro") ||
+        // iPad Pro (M1/M2)
+        modelName.includes("iPad Pro") ||
+        // iPad Air 5th gen+ (M1)
+        (modelName.includes("iPad Air") && /iPad Air \(5|6/.test(modelName)) ||
+        // Macs with Apple Silicon
+        modelName.includes("Mac")
       ) {
-        return 8; // 6-8GB RAM
+        return "high";
       }
 
-      // Mid-range devices (iPhone 13+, iPhone 14)
+      // Mid-range iOS devices
       if (
+        // iPhone 12-14 (non-Pro 14)
+        modelName.includes("iPhone 12") ||
         modelName.includes("iPhone 13") ||
         modelName.includes("iPhone 14") ||
-        modelName.includes("iPad Air")
+        // iPhone 11 series (A13)
+        modelName.includes("iPhone 11") ||
+        // iPad Air 3rd/4th gen
+        modelName.includes("iPad Air") ||
+        // iPad mini 5th/6th gen
+        modelName.includes("iPad mini")
       ) {
-        return 6; // 4-6GB RAM
+        return "mid";
       }
 
-      // Older or lower-end devices
-      return 4; // 3-4GB RAM
+      // Everything else is low-end
+      return "low";
     }
 
-    // For Android, we could use react-native-device-info, but for now estimate
     if (Platform.OS === "android") {
-      // Most modern Android devices have at least 6GB
-      return 6;
+      // For Android, we'd need more sophisticated detection
+      // For now, assume mid-range as a safe default
+      // TODO: Could check android.os.Build for RAM or chip info
+      return "mid";
     }
 
-    // Default fallback
-    return 4;
+    // Desktop/other - assume high-end
+    return "high";
   } catch (error) {
-    console.error("Error detecting device RAM:", error);
-    return 4; // Safe default
+    console.error("[DeviceInfo] Error detecting device tier:", error);
+    return "mid"; // Safe default
   }
 }
 
-// Model metadata for RAM calculation
-const MODEL_METADATA = [
-  {
-    modelId: "qwen-3-1.7b",
-    fileSizeMB: 2064,
-    ramUsageMB: 2064 * 1.5, // ~3.1 GB
-    priority: 3, // Highest priority
-  },
-  {
-    modelId: "llama-3.2-1b-instruct",
-    fileSizeMB: 1083,
-    ramUsageMB: 1083 * 1.5, // ~1.62 GB
-    priority: 2, // Medium priority
-  },
-  {
-    modelId: "qwen-3-0.6b",
-    fileSizeMB: 900,
-    ramUsageMB: 900 * 1.5, // ~1.35 GB
-    priority: 1, // Lowest priority
-  },
-] as const;
-
 /**
- * Get all compatible models for the device (models that fit within 20% RAM)
- * Returns array of modelIds sorted by priority (highest first)
+ * Get all compatible models for the device based on tier
  */
 export async function getCompatibleModels(): Promise<string[]> {
-  const ramGB = await getDeviceRAM();
-  const ramMB = ramGB * 1024; // Convert to MB
-  const maxRAMUsageMB = ramMB * 0.2; // 20% of total RAM
-
-  // Find all models that fit within 20% RAM
-  const suitableModels = MODEL_METADATA.filter(
-    (model) => model.ramUsageMB <= maxRAMUsageMB,
-  );
-
-  if (suitableModels.length === 0) {
-    // Fallback to smallest model if none fit (shouldn't happen in practice)
-    return ["qwen-3-0.6b"];
-  }
-
-  // Sort by priority (highest first) and return modelIds
-  suitableModels.sort((a, b) => b.priority - a.priority);
-  return suitableModels.map((m) => m.modelId);
+  const tier = await getDeviceTier();
+  return TIER_CONFIGS[tier].compatibleModels;
 }
 
 /**
- * Get recommended model based on device capabilities
- * Returns modelId of the best model for this device
- *
- * Automatically selects the highest-end model that consumes less than 20% of RAM.
- * Options: Qwen3_0_6B (low), Llama32_1B_Instruct (medium), Qwen3_1_7B (high)
+ * Get recommended model based on device tier
+ * Prioritizes quality while avoiding OOM errors
  */
 export async function getRecommendedModel(): Promise<string> {
-  const compatible = await getCompatibleModels();
-  // The first model in the compatible list is the highest priority (best) one
-  return compatible[0];
+  const tier = await getDeviceTier();
+  return TIER_CONFIGS[tier].recommendedModel;
+}
+
+/**
+ * Log detailed debug info about device tier and model selection
+ */
+export async function logModelCompatibilityDebug(): Promise<void> {
+  const tier = await getDeviceTier();
+  const config = TIER_CONFIGS[tier];
+  const modelName = Device.modelName || "Unknown";
+  const deviceType = Device.deviceType;
+
+  console.log("[ModelSelection] === Device Analysis ===");
+  console.log(`[ModelSelection] Device: ${modelName}`);
+  console.log(`[ModelSelection] Device Type: ${deviceType}`);
+  console.log(`[ModelSelection] Platform: ${Platform.OS}`);
+  console.log(`[ModelSelection] Detected Tier: ${tier.toUpperCase()}`);
+  console.log(`[ModelSelection] Tier Description: ${config.description}`);
+  console.log("[ModelSelection]");
+  console.log("[ModelSelection] === Model Selection ===");
+  console.log(`[ModelSelection] Compatible Models: ${config.compatibleModels.join(", ")}`);
+  console.log(`[ModelSelection] Recommended: ${config.recommendedModel}`);
+  console.log("[ModelSelection]");
+  console.log("[ModelSelection] === All Tiers Reference ===");
+  for (const [tierName, tierConfig] of Object.entries(TIER_CONFIGS)) {
+    const marker = tierName === tier ? "→" : " ";
+    console.log(`[ModelSelection] ${marker} ${tierName.toUpperCase()}: ${tierConfig.recommendedModel} (${tierConfig.compatibleModels.length} models)`);
+  }
+  console.log("[ModelSelection] =============================");
 }

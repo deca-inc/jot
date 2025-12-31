@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Uses `any` for react-native-render-html renderers and dynamic message handling
 import { Ionicons } from "@expo/vector-icons";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { marked } from "marked";
 import React, {
   useState,
@@ -20,14 +21,17 @@ import {
   ListRenderItem,
   useWindowDimensions,
   Keyboard,
+  ScrollView,
 } from "react-native";
 import { Message } from "react-native-executorch";
 import RenderHtml from "react-native-render-html";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ALL_MODELS, getModelById } from "../ai/modelConfig";
 import { useAIChat } from "../ai/useAIChat";
 import { useTrackScreenView } from "../analytics";
-import { Text, FloatingComposerHeader } from "../components";
+import { Dialog, Text, FloatingComposerHeader } from "../components";
 import { Block } from "../db/entries";
+import { useModelSettings, ModelDownloadInfo } from "../db/modelSettings";
 import {
   useEntry,
   useCreateEntry,
@@ -41,6 +45,9 @@ marked.setOptions({
   breaks: true,
   gfm: true,
 });
+
+// Check if glass effect is available (iOS 26+)
+const glassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
 
 // Helper to strip think tags from content
 function stripThinkTags(text: string): string {
@@ -302,9 +309,35 @@ export function AIChatComposer({
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const modelSettings = useModelSettings();
 
   // Track screen view
   useTrackScreenView("AI Chat Composer");
+
+  // Model selector state
+  const [downloadedModels, setDownloadedModels] = useState<ModelDownloadInfo[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [showModelSelector, setShowModelSelector] = useState(false);
+
+  // Load downloaded models on mount
+  useEffect(() => {
+    const loadModels = async () => {
+      const [downloaded, selected] = await Promise.all([
+        modelSettings.getDownloadedModels(),
+        modelSettings.getSelectedModelId(),
+      ]);
+      setDownloadedModels(downloaded);
+      setSelectedModelId(selected);
+    };
+    loadModels();
+  }, []);
+
+  // Get display name for selected model
+  const selectedModelName = useMemo(() => {
+    if (!selectedModelId) return "Select Model";
+    const model = getModelById(selectedModelId);
+    return model?.displayName || selectedModelId;
+  }, [selectedModelId]);
 
   // Track current entry ID (can change when new entry is created)
   const [currentEntryId, setCurrentEntryId] = useState<number | undefined>(entryId);
@@ -338,6 +371,7 @@ export function AIChatComposer({
     sendMessage: aiSendMessage,
     setMessageHistory,
     stop: stopGeneration,
+    refreshSelectedModel,
   } = useAIChat({
     entryId: currentEntryId,
     currentBlocks: entry?.blocks,
@@ -373,6 +407,15 @@ export function AIChatComposer({
       setIsSubmitting(false);
     },
   });
+
+  // Handle model selection - updates setting and tells LLM to refresh
+  const handleSelectModel = useCallback(async (modelId: string) => {
+    setSelectedModelId(modelId);
+    await modelSettings.setSelectedModelId(modelId);
+    setShowModelSelector(false);
+    // Tell LLM provider to reload the model on next message
+    await refreshSelectedModel();
+  }, [modelSettings, refreshSelectedModel]);
 
   // Initialize message history from existing entry
   useEffect(() => {
@@ -867,6 +910,141 @@ export function AIChatComposer({
         deleteConfirmMessage="Are you sure you want to delete this conversation? This action cannot be undone."
       />
 
+      {/* Model Selector - next to back button (only show if multiple models downloaded) */}
+      {downloadedModels.length > 1 && (
+        <View style={[
+          styles.modelSelectorContainer,
+          !glassAvailable && styles.fallbackShadow,
+        ]}>
+          {glassAvailable ? (
+            <GlassView
+              glassEffectStyle="regular"
+              tintColor={seasonalTheme.cardBg}
+              style={styles.modelSelectorGlass}
+            >
+              <TouchableOpacity
+                onPress={() => setShowModelSelector(true)}
+                style={styles.modelSelectorButton}
+                disabled={isGenerating}
+              >
+                <Ionicons
+                  name="hardware-chip-outline"
+                  size={16}
+                  color={isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="caption"
+                  style={{
+                    color: isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary,
+                    fontWeight: "500",
+                    marginLeft: 4,
+                  }}
+                  numberOfLines={1}
+                >
+                  {selectedModelName}
+                </Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={14}
+                  color={isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary}
+                />
+              </TouchableOpacity>
+            </GlassView>
+          ) : (
+            <View style={[styles.modelSelectorGlass, { backgroundColor: seasonalTheme.gradient.middle + "E6" }]}>
+              <TouchableOpacity
+                onPress={() => setShowModelSelector(true)}
+                style={styles.modelSelectorButton}
+                disabled={isGenerating}
+              >
+                <Ionicons
+                  name="hardware-chip-outline"
+                  size={16}
+                  color={isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="caption"
+                  style={{
+                    color: isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary,
+                    fontWeight: "500",
+                    marginLeft: 4,
+                  }}
+                  numberOfLines={1}
+                >
+                  {selectedModelName}
+                </Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={14}
+                  color={isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary}
+                />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Model Selector Dialog */}
+      <Dialog visible={showModelSelector} onRequestClose={() => setShowModelSelector(false)}>
+        <View style={styles.modelSelectorDialog}>
+          <Text
+            variant="h4"
+            style={{ color: seasonalTheme.textPrimary, marginBottom: spacingPatterns.md }}
+          >
+            Select Model
+          </Text>
+          <ScrollView style={styles.modelSelectorScroll} showsVerticalScrollIndicator={false}>
+            {downloadedModels.map((downloaded) => {
+              const model = ALL_MODELS.find((m) => m.modelId === downloaded.modelId);
+              if (!model) return null;
+              const isSelected = selectedModelId === model.modelId;
+              return (
+                <TouchableOpacity
+                  key={model.modelId}
+                  onPress={() => handleSelectModel(model.modelId)}
+                  style={[
+                    styles.modelOption,
+                    {
+                      backgroundColor: isSelected
+                        ? seasonalTheme.chipBg
+                        : "transparent",
+                      borderColor: isSelected
+                        ? seasonalTheme.textSecondary + "40"
+                        : "transparent",
+                    },
+                  ]}
+                >
+                  <View style={styles.modelOptionContent}>
+                    <Text
+                      variant="body"
+                      style={{
+                        color: seasonalTheme.textPrimary,
+                        fontWeight: isSelected ? "600" : "400",
+                      }}
+                    >
+                      {model.displayName}
+                    </Text>
+                    <Text
+                      variant="caption"
+                      style={{ color: seasonalTheme.textSecondary }}
+                    >
+                      {model.description}
+                    </Text>
+                  </View>
+                  {isSelected && (
+                    <Ionicons
+                      name="checkmark"
+                      size={20}
+                      color={seasonalTheme.textPrimary}
+                    />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Dialog>
+
       {/* Messages with FlatList for better performance */}
       <FlatList
         ref={flatListRef}
@@ -1133,5 +1311,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontStyle: "italic",
+  },
+  modelSelectorContainer: {
+    position: "absolute",
+    top: spacingPatterns.xxs,
+    left: spacingPatterns.sm + 44 + spacingPatterns.xs, // After back button
+    zIndex: 1000,
+  },
+  modelSelectorGlass: {
+    borderRadius: borderRadius.full,
+    overflow: "hidden",
+    // Shadow for GlassView case
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  fallbackShadow: {
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: "rgba(0, 0, 0, 0.15)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  modelSelectorButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacingPatterns.sm,
+    paddingVertical: spacingPatterns.xs,
+    height: 44,
+    gap: 4,
+  },
+  modelSelectorDialog: {
+    minWidth: 280,
+  },
+  modelSelectorScroll: {
+    maxHeight: 400,
+  },
+  modelOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacingPatterns.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    marginBottom: spacingPatterns.xs,
+  },
+  modelOptionContent: {
+    flex: 1,
+    gap: 2,
   },
 });

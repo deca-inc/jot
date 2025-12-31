@@ -133,9 +133,8 @@ async function ensureFromRemoteToFolder(
       url,
       dest,
       fileType,
-      (progress, bytesWritten, bytesTotal) => {
+      (progress, _bytesWritten, _bytesTotal) => {
         onProgress?.(progress);
-        console.log(`[ensureFromRemoteToFolder] Progress: ${(progress * 100).toFixed(1)}% (${bytesWritten}/${bytesTotal} bytes)`);
       },
     );
     

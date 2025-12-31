@@ -7,7 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALL_MODELS } from "../ai/modelConfig";
 import { ensureModelPresent } from "../ai/modelManager";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
@@ -16,7 +16,7 @@ import { useModelSettings } from "../db/modelSettings";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
-import { getRecommendedModel, getCompatibleModels } from "../utils/deviceInfo";
+import { getRecommendedModel, getCompatibleModels, logModelCompatibilityDebug } from "../utils/deviceInfo";
 
 interface OnboardingModelSelectionScreenProps {
   onContinue: () => void;
@@ -29,13 +29,9 @@ const MODEL_SIZES: Record<string, number> = {
   "qwen-3-0.6b": 900,
   "qwen-3-1.7b": 2064,
   "qwen-3-4b": 3527,
-};
-
-// Model descriptions for display
-const MODEL_DESCRIPTIONS: Record<string, string> = {
-  "qwen-3-0.6b": "Fastest responses, smallest download",
-  "llama-3.2-1b-instruct": "Good balance of speed and quality",
-  "qwen-3-1.7b": "Best quality, great for complex tasks",
+  "smollm2-135m": 535,
+  "smollm2-360m": 1360,
+  "smollm2-1.7b": 1220,
 };
 
 export function OnboardingModelSelectionScreen({
@@ -44,6 +40,7 @@ export function OnboardingModelSelectionScreen({
   const seasonalTheme = useSeasonalTheme();
   const theme = useTheme();
   const modelSettings = useModelSettings();
+  const insets = useSafeAreaInsets();
 
   const [compatibleModelIds, setCompatibleModelIds] = useState<string[]>([]);
   const [recommendedModelId, setRecommendedModelId] = useState<string>("");
@@ -58,6 +55,9 @@ export function OnboardingModelSelectionScreen({
   useEffect(() => {
     const loadModels = async () => {
       try {
+        // Log detailed debug info about RAM and model compatibility
+        await logModelCompatibilityDebug();
+
         const [compatible, recommended] = await Promise.all([
           getCompatibleModels(),
           getRecommendedModel(),
@@ -68,7 +68,7 @@ export function OnboardingModelSelectionScreen({
       } catch (error) {
         console.error("Error loading compatible models:", error);
         // Fallback to default
-        const fallback = "qwen-3-0.6b";
+        const fallback = "smollm2-135m";
         setCompatibleModelIds([fallback]);
         setRecommendedModelId(fallback);
         setSelectedModelId(fallback);
@@ -101,9 +101,7 @@ export function OnboardingModelSelectionScreen({
       });
 
       // Start the download in the background (don't await it)
-      ensureModelPresent(modelConfig, (progress: number) => {
-        console.log(`Model download progress: ${Math.round(progress * 100)}%`);
-      }).catch((error) => {
+      ensureModelPresent(modelConfig).catch((error) => {
         console.error("Error downloading model in background:", error);
       });
 
@@ -136,7 +134,7 @@ export function OnboardingModelSelectionScreen({
           styles.container,
           { backgroundColor: seasonalTheme.gradient.middle },
         ]}
-        edges={["top", "bottom"]}
+        edges={["top"]}
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.accent} />
@@ -155,7 +153,7 @@ export function OnboardingModelSelectionScreen({
         styles.container,
         { backgroundColor: seasonalTheme.gradient.middle },
       ]}
-      edges={["top", "bottom"]}
+      edges={["top"]}
     >
       <ScrollView
         style={styles.scrollView}
@@ -196,8 +194,6 @@ export function OnboardingModelSelectionScreen({
             const isSelected = model.modelId === selectedModelId;
             const isRecommended = model.modelId === recommendedModelId;
             const size = MODEL_SIZES[model.modelId] || 0;
-            const description =
-              MODEL_DESCRIPTIONS[model.modelId] || model.description;
 
             return (
               <TouchableOpacity
@@ -273,7 +269,7 @@ export function OnboardingModelSelectionScreen({
                     { color: seasonalTheme.textSecondary },
                   ]}
                 >
-                  {description}
+                  {model.description}
                 </Text>
               </TouchableOpacity>
             );
@@ -281,13 +277,14 @@ export function OnboardingModelSelectionScreen({
         </View>
       </ScrollView>
 
-      {/* Fixed bottom button */}
+      {/* Fixed bottom buttons */}
       <View
         style={[
           styles.bottomContainer,
           {
             backgroundColor: seasonalTheme.gradient.middle,
             borderTopColor: seasonalTheme.textSecondary + "30",
+            paddingBottom: Math.max(insets.bottom, spacingPatterns.sm),
           },
         ]}
       >
@@ -315,6 +312,19 @@ export function OnboardingModelSelectionScreen({
               Start Download
             </Text>
           )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onContinue}
+          disabled={isDownloading}
+          style={styles.skipButton}
+          activeOpacity={0.7}
+        >
+          <Text
+            variant="body"
+            style={[styles.skipButtonText, { color: seasonalTheme.textSecondary }]}
+          >
+            Skip for now
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -388,7 +398,7 @@ const styles = StyleSheet.create({
   bottomContainer: {
     paddingHorizontal: spacingPatterns.screen,
     paddingTop: spacingPatterns.md,
-    paddingBottom: spacingPatterns.md,
+    // paddingBottom is set dynamically based on safe area insets
     borderTopWidth: 1,
   },
   downloadButton: {
@@ -403,5 +413,14 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "600",
     letterSpacing: 0.2,
+  },
+  skipButton: {
+    marginTop: spacingPatterns.xs,
+    paddingVertical: spacingPatterns.xs,
+    alignItems: "center",
+  },
+  skipButtonText: {
+    fontSize: 15,
+    fontWeight: "500",
   },
 });

@@ -70,7 +70,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const [showPinned, setShowPinned] = useState(true);
   const [includeArchived, setIncludeArchived] = useState(false);
   const [entryTypeFilter, setEntryTypeFilter] = useState<EntryTypeFilter>("all");
-  const { currentConfig } = useModel();
+  const { currentConfig: _currentConfig } = useModel();
   const modelSettings = useModelSettings();
   const [_selectedModelConfig, setSelectedModelConfig] = useState(DEFAULT_MODEL);
   const _queryClient = useQueryClient();
@@ -269,14 +269,15 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     }
   }, [onOpenFullEditor]);
 
-  const handleCreateAIChat = useCallback(() => {
+  const handleCreateAIChat = useCallback(async () => {
     setFabMenuOpen(false);
 
-    // Check if AI model is available
-    if (!currentConfig) {
+    // Check if any AI model is downloaded
+    const downloadedModels = await modelSettings.getDownloadedModels();
+    if (downloadedModels.length === 0) {
       Alert.alert(
-        "No AI Model Selected",
-        "To use AI features, please go to Settings and download an AI model first. We recommend starting with Qwen 3 0.6B (900MB) for the best balance of speed and quality.",
+        "No AI Model Downloaded",
+        "To use AI Chat, please go to Settings and download an AI model first.",
         [
           {
             text: "Cancel",
@@ -299,7 +300,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     if (onCreateNewAIChat) {
       onCreateNewAIChat();
     }
-  }, [currentConfig, onOpenSettings, onCreateNewAIChat]);
+  }, [modelSettings, onOpenSettings, onCreateNewAIChat]);
 
   const handleCreateCountdown = useCallback(() => {
     setFabMenuOpen(false);

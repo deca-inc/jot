@@ -44,6 +44,8 @@ interface LLMContextValue {
   registerPendingSave: (save: PendingSave) => void;
   /** Clear pending save (e.g., when component handles save itself) */
   clearPendingSave: () => void;
+  /** Refresh the selected model from settings (call after changing model in settings) */
+  refreshSelectedModel: () => Promise<void>;
 }
 
 const LLMContext = createContext<LLMContextValue | null>(null);
@@ -82,10 +84,13 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
   const [loadRequested, setLoadRequested] = useState(false);
 
   // Load selected model ID from settings
+  const refreshSelectedModel = useCallback(async () => {
+    const id = await modelSettings.getSelectedModelId();
+    setSelectedModelId(id);
+  }, [modelSettings]);
+
   useEffect(() => {
-    modelSettings.getSelectedModelId().then((id) => {
-      setSelectedModelId(id);
-    });
+    refreshSelectedModel();
   }, []);
 
   // Determine which model config to use
@@ -274,6 +279,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       interrupt,
       registerPendingSave,
       clearPendingSave,
+      refreshSelectedModel,
     }),
     [
       llm.isReady,
@@ -287,6 +293,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       interrupt,
       registerPendingSave,
       clearPendingSave,
+      refreshSelectedModel,
     ],
   );
 

@@ -19,26 +19,21 @@ import { useModelSettings } from "../db/modelSettings";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
+import { getDeviceTier, getCompatibleModels } from "../utils/deviceInfo";
 import { Button } from "./Button";
 import { Text } from "./Text";
 import { useToast } from "./ToastProvider";
 
 // Estimated file sizes in MB
 const MODEL_SIZES: Record<string, number> = {
-  "llama-3.2-1b-instruct": 1083, // Actual: 1083MB (SpinQuant)
-  "llama-3.2-3b-instruct": 2435, // Actual: 2435MB (SpinQuant)
-  "qwen-3-0.6b": 900, // Actual: 900MB (8da4w quantization)
-  "qwen-3-1.7b": 2064, // Actual: 2064MB (8da4w quantization)
-  "qwen-3-4b": 3527, // Actual: 3527MB (8da4w quantization)
-};
-
-// Simplified descriptions
-const MODEL_DESCRIPTIONS: Record<string, string> = {
-  "llama-3.2-1b-instruct": "Fast, smaller",
-  "llama-3.2-3b-instruct": "Balanced, stronger",
-  "qwen-3-0.6b": "Fastest, smallest",
-  "qwen-3-1.7b": "Balanced",
-  "qwen-3-4b": "Slowest, strongest, largest",
+  "llama-3.2-1b-instruct": 1083,
+  "llama-3.2-3b-instruct": 2435,
+  "qwen-3-0.6b": 900,
+  "qwen-3-1.7b": 2064,
+  "qwen-3-4b": 3527,
+  "smollm2-135m": 535,
+  "smollm2-360m": 1360,
+  "smollm2-1.7b": 1220,
 };
 
 interface ModelCardProps {
@@ -47,6 +42,7 @@ interface ModelCardProps {
   isSelected: boolean;
   isDownloading: boolean;
   isLoading: boolean;
+  isNotRecommended: boolean; // Model may cause OOM on this device
   downloadProgress?: number; // 0-100
   onDownload: () => void;
   onSelect: () => void;
@@ -61,6 +57,7 @@ function ModelCard({
   isSelected,
   isDownloading,
   isLoading,
+  isNotRecommended,
   downloadProgress,
   onDownload,
   onSelect,
@@ -78,7 +75,6 @@ function ModelCard({
   };
 
   const estimatedSize = MODEL_SIZES[model.modelId] || 0;
-  const description = MODEL_DESCRIPTIONS[model.modelId] || model.description;
 
   const renderActionButton = () => {
     if (isDownloading) {
@@ -189,7 +185,9 @@ function ModelCard({
               style={[
                 styles.modelName,
                 {
-                  color: seasonalTheme.textPrimary,
+                  color: isNotRecommended && !isDownloaded
+                    ? seasonalTheme.textSecondary
+                    : seasonalTheme.textPrimary,
                   fontWeight: isSelected ? "600" : "400",
                 },
               ]}
@@ -203,8 +201,16 @@ function ModelCard({
                 { color: seasonalTheme.textSecondary },
               ]}
             >
-              {description}
+              {model.description}
             </Text>
+            {isNotRecommended && !isDownloaded && (
+              <View style={[styles.warningBadge, { backgroundColor: `${theme.colors.warning}20` }]}>
+                <Ionicons name="warning" size={10} color={theme.colors.warning} />
+                <Text style={[styles.warningText, { color: theme.colors.warning }]}>
+                  May crash on this device
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Size and Action */}
@@ -263,6 +269,7 @@ export function ModelManagement() {
 
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<string[]>([]);
+  const [compatibleModels, setCompatibleModels] = useState<string[]>([]);
   const [downloadingModels, setDownloadingModels] = useState<Set<string>>(
     new Set(),
   );
@@ -273,6 +280,7 @@ export function ModelManagement() {
   const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
+  const [deviceTier, setDeviceTier] = useState<string>("mid");
 
   // Load settings on mount
   useEffect(() => {
@@ -282,11 +290,17 @@ export function ModelManagement() {
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const selectedId = await modelSettings.getSelectedModelId();
-      const downloaded = await modelSettings.getDownloadedModels();
+      const [selectedId, downloaded, compatible, tier] = await Promise.all([
+        modelSettings.getSelectedModelId(),
+        modelSettings.getDownloadedModels(),
+        getCompatibleModels(),
+        getDeviceTier(),
+      ]);
 
       setSelectedModelId(selectedId);
       setDownloadedModels(downloaded.map((m) => m.modelId));
+      setCompatibleModels(compatible);
+      setDeviceTier(tier);
 
       // Load sizes for downloaded models
       const sizes = new Map<string, number>();
@@ -438,11 +452,21 @@ export function ModelManagement() {
 
   const selectedModel = ALL_MODELS.find((m) => m.modelId === selectedModelId);
 
-  // Sort models by size (smallest first)
+  // Hardcoded display order: alphabetical by family, then smallest to largest
+  const MODEL_ORDER = [
+    "llama-3.2-1b-instruct",
+    "llama-3.2-3b-instruct",
+    "qwen-3-0.6b",
+    "qwen-3-1.7b",
+    "qwen-3-4b",
+    "smollm2-135m",
+    "smollm2-360m",
+    "smollm2-1.7b",
+  ];
   const sortedModels = [...ALL_MODELS].sort((a, b) => {
-    const sizeA = MODEL_SIZES[a.modelId] || 0;
-    const sizeB = MODEL_SIZES[b.modelId] || 0;
-    return sizeA - sizeB;
+    const indexA = MODEL_ORDER.indexOf(a.modelId);
+    const indexB = MODEL_ORDER.indexOf(b.modelId);
+    return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
   });
 
   return (
@@ -478,7 +502,7 @@ export function ModelManagement() {
             variant="caption"
             style={[styles.description, { color: seasonalTheme.textSecondary }]}
           >
-            Tap to select a model. Download new models to use them.
+            Your device: {deviceTier}-end. Models marked "May crash" are not recommended.
           </Text>
 
           <View style={styles.modelsList}>
@@ -490,6 +514,7 @@ export function ModelManagement() {
                 isSelected={selectedModelId === model.modelId}
                 isDownloading={downloadingModels.has(model.modelId)}
                 isLoading={loadingModelId === model.modelId}
+                isNotRecommended={!compatibleModels.includes(model.modelId)}
                 downloadProgress={downloadProgress.get(model.modelId)}
                 onDownload={() => handleDownload(model)}
                 onSelect={() => handleSelect(model)}
@@ -586,6 +611,20 @@ const styles = StyleSheet.create({
   modelName: {
     fontSize: 14,
     lineHeight: 16,
+  },
+  warningBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 3,
+    marginTop: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  warningText: {
+    fontSize: 9,
+    fontWeight: "600",
   },
   modelDescription: {
     fontSize: 11,

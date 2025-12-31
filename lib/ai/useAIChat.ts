@@ -164,5 +164,6 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     setMessageHistory,
     clearHistory,
     stop,
+    refreshSelectedModel: llm.refreshSelectedModel,
   };
 }

@@ -834,8 +834,8 @@ export const QuillRichEditor = forwardRef<
               tintColor={seasonalTheme.cardBg}
               style={[
                 styles.toolbarContainer,
-                // Solid background as fallback when GlassView doesn't render blur
-                { backgroundColor: seasonalTheme.cardBg },
+                // Solid background as fallback when GlassView doesn't render blur (90% opaque)
+                { backgroundColor: seasonalTheme.gradient.middle + "E6" },
               ]}
             >
               <ScrollView
@@ -851,7 +851,7 @@ export const QuillRichEditor = forwardRef<
             <View
               style={[
                 styles.toolbarContainer,
-                { backgroundColor: seasonalTheme.cardBg },
+                { backgroundColor: seasonalTheme.gradient.middle + "E6" }, // 90% opaque
               ]}
             >
               <ScrollView
