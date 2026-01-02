@@ -48,13 +48,23 @@ export interface HomeScreenProps {
   isVisible?: boolean;
   onOpenFullEditor?: (initialText?: string) => void;
   onOpenSettings?: () => void;
-  onOpenEntryEditor?: (entryId: number, entryType?: "journal" | "ai_chat" | "countdown") => void;
+  onOpenEntryEditor?: (
+    entryId: number,
+    entryType?: "journal" | "ai_chat" | "countdown",
+  ) => void;
   onCreateNewAIChat?: () => void;
   onCreateCountdown?: () => void;
 }
 
 export function HomeScreen(props: HomeScreenProps = {}) {
-  const { onOpenFullEditor, onOpenSettings, onOpenEntryEditor, onCreateNewAIChat, onCreateCountdown, isVisible = true } = props;
+  const {
+    onOpenFullEditor,
+    onOpenSettings,
+    onOpenEntryEditor,
+    onCreateNewAIChat,
+    onCreateCountdown,
+    isVisible = true,
+  } = props;
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
 
@@ -69,10 +79,12 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showPinned, setShowPinned] = useState(true);
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [entryTypeFilter, setEntryTypeFilter] = useState<EntryTypeFilter>("all");
+  const [entryTypeFilter, setEntryTypeFilter] =
+    useState<EntryTypeFilter>("all");
   const { currentConfig: _currentConfig } = useModel();
   const modelSettings = useModelSettings();
-  const [_selectedModelConfig, setSelectedModelConfig] = useState(DEFAULT_MODEL);
+  const [_selectedModelConfig, setSelectedModelConfig] =
+    useState(DEFAULT_MODEL);
   const _queryClient = useQueryClient();
 
   // FAB menu state
@@ -177,7 +189,13 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       includeArchived: includeArchived ? true : undefined,
       limit: 20,
     };
-  }, [debouncedSearchQuery, entryTypeFilter, favoritesOnly, dateRange, includeArchived]);
+  }, [
+    debouncedSearchQuery,
+    entryTypeFilter,
+    favoritesOnly,
+    dateRange,
+    includeArchived,
+  ]);
 
   // Use search query when search text is present, otherwise use regular query
   const isSearching = debouncedSearchQuery.trim().length > 0;
@@ -337,7 +355,9 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
     // Convert to flat list with headers
     const flatData: Array<
-      { type: "header"; dateKey: string } | { type: "entry"; entry: Entry } | { type: "pinnedSpacer" }
+      | { type: "header"; dateKey: string }
+      | { type: "entry"; entry: Entry }
+      | { type: "pinnedSpacer" }
     > = [];
 
     // Add pinned entries at the top (no header - rely on pin icon)
@@ -398,7 +418,9 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
   // Render item for FlatList
   const renderItem: ListRenderItem<
-    { type: "header"; dateKey: string } | { type: "entry"; entry: Entry } | { type: "pinnedSpacer" }
+    | { type: "header"; dateKey: string }
+    | { type: "entry"; entry: Entry }
+    | { type: "pinnedSpacer" }
   > = useCallback(
     ({ item }) => {
       if (item.type === "pinnedSpacer") {
@@ -430,7 +452,13 @@ export function HomeScreen(props: HomeScreenProps = {}) {
         />
       );
     },
-    [seasonalTheme, formatDateHeader, handleEntryPress, handleToggleFavorite, handleResetCountup],
+    [
+      seasonalTheme,
+      formatDateHeader,
+      handleEntryPress,
+      handleToggleFavorite,
+      handleResetCountup,
+    ],
   );
 
   const keyExtractor = useCallback(

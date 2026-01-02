@@ -14,7 +14,7 @@ export type ModelSource =
   | { kind: "unavailable"; reason: string }; // For models without PTE files yet
 
 export interface LlmModelConfig {
-  modelId: string;
+  modelId: MODEL_IDS;
   displayName: string;
   description: string;
   // Model metadata
@@ -42,6 +42,17 @@ export interface LlmModelConfig {
 // Large .pte files are loaded from filesystem at runtime, not bundled by Metro
 // This avoids Metro trying to read 2GB+ files into memory
 
+export enum MODEL_IDS {
+  "smollm2-135m" = "smollm2-135m",
+  "smollm2-360m" = "smollm2-360m",
+  "smollm2-1.7b" = "smollm2-1.7b",
+  "llama-3.2-1b-instruct" = "llama-3.2-1b-instruct",
+  "llama-3.2-3b-instruct" = "llama-3.2-3b-instruct",
+  "qwen-3-0.6b" = "qwen-3-0.6b",
+  "qwen-3-1.7b" = "qwen-3-1.7b",
+  "qwen-3-4b" = "qwen-3-4b",
+}
+
 // =============================================================================
 // MODEL REGISTRY
 // =============================================================================
@@ -63,7 +74,7 @@ export interface LlmModelConfig {
 
 // SmolLM2 135M - Ultra lightweight for older devices
 export const SmolLM2_135M: LlmModelConfig = {
-  modelId: "smollm2-135m",
+  modelId: MODEL_IDS["smollm2-135m"],
   displayName: "SmolLM2 135M",
   description: "8K context, ~1GB RAM. Ultra-lightweight for older devices.",
   size: "135M",
@@ -91,7 +102,7 @@ export const SmolLM2_135M: LlmModelConfig = {
 
 // SmolLM2 360M - Good balance for older devices
 export const SmolLM2_360M: LlmModelConfig = {
-  modelId: "smollm2-360m",
+  modelId: MODEL_IDS["smollm2-360m"],
   displayName: "SmolLM2 360M",
   description: "8K context, ~2GB RAM. Good balance for older devices.",
   size: "360M",
@@ -119,7 +130,7 @@ export const SmolLM2_360M: LlmModelConfig = {
 
 // SmolLM2 1.7B - Best SmolLM2 quality
 export const SmolLM2_1_7B: LlmModelConfig = {
-  modelId: "smollm2-1.7b",
+  modelId: MODEL_IDS["smollm2-1.7b"],
   displayName: "SmolLM2 1.7B",
   description: "8K context, ~4GB RAM. Best SmolLM2 quality.",
   size: "1.7B",
@@ -151,7 +162,7 @@ export const SmolLM2_1_7B: LlmModelConfig = {
 
 // Llama 3.2 1B Instruct (SpinQuant)
 export const Llama32_1B_Instruct: LlmModelConfig = {
-  modelId: "llama-3.2-1b-instruct",
+  modelId: MODEL_IDS["llama-3.2-1b-instruct"],
   displayName: "Llama 3.2 1B Instruct",
   description: "128K context, ~2GB RAM. Fast and multilingual (8 languages).",
   size: "1B",
@@ -179,9 +190,10 @@ export const Llama32_1B_Instruct: LlmModelConfig = {
 
 // Llama 3.2 3B Instruct (SpinQuant)
 export const Llama32_3B_Instruct: LlmModelConfig = {
-  modelId: "llama-3.2-3b-instruct",
+  modelId: MODEL_IDS["llama-3.2-3b-instruct"],
   displayName: "Llama 3.2 3B Instruct",
-  description: "128K context, ~4GB RAM. Higher quality, multilingual (8 languages).",
+  description:
+    "128K context, ~4GB RAM. Higher quality, multilingual (8 languages).",
   size: "3B",
   quantization: "SpinQuant",
   folderName: "llama-3.2-3b-instruct",
@@ -212,7 +224,7 @@ export const Llama32_3B_Instruct: LlmModelConfig = {
 // Qwen 3 0.6B (Quantized) - Lightweight option
 // Smallest and fastest option
 export const Qwen3_0_6B: LlmModelConfig = {
-  modelId: "qwen-3-0.6b",
+  modelId: MODEL_IDS["qwen-3-0.6b"],
   displayName: "Qwen 3 0.6B",
   description: "32K context, ~2GB RAM. Smallest Qwen with fast inference.",
   size: "0.6B",
@@ -242,7 +254,7 @@ export const Qwen3_0_6B: LlmModelConfig = {
 // Qwen 3 1.7B (Quantized) - DEFAULT MODEL
 // Best balance of quality and performance - recommended for most users
 export const Qwen3_1_7B: LlmModelConfig = {
-  modelId: "qwen-3-1.7b",
+  modelId: MODEL_IDS["qwen-3-1.7b"],
   displayName: "Qwen 3 1.7B",
   description: "32K context, ~4GB RAM. Best balance of quality and speed.",
   size: "1.7B",
@@ -271,7 +283,7 @@ export const Qwen3_1_7B: LlmModelConfig = {
 
 // Qwen 3 4B (Quantized)
 export const Qwen3_4B: LlmModelConfig = {
-  modelId: "qwen-3-4b",
+  modelId: MODEL_IDS["qwen-3-4b"],
   displayName: "Qwen 3 4B",
   description: "32K context, ~8GB RAM. Highest quality Qwen for on-device.",
   size: "4B",

@@ -1,7 +1,7 @@
 import { Asset } from "expo-asset";
 import { Paths } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
-import { BundledAssetSource, DEFAULT_MODEL, LlmModelConfig } from "./modelConfig";
+import { BundledAssetSource, LlmModelConfig } from "./modelConfig";
 import { modelDownloadStatus } from "./modelDownloadStatus";
 import { persistentDownloadManager } from "./persistentDownloadManager";
 
@@ -30,19 +30,23 @@ function getBaseDir(): string {
   try {
     const documentsDir = Paths.document.uri;
     if (documentsDir) {
-      console.log(`[modelManager] Using Paths API document directory: ${documentsDir}`);
+      console.log(
+        `[modelManager] Using Paths API document directory: ${documentsDir}`,
+      );
       return documentsDir;
     }
   } catch (e) {
     console.warn("Paths API not available, falling back to legacy API:", e);
   }
-  
+
   // Fallback to legacy API - use documentDirectory for persistent storage
   if (FileSystem.documentDirectory) {
-    console.log(`[modelManager] Using legacy documentDirectory: ${FileSystem.documentDirectory}`);
+    console.log(
+      `[modelManager] Using legacy documentDirectory: ${FileSystem.documentDirectory}`,
+    );
     return FileSystem.documentDirectory;
   }
-  
+
   // NEVER use cacheDirectory for models - Android can clear it at any time!
   throw new Error(
     "No persistent storage directory available. documentDirectory is required for model storage.",
@@ -67,7 +71,11 @@ async function ensureFromBundled(
 ): Promise<string> {
   try {
     // Handle file path directly (for large .pte files loaded from filesystem)
-    if (typeof source === "object" && "uri" in source && typeof source.uri === "string") {
+    if (
+      typeof source === "object" &&
+      "uri" in source &&
+      typeof source.uri === "string"
+    ) {
       // File path from filesystem - use directly
       const fileInfo = await FileSystem.getInfoAsync(source.uri);
       if (fileInfo.exists) {
@@ -105,14 +113,13 @@ async function ensureFromBundled(
   }
 }
 
-
 async function ensureFromRemoteToFolder(
   url: string,
   folderName: string,
   fileName: string,
   modelId: string,
   modelName: string,
-  fileType: 'model' | 'tokenizer' | 'config',
+  fileType: "model" | "tokenizer" | "config",
   onProgress?: (progress: number) => void,
 ): Promise<string> {
   const modelDir = await ensureModelsDir(folderName);
@@ -122,10 +129,10 @@ async function ensureFromRemoteToFolder(
     console.log(`[ensureFromRemoteToFolder] File already exists: ${dest}`);
     return dest;
   }
-  
+
   try {
     console.log(`[ensureFromRemoteToFolder] Starting download: ${url}`);
-    
+
     // Use persistent download manager for resumable downloads
     const downloadResumable = await persistentDownloadManager.startDownload(
       modelId,
@@ -137,7 +144,7 @@ async function ensureFromRemoteToFolder(
         onProgress?.(progress);
       },
     );
-    
+
     // Execute the download
     const finalPath = await persistentDownloadManager.executeDownload(
       downloadResumable,
@@ -145,7 +152,7 @@ async function ensureFromRemoteToFolder(
       fileType,
       dest,
     );
-    
+
     console.log(`[ensureFromRemoteToFolder] Download complete: ${finalPath}`);
     return finalPath;
   } catch (e) {
@@ -155,7 +162,7 @@ async function ensureFromRemoteToFolder(
 }
 
 export async function ensureModelPresent(
-  config: LlmModelConfig = DEFAULT_MODEL,
+  config: LlmModelConfig,
   onProgress?: (progress: number) => void,
 ): Promise<EnsureResult> {
   let ptePath: string;
@@ -179,7 +186,7 @@ export async function ensureModelPresent(
         1024
       ).toFixed(2)}MB)`,
     );
-    
+
     // Model already exists, call onProgress with 100% immediately
     if (onProgress) {
       onProgress(1.0);
@@ -204,10 +211,10 @@ export async function ensureModelPresent(
   } else {
     // Download from remote to model-specific folder
     console.log(`Downloading model from remote: ${config.pteSource.url}`);
-    
+
     // Start tracking download status
     modelDownloadStatus.startDownload(config.modelId, config.displayName);
-    
+
     try {
       // Main model file progress (80% of total)
       ptePath = await ensureFromRemoteToFolder(
@@ -216,7 +223,7 @@ export async function ensureModelPresent(
         config.pteFileName,
         config.modelId,
         config.displayName,
-        'model',
+        "model",
         (progress) => {
           const overallProgress = progress * 0.8; // Model is 80% of the work
           if (onProgress) {
@@ -257,7 +264,7 @@ export async function ensureModelPresent(
         config.tokenizerFileName || "tokenizer.bin",
         config.modelId,
         config.displayName,
-        'tokenizer',
+        "tokenizer",
         (progress) => {
           const overallProgress = 0.8 + progress * 0.1;
           if (onProgress) {
@@ -294,7 +301,7 @@ export async function ensureModelPresent(
         config.tokenizerConfigFileName || "tokenizer.json",
         config.modelId,
         config.displayName,
-        'config',
+        "config",
         (progress) => {
           const overallProgress = 0.9 + progress * 0.1;
           if (onProgress) {

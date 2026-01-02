@@ -32,13 +32,10 @@ import { useTrackScreenView } from "../analytics";
 import { Dialog, Text, FloatingComposerHeader } from "../components";
 import { Block } from "../db/entries";
 import { useModelSettings, ModelDownloadInfo } from "../db/modelSettings";
-import {
-  useEntry,
-  useCreateEntry,
-  useUpdateEntry,
-} from "../db/useEntries";
+import { useEntry, useCreateEntry, useUpdateEntry } from "../db/useEntries";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useThrottle } from "../utils/debounce";
 
 // Configure marked for simple rendering
 marked.setOptions({
@@ -165,14 +162,14 @@ const MarkdownRenderer = React.memo(
 /**
  * AssistantMessage - Renders AI responses with streaming support
  *
- * During generation, polls streamingContentRef every 150ms to throttle updates.
+ * Throttling happens at parent level via useThrottle.
  * Handles think tags (shows thinking indicator) and strips them from final output.
  */
 const AssistantMessage = React.memo(
   ({
     block,
     isGenerating,
-    streamingContentRef,
+    currentResponse,
     textSecondary,
     htmlContentWidth,
     htmlTagsStyles,
@@ -180,40 +177,16 @@ const AssistantMessage = React.memo(
   }: {
     block: Block;
     isGenerating: boolean;
-    streamingContentRef: React.MutableRefObject<string>;
+    currentResponse: string | null;
     textSecondary: string;
     htmlContentWidth: number;
     htmlTagsStyles: any;
     customRenderers: any;
   }) => {
     const blockContent = block.type === "markdown" ? block.content : "";
-
-    // Keep last streaming content to prevent flash when generation ends
-    const lastStreamingContentRef = React.useRef<string>("");
-
-    // Content to display, updated every 150ms during generation
-    const [displayContent, setDisplayContent] = React.useState(
-      isGenerating ? streamingContentRef.current : blockContent,
-    );
-
-    React.useEffect(() => {
-      if (!isGenerating) {
-        // Use blockContent if available, otherwise use last streamed content
-        const content = blockContent || lastStreamingContentRef.current;
-        setDisplayContent(prev => prev === content ? prev : content);
-        return;
-      }
-
-      // Poll streaming content every 150ms during generation
-      setDisplayContent(streamingContentRef.current);
-      const intervalId = setInterval(() => {
-        const content = streamingContentRef.current;
-        lastStreamingContentRef.current = content;
-        setDisplayContent(prev => prev === content ? prev : content);
-      }, 150);
-
-      return () => clearInterval(intervalId);
-    }, [isGenerating, blockContent, streamingContentRef]);
+    const displayContent = isGenerating
+      ? currentResponse || ""
+      : blockContent || "";
 
     // Parse think tags from content
     const parsed = React.useMemo(() => {
@@ -223,7 +196,9 @@ const AssistantMessage = React.memo(
       if (!hasThinkTag) {
         return {
           thinkContent: "",
-          contentAfterThink: isGenerating ? displayContent : stripThinkTags(displayContent),
+          contentAfterThink: isGenerating
+            ? displayContent
+            : stripThinkTags(displayContent),
           hasThinkTags: false,
         };
       }
@@ -286,13 +261,9 @@ const AssistantMessage = React.memo(
     );
   },
   (prevProps, nextProps) => {
-    // During generation, skip re-renders - we poll internally via interval
-    if (nextProps.isGenerating) {
-      return true;
-    }
-    // Allow re-render when generation state changes or styles change
     return (
       prevProps.isGenerating === nextProps.isGenerating &&
+      prevProps.currentResponse === nextProps.currentResponse &&
       prevProps.textSecondary === nextProps.textSecondary &&
       prevProps.htmlContentWidth === nextProps.htmlContentWidth
     );
@@ -301,7 +272,6 @@ const AssistantMessage = React.memo(
 
 export function AIChatComposer({
   entryId,
-  initialTitle = "",
   initialBlocks = EMPTY_BLOCKS,
   onSave: _onSave,
   onCancel,
@@ -315,9 +285,15 @@ export function AIChatComposer({
   useTrackScreenView("AI Chat Composer");
 
   // Model selector state
-  const [downloadedModels, setDownloadedModels] = useState<ModelDownloadInfo[]>([]);
+  const [downloadedModels, setDownloadedModels] = useState<ModelDownloadInfo[]>(
+    [],
+  );
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [currentResponse, setCurrentResponse] = useThrottle<string | null>(
+    null,
+    150,
+  );
 
   // Load downloaded models on mount
   useEffect(() => {
@@ -340,7 +316,9 @@ export function AIChatComposer({
   }, [selectedModelId]);
 
   // Track current entry ID (can change when new entry is created)
-  const [currentEntryId, setCurrentEntryId] = useState<number | undefined>(entryId);
+  const [currentEntryId, setCurrentEntryId] = useState<number | undefined>(
+    entryId,
+  );
 
   // Use ref to track entry ID for callbacks (avoids stale closure issues)
   const currentEntryIdRef = useRef<number | undefined>(currentEntryId);
@@ -363,15 +341,10 @@ export function AIChatComposer({
   // Use the simplified AI chat hook
   // Pass entryId and currentBlocks so it can auto-save even if component unmounts
   const {
-    isReady: _isLLMReady,
     isGenerating,
-    isLoading: _isLLMLoading,
-    error: _llmError,
-    rawResponse: streamingResponse, // Use raw response for streaming display (AssistantMessage handles think tags)
     sendMessage: aiSendMessage,
     setMessageHistory,
     stop: stopGeneration,
-    refreshSelectedModel,
   } = useAIChat({
     entryId: currentEntryId,
     currentBlocks: entry?.blocks,
@@ -383,7 +356,7 @@ export function AIChatComposer({
       if (entryId) {
         const currentBlocks = currentEntry?.blocks || [];
         // Filter out empty assistant markdown blocks, keep all others
-        const filteredBlocks = currentBlocks.filter(b => {
+        const filteredBlocks = currentBlocks.filter((b) => {
           if (b.role === "assistant" && b.type === "markdown") {
             return b.content && b.content.trim().length > 0;
           }
@@ -400,7 +373,11 @@ export function AIChatComposer({
           input: { blocks: updatedBlocks },
         });
       }
+      setCurrentResponse(null);
       setIsSubmitting(false);
+    },
+    onResponseUpdate: (responseSoFar: string) => {
+      setCurrentResponse(responseSoFar);
     },
     onError: (error) => {
       Alert.alert("AI Error", error);
@@ -409,20 +386,27 @@ export function AIChatComposer({
   });
 
   // Handle model selection - updates setting and tells LLM to refresh
-  const handleSelectModel = useCallback(async (modelId: string) => {
-    setSelectedModelId(modelId);
-    await modelSettings.setSelectedModelId(modelId);
-    setShowModelSelector(false);
-    // Tell LLM provider to reload the model on next message
-    await refreshSelectedModel();
-  }, [modelSettings, refreshSelectedModel]);
+  const handleSelectModel = useCallback(
+    async (modelId: string) => {
+      setSelectedModelId(modelId);
+      await modelSettings.setSelectedModelId(modelId);
+      setShowModelSelector(false);
+    },
+    [modelSettings],
+  );
 
   // Initialize message history from existing entry
   useEffect(() => {
     if (entry?.blocks) {
       const messages: Message[] = entry.blocks
-        .filter((b): b is Extract<Block, { type: "markdown" }> & { role: "user" | "assistant" } =>
-          b.type === "markdown" && (b.role === "user" || b.role === "assistant"),
+        .filter(
+          (
+            b,
+          ): b is Extract<Block, { type: "markdown" }> & {
+            role: "user" | "assistant";
+          } =>
+            b.type === "markdown" &&
+            (b.role === "user" || b.role === "assistant"),
         )
         .map((b) => ({ role: b.role, content: b.content }));
       setMessageHistory(messages);
@@ -439,16 +423,10 @@ export function AIChatComposer({
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  // Ref to store streaming content - AssistantMessage polls this without triggering re-renders
-  const streamingContentRef = useRef<string>("");
-  streamingContentRef.current = streamingResponse;
-
   // Derive displayed data from entry or fallback to initial props
-  const _displayedTitle = entry?.title ?? initialTitle;
   const displayedBlocks = entry?.blocks ?? initialBlocks;
 
   // Build blocks with placeholder for generating state
-  // NOTE: Don't include streamingResponse in dependencies - AssistantMessage polls via ref
   const blocksWithPlaceholder = useMemo(() => {
     const blocks = [...displayedBlocks];
 
@@ -474,7 +452,7 @@ export function AIChatComposer({
     }
 
     return blocks;
-  }, [displayedBlocks, isGenerating]); // NOTE: streamingResponse deliberately excluded - AssistantMessage polls via ref
+  }, [displayedBlocks, isGenerating]);
 
   // Track user's intent to stay at bottom
   // Once user reaches bottom, assume they want to stay there until they scroll up
@@ -697,9 +675,10 @@ export function AIChatComposer({
       // If this is a new conversation, create entry first
       if (!entryIdToUse) {
         // Use first message as title (truncated to 60 chars)
-        const title = messageText.length > 60
-          ? messageText.substring(0, 57) + "..."
-          : messageText;
+        const title =
+          messageText.length > 60
+            ? messageText.substring(0, 57) + "..."
+            : messageText;
 
         const newEntry = await createEntry.mutateAsync({
           type: "ai_chat",
@@ -780,7 +759,7 @@ export function AIChatComposer({
         <AssistantMessage
           block={block}
           isGenerating={isGeneratingMessage}
-          streamingContentRef={streamingContentRef}
+          currentResponse={currentResponse}
           textSecondary={seasonalTheme.textSecondary}
           htmlContentWidth={htmlContentWidth}
           htmlTagsStyles={htmlTagsStyles}
@@ -791,6 +770,7 @@ export function AIChatComposer({
     [
       blocksWithPlaceholder.length,
       isGenerating,
+      currentResponse,
       seasonalTheme.textSecondary,
       htmlContentWidth,
       htmlTagsStyles,
@@ -891,7 +871,6 @@ export function AIChatComposer({
     );
   }, [seasonalTheme, promptSuggestions, handlePromptSuggestionPress]);
 
-
   // Show UI shell immediately - content will load progressively
   return (
     <View
@@ -912,10 +891,12 @@ export function AIChatComposer({
 
       {/* Model Selector - next to back button (only show if multiple models downloaded) */}
       {downloadedModels.length > 1 && (
-        <View style={[
-          styles.modelSelectorContainer,
-          !glassAvailable && styles.fallbackShadow,
-        ]}>
+        <View
+          style={[
+            styles.modelSelectorContainer,
+            !glassAvailable && styles.fallbackShadow,
+          ]}
+        >
           {glassAvailable ? (
             <GlassView
               glassEffectStyle="regular"
@@ -930,12 +911,18 @@ export function AIChatComposer({
                 <Ionicons
                   name="hardware-chip-outline"
                   size={16}
-                  color={isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary}
+                  color={
+                    isGenerating
+                      ? seasonalTheme.textSecondary
+                      : seasonalTheme.textPrimary
+                  }
                 />
                 <Text
                   variant="caption"
                   style={{
-                    color: isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary,
+                    color: isGenerating
+                      ? seasonalTheme.textSecondary
+                      : seasonalTheme.textPrimary,
                     fontWeight: "500",
                     marginLeft: 4,
                   }}
@@ -946,12 +933,21 @@ export function AIChatComposer({
                 <Ionicons
                   name="chevron-down"
                   size={14}
-                  color={isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary}
+                  color={
+                    isGenerating
+                      ? seasonalTheme.textSecondary
+                      : seasonalTheme.textPrimary
+                  }
                 />
               </TouchableOpacity>
             </GlassView>
           ) : (
-            <View style={[styles.modelSelectorGlass, { backgroundColor: seasonalTheme.glassFallbackBg }]}>
+            <View
+              style={[
+                styles.modelSelectorGlass,
+                { backgroundColor: seasonalTheme.glassFallbackBg },
+              ]}
+            >
               <TouchableOpacity
                 onPress={() => setShowModelSelector(true)}
                 style={styles.modelSelectorButton}
@@ -960,12 +956,18 @@ export function AIChatComposer({
                 <Ionicons
                   name="hardware-chip-outline"
                   size={16}
-                  color={isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary}
+                  color={
+                    isGenerating
+                      ? seasonalTheme.textSecondary
+                      : seasonalTheme.textPrimary
+                  }
                 />
                 <Text
                   variant="caption"
                   style={{
-                    color: isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary,
+                    color: isGenerating
+                      ? seasonalTheme.textSecondary
+                      : seasonalTheme.textPrimary,
                     fontWeight: "500",
                     marginLeft: 4,
                   }}
@@ -976,7 +978,11 @@ export function AIChatComposer({
                 <Ionicons
                   name="chevron-down"
                   size={14}
-                  color={isGenerating ? seasonalTheme.textSecondary : seasonalTheme.textPrimary}
+                  color={
+                    isGenerating
+                      ? seasonalTheme.textSecondary
+                      : seasonalTheme.textPrimary
+                  }
                 />
               </TouchableOpacity>
             </View>
@@ -985,17 +991,28 @@ export function AIChatComposer({
       )}
 
       {/* Model Selector Dialog */}
-      <Dialog visible={showModelSelector} onRequestClose={() => setShowModelSelector(false)}>
+      <Dialog
+        visible={showModelSelector}
+        onRequestClose={() => setShowModelSelector(false)}
+      >
         <View style={styles.modelSelectorDialog}>
           <Text
             variant="h4"
-            style={{ color: seasonalTheme.textPrimary, marginBottom: spacingPatterns.md }}
+            style={{
+              color: seasonalTheme.textPrimary,
+              marginBottom: spacingPatterns.md,
+            }}
           >
             Select Model
           </Text>
-          <ScrollView style={styles.modelSelectorScroll} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.modelSelectorScroll}
+            showsVerticalScrollIndicator={false}
+          >
             {downloadedModels.map((downloaded) => {
-              const model = ALL_MODELS.find((m) => m.modelId === downloaded.modelId);
+              const model = ALL_MODELS.find(
+                (m) => m.modelId === downloaded.modelId,
+              );
               if (!model) return null;
               const isSelected = selectedModelId === model.modelId;
               return (

@@ -1,21 +1,29 @@
 /**
  * LLMProvider - Keeps a single LLM instance mounted at the app level
  *
- * This prevents OOM by ensuring only one LLM exists and it never unmounts.
- * Also handles background task registration so generation continues when app is backgrounded.
+ * Uses LLMModule directly (instead of useLLM hook) for explicit control over
+ * model loading and unloading to prevent OOM when switching models.
  */
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useLLM, Message } from "react-native-executorch";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
+import { LLMModule, Message } from "react-native-executorch";
 import { Block } from "../db/entries";
 import { useModelSettings } from "../db/modelSettings";
 import { registerBackgroundTasks } from "./backgroundTasks";
 import { truncateContext, fitsInContext } from "./contextManager";
 import {
-  DEFAULT_SYSTEM_PROMPT,
   LlmModelConfig,
-  DEFAULT_MODEL,
   getModelById,
+  MODEL_IDS,
+  DEFAULT_SYSTEM_PROMPT,
 } from "./modelConfig";
 import { ensureModelPresent } from "./modelManager";
 
@@ -31,21 +39,17 @@ interface PendingSave {
 }
 
 interface LLMContextValue {
-  isReady: boolean;
   isGenerating: boolean;
-  isLoading: boolean;
-  error: string | null;
-  response: string;
-  rawResponse: string;
-  modelConfig: LlmModelConfig;
-  sendMessage: (messages: Message[]) => Promise<string>;
-  interrupt: () => void;
-  /** Register a pending save so response is saved even if component unmounts */
+  sendMessage: (
+    messages: Message[],
+    options?: {
+      responseCallback?: (responseSoFar: string) => void;
+      completeCallback?: (results: string) => void;
+    },
+  ) => Promise<string>;
   registerPendingSave: (save: PendingSave) => void;
-  /** Clear pending save (e.g., when component handles save itself) */
   clearPendingSave: () => void;
-  /** Refresh the selected model from settings (call after changing model in settings) */
-  refreshSelectedModel: () => Promise<void>;
+  interrupt: () => void;
 }
 
 const LLMContext = createContext<LLMContextValue | null>(null);
@@ -68,68 +72,120 @@ function addFilePrefix(path: string): string {
   return path.startsWith("file://") ? path : `file://${path}`;
 }
 
+interface ModelLibrary {
+  llm?: {
+    config: LlmModelConfig;
+    module: LLMModule;
+  };
+}
+
+// Singleton - exists outside React lifecycle to avoid closure/ref issues
+const modelLibrarySingleton: ModelLibrary = {};
+
+async function modelLoader(type: "llm", modelId: MODEL_IDS): Promise<void> {
+  if (
+    modelLibrarySingleton[type] &&
+    modelLibrarySingleton[type].config.modelId === modelId
+  ) {
+    return;
+  }
+
+  const hasNewModelAssigned =
+    modelLibrarySingleton[type] &&
+    modelLibrarySingleton[type].config.modelId !== modelId;
+
+  if (modelLibrarySingleton[type] && hasNewModelAssigned) {
+    modelLibrarySingleton[type].module.interrupt();
+    modelLibrarySingleton[type].module.delete();
+    delete modelLibrarySingleton[type];
+    // Wait an arbitrary amount of time for gc
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  const config = getModelById(modelId);
+  const llm = new LLMModule({});
+
+  if (!config) {
+    throw new Error(`No model config for ${modelId}`);
+  }
+
+  const modelFiles = await ensureModelPresent(config);
+
+  await llm.load({
+    modelSource: addFilePrefix(modelFiles.ptePath),
+    tokenizerSource: addFilePrefix(modelFiles.tokenizerPath || ""),
+    tokenizerConfigSource: addFilePrefix(modelFiles.tokenizerConfigPath || ""),
+  });
+
+  modelLibrarySingleton[type] = {
+    config,
+    module: llm,
+  };
+}
+
+async function sendLLMModelMessage(
+  currentModelName: MODEL_IDS,
+  messages: Message[],
+  options?: {
+    tokenCallback?: (token: string) => void;
+    responseCallback?: (responseSoFar: string) => void;
+    completeCallback?: (result: string) => void;
+  },
+): Promise<string> {
+  await modelLoader("llm", currentModelName);
+  let response = "";
+  modelLibrarySingleton.llm?.module.setTokenCallback({
+    tokenCallback: (token: string) => {
+      response += token;
+      options?.responseCallback?.(response);
+    },
+  });
+
+  // trim context if neccessary
+  let preparedMessages = messages;
+  if (!modelLibrarySingleton.llm) throw new Error("Model not loaded");
+  if (!fitsInContext(messages, modelLibrarySingleton.llm.config.modelId)) {
+    preparedMessages = truncateContext(
+      messages,
+      modelLibrarySingleton.llm.config.modelId,
+    );
+  }
+  preparedMessages = [
+    {
+      role: "system",
+      content: DEFAULT_SYSTEM_PROMPT,
+    } as Message,
+    ...messages,
+  ];
+
+  const result = await modelLibrarySingleton.llm?.module.generate(
+    preparedMessages,
+  );
+  if (!result) {
+    throw new Error("No content from generation");
+  }
+  options?.completeCallback?.(result);
+  return result;
+}
+
 export function LLMProvider({ children }: { children: React.ReactNode }) {
-  // Get model from settings
   const modelSettings = useModelSettings();
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [modelPaths, setModelPaths] = useState<{
-    ptePath: string;
-    tokenizerPath: string;
-    tokenizerConfigPath: string;
-  } | null>(null);
-  const [pathsError, setPathsError] = useState<string | null>(null);
 
-  // Lazy loading: only load the model when first sendMessage is called
-  // This prevents blocking the main thread during app cold start
-  const [loadRequested, setLoadRequested] = useState(false);
-
-  // Load selected model ID from settings
-  const refreshSelectedModel = useCallback(async () => {
-    const id = await modelSettings.getSelectedModelId();
-    setSelectedModelId(id);
-  }, [modelSettings]);
-
-  useEffect(() => {
-    refreshSelectedModel();
-  }, []);
-
-  // Determine which model config to use
-  const modelConfig = useMemo(() => {
-    return selectedModelId
-      ? getModelById(selectedModelId) || DEFAULT_MODEL
-      : DEFAULT_MODEL;
-  }, [selectedModelId]);
-
-  // Load model paths - only when explicitly requested (lazy loading)
-  // This prevents auto-downloading models when user skipped onboarding
-  const loadedModelIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!loadRequested) {
-      return;
-    }
-    if (loadedModelIdRef.current === modelConfig.modelId && modelPaths) {
-      return;
-    }
-    loadedModelIdRef.current = modelConfig.modelId;
-
-    ensureModelPresent(modelConfig)
-      .then((result) => {
-        setModelPaths({
-          ptePath: addFilePrefix(result.ptePath),
-          tokenizerPath: addFilePrefix(result.tokenizerPath || ""),
-          tokenizerConfigPath: addFilePrefix(result.tokenizerConfigPath || ""),
-        });
-        setPathsError(null);
-      })
-      .catch((err) => {
-        console.error("[LLMProvider] Failed to load model:", err);
-        setPathsError(err instanceof Error ? err.message : "Failed to load model");
-      });
-  }, [modelConfig, loadRequested, modelPaths]);
+  // LLM state
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Register background tasks on mount
   useEffect(() => {
     registerBackgroundTasks();
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      modelLibrarySingleton.llm?.module.interrupt();
+      modelLibrarySingleton.llm?.module.delete();
+      delete modelLibrarySingleton.llm;
+    };
   }, []);
 
   // Pending save - stores info needed to save response even if component unmounts
@@ -143,171 +199,101 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
     pendingSaveRef.current = null;
   }, []);
 
-  // Use the LLM hook - this stays mounted!
-  // preventLoad is true until both: (1) paths are ready AND (2) load is explicitly requested
-  // This prevents blocking the main thread during app cold start
-  const llm = useLLM({
-    model: {
-      modelSource: modelPaths?.ptePath || "",
-      tokenizerSource: modelPaths?.tokenizerPath || "",
-      tokenizerConfigSource: modelPaths?.tokenizerConfigPath || "",
-    },
-    preventLoad: !modelPaths || !loadRequested,
-  });
-
-  // Track response for returning from sendMessage
-  const responseResolverRef = useRef<((response: string) => void) | null>(null);
-
-  // Ref to track current llm state for async polling (avoids stale closure)
-  const llmStateRef = useRef({ isReady: llm.isReady, error: llm.error });
-  llmStateRef.current = { isReady: llm.isReady, error: llm.error };
-
-  // Watch for generation completion to resolve the promise AND handle pending saves
-  useEffect(() => {
-    // When generation stops and we have a response
-    if (!llm.isGenerating && llm.response) {
-      const cleanResponse = stripThinkTags(llm.response);
-
-      // Resolve the promise if there's a resolver
-      if (responseResolverRef.current) {
-        const resolver = responseResolverRef.current;
-        responseResolverRef.current = null;
-        resolver(llm.response);
-      }
-
-      // Handle pending save if component unmounted during generation
-      const pendingSave = pendingSaveRef.current;
-      if (pendingSave) {
-        const { entryId, existingBlocks, updateEntry, onComplete, onError } = pendingSave;
-
-        // Filter out empty assistant blocks, then add the new response
-        const filteredBlocks = existingBlocks.filter(b => {
-          if (b.role === "assistant" && b.type === "markdown") {
-            return b.content && b.content.trim().length > 0;
-          }
-          return true;
-        });
-
-        const updatedBlocks: Block[] = [
-          ...filteredBlocks,
-          { type: "markdown", content: cleanResponse, role: "assistant" },
-        ];
-
-        // Save using the passed mutation
-        updateEntry.mutateAsync({ id: entryId, input: { blocks: updatedBlocks } })
-          .then(() => {
-            onComplete?.(cleanResponse);
-          })
-          .catch((err) => {
-            console.error("[LLMProvider] Failed to save response:", err);
-            onError?.(err instanceof Error ? err.message : "Failed to save");
-          })
-          .finally(() => {
-            pendingSaveRef.current = null;
-          });
-      }
-    }
-  }, [llm.isGenerating, llm.response]);
-
   // Send message helper that handles context limits
   const sendMessage = useCallback(
-    async (messages: Message[]): Promise<string> => {
-      // Trigger lazy loading on first sendMessage call
-      if (!loadRequested) {
-        // Refresh selected model from settings before loading
-        // This ensures we use the latest model (e.g., changed in settings/onboarding)
-        await refreshSelectedModel();
-        setLoadRequested(true);
-        // Wait for state updates to propagate
-        await new Promise((resolve) => setTimeout(resolve, 50));
+    async (
+      messages: Message[],
+      options?: {
+        responseCallback?: (responseSoFar: string) => void;
+        completeCallback?: (results: string) => void;
+      },
+    ): Promise<string> => {
+      const selectedModelId = await modelSettings.getSelectedModelId();
+      if (!selectedModelId) {
+        throw new Error("No model selected");
       }
-
-      // Wait for model to be ready (polling with timeout)
-      const startTime = Date.now();
-      const timeout = 60000; // 60 second timeout for model loading
-
-      while (!llmStateRef.current.isReady) {
-        if (llmStateRef.current.error) {
-          throw new Error(llmStateRef.current.error);
-        }
-        if (Date.now() - startTime > timeout) {
-          throw new Error("Model loading timed out");
-        }
-        // Wait and check again
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      if (llm.isGenerating) {
+      if (isGenerating) {
         throw new Error("Already generating");
       }
 
-      // Add system prompt and handle context limits
-      const allMessages: Message[] = [
-        { role: "system", content: DEFAULT_SYSTEM_PROMPT },
-        ...messages.filter((m) => m.role !== "system"),
-      ];
+      setIsGenerating(true);
+      const result = await sendLLMModelMessage(
+        selectedModelId,
+        messages,
+        options
+          ? {
+              responseCallback: options.responseCallback,
+              completeCallback: options.completeCallback,
+            }
+          : undefined,
+      );
+      // Singleton is mutated in place, no need to reassign
+      setIsGenerating(false);
 
-      let preparedMessages = allMessages;
-      if (!fitsInContext(allMessages, modelConfig.modelId)) {
-        preparedMessages = truncateContext(allMessages, modelConfig.modelId);
+      try {
+        // Handle pending save
+        const pendingSave = pendingSaveRef.current;
+        if (pendingSave) {
+          const { entryId, existingBlocks, updateEntry, onComplete, onError } =
+            pendingSave;
+          const cleanResponse = stripThinkTags(result);
+
+          const filteredBlocks = existingBlocks.filter((b) => {
+            if (b.role === "assistant" && b.type === "markdown") {
+              return b.content && b.content.trim().length > 0;
+            }
+            return true;
+          });
+
+          const updatedBlocks: Block[] = [
+            ...filteredBlocks,
+            { type: "markdown", content: cleanResponse, role: "assistant" },
+          ];
+
+          updateEntry
+            .mutateAsync({ id: entryId, input: { blocks: updatedBlocks } })
+            .then(() => onComplete?.(cleanResponse))
+            .catch((err) => {
+              console.error("[LLMProvider] Failed to save response:", err);
+              onError?.(err instanceof Error ? err.message : "Failed to save");
+            })
+            .finally(() => {
+              pendingSaveRef.current = null;
+            });
+        }
+
+        return result;
+      } catch (err) {
+        setIsGenerating(false);
+        throw err;
       }
-
-      // Create a promise that will resolve when generation completes
-      const responsePromise = new Promise<string>((resolve) => {
-        responseResolverRef.current = resolve;
-      });
-
-      // Start generation (returns void, response comes via llm.response)
-      await llm.generate(preparedMessages);
-
-      // Wait for the response (resolved by the useEffect above)
-      const response = await responsePromise;
-      return response;
     },
-    [llm, modelConfig.modelId, loadRequested, refreshSelectedModel],
+    [isGenerating],
   );
 
   const interrupt = useCallback(() => {
-    if (llm.isGenerating) {
-      llm.interrupt();
-    }
-  }, [llm]);
+    modelLibrarySingleton.llm?.module.interrupt();
+  }, []);
 
   const contextValue = useMemo<LLMContextValue>(
     () => ({
-      isReady: llm.isReady,
-      isGenerating: llm.isGenerating,
-      isLoading: loadRequested && !llm.isReady && !llm.error && !pathsError,
-      error: pathsError || llm.error,
-      response: stripThinkTags(llm.response || ""),
-      rawResponse: llm.response || "",
-      modelConfig,
+      isGenerating,
       sendMessage,
       interrupt,
       registerPendingSave,
       clearPendingSave,
-      refreshSelectedModel,
     }),
     [
-      llm.isReady,
-      llm.isGenerating,
-      llm.error,
-      llm.response,
-      loadRequested,
-      pathsError,
-      modelConfig,
+      isGenerating,
       sendMessage,
       interrupt,
       registerPendingSave,
       clearPendingSave,
-      refreshSelectedModel,
     ],
   );
 
   return (
-    <LLMContext.Provider value={contextValue}>
-      {children}
-    </LLMContext.Provider>
+    <LLMContext.Provider value={contextValue}>{children}</LLMContext.Provider>
   );
 }
 

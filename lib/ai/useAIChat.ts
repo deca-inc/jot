@@ -19,6 +19,8 @@ export interface UseAIChatOptions {
   entryId?: number;
   /** Current blocks in the entry (used for auto-save) */
   currentBlocks?: Block[];
+  /** Callback while response is generating */
+  onResponseUpdate?: (response: string) => void;
   /** Callback when response is complete (called after auto-save if enabled) */
   onResponseComplete?: (response: string) => void;
   /** Callback on error */
@@ -36,7 +38,13 @@ function stripThinkTags(text: string): string {
 }
 
 export function useAIChat(options: UseAIChatOptions = {}) {
-  const { entryId, currentBlocks, onResponseComplete, onError } = options;
+  const {
+    entryId,
+    currentBlocks,
+    onResponseUpdate,
+    onResponseComplete,
+    onError,
+  } = options;
 
   // Get shared LLM from context
   const llm = useLLMContext();
@@ -54,6 +62,8 @@ export function useAIChat(options: UseAIChatOptions = {}) {
   entryIdRef.current = entryId;
   const currentBlocksRef = useRef(currentBlocks);
   currentBlocksRef.current = currentBlocks;
+  const onResponseUpdateRef = useRef(onResponseUpdate);
+  onResponseUpdateRef.current = onResponseUpdate;
   const onResponseCompleteRef = useRef(onResponseComplete);
   onResponseCompleteRef.current = onResponseComplete;
   const onErrorRef = useRef(onError);
@@ -95,7 +105,12 @@ export function useAIChat(options: UseAIChatOptions = {}) {
 
       try {
         // Send all messages (LLMProvider handles system prompt and context limits)
-        const response = await llm.sendMessage(messageHistoryRef.current);
+        const response = await llm.sendMessage(
+          messageHistoryRef.current,
+          onResponseUpdateRef.current
+            ? { responseCallback: onResponseUpdateRef.current }
+            : undefined,
+        );
         const cleanResponse = stripThinkTags(response);
 
         // Clear pending save since component is still mounted and handling it
@@ -144,26 +159,15 @@ export function useAIChat(options: UseAIChatOptions = {}) {
 
   return {
     // State from shared LLM
-    isReady: llm.isReady,
     isGenerating: llm.isGenerating,
-    isLoading: llm.isLoading,
-    error: llm.error,
-
-    // Current response (raw for streaming display)
-    response: llm.response,
-    rawResponse: llm.rawResponse,
 
     // Message history for this conversation
     messageHistory: messageHistoryRef.current,
-
-    // Model info
-    modelConfig: llm.modelConfig,
 
     // Actions
     sendMessage,
     setMessageHistory,
     clearHistory,
     stop,
-    refreshSelectedModel: llm.refreshSelectedModel,
   };
 }

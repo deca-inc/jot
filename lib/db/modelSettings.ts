@@ -1,4 +1,5 @@
 import { SQLiteDatabase } from "expo-sqlite";
+import { MODEL_IDS } from "../ai/modelConfig";
 import { useDatabase } from "./DatabaseProvider";
 
 export interface ModelDownloadInfo {
@@ -112,7 +113,7 @@ export class ModelSettingsRepository {
 export function useModelSettings(): {
   getSettings: () => Promise<ModelSettings | null>;
   setSettings: (settings: ModelSettings) => Promise<void>;
-  getSelectedModelId: () => Promise<string | null>;
+  getSelectedModelId: () => Promise<MODEL_IDS | null>;
   setSelectedModelId: (modelId: string) => Promise<void>;
   addDownloadedModel: (info: ModelDownloadInfo) => Promise<void>;
   removeDownloadedModel: (modelId: string) => Promise<void>;
@@ -126,7 +127,8 @@ export function useModelSettings(): {
   return {
     getSettings: () => repo.get(),
     setSettings: (settings: ModelSettings) => repo.set(settings),
-    getSelectedModelId: () => repo.getSelectedModelId(),
+    getSelectedModelId: () =>
+      repo.getSelectedModelId() as Promise<MODEL_IDS | null>,
     setSelectedModelId: (modelId: string) => repo.setSelectedModelId(modelId),
     addDownloadedModel: (info: ModelDownloadInfo) =>
       repo.addDownloadedModel(info),
@@ -134,7 +136,7 @@ export function useModelSettings(): {
       repo.removeDownloadedModel(modelId),
     getDownloadedModels: () => repo.getDownloadedModels(),
     isModelDownloaded: (modelId: string) => repo.isModelDownloaded(modelId),
-    getModelDownloadInfo: (modelId: string) => repo.getModelDownloadInfo(modelId),
+    getModelDownloadInfo: (modelId: string) =>
+      repo.getModelDownloadInfo(modelId),
   };
 }
-

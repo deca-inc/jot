@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 // Generic function type for debounce/throttle
 type AnyFunction = (...args: never[]) => unknown;
@@ -112,27 +112,23 @@ export function useDebounce<T>(value: T, delay: number): T {
 }
 
 /**
- * Hook to throttle a value - updates at most once per interval.
- * Uses a polling approach to avoid effect cleanup issues.
+ * Hook to create throttled state - updates at most once per interval.
+ * Returns [value, setter] like useState.
  */
-export function useThrottle<T>(value: T, interval: number): T {
-  const [throttledValue, setThrottledValue] = useState<T>(value);
-  const latestValueRef = useRef<T>(value);
-  const lastEmittedRef = useRef<T>(value);
-  const initializedRef = useRef(false);
-  latestValueRef.current = value;
+export function useThrottle<T>(
+  initialValue: T,
+  interval: number,
+): [T, (value: T) => void] {
+  const [throttledValue, setThrottledValue] = useState<T>(initialValue);
+  const latestValueRef = useRef<T>(initialValue);
+  const lastEmittedRef = useRef<T>(initialValue);
 
-  // Use interval-based polling
+  const setValue = useCallback((value: T) => {
+    latestValueRef.current = value;
+  }, []);
+
   useEffect(() => {
-    // Set initial value only once
-    if (!initializedRef.current) {
-      initializedRef.current = true;
-      lastEmittedRef.current = latestValueRef.current;
-      setThrottledValue(latestValueRef.current);
-    }
-
     const intervalId = setInterval(() => {
-      // Only update state if value actually changed
       if (latestValueRef.current !== lastEmittedRef.current) {
         lastEmittedRef.current = latestValueRef.current;
         setThrottledValue(latestValueRef.current);
@@ -140,7 +136,7 @@ export function useThrottle<T>(value: T, interval: number): T {
     }, interval);
 
     return () => clearInterval(intervalId);
-  }, [interval]); // Only re-create interval if interval changes
+  }, [interval]);
 
-  return throttledValue;
+  return [throttledValue, setValue];
 }

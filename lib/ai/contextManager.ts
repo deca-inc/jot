@@ -10,18 +10,24 @@
  */
 
 import { Message as LlmMessage } from "react-native-executorch";
+import { MODEL_IDS } from "./modelConfig";
 
 // Context limits by model size (conservative estimates with headroom for response)
 // These are tokens available for input context (reserving ~512 for response)
-const CONTEXT_LIMITS: Record<string, number> = {
+const CONTEXT_LIMITS: Record<MODEL_IDS, number> = {
+  // Smol models, a bit arbitrarily set to reduce context errors
+  [MODEL_IDS["smollm2-135m"]]: 2000,
+  [MODEL_IDS["smollm2-360m"]]: 2000,
+  [MODEL_IDS["smollm2-1.7b"]]: 2000,
+
   // Qwen models
-  "qwen-3-0.6b": 1500, // 2048 context, reserve 500 for response
-  "qwen-3-1.7b": 1500,
-  "qwen-3-4b": 3500, // Larger model, more context
+  [MODEL_IDS["qwen-3-0.6b"]]: 1500,
+  [MODEL_IDS["qwen-3-1.7b"]]: 1500,
+  [MODEL_IDS["qwen-3-4b"]]: 3500,
 
   // Llama models
-  "llama-3.2-1b-instruct": 1500,
-  "llama-3.2-3b-instruct": 3500,
+  [MODEL_IDS["llama-3.2-1b-instruct"]]: 1500,
+  [MODEL_IDS["llama-3.2-3b-instruct"]]: 3500,
 };
 
 const DEFAULT_CONTEXT_LIMIT = 1500;
@@ -50,7 +56,7 @@ function estimateMessagesTokens(messages: LlmMessage[]): number {
 /**
  * Get context limit for a model
  */
-function getContextLimit(modelId: string): number {
+function getContextLimit(modelId: MODEL_IDS): number {
   return CONTEXT_LIMITS[modelId] || DEFAULT_CONTEXT_LIMIT;
 }
 
@@ -59,7 +65,7 @@ function getContextLimit(modelId: string): number {
  */
 export function fitsInContext(
   messages: LlmMessage[],
-  modelId: string,
+  modelId: MODEL_IDS,
 ): boolean {
   const limit = getContextLimit(modelId);
   const tokens = estimateMessagesTokens(messages);
@@ -74,7 +80,7 @@ export function fitsInContext(
  */
 export function truncateContext(
   messages: LlmMessage[],
-  modelId: string,
+  modelId: MODEL_IDS,
 ): LlmMessage[] {
   const limit = getContextLimit(modelId);
 
