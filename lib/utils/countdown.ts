@@ -62,15 +62,47 @@ export function calculateTimeRemaining(targetDate: number): TimeRemaining {
  * Format countdown/time since for display
  * Shows max 2 units: "5d", "3w 2d", "1y 5w"
  * For countdown: adds "ago" suffix when past
+ * Special cases for countdowns near completion:
+ * - <5m remaining: "<5m"
+ * - <1m remaining: "<1m"
+ * - Ended <5m ago: "Ended just now"
+ * - Ended <30m ago: "<30m ago"
+ * - Ended <1h ago: "<1h ago"
  */
-export function formatCountdown(targetDate: number, isCountUp?: boolean): string {
-  const { isPast, days, hours, minutes, totalMinutes } = calculateTimeRemaining(targetDate);
+export function formatCountdown(
+  targetDate: number,
+  isCountUp?: boolean,
+): string {
+  const { isPast, days, hours, minutes, totalMinutes } =
+    calculateTimeRemaining(targetDate);
 
   // Handle < 1 day case
   if (days === 0) {
     // For countup (Time Since), just show "0d" when less than a day
     if (isCountUp) {
       return "0d";
+    }
+
+    // Special formatting for countdowns near completion
+    if (!isPast) {
+      // Countdown still running - show approximate remaining time
+      if (totalMinutes < 1) {
+        return "<1m";
+      }
+      if (totalMinutes < 5) {
+        return "<5m";
+      }
+    } else {
+      // Countdown ended - show how long ago
+      if (totalMinutes < 5) {
+        return "Just Now";
+      }
+      if (totalMinutes < 30) {
+        return "<30m ago";
+      }
+      if (totalMinutes < 60) {
+        return "<1h ago";
+      }
     }
 
     if (totalMinutes === 0) {
@@ -118,9 +150,7 @@ export function formatCountdown(targetDate: number, isCountUp?: boolean): string
  */
 export function shouldTriggerConfetti(data: CountdownData): boolean {
   const { isPast } = calculateTimeRemaining(data.targetDate);
-  return (
-    isPast && (data.confettiEnabled ?? true) && !data.confettiTriggeredAt
-  );
+  return isPast && (data.confettiEnabled ?? true) && !data.confettiTriggeredAt;
 }
 
 /**

@@ -10,8 +10,9 @@ import {
   TextInput,
   TouchableOpacity,
   Switch,
-  KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  LayoutAnimation,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
@@ -105,6 +106,37 @@ export function CountdownComposer({
   const [showTimePicker, setShowTimePicker] = useState(Platform.OS === "ios");
   const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
 
+  // Keyboard state for positioning save button
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Listen for keyboard events
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSubscription = Keyboard.addListener(showEvent, (e) => {
+      if (Platform.OS === "ios") {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      if (Platform.OS === "ios") {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
   // Mutations
   const createEntry = useCreateEntry();
   const updateEntry = useUpdateEntry();
@@ -196,13 +228,29 @@ export function CountdownComposer({
     } finally {
       setIsSaving(false);
     }
-  }, [title, targetDate, isCountUp, rewardsNote, confettiEnabled, entryId, onSave]);
+  }, [
+    title,
+    targetDate,
+    isCountUp,
+    rewardsNote,
+    confettiEnabled,
+    entryId,
+    onSave,
+  ]);
 
   const handleCancel = useCallback(() => {
     onCancel?.();
   }, [onCancel]);
 
   const isFormValid = title.trim().length > 0;
+
+  // Scroll to bottom when rewards note is focused to ensure it's visible
+  const handleRewardsNoteFocus = useCallback(() => {
+    // Small delay to allow keyboard to fully show
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, []);
 
   return (
     <View
@@ -233,399 +281,433 @@ export function CountdownComposer({
         <View style={styles.headerSpacer} />
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={0}
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.content,
+          // Add extra padding at bottom for the fixed footer + keyboard when visible
+          {
+            paddingBottom:
+              keyboardHeight > 0
+                ? 80 + spacingPatterns.md + keyboardHeight
+                : 80 + insets.bottom,
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Title */}
-          <View style={styles.formGroup}>
-            <Text
-              variant="caption"
-              style={[styles.label, { color: seasonalTheme.textSecondary }]}
-            >
-              Title
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: seasonalTheme.textPrimary,
-                  backgroundColor: seasonalTheme.isDark
-                    ? "rgba(255, 255, 255, 0.08)"
-                    : "rgba(255, 255, 255, 0.9)",
-                  borderColor: seasonalTheme.textSecondary + "40",
-                },
-              ]}
-              value={title}
-              onChangeText={setTitle}
-              placeholder={isCountUp ? "What are you tracking?" : "What are you counting down to?"}
-              placeholderTextColor={seasonalTheme.textSecondary}
-              autoFocus
-            />
-          </View>
+        {/* Title */}
+        <View style={styles.formGroup}>
+          <Text
+            variant="caption"
+            style={[styles.label, { color: seasonalTheme.textSecondary }]}
+          >
+            Title
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                color: seasonalTheme.textPrimary,
+                backgroundColor: seasonalTheme.isDark
+                  ? "rgba(255, 255, 255, 0.08)"
+                  : "rgba(255, 255, 255, 0.9)",
+                borderColor: seasonalTheme.textSecondary + "40",
+              },
+            ]}
+            value={title}
+            onChangeText={setTitle}
+            placeholder={
+              isCountUp
+                ? "What are you tracking?"
+                : "What are you counting down to?"
+            }
+            placeholderTextColor={seasonalTheme.textSecondary}
+            autoFocus
+          />
+        </View>
 
-          {/* Countdown / Time Since Toggle */}
-          <View style={styles.formGroup}>
-            <Text
-              variant="caption"
-              style={[styles.label, { color: seasonalTheme.textSecondary }]}
-            >
-              Mode
-            </Text>
-            <View
+        {/* Countdown / Time Since Toggle */}
+        <View style={styles.formGroup}>
+          <Text
+            variant="caption"
+            style={[styles.label, { color: seasonalTheme.textSecondary }]}
+          >
+            Mode
+          </Text>
+          <View
+            style={[
+              styles.segmentedControl,
+              {
+                backgroundColor: seasonalTheme.isDark
+                  ? "rgba(255, 255, 255, 0.08)"
+                  : "rgba(0, 0, 0, 0.06)",
+              },
+            ]}
+          >
+            <TouchableOpacity
               style={[
-                styles.segmentedControl,
-                {
+                styles.segmentButton,
+                !isCountUp && {
                   backgroundColor: seasonalTheme.isDark
-                    ? "rgba(255, 255, 255, 0.08)"
-                    : "rgba(0, 0, 0, 0.06)",
+                    ? "rgba(255, 255, 255, 0.15)"
+                    : "rgba(255, 255, 255, 0.95)",
                 },
               ]}
+              onPress={() => setIsCountUp(false)}
+              activeOpacity={0.7}
             >
-              <TouchableOpacity
-                style={[
-                  styles.segmentButton,
-                  !isCountUp && {
-                    backgroundColor: seasonalTheme.isDark
-                      ? "rgba(255, 255, 255, 0.15)"
-                      : "rgba(255, 255, 255, 0.95)",
-                  },
-                ]}
-                onPress={() => setIsCountUp(false)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.segmentContent}>
-                  <View style={styles.segmentHeader}>
-                    <Ionicons
-                      name="hourglass-outline"
-                      size={16}
-                      color={!isCountUp ? seasonalTheme.textPrimary : seasonalTheme.textSecondary}
-                      style={styles.segmentIcon}
-                    />
-                    <Text
-                      variant="body"
-                      style={{
-                        color: !isCountUp ? seasonalTheme.textPrimary : seasonalTheme.textSecondary,
-                        fontWeight: !isCountUp ? "600" : "400",
-                      }}
-                    >
-                      Countdown
-                    </Text>
-                  </View>
+              <View style={styles.segmentContent}>
+                <View style={styles.segmentHeader}>
+                  <Ionicons
+                    name="hourglass-outline"
+                    size={16}
+                    color={
+                      !isCountUp
+                        ? seasonalTheme.textPrimary
+                        : seasonalTheme.textSecondary
+                    }
+                    style={styles.segmentIcon}
+                  />
                   <Text
-                    variant="caption"
-                    style={[
-                      styles.segmentExample,
-                      { color: !isCountUp ? seasonalTheme.textSecondary : seasonalTheme.textSecondary + "80" },
-                    ]}
+                    variant="body"
+                    style={{
+                      color: !isCountUp
+                        ? seasonalTheme.textPrimary
+                        : seasonalTheme.textSecondary,
+                      fontWeight: !isCountUp ? "600" : "400",
+                    }}
                   >
-                    vacation, deadline, birthday
+                    Countdown
                   </Text>
                 </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.segmentButton,
-                  isCountUp && {
-                    backgroundColor: seasonalTheme.isDark
-                      ? "rgba(255, 255, 255, 0.15)"
-                      : "rgba(255, 255, 255, 0.95)",
-                  },
-                ]}
-                onPress={() => {
-                  setIsCountUp(true);
-                  setConfettiEnabled(false);
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={styles.segmentContent}>
-                  <View style={styles.segmentHeader}>
-                    <Ionicons
-                      name="timer-outline"
-                      size={16}
-                      color={isCountUp ? seasonalTheme.textPrimary : seasonalTheme.textSecondary}
-                      style={styles.segmentIcon}
-                    />
-                    <Text
-                      variant="body"
-                      style={{
-                        color: isCountUp ? seasonalTheme.textPrimary : seasonalTheme.textSecondary,
-                        fontWeight: isCountUp ? "600" : "400",
-                      }}
-                    >
-                      Time Since
-                    </Text>
-                  </View>
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.segmentExample,
+                    {
+                      color: !isCountUp
+                        ? seasonalTheme.textSecondary
+                        : seasonalTheme.textSecondary + "80",
+                    },
+                  ]}
+                >
+                  vacation, deadline, birthday
+                </Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.segmentButton,
+                isCountUp && {
+                  backgroundColor: seasonalTheme.isDark
+                    ? "rgba(255, 255, 255, 0.15)"
+                    : "rgba(255, 255, 255, 0.95)",
+                },
+              ]}
+              onPress={() => {
+                setIsCountUp(true);
+                setConfettiEnabled(false);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.segmentContent}>
+                <View style={styles.segmentHeader}>
+                  <Ionicons
+                    name="timer-outline"
+                    size={16}
+                    color={
+                      isCountUp
+                        ? seasonalTheme.textPrimary
+                        : seasonalTheme.textSecondary
+                    }
+                    style={styles.segmentIcon}
+                  />
                   <Text
-                    variant="caption"
-                    style={[
-                      styles.segmentExample,
-                      { color: isCountUp ? seasonalTheme.textSecondary : seasonalTheme.textSecondary + "80" },
-                    ]}
+                    variant="body"
+                    style={{
+                      color: isCountUp
+                        ? seasonalTheme.textPrimary
+                        : seasonalTheme.textSecondary,
+                      fontWeight: isCountUp ? "600" : "400",
+                    }}
                   >
-                    habits, streaks, progress
+                    Time Since
                   </Text>
                 </View>
-              </TouchableOpacity>
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.segmentExample,
+                    {
+                      color: isCountUp
+                        ? seasonalTheme.textSecondary
+                        : seasonalTheme.textSecondary + "80",
+                    },
+                  ]}
+                >
+                  habits, streaks, progress
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Date and Time */}
+        <View style={styles.formGroup}>
+          <Text
+            variant="caption"
+            style={[styles.label, { color: seasonalTheme.textSecondary }]}
+          >
+            {isCountUp ? "Start Date & Time" : "Target Date & Time"}
+          </Text>
+
+          {Platform.OS === "ios" ? (
+            // iOS: Show compact picker (calendar view when tapped)
+            <View style={styles.iosPickerRow}>
+              <DateTimePicker
+                value={targetDate}
+                mode="date"
+                display="compact"
+                onChange={handleDateChange}
+                accentColor={seasonalTheme.chipText}
+                themeVariant={seasonalTheme.isDark ? "dark" : "light"}
+                style={styles.iosPicker}
+              />
+              <DateTimePicker
+                value={targetDate}
+                mode="time"
+                display="compact"
+                onChange={handleDateChange}
+                accentColor={seasonalTheme.chipText}
+                themeVariant={seasonalTheme.isDark ? "dark" : "light"}
+                style={styles.iosPicker}
+              />
             </View>
-          </View>
+          ) : (
+            // Android: Show buttons that open modal pickers
+            <View style={styles.androidPickerContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.pickerButton,
+                  {
+                    backgroundColor: seasonalTheme.isDark
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(255, 255, 255, 0.9)",
+                    borderColor: seasonalTheme.textSecondary + "40",
+                  },
+                ]}
+                onPress={showDatePickerModal}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={20}
+                  color={seasonalTheme.textSecondary}
+                />
+                <Text
+                  variant="body"
+                  style={[
+                    styles.pickerButtonText,
+                    { color: seasonalTheme.textPrimary },
+                  ]}
+                >
+                  {formatDateForDisplay(targetDate)}
+                </Text>
+              </TouchableOpacity>
 
-          {/* Date and Time */}
-          <View style={styles.formGroup}>
-            <Text
-              variant="caption"
-              style={[styles.label, { color: seasonalTheme.textSecondary }]}
-            >
-              {isCountUp ? "Start Date & Time" : "Target Date & Time"}
-            </Text>
+              <TouchableOpacity
+                style={[
+                  styles.pickerButton,
+                  {
+                    backgroundColor: seasonalTheme.isDark
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(255, 255, 255, 0.9)",
+                    borderColor: seasonalTheme.textSecondary + "40",
+                  },
+                ]}
+                onPress={showTimePickerModal}
+              >
+                <Ionicons
+                  name="time-outline"
+                  size={20}
+                  color={seasonalTheme.textSecondary}
+                />
+                <Text
+                  variant="body"
+                  style={[
+                    styles.pickerButtonText,
+                    { color: seasonalTheme.textPrimary },
+                  ]}
+                >
+                  {formatTimeForDisplay(targetDate)}
+                </Text>
+              </TouchableOpacity>
 
-            {Platform.OS === "ios" ? (
-              // iOS: Show compact picker (calendar view when tapped)
-              <View style={styles.iosPickerRow}>
+              {showDatePicker && (
                 <DateTimePicker
                   value={targetDate}
                   mode="date"
-                  display="compact"
+                  display="default"
                   onChange={handleDateChange}
-                  accentColor={seasonalTheme.chipText}
                   themeVariant={seasonalTheme.isDark ? "dark" : "light"}
-                  style={styles.iosPicker}
                 />
+              )}
+
+              {showTimePicker && (
                 <DateTimePicker
                   value={targetDate}
                   mode="time"
-                  display="compact"
+                  display="default"
                   onChange={handleDateChange}
-                  accentColor={seasonalTheme.chipText}
                   themeVariant={seasonalTheme.isDark ? "dark" : "light"}
-                  style={styles.iosPicker}
                 />
-              </View>
-            ) : (
-              // Android: Show buttons that open modal pickers
-              <View style={styles.androidPickerContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.pickerButton,
-                    {
-                      backgroundColor: seasonalTheme.isDark
-                        ? "rgba(255, 255, 255, 0.08)"
-                        : "rgba(255, 255, 255, 0.9)",
-                      borderColor: seasonalTheme.textSecondary + "40",
-                    },
-                  ]}
-                  onPress={showDatePickerModal}
-                >
-                  <Ionicons
-                    name="calendar-outline"
-                    size={20}
-                    color={seasonalTheme.textSecondary}
-                  />
-                  <Text
-                    variant="body"
-                    style={[
-                      styles.pickerButtonText,
-                      { color: seasonalTheme.textPrimary },
-                    ]}
-                  >
-                    {formatDateForDisplay(targetDate)}
-                  </Text>
-                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
 
-                <TouchableOpacity
-                  style={[
-                    styles.pickerButton,
-                    {
-                      backgroundColor: seasonalTheme.isDark
-                        ? "rgba(255, 255, 255, 0.08)"
-                        : "rgba(255, 255, 255, 0.9)",
-                      borderColor: seasonalTheme.textSecondary + "40",
-                    },
-                  ]}
-                  onPress={showTimePickerModal}
-                >
-                  <Ionicons
-                    name="time-outline"
-                    size={20}
-                    color={seasonalTheme.textSecondary}
-                  />
-                  <Text
-                    variant="body"
-                    style={[
-                      styles.pickerButtonText,
-                      { color: seasonalTheme.textPrimary },
-                    ]}
-                  >
-                    {formatTimeForDisplay(targetDate)}
-                  </Text>
-                </TouchableOpacity>
-
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={targetDate}
-                    mode="date"
-                    display="default"
-                    onChange={handleDateChange}
-                    themeVariant={seasonalTheme.isDark ? "dark" : "light"}
-                  />
-                )}
-
-                {showTimePicker && (
-                  <DateTimePicker
-                    value={targetDate}
-                    mode="time"
-                    display="default"
-                    onChange={handleDateChange}
-                    themeVariant={seasonalTheme.isDark ? "dark" : "light"}
-                  />
-                )}
-              </View>
-            )}
-          </View>
-
-          {/* Advanced Section Toggle */}
-          <TouchableOpacity
-            style={styles.advancedToggle}
-            onPress={() => setShowAdvanced(!showAdvanced)}
+        {/* Advanced Section Toggle */}
+        <TouchableOpacity
+          style={styles.advancedToggle}
+          onPress={() => setShowAdvanced(!showAdvanced)}
+        >
+          <Ionicons
+            name={showAdvanced ? "chevron-down" : "chevron-forward"}
+            size={20}
+            color={seasonalTheme.textSecondary}
+          />
+          <Text
+            variant="body"
+            style={{ color: seasonalTheme.textSecondary, marginLeft: 8 }}
           >
-            <Ionicons
-              name={showAdvanced ? "chevron-down" : "chevron-forward"}
-              size={20}
-              color={seasonalTheme.textSecondary}
-            />
-            <Text
-              variant="body"
-              style={{ color: seasonalTheme.textSecondary, marginLeft: 8 }}
-            >
-              Advanced Options
-            </Text>
-          </TouchableOpacity>
+            Reward Options
+          </Text>
+        </TouchableOpacity>
 
-          {/* Advanced Section */}
-          {showAdvanced && (
-            <>
-              {/* Rewards Note */}
+        {/* Advanced Section */}
+        {showAdvanced && (
+          <>
+            {/* Rewards Note */}
+            <View style={styles.formGroup}>
+              <Text
+                variant="caption"
+                style={[styles.label, { color: seasonalTheme.textSecondary }]}
+              >
+                Rewards / Encouragement Note
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.multilineInput,
+                  {
+                    color: seasonalTheme.textPrimary,
+                    backgroundColor: seasonalTheme.isDark
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(255, 255, 255, 0.9)",
+                    borderColor: seasonalTheme.textSecondary + "40",
+                  },
+                ]}
+                value={rewardsNote}
+                onChangeText={setRewardsNote}
+                placeholder="Write a note to yourself for when the countdown ends..."
+                placeholderTextColor={seasonalTheme.textSecondary}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                onFocus={handleRewardsNoteFocus}
+              />
+            </View>
+
+            {/* Confetti Toggle - only for countdowns, not Time Since */}
+            {!isCountUp && (
               <View style={styles.formGroup}>
+                <View style={styles.toggleRow}>
+                  <View style={styles.toggleLabel}>
+                    <Ionicons
+                      name="sparkles"
+                      size={20}
+                      color={seasonalTheme.textSecondary}
+                    />
+                    <Text
+                      variant="body"
+                      style={{
+                        color: seasonalTheme.textPrimary,
+                        marginLeft: spacingPatterns.sm,
+                      }}
+                    >
+                      Confetti Effect
+                    </Text>
+                  </View>
+                  <Switch
+                    value={confettiEnabled}
+                    onValueChange={setConfettiEnabled}
+                    trackColor={{
+                      false: seasonalTheme.textSecondary + "30",
+                      true: seasonalTheme.chipText,
+                    }}
+                    thumbColor={seasonalTheme.isDark ? "#ffffff" : "#f4f3f4"}
+                  />
+                </View>
                 <Text
                   variant="caption"
-                  style={[styles.label, { color: seasonalTheme.textSecondary }]}
+                  style={{ color: seasonalTheme.textSecondary, marginTop: 4 }}
                 >
-                  Rewards / Encouragement Note
+                  Show a celebration effect when the countdown completes
                 </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.multilineInput,
-                    {
-                      color: seasonalTheme.textPrimary,
-                      backgroundColor: seasonalTheme.isDark
-                        ? "rgba(255, 255, 255, 0.08)"
-                        : "rgba(255, 255, 255, 0.9)",
-                      borderColor: seasonalTheme.textSecondary + "40",
-                    },
-                  ]}
-                  value={rewardsNote}
-                  onChangeText={setRewardsNote}
-                  placeholder="Write a note to yourself for when the countdown ends..."
-                  placeholderTextColor={seasonalTheme.textSecondary}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
               </View>
+            )}
+          </>
+        )}
+      </ScrollView>
 
-              {/* Confetti Toggle - only for countdowns, not Time Since */}
-              {!isCountUp && (
-                <View style={styles.formGroup}>
-                  <View style={styles.toggleRow}>
-                    <View style={styles.toggleLabel}>
-                      <Ionicons
-                        name="sparkles"
-                        size={20}
-                        color={seasonalTheme.textSecondary}
-                      />
-                      <Text
-                        variant="body"
-                        style={{
-                          color: seasonalTheme.textPrimary,
-                          marginLeft: spacingPatterns.sm,
-                        }}
-                      >
-                        Confetti Effect
-                      </Text>
-                    </View>
-                    <Switch
-                      value={confettiEnabled}
-                      onValueChange={setConfettiEnabled}
-                      trackColor={{
-                        false: seasonalTheme.textSecondary + "30",
-                        true: seasonalTheme.chipText,
-                      }}
-                      thumbColor={seasonalTheme.isDark ? "#ffffff" : "#f4f3f4"}
-                    />
-                  </View>
-                  <Text
-                    variant="caption"
-                    style={{ color: seasonalTheme.textSecondary, marginTop: 4 }}
-                  >
-                    Show a celebration effect when the countdown completes
-                  </Text>
-                </View>
-              )}
-            </>
-          )}
-        </ScrollView>
-
-        {/* Fixed Footer with Button */}
-        <View
+      {/* Fixed Footer with Button - positioned above keyboard */}
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: seasonalTheme.gradient.middle,
+            paddingBottom:
+              keyboardHeight > 0
+                ? spacingPatterns.md
+                : insets.bottom + spacingPatterns.md,
+            bottom: keyboardHeight,
+          },
+        ]}
+      >
+        <TouchableOpacity
           style={[
-            styles.footer,
-            {
-              paddingBottom: insets.bottom + spacingPatterns.md,
-            },
+            styles.saveButton,
+            isFormValid && !isSaving
+              ? {
+                  backgroundColor: seasonalTheme.textPrimary,
+                }
+              : {
+                  backgroundColor: seasonalTheme.isDark
+                    ? "rgba(255, 255, 255, 0.15)"
+                    : "rgba(0, 0, 0, 0.08)",
+                },
           ]}
+          onPress={handleSave}
+          disabled={!isFormValid || isSaving}
+          activeOpacity={0.8}
         >
-          <TouchableOpacity
+          <Text
+            variant="body"
             style={[
-              styles.saveButton,
+              styles.saveButtonText,
               isFormValid && !isSaving
                 ? {
-                    backgroundColor: seasonalTheme.textPrimary,
+                    color: seasonalTheme.gradient.middle,
                   }
                 : {
-                    backgroundColor: seasonalTheme.isDark
-                      ? "rgba(255, 255, 255, 0.15)"
-                      : "rgba(0, 0, 0, 0.08)",
+                    color: seasonalTheme.textSecondary,
                   },
             ]}
-            onPress={handleSave}
-            disabled={!isFormValid || isSaving}
-            activeOpacity={0.8}
           >
-            <Text
-              variant="body"
-              style={[
-                styles.saveButtonText,
-                isFormValid && !isSaving
-                  ? {
-                      color: seasonalTheme.gradient.middle,
-                    }
-                  : {
-                      color: seasonalTheme.textSecondary,
-                    },
-              ]}
-            >
-              {isSaving ? "Saving..." : "Save"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+            {isSaving ? "Saving..." : "Save"}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -646,9 +728,6 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 32,
-  },
-  keyboardView: {
-    flex: 1,
   },
   scrollView: {
     flex: 1,
@@ -744,6 +823,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
     paddingHorizontal: spacingPatterns.screen,
     paddingTop: spacingPatterns.md,
   },
