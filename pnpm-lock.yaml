@@ -15,11 +15,6 @@ overrides:
   expo-keep-awake: 15.0.7
   expo-modules-core: 3.0.23
 
-patchedDependencies:
-  react-native-executorch@0.5.15:
-    hash: 2u56pfvwyooreqls3654fpyeai
-    path: patches/react-native-executorch@0.5.15.patch
-
 dependencies:
   '@react-native-community/datetimepicker':
     specifier: ^8.5.1
@@ -109,8 +104,8 @@ dependencies:
     specifier: ^0.7.20
     version: 0.7.20(react-native-webview@13.16.0)(react-native@0.81.5)(react@19.1.0)
   react-native-executorch:
-    specifier: ^0.5.15
-    version: 0.5.15(patch_hash=2u56pfvwyooreqls3654fpyeai)(@babel/core@7.28.5)(react-native-webview@13.16.0)(react-native@0.81.5)(react@19.1.0)
+    specifier: ^0.6.0
+    version: 0.6.0(expo-asset@12.0.9)(expo-file-system@19.0.19)(expo@54.0.25)(react-native@0.81.5)(react@19.1.0)
   react-native-fast-confetti:
     specifier: ^1.1.1
     version: 1.1.1(@shopify/react-native-skia@2.4.14)(react-native-reanimated@4.2.1)(react-native@0.81.5)(react@19.1.0)
@@ -6905,9 +6900,12 @@ packages:
       react-native-webview: 13.16.0(react-native@0.81.5)(react@19.1.0)
     dev: false
 
-  /react-native-executorch@0.5.15(patch_hash=2u56pfvwyooreqls3654fpyeai)(@babel/core@7.28.5)(react-native-webview@13.16.0)(react-native@0.81.5)(react@19.1.0):
-    resolution: {integrity: sha512-QypTQIvtArexiwL/YIDtxy9Sp8iEvsD+gUGGhGq5X3hjjRUOBqkGBK7bRRrB1BH4twqTBNxa23mntEmpUe27Eg==}
+  /react-native-executorch@0.6.0(expo-asset@12.0.9)(expo-file-system@19.0.19)(expo@54.0.25)(react-native@0.81.5)(react@19.1.0):
+    resolution: {integrity: sha512-FRAvd9nwYZXQ/2joIPY/JktFvdb25ZSJEmm4YT00o+2nFyFKxi7/Dv3rFmhNC7/aS3ioNJZQE+5GZWfnw1oAzg==}
     peerDependencies:
+      expo: ~54.0.25
+      expo-asset: 12.0.9
+      expo-file-system: ~19.0.19
       react: '*'
       react-native: '*'
     dependencies:
@@ -6920,19 +6918,7 @@ packages:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
       zod: 3.25.76
-    transitivePeerDependencies:
-      - '@babel/core'
-      - '@expo/dom-webview'
-      - '@expo/metro-runtime'
-      - '@modelcontextprotocol/sdk'
-      - bufferutil
-      - expo-router
-      - graphql
-      - react-native-webview
-      - supports-color
-      - utf-8-validate
     dev: false
-    patched: true
 
   /react-native-fast-confetti@1.1.1(@shopify/react-native-skia@2.4.14)(react-native-reanimated@4.2.1)(react-native@0.81.5)(react@19.1.0):
     resolution: {integrity: sha512-5kJn+dgvEoeM9h4c4SqxeqMtYAfN8QhaB1JS/5yv+AGYjVnE1a4c0AAv4yFyetwvmWQ3b16C10a8eW0FlaFAyg==}
