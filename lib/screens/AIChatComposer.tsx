@@ -339,15 +339,12 @@ export function AIChatComposer({
   updateEntryRef.current = updateEntry;
 
   // Use the simplified AI chat hook
-  // Pass entryId and currentBlocks so it can auto-save even if component unmounts
   const {
     isGenerating,
     sendMessage: aiSendMessage,
     setMessageHistory,
     stop: stopGeneration,
   } = useAIChat({
-    entryId: currentEntryId,
-    currentBlocks: entry?.blocks,
     onResponseComplete: async (response) => {
       // Save completed response to database
       const entryId = currentEntryIdRef.current;

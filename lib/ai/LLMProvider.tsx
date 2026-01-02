@@ -3,6 +3,9 @@
  *
  * Uses LLMModule directly (instead of useLLM hook) for explicit control over
  * model loading and unloading to prevent OOM when switching models.
+ *
+ * This provider only handles LLM operations. Persistence is handled by the
+ * consuming components via the onResponseComplete callback.
  */
 
 import React, {
@@ -11,11 +14,9 @@ import React, {
   useEffect,
   useState,
   useCallback,
-  useRef,
   useMemo,
 } from "react";
 import { LLMModule, Message } from "react-native-executorch";
-import { Block } from "../db/entries";
 import { useModelSettings } from "../db/modelSettings";
 import { registerBackgroundTasks } from "./backgroundTasks";
 import { truncateContext, fitsInContext } from "./contextManager";
@@ -27,17 +28,6 @@ import {
 } from "./modelConfig";
 import { ensureModelPresent } from "./modelManager";
 
-/**
- * Pending save info - stores what we need to save response even if component unmounts
- */
-interface PendingSave {
-  entryId: number;
-  existingBlocks: Block[];
-  updateEntry: ReturnType<typeof import("../db/useEntries").useUpdateEntry>;
-  onComplete?: (response: string) => void;
-  onError?: (error: string) => void;
-}
-
 interface LLMContextValue {
   isGenerating: boolean;
   sendMessage: (
@@ -47,22 +37,10 @@ interface LLMContextValue {
       completeCallback?: (results: string) => void;
     },
   ) => Promise<string>;
-  registerPendingSave: (save: PendingSave) => void;
-  clearPendingSave: () => void;
   interrupt: () => void;
 }
 
 const LLMContext = createContext<LLMContextValue | null>(null);
-
-/**
- * Strip think tags from response (Qwen models use these for reasoning)
- */
-function stripThinkTags(text: string): string {
-  return text
-    .replace(/<think>[\s\S]*?<\/think>/g, "")
-    .replace(/<\/?think>/g, "")
-    .trim();
-}
 
 /**
  * Add file:// prefix for local paths
@@ -188,17 +166,6 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Pending save - stores info needed to save response even if component unmounts
-  const pendingSaveRef = useRef<PendingSave | null>(null);
-
-  const registerPendingSave = useCallback((save: PendingSave) => {
-    pendingSaveRef.current = save;
-  }, []);
-
-  const clearPendingSave = useCallback(() => {
-    pendingSaveRef.current = null;
-  }, []);
-
   // Send message helper that handles context limits
   const sendMessage = useCallback(
     async (
@@ -217,55 +184,20 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       }
 
       setIsGenerating(true);
-      const result = await sendLLMModelMessage(
-        selectedModelId,
-        messages,
-        options
-          ? {
-              responseCallback: options.responseCallback,
-              completeCallback: options.completeCallback,
-            }
-          : undefined,
-      );
-      // Singleton is mutated in place, no need to reassign
-      setIsGenerating(false);
-
       try {
-        // Handle pending save
-        const pendingSave = pendingSaveRef.current;
-        if (pendingSave) {
-          const { entryId, existingBlocks, updateEntry, onComplete, onError } =
-            pendingSave;
-          const cleanResponse = stripThinkTags(result);
-
-          const filteredBlocks = existingBlocks.filter((b) => {
-            if (b.role === "assistant" && b.type === "markdown") {
-              return b.content && b.content.trim().length > 0;
-            }
-            return true;
-          });
-
-          const updatedBlocks: Block[] = [
-            ...filteredBlocks,
-            { type: "markdown", content: cleanResponse, role: "assistant" },
-          ];
-
-          updateEntry
-            .mutateAsync({ id: entryId, input: { blocks: updatedBlocks } })
-            .then(() => onComplete?.(cleanResponse))
-            .catch((err) => {
-              console.error("[LLMProvider] Failed to save response:", err);
-              onError?.(err instanceof Error ? err.message : "Failed to save");
-            })
-            .finally(() => {
-              pendingSaveRef.current = null;
-            });
-        }
-
+        const result = await sendLLMModelMessage(
+          selectedModelId,
+          messages,
+          options
+            ? {
+                responseCallback: options.responseCallback,
+                completeCallback: options.completeCallback,
+              }
+            : undefined,
+        );
         return result;
-      } catch (err) {
+      } finally {
         setIsGenerating(false);
-        throw err;
       }
     },
     [isGenerating],
@@ -280,16 +212,8 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       isGenerating,
       sendMessage,
       interrupt,
-      registerPendingSave,
-      clearPendingSave,
     }),
-    [
-      isGenerating,
-      sendMessage,
-      interrupt,
-      registerPendingSave,
-      clearPendingSave,
-    ],
+    [isGenerating, sendMessage, interrupt],
   );
 
   return (

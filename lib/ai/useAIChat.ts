@@ -4,24 +4,17 @@
  * Uses the shared LLM from LLMProvider (which stays mounted at app level).
  * Handles message history and callbacks for a single conversation.
  *
- * Key feature: Can auto-save responses to the database even if the component
- * unmounts during generation (e.g., user navigates away).
+ * Persistence is handled by the consuming component via onResponseComplete.
  */
 
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef } from "react";
 import { Message } from "react-native-executorch";
-import { Block } from "../db/entries";
-import { useUpdateEntry } from "../db/useEntries";
 import { useLLMContext } from "./LLMProvider";
 
 export interface UseAIChatOptions {
-  /** Entry ID to save responses to (enables auto-save even if component unmounts) */
-  entryId?: number;
-  /** Current blocks in the entry (used for auto-save) */
-  currentBlocks?: Block[];
   /** Callback while response is generating */
   onResponseUpdate?: (response: string) => void;
-  /** Callback when response is complete (called after auto-save if enabled) */
+  /** Callback when response is complete */
   onResponseComplete?: (response: string) => void;
   /** Callback on error */
   onError?: (error: string) => void;
@@ -38,49 +31,21 @@ function stripThinkTags(text: string): string {
 }
 
 export function useAIChat(options: UseAIChatOptions = {}) {
-  const {
-    entryId,
-    currentBlocks,
-    onResponseUpdate,
-    onResponseComplete,
-    onError,
-  } = options;
+  const { onResponseUpdate, onResponseComplete, onError } = options;
 
   // Get shared LLM from context
   const llm = useLLMContext();
-
-  // Get update mutation for saving responses
-  const updateEntry = useUpdateEntry();
-  const updateEntryRef = useRef(updateEntry);
-  updateEntryRef.current = updateEntry;
 
   // Track message history for this conversation
   const messageHistoryRef = useRef<Message[]>([]);
 
   // Track options with refs to avoid stale closures
-  const entryIdRef = useRef(entryId);
-  entryIdRef.current = entryId;
-  const currentBlocksRef = useRef(currentBlocks);
-  currentBlocksRef.current = currentBlocks;
   const onResponseUpdateRef = useRef(onResponseUpdate);
   onResponseUpdateRef.current = onResponseUpdate;
   const onResponseCompleteRef = useRef(onResponseComplete);
   onResponseCompleteRef.current = onResponseComplete;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
-
-  // Register pending save whenever entryId and blocks change during generation
-  useEffect(() => {
-    if (llm.isGenerating && entryId && currentBlocks) {
-      llm.registerPendingSave({
-        entryId,
-        existingBlocks: currentBlocks,
-        updateEntry: updateEntryRef.current,
-        onComplete: onResponseCompleteRef.current,
-        onError: onErrorRef.current,
-      });
-    }
-  }, [llm.isGenerating, entryId, currentBlocks]);
 
   /**
    * Send a message and generate a response
@@ -113,9 +78,6 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         );
         const cleanResponse = stripThinkTags(response);
 
-        // Clear pending save since component is still mounted and handling it
-        llm.clearPendingSave();
-
         // Add assistant response to history
         messageHistoryRef.current = [
           ...messageHistoryRef.current,
@@ -126,7 +88,6 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         return messageHistoryRef.current;
       } catch (err) {
         console.error("[useAIChat] Generation failed:", err);
-        llm.clearPendingSave();
         onErrorRef.current?.(
           err instanceof Error ? err.message : "Generation failed",
         );
