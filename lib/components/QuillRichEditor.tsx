@@ -696,6 +696,53 @@ export const QuillRichEditor = forwardRef<
           onHtmlChange={handleHtmlChange}
           customStyles={[customStyles]}
           customJS={`
+            // Auto-scroll cursor into view when typing or focusing
+            (function() {
+              function scrollCursorIntoView() {
+                if (typeof quill === 'undefined') return;
+                var selection = quill.getSelection();
+                if (!selection) return;
+
+                var bounds = quill.getBounds(selection.index);
+                if (!bounds) return;
+
+                var editor = document.querySelector('.ql-editor');
+                if (!editor) return;
+
+                // Get the visible area (account for toolbar at bottom)
+                var toolbarHeight = 80;
+                var cursorBottom = bounds.top + bounds.height;
+                var visibleBottom = editor.scrollTop + editor.clientHeight - toolbarHeight;
+
+                // If cursor is below visible area, scroll it into view
+                if (cursorBottom > visibleBottom) {
+                  editor.scrollTop = cursorBottom - editor.clientHeight + toolbarHeight + 40;
+                }
+              }
+
+              setTimeout(function() {
+                if (typeof quill !== 'undefined') {
+                  // Run on text changes
+                  quill.on('text-change', function() {
+                    setTimeout(scrollCursorIntoView, 10);
+                  });
+
+                  // Run on focus (when keyboard opens)
+                  quill.root.addEventListener('focus', function() {
+                    // Delay to let keyboard fully open and layout settle
+                    setTimeout(scrollCursorIntoView, 500);
+                  });
+
+                  // Run on selection changes (tapping to a new position)
+                  quill.on('selection-change', function(range) {
+                    if (range) {
+                      setTimeout(scrollCursorIntoView, 50);
+                    }
+                  });
+                }
+              }, 500);
+            })();
+
             // Fix for Quill mobile checkbox bug (issues #3781, #2031)
             // On mobile, touch events cause checkbox to toggle twice
             // Solution: Completely take over checkbox click handling
