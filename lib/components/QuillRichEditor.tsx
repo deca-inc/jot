@@ -652,8 +652,8 @@ export const QuillRichEditor = forwardRef<
         style={[
           styles.editorContainer,
           {
-            // On iOS, add padding when keyboard is visible so content isn't behind keyboard
-            paddingBottom: Platform.OS === "ios" && isKeyboardVisible
+            // Add padding when keyboard is visible so content isn't behind keyboard
+            paddingBottom: isKeyboardVisible
               ? keyboardHeight + 80
               : editorPadding,
           },
@@ -716,7 +716,7 @@ export const QuillRichEditor = forwardRef<
 
                 // If cursor is below visible area, scroll it into view
                 if (cursorBottom > visibleBottom) {
-                  editor.scrollTop = cursorBottom - editor.clientHeight + toolbarHeight + 40;
+                  editor.scrollTop = cursorBottom - editor.clientHeight + toolbarHeight + 48;
                 }
               }
 
