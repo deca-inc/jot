@@ -28,9 +28,6 @@ import { showKeyboard } from "../../modules/keyboard-module/src";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 
-// Toolbar height: minHeight (44) + paddingVertical (xs * 2) + margins
-const _TOOLBAR_HEIGHT = 44 + spacingPatterns.xs * 2 + spacingPatterns.xs;
-
 // Check if glass effect is available (iOS 26+)
 const glassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
 
@@ -291,7 +288,7 @@ export const QuillRichEditor = forwardRef<
       line-height: 1.5;
       color: ${seasonalTheme.textPrimary};
       padding: ${editorPadding}px;
-      padding-bottom: ${isKeyboardVisible ? 80 : editorPadding}px;
+      padding-bottom: ${editorPadding}px;
       background-color: ${seasonalTheme.gradient.middle};
       min-height: 100%;
     }
@@ -655,7 +652,10 @@ export const QuillRichEditor = forwardRef<
         style={[
           styles.editorContainer,
           {
-            paddingBottom: !isKeyboardVisible ? editorPadding : 0,
+            // On iOS, add padding when keyboard is visible so content isn't behind keyboard
+            paddingBottom: Platform.OS === "ios" && isKeyboardVisible
+              ? keyboardHeight + 80
+              : editorPadding,
           },
         ]}
       >

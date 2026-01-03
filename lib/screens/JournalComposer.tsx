@@ -180,7 +180,6 @@ export function JournalComposer({
   );
 
   // Show UI shell immediately - content loads progressively
-  // Note: Not using KeyboardAvoidingView - QuillRichEditor handles keyboard positioning
   return (
     <View
       style={[
