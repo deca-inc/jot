@@ -290,7 +290,11 @@ export function CountdownComposer({
           {
             paddingBottom:
               keyboardHeight > 0
-                ? 80 + spacingPatterns.md + keyboardHeight
+                ? 80 +
+                  spacingPatterns.md +
+                  (Platform.OS === "android"
+                    ? keyboardHeight + insets.bottom
+                    : keyboardHeight)
                 : 80 + insets.bottom,
           },
         ]}
@@ -670,7 +674,14 @@ export function CountdownComposer({
               keyboardHeight > 0
                 ? spacingPatterns.md
                 : insets.bottom + spacingPatterns.md,
-            bottom: keyboardHeight,
+            // On Android with edge-to-edge, add insets.bottom to account for the
+            // navigation bar area that the keyboard doesn't fully cover
+            bottom:
+              keyboardHeight > 0
+                ? Platform.OS === "android"
+                  ? keyboardHeight + insets.bottom
+                  : keyboardHeight
+                : 0,
           },
         ]}
       >
