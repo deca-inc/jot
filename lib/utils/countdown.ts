@@ -10,6 +10,8 @@ export interface CountdownData {
   rewardsNote?: string;
   confettiEnabled?: boolean;
   confettiTriggeredAt?: number;
+  notificationEnabled?: boolean;
+  notificationId?: string;
 }
 
 /**
@@ -38,6 +40,8 @@ export function extractCountdownData(blocks: Block[]): CountdownData | null {
     rewardsNote: countdownBlock.rewardsNote,
     confettiEnabled: countdownBlock.confettiEnabled ?? false,
     confettiTriggeredAt: countdownBlock.confettiTriggeredAt,
+    notificationEnabled: countdownBlock.notificationEnabled ?? false,
+    notificationId: countdownBlock.notificationId,
   };
 }
 
@@ -169,6 +173,8 @@ export function createCountdownBlock(data: {
   isCountUp?: boolean;
   rewardsNote?: string;
   confettiEnabled?: boolean;
+  notificationEnabled?: boolean;
+  notificationId?: string;
 }): Block {
   return {
     type: "countdown",
@@ -177,5 +183,7 @@ export function createCountdownBlock(data: {
     isCountUp: data.isCountUp,
     rewardsNote: data.rewardsNote,
     confettiEnabled: data.confettiEnabled ?? false,
+    notificationEnabled: data.notificationEnabled ?? false,
+    notificationId: data.notificationId,
   };
 }

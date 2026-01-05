@@ -73,6 +73,12 @@ module.exports = ({ config }) => {
           },
         },
       ],
+      [
+        "expo-notifications",
+        {
+          sounds: [],
+        },
+      ],
     ],
     updates: {
       url: "https://u.expo.dev/0218f474-abc5-4575-ab99-0fa81a34e435",

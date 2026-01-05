@@ -16,6 +16,7 @@ import {
   QuillEditorScreen,
 } from "../screens";
 import { CountdownComposer } from "../screens/CountdownComposer";
+import { CountdownViewer } from "../screens/CountdownViewer";
 import { springPresets } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -28,7 +29,24 @@ type Screen =
   | "composer"
   | "fullEditor"
   | "entryEditor"
-  | "countdownComposer";
+  | "countdownComposer"
+  | "countdownViewer";
+
+// Navigation ref for external navigation (e.g., from notification handler)
+export interface NavigationRef {
+  navigateToCountdownViewer: (entryId: number) => void;
+}
+
+// Global navigation ref
+let navigationRefInstance: NavigationRef | null = null;
+
+export function setNavigationRef(ref: NavigationRef | null): void {
+  navigationRefInstance = ref;
+}
+
+export function getNavigationRef(): NavigationRef | null {
+  return navigationRefInstance;
+}
 
 export function SimpleNavigation() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("home");
@@ -44,6 +62,9 @@ export function SimpleNavigation() {
   const [countdownEntryId, setCountdownEntryId] = useState<number | undefined>(
     undefined,
   );
+  const [countdownViewerEntryId, setCountdownViewerEntryId] = useState<
+    number | undefined
+  >(undefined);
   const [_homeRefreshKey, _setHomeRefreshKey] = useState(0);
   const _theme = useTheme();
   const createEntry = useCreateEntry();
@@ -59,6 +80,9 @@ export function SimpleNavigation() {
     null,
   );
   const countdownOnCancelRef = useRef<(() => void | Promise<void>) | null>(
+    null,
+  );
+  const countdownViewerOnCloseRef = useRef<(() => void | Promise<void>) | null>(
     null,
   );
 
@@ -87,6 +111,10 @@ export function SimpleNavigation() {
     } else if (currentScreen === "countdownComposer") {
       if (countdownOnCancelRef.current) {
         await countdownOnCancelRef.current();
+      }
+    } else if (currentScreen === "countdownViewer") {
+      if (countdownViewerOnCloseRef.current) {
+        await countdownViewerOnCloseRef.current();
       }
     }
   }, [currentScreen]);
@@ -308,6 +336,25 @@ export function SimpleNavigation() {
     setCountdownEntryId(undefined);
   }, []);
 
+  // Countdown viewer handlers (for notification deep linking)
+  const handleNavigateToCountdownViewer = useCallback((entryId: number) => {
+    setCountdownViewerEntryId(entryId);
+    setCurrentScreen("countdownViewer");
+  }, []);
+
+  const handleCountdownViewerClose = useCallback(() => {
+    setCurrentScreen("home");
+    setCountdownViewerEntryId(undefined);
+  }, []);
+
+  // Register navigation ref for external navigation (e.g., notification handler)
+  useEffect(() => {
+    setNavigationRef({
+      navigateToCountdownViewer: handleNavigateToCountdownViewer,
+    });
+    return () => setNavigationRef(null);
+  }, [handleNavigateToCountdownViewer]);
+
   const handleSettingsBack = useCallback(() => {
     setCurrentScreen("home");
   }, []);
@@ -438,6 +485,14 @@ export function SimpleNavigation() {
             onCancel={handleCountdownCancel}
           />
         );
+      case "countdownViewer":
+        countdownViewerOnCloseRef.current = handleCountdownViewerClose;
+        return countdownViewerEntryId ? (
+          <CountdownViewer
+            entryId={countdownViewerEntryId}
+            onClose={handleCountdownViewerClose}
+          />
+        ) : null;
       default:
         return null;
     }

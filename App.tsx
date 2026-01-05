@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { LogBox } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { LLMProvider } from "./lib/ai/LLMProvider";
@@ -11,9 +11,17 @@ import { DatabaseProvider, useDatabase } from "./lib/db/DatabaseProvider";
 import { OnboardingSettingsRepository } from "./lib/db/onboardingSettings";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
 import { OnboardingFlow } from "./lib/navigation/OnboardingFlow";
-import { SimpleNavigation } from "./lib/navigation/SimpleNavigation";
+import {
+  SimpleNavigation,
+  getNavigationRef,
+} from "./lib/navigation/SimpleNavigation";
 import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
 import { ThemeProvider } from "./lib/theme/ThemeProvider";
+import {
+  setupNotificationResponseHandler,
+  getLastNotificationResponse,
+  NotificationData,
+} from "./lib/utils/notifications";
 
 // Suppress harmless warnings
 LogBox.ignoreLogs([
@@ -95,6 +103,7 @@ function OnboardingWrapper() {
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const db = useDatabase(); // Use the hook at component level
+  const hasHandledInitialNotificationRef = useRef(false);
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -114,6 +123,46 @@ function OnboardingWrapper() {
 
     checkOnboarding();
   }, [db]);
+
+  // Handle notification responses (user tapping on notification)
+  useEffect(() => {
+    // Handler for when user taps a notification
+    const handleNotificationTap = (entryId: number) => {
+      const navRef = getNavigationRef();
+      if (navRef) {
+        navRef.navigateToCountdownViewer(entryId);
+      }
+    };
+
+    // Set up listener for notification responses
+    const cleanup = setupNotificationResponseHandler(handleNotificationTap);
+
+    // Check if app was launched from a notification
+    const checkInitialNotification = async () => {
+      if (hasHandledInitialNotificationRef.current) return;
+
+      try {
+        const response = await getLastNotificationResponse();
+        if (response) {
+          const data = response.notification.request.content
+            .data as NotificationData;
+          if (data?.entryId && data?.type === "countdown-complete") {
+            hasHandledInitialNotificationRef.current = true;
+            // Delay slightly to ensure navigation is ready
+            setTimeout(() => {
+              handleNotificationTap(data.entryId as number);
+            }, 500);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking initial notification:", error);
+      }
+    };
+
+    checkInitialNotification();
+
+    return cleanup;
+  }, []);
 
   const handleOnboardingComplete = async () => {
     try {

@@ -29,6 +29,7 @@ import { spacingPatterns, borderRadius } from "../theme";
 import { type SeasonalTheme } from "../theme/seasonalTheme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { extractCountdownData, formatCountdown, isCountdownComplete } from "../utils/countdown";
+import { cancelNotification } from "../utils/notifications";
 import { Card } from "./Card";
 import { Dialog } from "./Dialog";
 import { PinIcon } from "./icons/PinIcon";
@@ -549,6 +550,13 @@ function EntryListItemComponent({
   // Event handler: Delete entry
   const handleDelete = async () => {
     try {
+      // Cancel notification before deleting if this is a countdown with a notification
+      if (entry.type === "countdown") {
+        const data = extractCountdownData(entry.blocks);
+        if (data?.notificationId) {
+          await cancelNotification(data.notificationId);
+        }
+      }
       await deleteEntryWithConfirmation(entry.id, actionContext);
       trackEvent("Delete Entry", { entryType: entry.type });
     } catch (error) {
@@ -556,6 +564,19 @@ function EntryListItemComponent({
       if (error instanceof Error && error.message !== "Deletion cancelled") {
         Alert.alert("Error", "Failed to delete entry");
       }
+    }
+  };
+
+  // Event handler: Archive countdown (cancels notification first)
+  const handleArchiveCountdown = async () => {
+    // Cancel notification before archiving if this countdown has one
+    if (countdownData?.notificationId) {
+      await cancelNotification(countdownData.notificationId);
+    }
+    if (onArchive) {
+      onArchive(entry);
+    } else {
+      archiveEntryMutation.mutate(entry.id);
     }
   };
 
@@ -723,11 +744,7 @@ function EntryListItemComponent({
                       if (countdownData.rewardsNote || countdownData.confettiEnabled) {
                         setShowDismissDialog(true);
                       } else {
-                        if (onArchive) {
-                          onArchive(entry);
-                        } else {
-                          archiveEntryMutation.mutate(entry.id);
-                        }
+                        handleArchiveCountdown();
                       }
                     }}
                     activeOpacity={0.7}
@@ -1127,11 +1144,7 @@ function EntryListItemComponent({
               onPress={() => {
                 setShowDismissDialog(false);
                 setShowConfetti(false);
-                if (onArchive) {
-                  onArchive(entry);
-                } else {
-                  archiveEntryMutation.mutate(entry.id);
-                }
+                handleArchiveCountdown();
               }}
             >
               <Text

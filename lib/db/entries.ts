@@ -67,6 +67,8 @@ export type Block =
       rewardsNote?: string; // Encouragement/reward note
       confettiEnabled?: boolean; // Whether to show confetti on completion
       confettiTriggeredAt?: number; // Timestamp when confetti was shown (prevents re-triggering)
+      notificationEnabled?: boolean; // Whether to send notification on completion
+      notificationId?: string; // ID of scheduled notification (for cancellation)
       role?: "user" | "assistant" | "system";
     };
 

@@ -13,6 +13,7 @@ import {
   Platform,
   Keyboard,
   LayoutAnimation,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
@@ -21,6 +22,12 @@ import { useCreateEntry, useUpdateEntry, useEntry } from "../db/useEntries";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { createCountdownBlock, extractCountdownData } from "../utils/countdown";
+import {
+  requestNotificationPermissions,
+  scheduleCountdownNotification,
+  cancelNotification,
+  hasNotificationPermissions,
+} from "../utils/notifications";
 
 export interface CountdownComposerProps {
   entryId?: number;
@@ -79,6 +86,12 @@ export function CountdownComposer({
   const [confettiEnabled, setConfettiEnabled] = useState(
     existingData?.confettiEnabled ?? false,
   );
+  const [notificationEnabled, setNotificationEnabled] = useState(
+    existingData?.notificationEnabled ?? false,
+  );
+  const [existingNotificationId, setExistingNotificationId] = useState<
+    string | undefined
+  >(existingData?.notificationId);
   const [showAdvanced, setShowAdvanced] = useState(
     !!(existingData?.rewardsNote || existingData?.confettiEnabled === true),
   );
@@ -95,11 +108,28 @@ export function CountdownComposer({
         setIsCountUp(data.isCountUp ?? false);
         setRewardsNote(data.rewardsNote || "");
         setConfettiEnabled(data.confettiEnabled ?? false);
-        setShowAdvanced(!!(data.rewardsNote || data.confettiEnabled === true));
+        setNotificationEnabled(data.notificationEnabled ?? false);
+        setExistingNotificationId(data.notificationId);
+        setShowAdvanced(
+          !!(data.rewardsNote || data.confettiEnabled === true),
+        );
         setHasLoadedExistingData(true);
       }
     }
   }, [existingEntry, hasLoadedExistingData]);
+
+  // Auto-enable notifications for new countdowns if user has already granted permission
+  useEffect(() => {
+    // Only for new countdowns (not editing), and only if not already set
+    if (!entryId && !notificationEnabled && !isCountUp) {
+      hasNotificationPermissions().then((hasPermission) => {
+        if (hasPermission) {
+          setNotificationEnabled(true);
+        }
+      });
+    }
+    // Only run on mount - intentionally empty deps array
+  }, []);
 
   // Picker visibility state (for Android which shows modal)
   const [showDatePicker, setShowDatePicker] = useState(Platform.OS === "ios");
@@ -188,6 +218,31 @@ export function CountdownComposer({
     setShowTimePicker(true);
   }, []);
 
+  // Handle notification toggle
+  const handleNotificationToggle = useCallback(
+    async (enabled: boolean) => {
+      if (enabled) {
+        // Check if target date is in the past
+        if (targetDate.getTime() <= Date.now()) {
+          Alert.alert(
+            "Cannot Schedule Notification",
+            "The target date is in the past. Please set a future date to enable notifications.",
+            [{ text: "OK" }],
+          );
+          return;
+        }
+
+        // Request permissions
+        const hasPermission = await requestNotificationPermissions();
+        if (!hasPermission) {
+          return;
+        }
+      }
+      setNotificationEnabled(enabled);
+    },
+    [targetDate],
+  );
+
   const handleSave = useCallback(async () => {
     if (!title.trim()) {
       return;
@@ -196,12 +251,45 @@ export function CountdownComposer({
     setIsSaving(true);
 
     try {
+      let notificationId: string | undefined = existingNotificationId;
+
+      // Handle notification scheduling/cancellation
+      if (!isCountUp) {
+        // Cancel existing notification if notification was disabled or target date changed
+        if (existingNotificationId) {
+          const shouldCancelExisting =
+            !notificationEnabled ||
+            (existingEntry &&
+              extractCountdownData(existingEntry.blocks)?.targetDate !==
+                targetDate.getTime());
+          if (shouldCancelExisting) {
+            await cancelNotification(existingNotificationId);
+            notificationId = undefined;
+          }
+        }
+
+        // Schedule new notification if enabled and target date is in the future
+        if (notificationEnabled && targetDate.getTime() > Date.now()) {
+          // If we already have a valid notification and nothing changed, keep it
+          if (!notificationId) {
+            notificationId =
+              (await scheduleCountdownNotification(
+                entryId ?? 0, // Will be updated after entry creation
+                targetDate.getTime(),
+                title.trim(),
+              )) ?? undefined;
+          }
+        }
+      }
+
       const block = createCountdownBlock({
         targetDate: targetDate.getTime(),
         title: title.trim(),
         isCountUp,
         rewardsNote: rewardsNote.trim() || undefined,
         confettiEnabled,
+        notificationEnabled: isCountUp ? false : notificationEnabled,
+        notificationId,
       });
 
       if (entryId) {
@@ -221,6 +309,35 @@ export function CountdownComposer({
           title: title.trim(),
           blocks: [block],
         });
+
+        // If notification was scheduled with entryId=0, we need to reschedule with the real ID
+        if (notificationId && notificationEnabled && !isCountUp) {
+          await cancelNotification(notificationId);
+          const newNotificationId = await scheduleCountdownNotification(
+            entry.id,
+            targetDate.getTime(),
+            title.trim(),
+          );
+          if (newNotificationId) {
+            // Update the entry with the correct notification ID
+            const updatedBlock = createCountdownBlock({
+              targetDate: targetDate.getTime(),
+              title: title.trim(),
+              isCountUp,
+              rewardsNote: rewardsNote.trim() || undefined,
+              confettiEnabled,
+              notificationEnabled,
+              notificationId: newNotificationId,
+            });
+            await updateEntryRef.current.mutateAsync({
+              id: entry.id,
+              input: {
+                blocks: [updatedBlock],
+              },
+            });
+          }
+        }
+
         onSave?.(entry.id);
       }
     } catch (error) {
@@ -234,6 +351,9 @@ export function CountdownComposer({
     isCountUp,
     rewardsNote,
     confettiEnabled,
+    notificationEnabled,
+    existingNotificationId,
+    existingEntry,
     entryId,
     onSave,
   ]);
@@ -264,7 +384,7 @@ export function CountdownComposer({
         style={[
           styles.header,
           {
-            paddingTop: insets.top,
+            paddingTop: insets.top / 2,
           },
         ]}
       >
@@ -412,6 +532,7 @@ export function CountdownComposer({
               onPress={() => {
                 setIsCountUp(true);
                 setConfettiEnabled(false);
+                setNotificationEnabled(false);
               }}
               activeOpacity={0.7}
             >
@@ -569,6 +690,45 @@ export function CountdownComposer({
             </View>
           )}
         </View>
+
+        {/* Notification Toggle - only for countdowns, not Time Since */}
+        {!isCountUp && (
+          <View style={styles.formGroup}>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleLabel}>
+                <Ionicons
+                  name="notifications-outline"
+                  size={20}
+                  color={seasonalTheme.textSecondary}
+                />
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    marginLeft: spacingPatterns.sm,
+                  }}
+                >
+                  Notify When Complete
+                </Text>
+              </View>
+              <Switch
+                value={notificationEnabled}
+                onValueChange={handleNotificationToggle}
+                trackColor={{
+                  false: seasonalTheme.textSecondary + "30",
+                  true: seasonalTheme.chipText,
+                }}
+                thumbColor={seasonalTheme.isDark ? "#ffffff" : "#f4f3f4"}
+              />
+            </View>
+            <Text
+              variant="caption"
+              style={{ color: seasonalTheme.textSecondary, marginTop: 4 }}
+            >
+              Send a push notification when the countdown reaches its target
+            </Text>
+          </View>
+        )}
 
         {/* Advanced Section Toggle */}
         <TouchableOpacity
@@ -731,7 +891,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacingPatterns.screen,
-    paddingBottom: spacingPatterns.sm,
+    paddingBottom: spacingPatterns.xs,
   },
   backButton: {
     padding: spacingPatterns.xs,
@@ -745,7 +905,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: spacingPatterns.screen,
-    paddingTop: spacingPatterns.lg,
+    paddingTop: spacingPatterns.sm,
     paddingBottom: spacingPatterns.md,
   },
   formGroup: {
