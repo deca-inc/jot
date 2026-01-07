@@ -3,6 +3,7 @@
 This document provides essential context for AI assistants (like Claude) working on this codebase. It covers architecture, coding guidelines, and product fundamentals.
 
 ## Table of Contents
+
 - [Product Fundamentals](#product-fundamentals)
 - [Architecture](#architecture)
 - [Coding Guidelines](#coding-guidelines)
@@ -16,6 +17,7 @@ This document provides essential context for AI assistants (like Claude) working
 ### Core Principles
 
 #### 1. Writing Experience is the Most Important Thing
+
 The typing and writing experience must be exceptional—competitive with the best writing apps (iA Writer, Ulysses, Bear, Craft).
 
 - **Low Latency**: Keystroke-to-render latency must be imperceptible (<16ms target). Never laggy or sluggish.
@@ -24,12 +26,14 @@ The typing and writing experience must be exceptional—competitive with the bes
 - **Extremely Flexible**: Mix components together—text, images, videos, embeds, code blocks, tables, AI chat threads—seamlessly within a single entry.
 
 #### 2. Fast to Find Your Content
+
 Search must be comprehensive, fast, and forgiving.
 
 - **Searchable by Whatever You Can Remember**: Full-text search across all content, metadata search (tags, dates, attachments), media search.
 - **Search is Fast So You Can Correct Quickly**: Sub-100ms search results. Instant feedback as you type.
 
 #### 3. Privacy First
+
 We are a private personal assistant and journaling app. Privacy is a core feature.
 
 - **Your Private Personal Assistant**: Trusted, private space for thoughts. Local-first by default.
@@ -44,20 +48,23 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 - **Connectivity**: Works fully offline. Optional backups to user-selected services.
 
 #### Key Features
+
 - **Entries + AI Convos**: Unified timeline combining manual journal entries and conversations with a personal AI.
-- **Entry Types**: Journal Entry and AI Chat. *AI summarization planned.*
-- **Search**: Full-text search across all content. *Semantic (AI) search planned.*
-- **Encryption**: Local database encryption at rest (SQLCipher). *Zero-knowledge cloud backups planned.*
-- **Local AI**: On-device inference for AI conversations. *Summarization, Q&A, insight extraction planned.*
+- **Entry Types**: Journal Entry and AI Chat. _AI summarization planned._
+- **Search**: Full-text search across all content. _Semantic (AI) search planned._
+- **Encryption**: Local database encryption at rest (SQLCipher). _Zero-knowledge cloud backups planned._
+- **Local AI**: On-device inference for AI conversations. _Summarization, Q&A, insight extraction planned._
 - **Import/Export (Planned)**: JSON/Markdown export; portable backups.
 - **Trial & Purchase (Planned)**: 7-day free trial, then $45 lifetime license.
 
 #### Non-Goals (v1)
+
 - Multi-user collaboration
 - Realtime sync across devices (v1 supports backup/restore, not continuous sync)
 - Server-side features; no vendor lock-in
 
 #### Success Metrics
+
 - **Performance**: <100ms search on 10k notes; <300ms app launch cold.
 - **Reliability**: Zero data loss in local crash scenarios; validated backup/restore.
 - **Delight**: >40% week-4 retention after trial; NPS > 50.
@@ -65,16 +72,18 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 ### UX Overview
 
 #### Primary Screens
+
 - **Home Timeline**: Mixed list of entries and AI convos, grouped by day. Quick filters: Entries, AI, Favorites, Tags.
 - **Composer**:
   - Journal Entry: Rich block-based editor (checkboxes, lists, tables, images, embeds, code blocks) - WYSIWYG with low latency
   - AI Chat: Markdown-based editor/display
-- **Search**: Unified search bar with filters. *Keyboard navigation and semantic tabs planned.*
+- **Search**: Unified search bar with filters. _Keyboard navigation and semantic tabs planned._
 - **Settings**: Encryption, backups, AI model, license, import/export.
 
 #### Interaction Principles
+
 - **Zero friction**: Minimal modals; optimistic UI; autosave.
-- **Accessible (Planned)**: *Full keyboard navigation, prefers-reduced-motion, and high contrast mode are planned.*
+- **Accessible (Planned)**: _Full keyboard navigation, prefers-reduced-motion, and high contrast mode are planned._
 - **Trust**: Clear encryption states; explicit backup confirmation; no hidden sync.
 
 ---
@@ -82,37 +91,45 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 ## Architecture
 
 ### Tech Stack
+
 - **Framework**: Expo + React Native for macOS via [react-native-macos](https://github.com/microsoft/react-native-macos)
 - **Package Manager**: pnpm (always use `pnpm` commands, never `npm` or `yarn`)
 - **No web app**: Desktop-only initially
 
 ### Local-First Storage
+
 - **Database**: SQLite (via `expo-sqlite` or `better-sqlite3` for desktop). Full-text search with FTS5.
 - **Files**: Attachments stored under app data directory. Metadata in DB.
 - **Schema versioning**: Migration table; deterministic up/down migrations.
 
 ### Backup Integrations (Planned)
-*Backup functionality is not yet implemented. The following describes the planned strategy:*
+
+_Backup functionality is not yet implemented. The following describes the planned strategy:_
+
 - Providers: Google Drive, Dropbox, iCloud Drive, Local file export.
 - Backups are encrypted client-side with user key; providers see only ciphertext.
 - Strategy: Periodic snapshot with incremental diffs; verify integrity with checksum.
 
 ### Sync vs Backup
+
 - v1: Backup/restore only. No multi-device conflict resolution.
 - v2+: Consider CRDTs (e.g., Yjs) for multi-device sync.
 
 ### App Layers
+
 ```
 UI (React Native/Expo) → Data access layer → Crypto layer → Storage layer
 Background workers: indexing, embeddings, backup scheduler
 ```
 
 ### Embedding Storage
+
 - **Strategy**: Simple blob storage in SQLite (`Entry.embedding` BLOB column)
 - Vectors stored as float32 arrays, queried via linear scan with cosine similarity
 - Suitable for personal journaling scale (<50K entries). Can optimize to FAISS-like index later if needed.
 
 ### Local AI
+
 - On-device small LLM (e.g., Llama 3.2 3B Instruct) via `llama.cpp`/Metal or MLC.
 - Optional local embedding model (e.g., MiniLM/all-MiniLM-L6-v2 distilled variant) for semantic search.
 - **Download Strategy**: Small initial app download. Models downloaded on-demand with user choice.
@@ -122,10 +139,12 @@ Background workers: indexing, embeddings, backup scheduler
   - Users can switch between downloaded models per conversation or globally in settings
 
 ### Retrieval
+
 - Hybrid search: BM25 via FTS5 + vector similarity over embeddings.
 - Chunking strategy: sentence/paragraph for entries; per-message for AI conversations.
 
 ### Telemetry
+
 - Default off. If enabled, anonymous, no content ever leaves device.
 
 ---
@@ -157,6 +176,7 @@ const handleUserAction = () => {
 ```
 
 **When useEffect is acceptable**:
+
 - Subscribing to external systems (WebSocket, DOM events)
 - Cleanup operations on unmount
 - Syncing with browser APIs (window size, scroll position)
@@ -183,6 +203,7 @@ if (!hasTitle) {
 ```
 
 **When refs are acceptable**:
+
 - DOM manipulation (focusing inputs, scrolling)
 - Storing timeout/interval IDs for cleanup
 - Storing stable callbacks that don't need to trigger re-renders
@@ -257,6 +278,7 @@ async function createConversation(
 ```
 
 **Benefits**:
+
 - Clear, testable workflow
 - Easy to understand sequence
 - No hidden dependencies
@@ -279,6 +301,7 @@ User Action → Event Handler → Action Function
 #### Memoization Rules
 
 **When to memoize**:
+
 1. **Context values** - Always memoize with `useMemo`
 2. **Callbacks passed as props** - Always wrap with `useCallback`
 3. **Expensive computations** - Use `useMemo` for derived data
@@ -317,8 +340,8 @@ export function ThemeProvider({ children }) {
 // ❌ BAD: Creates new theme object every call
 export function getSeasonalTheme(season: Season, time: TimeOfDay) {
   return {
-    gradient: { start: '#...', middle: '#...', end: '#...' },
-    textPrimary: '#...',
+    gradient: { start: "#...", middle: "#...", end: "#..." },
+    textPrimary: "#...",
   };
 }
 
@@ -331,8 +354,8 @@ export function getSeasonalTheme(season: Season, time: TimeOfDay) {
   if (cached) return cached;
 
   const theme = {
-    gradient: { start: '#...', middle: '#...', end: '#...' },
-    textPrimary: '#...',
+    gradient: { start: "#...", middle: "#...", end: "#..." },
+    textPrimary: "#...",
   };
 
   themeCache.set(cacheKey, theme);
@@ -351,7 +374,7 @@ const handleSubmit = useCallback(
   async (text: string) => {
     await createEntry.mutateAsync({ text });
   },
-  [createEntry] // Recreates every render!
+  [createEntry], // Recreates every render!
 );
 
 // ✅ GOOD: Use ref to access mutation
@@ -363,7 +386,7 @@ const handleSubmit = useCallback(
   async (text: string) => {
     await createEntryRef.current.mutateAsync({ text });
   },
-  [] // Stable!
+  [], // Stable!
 );
 ```
 
@@ -372,6 +395,7 @@ const handleSubmit = useCallback(
 **Why**: `any` disables type checking and defeats the purpose of TypeScript. It hides bugs and makes refactoring dangerous.
 
 **Hierarchy of solutions** (in order of preference):
+
 1. **Use proper types** - Define interfaces, use generics, leverage library types
 2. **Use `unknown`** - When you truly don't know the type, use `unknown` and narrow with type guards
 3. **Line-level disable** - If a specific line genuinely needs `any` (e.g., library interop), use `// eslint-disable-next-line @typescript-eslint/no-explicit-any` with a comment explaining why
@@ -420,6 +444,7 @@ When in doubt, ask: "Can I derive this from data?" and "Can I handle this with a
 ### Entities
 
 #### Entry
+
 - `id`: unique identifier
 - `type`: journal|ai_chat
 - `title`: string
@@ -434,10 +459,12 @@ When in doubt, ask: "Can I derive this from data?" and "Can I handle this with a
 - `updatedAt`: timestamp
 
 **Entry Types:**
+
 - Journal entries: `type='journal'`, `blocks` contains rich block types (paragraph, heading, list, checkbox, table, image, code, etc.)
 - AI chat messages: `type='ai_chat'`, `blocks` typically contains a markdown block type with `role='user'` or `role='assistant'` set on blocks
 
 **Notes:**
+
 - Each entry is a self-contained document
 - Journal entries are standalone pages with rich content blocks
 - AI chat entries are individual messages in a conversation (grouped by date or conversation thread)
@@ -447,6 +474,7 @@ When in doubt, ask: "Can I derive this from data?" and "Can I handle this with a
 Blocks are intentionally **flat** with no nested children for performance and simplicity.
 
 **Block Types:**
+
 - `paragraph`: Plain text paragraph
 - `heading1`, `heading2`, `heading3`: Headings
 - `list`: Ordered or unordered list
@@ -458,20 +486,24 @@ Blocks are intentionally **flat** with no nested children for performance and si
 - `quote`: Blockquote
 
 All blocks support:
+
 - `role`: Optional `user`, `assistant`, or `system` (identifies the author/origin of the block)
 
 **Design Decision: Flat Structure (No Nesting)**
+
 - Blocks are intentionally flat with no nested children
 - This is for performance (simpler parsing, faster rendering) and simplicity (easier to reason about, less complexity)
 - Adding nesting later should be very carefully thought through - it increases complexity significantly and may impact performance
 
 #### Settings
+
 - `key`: string
 - `value`: JSON/text
 - `updatedAt`: timestamp
 - Key-value store for app settings including license
 
 ### Storage
+
 - SQLite tables with FTS5 virtual table for `Entry.blocks` (extracts plain text from blocks for search).
 - **Content Format**: All content stored as JSON array of block objects, validated with Zod schema.
 - **Embeddings**: Stored directly on `Entry.embedding` as BLOB (float32 array).
@@ -481,6 +513,7 @@ All blocks support:
 - Attachments stored as files; referenced by path in Entry.attachments[].
 
 ### File Formats
+
 - **Export**: JSON bundle + attachments folder; optional Markdown per entry.
 - **Backup**: Encrypted TAR/ZIP of DB + attachments + metadata.json.
 
@@ -489,25 +522,31 @@ All blocks support:
 ## Security & Privacy
 
 ### Threat Model
+
 - Protect against lost/stolen device, nosy processes, and cloud providers.
 - Not defending against targeted, persistent attackers with device root access.
 
 ### Keys
+
 - **Master Key**: 256-bit key auto-generated using cryptographically secure random number generation.
 - **Key Storage**: Stored securely in OS keystore (Keychain on macOS/iOS, Keystore on Android).
 - **Key Management**: Key is automatically generated on first launch and stored securely. No user passphrase required for default encryption mode.
 - **Optional Passphrase Mode**: Future enhancement - allow users to optionally enable passphrase-based encryption for additional security.
 
 ### Data at Rest
+
 - **DB Encryption**: Encrypt the entire SQLite storage file as a whole (opaque to most of the system). This keeps the encryption layer separate from the application logic.
-- **Files (Planned)**: Each attachment encrypted with random file key; keys wrapped by master key. *Note: Attachments feature not yet implemented.*
+- **Files (Planned)**: Each attachment encrypted with random file key; keys wrapped by master key. _Note: Attachments feature not yet implemented._
 
 ### Backups (Planned)
-*Backup functionality is not yet implemented. The following describes the planned strategy:*
+
+_Backup functionality is not yet implemented. The following describes the planned strategy:_
+
 - Client-side encryption before upload. Zero-knowledge providers.
 - Integrity: HMAC over archive manifest; per-file checksums.
 
 ### Privacy
+
 - **All inference on-device**. No remote calls unless user opts into a provider.
 - No content leaves device unless exporting/backing up.
 - Telemetry off by default.
@@ -517,6 +556,7 @@ All blocks support:
 ## Quick Reference
 
 ### Implementation Implications
+
 - Optimized Expo/React Native stack for ultra-low latency typing
 - Investment in editor technology and typography
 - Comprehensive search infrastructure (FTS5, embeddings, media indexing)
@@ -524,6 +564,7 @@ All blocks support:
 - Clear, accessible privacy documentation and controls
 
 ### When Working on Code
+
 1. **Always read existing code first** - Never propose changes to code you haven't read
 2. **Minimize useEffect** - Prefer event handlers and actions
 3. **Single source of truth** - Database via React Query
@@ -534,15 +575,16 @@ All blocks support:
 8. **Run lint and typecheck** - After making significant changes, run `pnpm lint` and `pnpm typecheck` to catch issues early
 
 ### Code Quality Commands
+
 - **`pnpm lint`** - Run ESLint to check for code style issues
 - **`pnpm lint:fix`** - Auto-fix ESLint issues (import sorting, trailing commas, etc.)
 - **`pnpm typecheck`** - Run TypeScript type checking without emitting files
 
 ### Code Style (Enforced by ESLint)
+
 - **Trailing commas**: Always use trailing commas in multiline structures
 - **Import order**: Imports are auto-sorted alphabetically (builtin → external → internal → relative)
 - **Unused variables**: Prefix with `_` to indicate intentionally unused (e.g., `_unused`)
 - **Newlines**: Files must end with a newline
 
 A pre-commit hook runs `lint-staged` to automatically lint and fix staged files before each commit.
-

@@ -136,9 +136,8 @@ async function sendLLMModelMessage(
     ...messages,
   ];
 
-  const result = await modelLibrarySingleton.llm?.module.generate(
-    preparedMessages,
-  );
+  const result =
+    await modelLibrarySingleton.llm?.module.generate(preparedMessages);
   if (!result) {
     throw new Error("No content from generation");
   }

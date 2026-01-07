@@ -1,6 +1,7 @@
 ## Roadmap
 
 ### Currently Implemented
+
 - Local SQLite + FTS5, schema + migrations ✓
 - Editor + timeline (entries + AI convos) ✓
 - Local database encryption (SQLCipher) ✓
@@ -10,6 +11,7 @@
 - Model download and management ✓
 
 ### Next (In Progress, in no particular order)
+
 - Countdowns
 - Pinning
 - Reminders & Tasks

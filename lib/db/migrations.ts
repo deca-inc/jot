@@ -130,10 +130,10 @@ export async function migrateTo(
         const runEnd = Date.now();
 
         // Record migration
-        await db.runAsync("INSERT INTO migrations (name, batch) VALUES (?, ?)", [
-          migrationsToRun[i],
-          newBatch,
-        ]);
+        await db.runAsync(
+          "INSERT INTO migrations (name, batch) VALUES (?, ?)",
+          [migrationsToRun[i], newBatch],
+        );
 
         log(options, `- ▲ ${migrationsToRun[i]} [${runEnd - runStart}ms]`);
       }

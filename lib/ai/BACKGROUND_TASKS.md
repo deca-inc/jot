@@ -7,16 +7,19 @@ This implementation adds background task support for AI generation, allowing mod
 ## Important Limitations
 
 ### iOS
+
 - **Background tasks are time-limited**: iOS typically allows background tasks to run for 30 seconds to a few minutes maximum
 - **CPU-intensive tasks may be suspended**: ML inference is CPU/GPU intensive and iOS may suspend the app process regardless of background mode
 - **Background modes required**: The app must declare background modes in `Info.plist` (already configured in `app.json`)
 
 ### Android
+
 - **Battery optimization**: Android's battery optimization features may kill background tasks
 - **Foreground service required for long tasks**: For truly continuous background execution, a foreground service with a notification is required
 - **More flexible than iOS**: Android generally allows longer background execution, but still has restrictions
 
 ### General Considerations
+
 - **No guarantee of completion**: Even with background tasks registered, the OS may suspend or kill the app process
 - **User experience**: Background execution can impact battery life and device performance
 - **Testing**: Background behavior must be tested on real devices, not simulators

@@ -1,9 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect, useCallback } from "react";
-import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { ALL_MODELS } from "../ai/modelConfig";
 import { ensureModelPresent, getModelSize } from "../ai/modelManager";
-import { persistentDownloadManager, type DownloadMetadata } from "../ai/persistentDownloadManager";
+import {
+  persistentDownloadManager,
+  type DownloadMetadata,
+} from "../ai/persistentDownloadManager";
 import { useModelDownloadStatus } from "../ai/useModelDownloadStatus";
 import { useModelSettings } from "../db/modelSettings";
 import { spacingPatterns, borderRadius } from "../theme";
@@ -17,7 +25,8 @@ import { useToast } from "./ToastProvider";
  * Allows users to resume downloads with one tap.
  */
 export function PendingDownloadBanner() {
-  const [pendingDownload, setPendingDownload] = useState<DownloadMetadata | null>(null);
+  const [pendingDownload, setPendingDownload] =
+    useState<DownloadMetadata | null>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [progress, setProgress] = useState(0);
   const seasonalTheme = useSeasonalTheme();
@@ -34,13 +43,14 @@ export function PendingDownloadBanner() {
       // Get the first pending download (most likely the one that was interrupted)
       if (pending.length > 0) {
         // Filter for model downloads (not tokenizer/config which are smaller)
-        const modelDownload = pending.find(d => d.fileType === 'model') || pending[0];
+        const modelDownload =
+          pending.find((d) => d.fileType === "model") || pending[0];
         setPendingDownload(modelDownload);
       } else {
         setPendingDownload(null);
       }
     } catch (error) {
-      console.error('Failed to load pending downloads:', error);
+      console.error("Failed to load pending downloads:", error);
       setPendingDownload(null);
     }
   }, []);
@@ -65,9 +75,11 @@ export function PendingDownloadBanner() {
       setIsResuming(true);
       setProgress(0);
 
-      const modelConfig = ALL_MODELS.find(m => m.modelId === pendingDownload.modelId);
+      const modelConfig = ALL_MODELS.find(
+        (m) => m.modelId === pendingDownload.modelId,
+      );
       if (!modelConfig) {
-        showToast('Model configuration not found', 'error');
+        showToast("Model configuration not found", "error");
         return;
       }
 
@@ -86,12 +98,15 @@ export function PendingDownloadBanner() {
         size,
       });
 
-      showToast(`${modelConfig.displayName} downloaded successfully`, 'success');
+      showToast(
+        `${modelConfig.displayName} downloaded successfully`,
+        "success",
+      );
       await loadPendingDownload();
     } catch (error: unknown) {
-      console.error('Failed to resume download:', error);
+      console.error("Failed to resume download:", error);
       const err = error as { message?: string };
-      showToast(err?.message || 'Failed to resume download', 'error');
+      showToast(err?.message || "Failed to resume download", "error");
     } finally {
       setIsResuming(false);
       setProgress(0);
@@ -102,26 +117,26 @@ export function PendingDownloadBanner() {
     if (!pendingDownload) return;
 
     try {
-      await persistentDownloadManager.cancelDownload(pendingDownload.modelId, pendingDownload.fileType);
+      await persistentDownloadManager.cancelDownload(
+        pendingDownload.modelId,
+        pendingDownload.fileType,
+      );
       await loadPendingDownload();
     } catch (error) {
-      console.error('Failed to dismiss download:', error);
+      console.error("Failed to dismiss download:", error);
     }
   };
 
   const displayProgress = isResuming
     ? progress
-    : (pendingDownload.bytesTotal > 0
-        ? Math.round((pendingDownload.bytesWritten / pendingDownload.bytesTotal) * 100)
-        : 0);
+    : pendingDownload.bytesTotal > 0
+      ? Math.round(
+          (pendingDownload.bytesWritten / pendingDownload.bytesTotal) * 100,
+        )
+      : 0;
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: seasonalTheme.cardBg },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: seasonalTheme.cardBg }]}>
       <View style={styles.content}>
         <View style={styles.iconContainer}>
           {isResuming ? (
@@ -140,7 +155,7 @@ export function PendingDownloadBanner() {
             variant="body"
             style={[styles.title, { color: seasonalTheme.textPrimary }]}
           >
-            {isResuming ? 'Downloading' : 'Download Paused'}
+            {isResuming ? "Downloading" : "Download Paused"}
           </Text>
           <Text
             variant="caption"
@@ -154,7 +169,7 @@ export function PendingDownloadBanner() {
           {!isResuming && (
             <TouchableOpacity
               onPress={handleDismiss}
-              style={[styles.actionButton, { backgroundColor: '#FF6B6B15' }]}
+              style={[styles.actionButton, { backgroundColor: "#FF6B6B15" }]}
             >
               <Ionicons name="close" size={16} color="#FF6B6B" />
             </TouchableOpacity>

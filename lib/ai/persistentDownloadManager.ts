@@ -10,7 +10,7 @@
 
 import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from "expo-secure-store";
 
 export interface DownloadMetadata {
   modelId: string;
@@ -20,7 +20,7 @@ export interface DownloadMetadata {
   bytesWritten: number;
   bytesTotal: number;
   startedAt: number;
-  fileType: 'model' | 'tokenizer' | 'config';
+  fileType: "model" | "tokenizer" | "config";
 }
 
 interface PersistedDownload {
@@ -28,7 +28,7 @@ interface PersistedDownload {
   resumeData: string;
 }
 
-const DOWNLOADS_KEY = 'persistent_downloads';
+const DOWNLOADS_KEY = "persistent_downloads";
 
 class PersistentDownloadManager {
   private activeDownloads = new Map<string, FileSystem.DownloadResumable>();
@@ -37,7 +37,10 @@ class PersistentDownloadManager {
   /**
    * Get a unique key for a download based on model ID and file type
    */
-  private getDownloadKey(modelId: string, fileType: DownloadMetadata['fileType']): string {
+  private getDownloadKey(
+    modelId: string,
+    fileType: DownloadMetadata["fileType"],
+  ): string {
     return `${modelId}:${fileType}`;
   }
 
@@ -49,11 +52,15 @@ class PersistentDownloadManager {
     modelName: string,
     url: string,
     destination: string,
-    fileType: DownloadMetadata['fileType'],
-    onProgress?: (progress: number, bytesWritten: number, bytesTotal: number) => void,
+    fileType: DownloadMetadata["fileType"],
+    onProgress?: (
+      progress: number,
+      bytesWritten: number,
+      bytesTotal: number,
+    ) => void,
   ): Promise<FileSystem.DownloadResumable> {
     const key = this.getDownloadKey(modelId, fileType);
-    
+
     // Check if already downloading
     const existing = this.activeDownloads.get(key);
     if (existing) {
@@ -64,12 +71,14 @@ class PersistentDownloadManager {
     const persisted = await this.loadPersistedDownload(key);
     let downloadResumable: FileSystem.DownloadResumable;
     let isResuming = false;
-    let effectiveDestination = destination + '.download';
+    let effectiveDestination = destination + ".download";
 
     // Try to resume if we have persisted data
     if (persisted) {
       // Check if the partial download file still exists
-      const fileInfo = await FileSystem.getInfoAsync(persisted.metadata.destination);
+      const fileInfo = await FileSystem.getInfoAsync(
+        persisted.metadata.destination,
+      );
 
       if (fileInfo.exists && persisted.resumeData) {
         // Parse the resumeData - it was stringified when saved
@@ -79,13 +88,19 @@ class PersistentDownloadManager {
           const savedData = JSON.parse(persisted.resumeData);
           // The savable() returns an object with resumeData inside it
           parsedResumeData = savedData.resumeData;
-          console.log(`[PersistentDownloadManager] Parsed savable data for ${key}:`, {
-            hasResumeData: !!parsedResumeData,
-            resumeDataLength: parsedResumeData?.length,
-            fileUri: savedData.fileUri,
-          });
+          console.log(
+            `[PersistentDownloadManager] Parsed savable data for ${key}:`,
+            {
+              hasResumeData: !!parsedResumeData,
+              resumeDataLength: parsedResumeData?.length,
+              fileUri: savedData.fileUri,
+            },
+          );
         } catch (e) {
-          console.error(`[PersistentDownloadManager] Failed to parse resumeData for ${key}:`, e);
+          console.error(
+            `[PersistentDownloadManager] Failed to parse resumeData for ${key}:`,
+            e,
+          );
         }
 
         // Check if we have resumeData from pauseAsync OR if we can resume via HTTP Range
@@ -93,14 +108,18 @@ class PersistentDownloadManager {
 
         if (parsedResumeData) {
           // We have proper resumeData from pauseAsync - use it
-          console.log(`[PersistentDownloadManager] Resuming download for ${key} with resumeData`);
+          console.log(
+            `[PersistentDownloadManager] Resuming download for ${key} with resumeData`,
+          );
 
           downloadResumable = new FileSystem.DownloadResumable(
             persisted.metadata.url,
             persisted.metadata.destination,
             {},
             (downloadProgress) => {
-              const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+              const progress =
+                downloadProgress.totalBytesWritten /
+                downloadProgress.totalBytesExpectedToWrite;
 
               // Update metadata
               const meta = this.downloadMetadata.get(key);
@@ -109,7 +128,11 @@ class PersistentDownloadManager {
                 meta.bytesTotal = downloadProgress.totalBytesExpectedToWrite;
               }
 
-              onProgress?.(progress, downloadProgress.totalBytesWritten, downloadProgress.totalBytesExpectedToWrite);
+              onProgress?.(
+                progress,
+                downloadProgress.totalBytesWritten,
+                downloadProgress.totalBytesExpectedToWrite,
+              );
             },
             parsedResumeData,
           );
@@ -118,7 +141,9 @@ class PersistentDownloadManager {
         } else if (existingFileSize > 0 && persisted.metadata.bytesTotal > 0) {
           // No resumeData, but we have a partial file - try HTTP Range resume
           // This handles the case where app crashed without calling pauseAsync
-          console.log(`[PersistentDownloadManager] Attempting HTTP Range resume for ${key} from byte ${existingFileSize}`);
+          console.log(
+            `[PersistentDownloadManager] Attempting HTTP Range resume for ${key} from byte ${existingFileSize}`,
+          );
 
           // Use HTTP Range header to resume from where we left off
           downloadResumable = FileSystem.createDownloadResumable(
@@ -126,12 +151,13 @@ class PersistentDownloadManager {
             persisted.metadata.destination,
             {
               headers: {
-                'Range': `bytes=${existingFileSize}-`,
+                Range: `bytes=${existingFileSize}-`,
               },
             },
             (downloadProgress) => {
               // Adjust progress to account for already downloaded bytes
-              const totalWritten = existingFileSize + downloadProgress.totalBytesWritten;
+              const totalWritten =
+                existingFileSize + downloadProgress.totalBytesWritten;
               const totalExpected = persisted.metadata.bytesTotal;
               const progress = totalWritten / totalExpected;
 
@@ -153,16 +179,22 @@ class PersistentDownloadManager {
           (downloadResumable as any)._existingBytes = existingFileSize;
         } else {
           // No resumeData and no usable partial file - start fresh
-          console.log(`[PersistentDownloadManager] No resumeData for ${key} - starting fresh`);
+          console.log(
+            `[PersistentDownloadManager] No resumeData for ${key} - starting fresh`,
+          );
           await this.completeDownload(modelId, fileType);
           try {
-            await FileSystem.deleteAsync(persisted.metadata.destination, { idempotent: true });
+            await FileSystem.deleteAsync(persisted.metadata.destination, {
+              idempotent: true,
+            });
           } catch (_e) {
             // Ignore delete errors
           }
         }
       } else {
-        console.log(`[PersistentDownloadManager] Partial file missing for ${key}, starting fresh`);
+        console.log(
+          `[PersistentDownloadManager] Partial file missing for ${key}, starting fresh`,
+        );
         // Clean up stale persisted data
         await this.completeDownload(modelId, fileType);
       }
@@ -170,12 +202,18 @@ class PersistentDownloadManager {
 
     // Start fresh download if not resuming
     if (!isResuming) {
-      console.log(`[PersistentDownloadManager] Starting new download for ${key}`);
-      const tempDestination = destination + '.download';
+      console.log(
+        `[PersistentDownloadManager] Starting new download for ${key}`,
+      );
+      const tempDestination = destination + ".download";
       effectiveDestination = tempDestination;
 
-      const progressCallback = (downloadProgress: FileSystem.DownloadProgressData) => {
-        const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+      const progressCallback = (
+        downloadProgress: FileSystem.DownloadProgressData,
+      ) => {
+        const progress =
+          downloadProgress.totalBytesWritten /
+          downloadProgress.totalBytesExpectedToWrite;
 
         // Update metadata
         const meta = this.downloadMetadata.get(key);
@@ -184,7 +222,11 @@ class PersistentDownloadManager {
           meta.bytesTotal = downloadProgress.totalBytesExpectedToWrite;
         }
 
-        onProgress?.(progress, downloadProgress.totalBytesWritten, downloadProgress.totalBytesExpectedToWrite);
+        onProgress?.(
+          progress,
+          downloadProgress.totalBytesWritten,
+          downloadProgress.totalBytesExpectedToWrite,
+        );
 
         // Periodically save progress (get the current resumable from the map)
         const currentResumable = this.activeDownloads.get(key);
@@ -211,16 +253,19 @@ class PersistentDownloadManager {
     }
 
     // Store metadata
-    const metadata: DownloadMetadata = (isResuming && persisted?.metadata) ? persisted.metadata : {
-      modelId,
-      modelName,
-      url,
-      destination: effectiveDestination,
-      bytesWritten: 0,
-      bytesTotal: 0,
-      startedAt: Date.now(),
-      fileType,
-    };
+    const metadata: DownloadMetadata =
+      isResuming && persisted?.metadata
+        ? persisted.metadata
+        : {
+            modelId,
+            modelName,
+            url,
+            destination: effectiveDestination,
+            bytesWritten: 0,
+            bytesTotal: 0,
+            startedAt: Date.now(),
+            fileType,
+          };
 
     this.downloadMetadata.set(key, metadata);
     this.activeDownloads.set(key, downloadResumable!);
@@ -237,7 +282,7 @@ class PersistentDownloadManager {
   async executeDownload(
     downloadResumable: FileSystem.DownloadResumable,
     modelId: string,
-    fileType: DownloadMetadata['fileType'],
+    fileType: DownloadMetadata["fileType"],
     finalDestination: string,
   ): Promise<string> {
     const key = this.getDownloadKey(modelId, fileType);
@@ -250,12 +295,16 @@ class PersistentDownloadManager {
       if (isRangeResume) {
         // For HTTP Range resume, we use downloadAsync (not resumeAsync)
         // The Range header was already set in the options
-        console.log(`[PersistentDownloadManager] Calling downloadAsync with Range header for ${key}`);
+        console.log(
+          `[PersistentDownloadManager] Calling downloadAsync with Range header for ${key}`,
+        );
         result = await downloadResumable.downloadAsync();
 
         // Range requests return 206 Partial Content on success
         if (!result || (result.status !== 200 && result.status !== 206)) {
-          throw new Error(`Download failed with status ${result?.status || 'unknown'}`);
+          throw new Error(
+            `Download failed with status ${result?.status || "unknown"}`,
+          );
         }
 
         // For Range resume, the new content was downloaded to a temp file
@@ -267,36 +316,53 @@ class PersistentDownloadManager {
         if (partialFilePath && existingBytes > 0) {
           // The Range request downloaded remaining bytes to result.uri
           // We need to combine: existing partial file + new chunk -> final file
-          console.log(`[PersistentDownloadManager] Combining partial file (${existingBytes} bytes) with new chunk at ${result.uri}`);
+          console.log(
+            `[PersistentDownloadManager] Combining partial file (${existingBytes} bytes) with new chunk at ${result.uri}`,
+          );
 
           // Use chunked copy to handle large files without memory issues
-          await this.concatenateFiles(partialFilePath, result.uri, finalDestination);
+          await this.concatenateFiles(
+            partialFilePath,
+            result.uri,
+            finalDestination,
+          );
 
           // Clean up temp files
           await FileSystem.deleteAsync(partialFilePath, { idempotent: true });
           await FileSystem.deleteAsync(result.uri, { idempotent: true });
         } else {
           // No existing bytes, just move the downloaded file
-          await FileSystem.moveAsync({ from: result.uri, to: finalDestination });
+          await FileSystem.moveAsync({
+            from: result.uri,
+            to: finalDestination,
+          });
         }
       } else if (isResuming) {
         // Use resumeAsync for proper pause/resume (has resumeData)
-        console.log(`[PersistentDownloadManager] Calling resumeAsync for ${key}`);
+        console.log(
+          `[PersistentDownloadManager] Calling resumeAsync for ${key}`,
+        );
         result = await downloadResumable.resumeAsync();
 
         if (!result || result.status !== 200) {
-          throw new Error(`Download failed with status ${result?.status || 'unknown'}`);
+          throw new Error(
+            `Download failed with status ${result?.status || "unknown"}`,
+          );
         }
 
         // Move from temp location to final destination
         await FileSystem.moveAsync({ from: result.uri, to: finalDestination });
       } else {
         // Fresh download
-        console.log(`[PersistentDownloadManager] Calling downloadAsync for ${key}`);
+        console.log(
+          `[PersistentDownloadManager] Calling downloadAsync for ${key}`,
+        );
         result = await downloadResumable.downloadAsync();
 
         if (!result || result.status !== 200) {
-          throw new Error(`Download failed with status ${result?.status || 'unknown'}`);
+          throw new Error(
+            `Download failed with status ${result?.status || "unknown"}`,
+          );
         }
 
         // Move from temp location to final destination
@@ -320,11 +386,14 @@ class PersistentDownloadManager {
   /**
    * Pause a download (saves state for later resume)
    */
-  async pauseDownload(modelId: string, fileType: DownloadMetadata['fileType']): Promise<void> {
+  async pauseDownload(
+    modelId: string,
+    fileType: DownloadMetadata["fileType"],
+  ): Promise<void> {
     const key = this.getDownloadKey(modelId, fileType);
     const downloadResumable = this.activeDownloads.get(key);
     const metadata = this.downloadMetadata.get(key);
-    
+
     if (downloadResumable && metadata) {
       await downloadResumable.pauseAsync();
       await this.saveDownloadState(key, downloadResumable, metadata);
@@ -334,12 +403,15 @@ class PersistentDownloadManager {
   /**
    * Complete a download and clean up persisted state
    */
-  async completeDownload(modelId: string, fileType: DownloadMetadata['fileType']): Promise<void> {
+  async completeDownload(
+    modelId: string,
+    fileType: DownloadMetadata["fileType"],
+  ): Promise<void> {
     const key = this.getDownloadKey(modelId, fileType);
-    
+
     this.activeDownloads.delete(key);
     this.downloadMetadata.delete(key);
-    
+
     // Remove from persisted storage
     const allDownloads = await this.loadAllPersistedDownloads();
     delete allDownloads[key];
@@ -349,31 +421,42 @@ class PersistentDownloadManager {
   /**
    * Cancel a download and clean up files
    */
-  async cancelDownload(modelId: string, fileType: DownloadMetadata['fileType']): Promise<void> {
+  async cancelDownload(
+    modelId: string,
+    fileType: DownloadMetadata["fileType"],
+  ): Promise<void> {
     const key = this.getDownloadKey(modelId, fileType);
     const downloadResumable = this.activeDownloads.get(key);
     const metadata = this.downloadMetadata.get(key);
-    
+
     if (downloadResumable) {
       await downloadResumable.pauseAsync();
     }
-    
+
     // Delete partial download file
     if (metadata) {
       try {
-        await FileSystem.deleteAsync(metadata.destination, { idempotent: true });
+        await FileSystem.deleteAsync(metadata.destination, {
+          idempotent: true,
+        });
       } catch (e) {
-        console.warn(`[PersistentDownloadManager] Failed to delete partial download:`, e);
+        console.warn(
+          `[PersistentDownloadManager] Failed to delete partial download:`,
+          e,
+        );
       }
     }
-    
+
     await this.completeDownload(modelId, fileType);
   }
 
   /**
    * Get active download for a model
    */
-  getActiveDownload(modelId: string, fileType: DownloadMetadata['fileType']): FileSystem.DownloadResumable | undefined {
+  getActiveDownload(
+    modelId: string,
+    fileType: DownloadMetadata["fileType"],
+  ): FileSystem.DownloadResumable | undefined {
     const key = this.getDownloadKey(modelId, fileType);
     return this.activeDownloads.get(key);
   }
@@ -381,7 +464,10 @@ class PersistentDownloadManager {
   /**
    * Get metadata for a download
    */
-  getDownloadMetadata(modelId: string, fileType: DownloadMetadata['fileType']): DownloadMetadata | undefined {
+  getDownloadMetadata(
+    modelId: string,
+    fileType: DownloadMetadata["fileType"],
+  ): DownloadMetadata | undefined {
     const key = this.getDownloadKey(modelId, fileType);
     return this.downloadMetadata.get(key);
   }
@@ -389,7 +475,10 @@ class PersistentDownloadManager {
   /**
    * Check if a download is in progress
    */
-  isDownloading(modelId: string, fileType: DownloadMetadata['fileType']): boolean {
+  isDownloading(
+    modelId: string,
+    fileType: DownloadMetadata["fileType"],
+  ): boolean {
     const key = this.getDownloadKey(modelId, fileType);
     return this.activeDownloads.has(key);
   }
@@ -397,12 +486,17 @@ class PersistentDownloadManager {
   /**
    * Get all persisted downloads from storage
    */
-  private async loadAllPersistedDownloads(): Promise<Record<string, PersistedDownload>> {
+  private async loadAllPersistedDownloads(): Promise<
+    Record<string, PersistedDownload>
+  > {
     try {
       const stored = await SecureStore.getItemAsync(DOWNLOADS_KEY);
       return stored ? JSON.parse(stored) : {};
     } catch (e) {
-      console.error('[PersistentDownloadManager] Failed to load persisted downloads:', e);
+      console.error(
+        "[PersistentDownloadManager] Failed to load persisted downloads:",
+        e,
+      );
       return {};
     }
   }
@@ -410,7 +504,9 @@ class PersistentDownloadManager {
   /**
    * Load a specific persisted download
    */
-  private async loadPersistedDownload(key: string): Promise<PersistedDownload | null> {
+  private async loadPersistedDownload(
+    key: string,
+  ): Promise<PersistedDownload | null> {
     const allDownloads = await this.loadAllPersistedDownloads();
     return allDownloads[key] || null;
   }
@@ -426,15 +522,21 @@ class PersistentDownloadManager {
     try {
       const resumeData = downloadResumable.savable();
       const allDownloads = await this.loadAllPersistedDownloads();
-      
+
       allDownloads[key] = {
         metadata,
         resumeData: JSON.stringify(resumeData),
       };
-      
-      await SecureStore.setItemAsync(DOWNLOADS_KEY, JSON.stringify(allDownloads));
+
+      await SecureStore.setItemAsync(
+        DOWNLOADS_KEY,
+        JSON.stringify(allDownloads),
+      );
     } catch (e) {
-      console.error('[PersistentDownloadManager] Failed to save download state:', e);
+      console.error(
+        "[PersistentDownloadManager] Failed to save download state:",
+        e,
+      );
     }
   }
 
@@ -442,28 +544,38 @@ class PersistentDownloadManager {
    * Resume all persisted downloads on app startup
    */
   async resumeAllDownloads(
-    _onProgress?: (modelId: string, fileType: DownloadMetadata['fileType'], progress: number) => void,
+    _onProgress?: (
+      modelId: string,
+      fileType: DownloadMetadata["fileType"],
+      progress: number,
+    ) => void,
   ): Promise<void> {
     const allDownloads = await this.loadAllPersistedDownloads();
-    
+
     for (const [key, persisted] of Object.entries(allDownloads)) {
       const { metadata } = persisted;
-      
-      console.log(`[PersistentDownloadManager] Found persisted download: ${key}`);
-      
+
+      console.log(
+        `[PersistentDownloadManager] Found persisted download: ${key}`,
+      );
+
       // Check if the partial file still exists
       const fileInfo = await FileSystem.getInfoAsync(metadata.destination);
       if (!fileInfo.exists) {
-        console.log(`[PersistentDownloadManager] Partial file missing for ${key}, cleaning up`);
+        console.log(
+          `[PersistentDownloadManager] Partial file missing for ${key}, cleaning up`,
+        );
         await this.completeDownload(metadata.modelId, metadata.fileType);
         continue;
       }
-      
+
       // Don't auto-resume - just load the metadata so it's available
       // The app can decide whether to resume downloads
       this.downloadMetadata.set(key, metadata);
-      
-      console.log(`[PersistentDownloadManager] Download ${key} ready to resume`);
+
+      console.log(
+        `[PersistentDownloadManager] Download ${key} ready to resume`,
+      );
     }
   }
 
@@ -472,37 +584,49 @@ class PersistentDownloadManager {
    */
   async getPendingDownloads(): Promise<DownloadMetadata[]> {
     const allDownloads = await this.loadAllPersistedDownloads();
-    return Object.values(allDownloads).map(d => d.metadata);
+    return Object.values(allDownloads).map((d) => d.metadata);
   }
 
   /**
    * Clean up old/stale downloads
    */
-  async cleanupOldDownloads(maxAgeMs: number = 7 * 24 * 60 * 60 * 1000): Promise<void> {
+  async cleanupOldDownloads(
+    maxAgeMs: number = 7 * 24 * 60 * 60 * 1000,
+  ): Promise<void> {
     const now = Date.now();
     const allDownloads = await this.loadAllPersistedDownloads();
     const toDelete: string[] = [];
-    
+
     for (const [key, persisted] of Object.entries(allDownloads)) {
       const age = now - persisted.metadata.startedAt;
       if (age > maxAgeMs) {
-        console.log(`[PersistentDownloadManager] Cleaning up stale download: ${key}`);
+        console.log(
+          `[PersistentDownloadManager] Cleaning up stale download: ${key}`,
+        );
         toDelete.push(key);
-        
+
         // Delete partial file
         try {
-          await FileSystem.deleteAsync(persisted.metadata.destination, { idempotent: true });
+          await FileSystem.deleteAsync(persisted.metadata.destination, {
+            idempotent: true,
+          });
         } catch (e) {
-          console.warn(`[PersistentDownloadManager] Failed to delete stale file:`, e);
+          console.warn(
+            `[PersistentDownloadManager] Failed to delete stale file:`,
+            e,
+          );
         }
       }
     }
-    
+
     if (toDelete.length > 0) {
       for (const key of toDelete) {
         delete allDownloads[key];
       }
-      await SecureStore.setItemAsync(DOWNLOADS_KEY, JSON.stringify(allDownloads));
+      await SecureStore.setItemAsync(
+        DOWNLOADS_KEY,
+        JSON.stringify(allDownloads),
+      );
     }
   }
 
@@ -554,7 +678,9 @@ class PersistentDownloadManager {
           destHandle.writeBytes(chunk);
         }
 
-        console.log(`[PersistentDownloadManager] Successfully concatenated files: ${file1Size} + ${file2Size} bytes`);
+        console.log(
+          `[PersistentDownloadManager] Successfully concatenated files: ${file1Size} + ${file2Size} bytes`,
+        );
       } finally {
         // Always close handles
         handle1.close();
@@ -562,7 +688,10 @@ class PersistentDownloadManager {
         destHandle.close();
       }
     } catch (error) {
-      console.error('[PersistentDownloadManager] Failed to concatenate files:', error);
+      console.error(
+        "[PersistentDownloadManager] Failed to concatenate files:",
+        error,
+      );
       throw error;
     }
   }
@@ -570,4 +699,3 @@ class PersistentDownloadManager {
 
 // Global singleton
 export const persistentDownloadManager = new PersistentDownloadManager();
-

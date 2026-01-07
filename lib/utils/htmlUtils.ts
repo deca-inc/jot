@@ -89,7 +89,7 @@ export function convertBlocksToHtml(blocks: Block[]): Block[] {
  * Note: Quill puts each checklist item in its own <ul> with data-checked attribute
  */
 export function convertEnrichedChecklistToQuill(html: string): string {
-  if (!html || !html.includes("<checklist>") && !html.includes("<cli")) {
+  if (!html || (!html.includes("<checklist>") && !html.includes("<cli"))) {
     return html;
   }
 

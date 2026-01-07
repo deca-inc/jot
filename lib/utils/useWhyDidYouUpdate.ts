@@ -5,7 +5,10 @@ import { useEffect, useRef } from "react";
  * Debug hook to log which props/dependencies changed between renders
  * Usage: useWhyDidYouUpdate('ComponentName', { prop1, prop2, etc })
  */
-export function useWhyDidYouUpdate(name: string, props: Record<string, unknown>) {
+export function useWhyDidYouUpdate(
+  name: string,
+  props: Record<string, unknown>,
+) {
   const previousProps = useRef<Record<string, unknown> | null>(null);
 
   useEffect(() => {

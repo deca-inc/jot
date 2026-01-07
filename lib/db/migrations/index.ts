@@ -28,6 +28,15 @@ registerMigration(
 
 // Add new migrations here:
 // registerMigration("YYYY_MM_DD_HH:MM:SS_migration_name.ts", async () => await import("./YYYY_MM_DD_HH:MM:SS_migration_name"));
-registerMigration("2025_12_30_06_41_26_add_countdown_pinned_archive.ts", async () => add_countdown_pinned_archive);
-registerMigration("2025_12_30_07_00_00_add_countdown_type.ts", async () => add_countdown_type);
-registerMigration("2025_01_04_12_00_00_add_parent_id.ts", async () => add_parent_id);
+registerMigration(
+  "2025_12_30_06_41_26_add_countdown_pinned_archive.ts",
+  async () => add_countdown_pinned_archive,
+);
+registerMigration(
+  "2025_12_30_07_00_00_add_countdown_type.ts",
+  async () => add_countdown_type,
+);
+registerMigration(
+  "2025_01_04_12_00_00_add_parent_id.ts",
+  async () => add_parent_id,
+);

@@ -185,9 +185,10 @@ function ModelCard({
               style={[
                 styles.modelName,
                 {
-                  color: isNotRecommended && !isDownloaded
-                    ? seasonalTheme.textSecondary
-                    : seasonalTheme.textPrimary,
+                  color:
+                    isNotRecommended && !isDownloaded
+                      ? seasonalTheme.textSecondary
+                      : seasonalTheme.textPrimary,
                   fontWeight: isSelected ? "600" : "400",
                 },
               ]}
@@ -204,9 +205,20 @@ function ModelCard({
               {model.description}
             </Text>
             {isNotRecommended && !isDownloaded && (
-              <View style={[styles.warningBadge, { backgroundColor: `${theme.colors.warning}20` }]}>
-                <Ionicons name="warning" size={10} color={theme.colors.warning} />
-                <Text style={[styles.warningText, { color: theme.colors.warning }]}>
+              <View
+                style={[
+                  styles.warningBadge,
+                  { backgroundColor: `${theme.colors.warning}20` },
+                ]}
+              >
+                <Ionicons
+                  name="warning"
+                  size={10}
+                  color={theme.colors.warning}
+                />
+                <Text
+                  style={[styles.warningText, { color: theme.colors.warning }]}
+                >
                   May crash on this device
                 </Text>
               </View>
@@ -502,7 +514,8 @@ export function ModelManagement() {
             variant="caption"
             style={[styles.description, { color: seasonalTheme.textSecondary }]}
           >
-            Your device: {deviceTier}-end. Models marked "May crash" are not recommended.
+            Your device: {deviceTier}-end. Models marked "May crash" are not
+            recommended.
           </Text>
 
           <View style={styles.modelsList}>

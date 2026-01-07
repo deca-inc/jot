@@ -18,4 +18,3 @@ export const borderWidth = {
   medium: 2,
   thick: 3,
 } as const;
-

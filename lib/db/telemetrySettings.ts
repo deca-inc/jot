@@ -62,7 +62,7 @@ export function useTelemetrySettings(): {
     getSettings: () => repo.get(),
     setSettings: (settings: TelemetrySettings) => repo.set(settings),
     isTelemetryEnabled: () => repo.isTelemetryEnabled(),
-    setTelemetryEnabled: (enabled: boolean) => repo.setTelemetryEnabled(enabled),
+    setTelemetryEnabled: (enabled: boolean) =>
+      repo.setTelemetryEnabled(enabled),
   };
 }
-

@@ -1,9 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import {
-  ViewProps,
-  Animated,
-  AccessibilityInfo,
-} from "react-native";
+import { ViewProps, Animated, AccessibilityInfo } from "react-native";
 import {
   spacingPatterns,
   borderRadius,

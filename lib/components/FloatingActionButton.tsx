@@ -111,7 +111,10 @@ export function FloatingActionButton({
 
   const shadowOpacity = glowAnimation.interpolate({
     inputRange: [0, 1],
-    outputRange: [seasonalTheme.isDark ? 0.4 : 0.15, seasonalTheme.isDark ? 0.6 : 0.25],
+    outputRange: [
+      seasonalTheme.isDark ? 0.4 : 0.15,
+      seasonalTheme.isDark ? 0.6 : 0.25,
+    ],
   });
 
   const shadowRadius = glowAnimation.interpolate({

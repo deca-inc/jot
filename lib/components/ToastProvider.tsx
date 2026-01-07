@@ -20,11 +20,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<ToastType>("success");
 
-  const showToast = useCallback((message: string, type: ToastType = "success") => {
-    setToastMessage(message);
-    setToastType(type);
-    setToastVisible(true);
-  }, []);
+  const showToast = useCallback(
+    (message: string, type: ToastType = "success") => {
+      setToastMessage(message);
+      setToastType(type);
+      setToastVisible(true);
+    },
+    [],
+  );
 
   return (
     <ToastContext.Provider value={{ showToast }}>
@@ -38,4 +41,3 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     </ToastContext.Provider>
   );
 }
-

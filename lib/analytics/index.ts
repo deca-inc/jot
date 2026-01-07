@@ -1,6 +1,6 @@
 /**
  * Analytics module for the Journal app.
- * 
+ *
  * Privacy-first telemetry:
  * - Only enabled when user opts in
  * - Never collects journal entries, AI conversations, or personal content
@@ -14,4 +14,3 @@ export {
   useTrackEvent,
   sanitizeProperties,
 } from "./hooks";
-

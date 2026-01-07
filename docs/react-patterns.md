@@ -27,6 +27,7 @@ const handleUserAction = () => {
 ```
 
 **When useEffect is acceptable**:
+
 - Subscribing to external systems (WebSocket, DOM events)
 - Cleanup operations on unmount
 - Syncing with browser APIs (window size, scroll position)
@@ -53,6 +54,7 @@ if (!hasTitle) {
 ```
 
 **When refs are acceptable**:
+
 - DOM manipulation (focusing inputs, scrolling)
 - Storing timeout/interval IDs for cleanup
 - Storing stable callbacks that don't need to trigger re-renders
@@ -124,18 +126,19 @@ async function createConversation(
 ): Promise<number> {
   // 1. Create entry
   const entry = await createEntry(...);
-  
+
   // 2. Trigger navigation immediately
   context.onSave?.(entry.id);
-  
+
   // 3. Queue background work (don't await)
   queueBackgroundWork(entry.id);
-  
+
   return entry.id;
 }
 ```
 
 **Benefits**:
+
 - Clear, testable workflow
 - Easy to understand sequence
 - No hidden dependencies
@@ -161,15 +164,15 @@ User Action → Event Handler → Action Function
 export function AIChatComposer({ entryId }: Props) {
   // 1. Data from React Query (single source of truth)
   const { data: entry } = useEntry(entryId);
-  
+
   // 2. Derive display state
   const displayedBlocks = entry?.blocks ?? [];
-  
+
   // 3. Event handlers call actions
   const handleSendMessage = async () => {
     await sendMessageWithResponse(message, entryId, ...);
   };
-  
+
   // 4. Render derived state
   return <FlatList data={displayedBlocks} />;
 }
@@ -196,7 +199,7 @@ if (shouldQueueWork && !hasQueuedWork.current) {
 
 ```typescript
 // Derive from data, not refs
-const isGenerating = 
+const isGenerating =
   displayedBlocks.length > 0 &&
   displayedBlocks[displayedBlocks.length - 1].content === "" &&
   isLLMLoading;
@@ -208,13 +211,13 @@ const isGenerating =
 // Return ID immediately, queue work in background
 async function createConversation() {
   const entry = await createEntry();
-  
+
   // Navigate immediately
   navigate(entry.id);
-  
+
   // Queue background work (don't await)
   queueBackgroundGeneration(entry.id);
-  
+
   return entry.id;
 }
 ```
@@ -222,6 +225,7 @@ async function createConversation() {
 ## Anti-Patterns to Avoid
 
 ### ❌ useEffect for Orchestration
+
 ```typescript
 useEffect(() => {
   if (condition1) {
@@ -237,12 +241,14 @@ useEffect(() => {
 ```
 
 ### ❌ Refs for State
+
 ```typescript
 const valueRef = useRef(0);
 valueRef.current = newValue; // Not triggering re-renders!
 ```
 
 ### ❌ Duplicate Sources of Truth
+
 ```typescript
 const [localData, setLocalData] = useState([]);
 const { data: dbData } = useQuery(...);
@@ -250,6 +256,7 @@ const { data: dbData } = useQuery(...);
 ```
 
 ### ❌ Reactive Chains
+
 ```typescript
 useEffect(() => {
   if (a) setB(true);
@@ -279,6 +286,7 @@ When refactoring components with many useEffects:
 ### Memoization Rules
 
 **When to memoize**:
+
 1. **Context values** - Always memoize with `useMemo`
 2. **Callbacks passed as props** - Always wrap with `useCallback`
 3. **Expensive computations** - Use `useMemo` for derived data
@@ -293,7 +301,7 @@ export function ThemeProvider({ children }) {
     theme: getTheme(),
     settings: getSettings(),
   };
-  
+
   return <Context.Provider value={contextValue}>{children}</Context.Provider>;
 }
 
@@ -301,12 +309,12 @@ export function ThemeProvider({ children }) {
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(null);
   const [settings, setSettings] = useState(null);
-  
+
   const contextValue = useMemo(
     () => ({ theme, settings }),
     [theme, settings]
   );
-  
+
   return <Context.Provider value={contextValue}>{children}</Context.Provider>;
 }
 ```
@@ -317,8 +325,8 @@ export function ThemeProvider({ children }) {
 // ❌ BAD: Creates new theme object every call
 export function getSeasonalTheme(season: Season, time: TimeOfDay) {
   return {
-    gradient: { start: '#...', middle: '#...', end: '#...' },
-    textPrimary: '#...',
+    gradient: { start: "#...", middle: "#...", end: "#..." },
+    textPrimary: "#...",
     // ... many more properties
   };
 }
@@ -330,12 +338,12 @@ export function getSeasonalTheme(season: Season, time: TimeOfDay) {
   const cacheKey = `${season}-${time}`;
   const cached = themeCache.get(cacheKey);
   if (cached) return cached;
-  
+
   const theme = {
-    gradient: { start: '#...', middle: '#...', end: '#...' },
-    textPrimary: '#...',
+    gradient: { start: "#...", middle: "#...", end: "#..." },
+    textPrimary: "#...",
   };
-  
+
   themeCache.set(cacheKey, theme);
   return theme;
 }
@@ -352,7 +360,7 @@ const handleSubmit = useCallback(
   async (text: string) => {
     await createEntry.mutateAsync({ text });
   },
-  [createEntry] // Recreates every render!
+  [createEntry], // Recreates every render!
 );
 
 // ✅ GOOD: Use ref to access mutation
@@ -364,7 +372,7 @@ const handleSubmit = useCallback(
   async (text: string) => {
     await createEntryRef.current.mutateAsync({ text });
   },
-  [] // Stable!
+  [], // Stable!
 );
 ```
 
@@ -407,7 +415,7 @@ Animations that run continuously cause re-renders:
 // ❌ BAD: Animated blob pulsing every frame
 useEffect(() => {
   Animated.loop(
-    Animated.timing(animation, { toValue: 1, duration: 4000 })
+    Animated.timing(animation, { toValue: 1, duration: 4000 }),
   ).start();
 }, []);
 
@@ -467,4 +475,3 @@ useWhyDidYouUpdate("MyComponent", {
 - **Update state conditionally**: Only when value actually changes
 
 When in doubt, ask: "Can I derive this from data?" and "Can I handle this with an event?" The answer is usually yes.
-

@@ -7,7 +7,10 @@ import {
   ScrollView,
   TouchableOpacity,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { ALL_MODELS } from "../ai/modelConfig";
 import { ensureModelPresent } from "../ai/modelManager";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
@@ -16,7 +19,11 @@ import { useModelSettings } from "../db/modelSettings";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
-import { getRecommendedModel, getCompatibleModels, logModelCompatibilityDebug } from "../utils/deviceInfo";
+import {
+  getRecommendedModel,
+  getCompatibleModels,
+  logModelCompatibilityDebug,
+} from "../utils/deviceInfo";
 
 interface OnboardingModelSelectionScreenProps {
   onContinue: () => void;
@@ -321,7 +328,10 @@ export function OnboardingModelSelectionScreen({
         >
           <Text
             variant="body"
-            style={[styles.skipButtonText, { color: seasonalTheme.textSecondary }]}
+            style={[
+              styles.skipButtonText,
+              { color: seasonalTheme.textSecondary },
+            ]}
           >
             Skip for now
           </Text>

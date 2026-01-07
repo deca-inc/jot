@@ -161,9 +161,7 @@ export function CountdownComposer({
         setRewardsNote(data.rewardsNote || "");
         setConfettiEnabled(data.confettiEnabled ?? false);
         setNotificationEnabled(data.notificationEnabled ?? false);
-        setShowAdvanced(
-          !!(data.rewardsNote || data.confettiEnabled === true),
-        );
+        setShowAdvanced(!!(data.rewardsNote || data.confettiEnabled === true));
         // Load recurrence data
         if (data.checkinRecurrence) {
           setRecurrenceType(data.checkinRecurrence.type);

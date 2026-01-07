@@ -107,4 +107,3 @@ export async function deleteEntryWithConfirmation(
 ): Promise<void> {
   return deleteEntry(entryId, context, { skipConfirmation: false });
 }
-

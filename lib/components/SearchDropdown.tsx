@@ -237,8 +237,8 @@ export function SearchDropdown({
                           type === "all"
                             ? "apps-outline"
                             : type === "journal"
-                            ? "book-outline"
-                            : "chatbubbles-outline"
+                              ? "book-outline"
+                              : "chatbubbles-outline"
                         }
                         size={14}
                         color={seasonalTheme.textPrimary}
@@ -255,8 +255,8 @@ export function SearchDropdown({
                         {type === "all"
                           ? "All"
                           : type === "journal"
-                          ? "Journal"
-                          : "AI Chat"}
+                            ? "Journal"
+                            : "AI Chat"}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -314,10 +314,10 @@ export function SearchDropdown({
                     {date === "all"
                       ? "All Time"
                       : date === "today"
-                      ? "Today"
-                      : date === "week"
-                      ? "This Week"
-                      : "This Month"}
+                        ? "Today"
+                        : date === "week"
+                          ? "This Week"
+                          : "This Month"}
                   </Text>
                 </TouchableOpacity>
               ))}

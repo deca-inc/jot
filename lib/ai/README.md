@@ -54,10 +54,12 @@ The implementation is split into layers:
 ### Background Downloads
 
 Downloads use native OS capabilities:
+
 - **iOS**: Background transfer service (continues when app closed)
 - **Android**: Uses persistent storage (`/files/` not `/cache/`)
 
 **Important**: Requires rebuild after configuration changes:
+
 ```bash
 pnpm android  # or pnpm ios
 ```
@@ -67,6 +69,7 @@ pnpm android  # or pnpm ios
 ⚠️ **Critical**: Models MUST be saved to persistent storage, not cache directory.
 
 **Troubleshooting "disappearing models"**:
+
 1. Rebuild app after updating (`app.json` permissions changed)
 2. Check console logs - should see "persistent storage" message
 3. Disable battery optimization: Settings → Apps → Jot → Battery → Don't optimize
@@ -122,9 +125,7 @@ function MyComponent() {
   const llm = useLLMContext();
 
   const handleGenerate = async () => {
-    const messages = [
-      { role: "user", content: "Hello!" }
-    ];
+    const messages = [{ role: "user", content: "Hello!" }];
 
     const response = await llm.sendMessage(messages);
     console.log("Full response:", response);

@@ -1,8 +1,5 @@
 import React, { useCallback, useEffect, useRef, useMemo } from "react";
-import {
-  View,
-  StyleSheet,
-} from "react-native";
+import { View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
 import { FloatingComposerHeader, QuillRichEditor } from "../components";
@@ -10,7 +7,11 @@ import { useEntry, useUpdateEntry } from "../db/useEntries";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { debounce } from "../utils/debounce";
-import { convertBlockToHtml, convertEnrichedHtmlToQuill, isHtmlContentEmpty } from "../utils/htmlUtils";
+import {
+  convertBlockToHtml,
+  convertEnrichedHtmlToQuill,
+  isHtmlContentEmpty,
+} from "../utils/htmlUtils";
 import { saveJournalContent } from "./journalActions";
 import type { QuillRichEditorRef } from "../components";
 
@@ -87,7 +88,10 @@ export function JournalComposer({
       // Otherwise, convert markdown block to HTML
       const htmlBlockConverted = convertBlockToHtml(markdownBlock);
       lastLoadTimeRef.current = Date.now();
-      return ("content" in htmlBlockConverted ? htmlBlockConverted.content : null) || "<p></p>";
+      return (
+        ("content" in htmlBlockConverted ? htmlBlockConverted.content : null) ||
+        "<p></p>"
+      );
     }
 
     // Empty or no content

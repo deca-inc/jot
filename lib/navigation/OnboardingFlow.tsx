@@ -1,6 +1,10 @@
 import React, { useState } from "react";
 import { View, StyleSheet } from "react-native";
-import { WelcomeScreen, OnboardingModelSelectionScreen, TelemetryConsentScreen } from "../screens";
+import {
+  WelcomeScreen,
+  OnboardingModelSelectionScreen,
+  TelemetryConsentScreen,
+} from "../screens";
 
 interface OnboardingFlowProps {
   onComplete: () => void;
@@ -34,9 +38,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         />
       )}
       {currentStep === "telemetry-consent" && (
-        <TelemetryConsentScreen
-          onContinue={handleTelemetryConsentContinue}
-        />
+        <TelemetryConsentScreen onContinue={handleTelemetryConsentContinue} />
       )}
     </View>
   );
@@ -47,4 +49,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-

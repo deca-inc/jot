@@ -78,11 +78,13 @@ export function FloatingComposerHeader({
   return (
     <>
       {/* Floating Back Button */}
-      <View style={[
-        styles.floatingButton,
-        styles.backButtonContainer,
-        needsBackgroundFallback && styles.fallbackShadow,
-      ]}>
+      <View
+        style={[
+          styles.floatingButton,
+          styles.backButtonContainer,
+          needsBackgroundFallback && styles.fallbackShadow,
+        ]}
+      >
         <ButtonWrapper
           {...(glassAvailable && {
             glassEffectStyle: "regular",
@@ -111,11 +113,13 @@ export function FloatingComposerHeader({
 
       {/* Floating Settings Button */}
       {entryId && (
-        <View style={[
-          styles.floatingButton,
-          styles.settingsButtonContainer,
-          needsBackgroundFallback && styles.fallbackShadow,
-        ]}>
+        <View
+          style={[
+            styles.floatingButton,
+            styles.settingsButtonContainer,
+            needsBackgroundFallback && styles.fallbackShadow,
+          ]}
+        >
           <ButtonWrapper
             {...(glassAvailable && {
               glassEffectStyle: "regular",

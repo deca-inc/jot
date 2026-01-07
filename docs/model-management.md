@@ -22,16 +22,17 @@ Defines all available models with their configuration:
 
 ```typescript
 export const ALL_MODELS: LlmModelConfig[] = [
-  Llama32_1B_Instruct,      // ✅ Available
-  GLM4_9B_Chat,             // 🚧 Coming soon
-  GLMEdge_V_5B,             // 🚧 Coming soon
-  DeepSeekR1_Qwen3_8B,      // 🚧 Coming soon
+  Llama32_1B_Instruct, // ✅ Available
+  GLM4_9B_Chat, // 🚧 Coming soon
+  GLMEdge_V_5B, // 🚧 Coming soon
+  DeepSeekR1_Qwen3_8B, // 🚧 Coming soon
   DeepSeekR1_Distill_Qwen_14B, // 🚧 Coming soon
-  DeepSeekVL2_Tiny,         // 🚧 Coming soon
+  DeepSeekVL2_Tiny, // 🚧 Coming soon
 ];
 ```
 
 Each model includes:
+
 - **modelId**: Unique identifier
 - **displayName**: Human-readable name
 - **description**: What the model is good for
@@ -64,6 +65,7 @@ interface ModelDownloadInfo {
 ```
 
 Repository methods:
+
 - `getSelectedModelId()` - Get active model
 - `setSelectedModelId(id)` - Set active model
 - `addDownloadedModel(info)` - Record download
@@ -86,6 +88,7 @@ getModelSize(config: LlmModelConfig): Promise<number>
 ```
 
 Storage structure:
+
 ```
 documents/models/
 ├── llama-3.2-1b-instruct/
@@ -112,6 +115,7 @@ await reloadModel(newModelConfig);
 ```
 
 The provider handles:
+
 - Model initialization on app startup
 - Verification that downloaded models still exist on disk
 - Cleanup of stale download state
@@ -124,6 +128,7 @@ Note: Actual LLM loading and generation is handled by `LLMProvider`.
 User interface for model management:
 
 **Features:**
+
 - List all available models
 - Show download status and size
 - Display model metadata (size, quantization)
@@ -134,6 +139,7 @@ User interface for model management:
 - Loading states and error handling
 
 **Model Card UI:**
+
 - Title with SELECTED badge
 - Metadata badges (size, quantization, availability)
 - Description text
@@ -190,12 +196,12 @@ pnpm download:models --all
 
 ## Model States
 
-| State | Downloaded | Selected | Actions Available |
-|-------|-----------|----------|-------------------|
-| **Not Downloaded (Available)** | ❌ | ❌ | Download, View Details |
-| **Not Downloaded (Unavailable)** | ❌ | ❌ | View Details |
-| **Downloaded** | ✅ | ❌ | Select, Remove, View Details |
-| **Selected** | ✅ | ✅ | Remove (disabled), View Details |
+| State                            | Downloaded | Selected | Actions Available               |
+| -------------------------------- | ---------- | -------- | ------------------------------- |
+| **Not Downloaded (Available)**   | ❌         | ❌       | Download, View Details          |
+| **Not Downloaded (Unavailable)** | ❌         | ❌       | View Details                    |
+| **Downloaded**                   | ✅         | ❌       | Select, Remove, View Details    |
+| **Selected**                     | ✅         | ✅       | Remove (disabled), View Details |
 
 ## Model Registry
 
@@ -204,6 +210,7 @@ All models are from [Software Mansion's React Native ExecuTorch repositories](ht
 ### Llama 3.2 Models (SpinQuant Quantization)
 
 #### Llama 3.2 1B Instruct
+
 - **Model ID**: `llama-3.2-1b-instruct`
 - **Size**: 1B parameters
 - **Quantization**: SpinQuant
@@ -213,6 +220,7 @@ All models are from [Software Mansion's React Native ExecuTorch repositories](ht
 - **Source**: [software-mansion/react-native-executorch-llama-3.2](https://huggingface.co/software-mansion/react-native-executorch-llama-3.2)
 
 #### Llama 3.2 3B Instruct
+
 - **Model ID**: `llama-3.2-3b-instruct`
 - **Size**: 3B parameters
 - **Quantization**: SpinQuant
@@ -224,6 +232,7 @@ All models are from [Software Mansion's React Native ExecuTorch repositories](ht
 ### Qwen 3 Models (8-bit Quantization)
 
 #### Qwen 3 0.6B
+
 - **Model ID**: `qwen-3-0.6b`
 - **Size**: 0.6B parameters
 - **Quantization**: 8-bit (8da4w)
@@ -233,6 +242,7 @@ All models are from [Software Mansion's React Native ExecuTorch repositories](ht
 - **Source**: [software-mansion/react-native-executorch-qwen-3](https://huggingface.co/software-mansion/react-native-executorch-qwen-3)
 
 #### Qwen 3 1.7B
+
 - **Model ID**: `qwen-3-1.7b`
 - **Size**: 1.7B parameters
 - **Quantization**: 8-bit (8da4w)
@@ -242,6 +252,7 @@ All models are from [Software Mansion's React Native ExecuTorch repositories](ht
 - **Source**: [software-mansion/react-native-executorch-qwen-3](https://huggingface.co/software-mansion/react-native-executorch-qwen-3)
 
 #### Qwen 3 4B
+
 - **Model ID**: `qwen-3-4b`
 - **Size**: 4B parameters
 - **Quantization**: 8-bit (8da4w)
@@ -268,6 +279,7 @@ type ModelSource =
 ### Storage Locations
 
 **Development (assets/):**
+
 ```
 assets/models/{model-id}/
 ├── {model}.pte
@@ -276,6 +288,7 @@ assets/models/{model-id}/
 ```
 
 **Runtime (documents/):**
+
 ```
 {documents}/models/{model-id}/
 ├── {model}.pte
@@ -314,6 +327,7 @@ assets/models/{model-id}/
 To add support for new models:
 
 1. **Convert to ExecuTorch PTE**:
+
    ```bash
    # Export model to ExecuTorch format
    python -m examples.models.llama.export_llama \
@@ -322,6 +336,7 @@ To add support for new models:
    ```
 
 2. **Add to Registry** (`modelConfig.ts`):
+
    ```typescript
    export const NewModel: LlmModelConfig = {
      modelId: "new-model-id",
@@ -338,6 +353,7 @@ To add support for new models:
    ```
 
 3. **Add to Download Script** (`downloadModels.ts`):
+
    ```typescript
    {
      modelId: "new-model-id",
@@ -368,6 +384,7 @@ To add support for new models:
 ## Support
 
 For issues with:
+
 - **Model download**: Check network connection and storage space
 - **Model selection**: Ensure model is downloaded first
 - **Model availability**: Check HuggingFace for PTE files
@@ -382,7 +399,7 @@ For issues with:
 🚀 **Production Ready**: All models are from Software Mansion's official ExecuTorch repositories and tested for mobile deployment.
 
 ⚖️ **Model Selection Guide**:
+
 - **Fastest**: Qwen 3 0.6B (~600MB)
 - **Balanced**: Llama 3.2 1B or Qwen 3 1.7B (~800MB - 1.7GB)
 - **Best Quality**: Llama 3.2 3B or Qwen 3 4B (~2.5GB - 4GB)
-

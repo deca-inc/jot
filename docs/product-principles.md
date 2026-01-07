@@ -40,9 +40,9 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 ### Implementation Implications
 
 These principles mean:
+
 - Optimized Expo/React Native stack for ultra-low latency typing (careful editor component selection, performance tuning, native optimizations where needed)
 - Investment in editor technology and typography
 - Comprehensive search infrastructure (FTS5, embeddings, media indexing)
 - Privacy-by-design architecture (local-first, encrypted, zero-knowledge backups)
 - Clear, accessible privacy documentation and controls
-

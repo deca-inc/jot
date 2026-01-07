@@ -64,7 +64,9 @@ export function ComposerScreen({
               title: initialContent.trim()
                 ? initialContent.trim().slice(0, 50) +
                   (initialContent.length > 50 ? "..." : "")
-                : parentId ? "Check-in" : "Untitled",
+                : parentId
+                  ? "Check-in"
+                  : "Untitled",
               blocks,
               tags: [],
               attachments: [],

@@ -72,8 +72,8 @@ export function ThemeControl({ onThemeChange }: ThemeControlProps = {}) {
         timeOfDayValue === "system"
           ? "system"
           : timeOfDayValue === "day"
-          ? "day"
-          : "night",
+            ? "day"
+            : "night",
       useSystemTimeOfDay: timeOfDayValue === "system",
     });
     await refreshTheme();
@@ -91,8 +91,8 @@ export function ThemeControl({ onThemeChange }: ThemeControlProps = {}) {
         timeOfDay === "system"
           ? "system"
           : timeOfDay === "day"
-          ? "day"
-          : "night",
+            ? "day"
+            : "night",
       useSystemTimeOfDay: timeOfDay === "system",
     });
     await refreshTheme();
@@ -151,8 +151,8 @@ export function ThemeControl({ onThemeChange }: ThemeControlProps = {}) {
             {selectedTimeOfDay === "system"
               ? "System Default Dark Mode"
               : selectedTimeOfDay === "day"
-              ? "Light"
-              : "Dark"}
+                ? "Light"
+                : "Dark"}
           </Text>
           <Text style={{ color: seasonalTheme.textSecondary }}>▼</Text>
         </TouchableOpacity>
@@ -263,8 +263,8 @@ export function ThemeControl({ onThemeChange }: ThemeControlProps = {}) {
                   {tod === "system"
                     ? "System Default Dark Mode"
                     : tod === "day"
-                    ? "Light"
-                    : "Dark"}
+                      ? "Light"
+                      : "Dark"}
                 </Text>
               </TouchableOpacity>
             ))}

@@ -48,4 +48,3 @@ const styles = StyleSheet.create({
     paddingTop: spacingPatterns.sm,
   },
 });
-

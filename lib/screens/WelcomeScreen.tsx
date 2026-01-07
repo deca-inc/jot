@@ -1,5 +1,11 @@
 import React from "react";
-import { View, StyleSheet, Image, TouchableOpacity, Linking } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  Linking,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "../components";
 import { spacingPatterns, borderRadius } from "../theme";
@@ -10,10 +16,7 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
   return (
-    <SafeAreaView
-      style={styles.container}
-      edges={["top", "bottom"]}
-    >
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.content}>
         {/* Logo */}
         <View style={styles.logoContainer}>
@@ -26,48 +29,27 @@ export function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
 
         {/* Tagline */}
         <View style={styles.textContainer}>
-          <Text
-            variant="h1"
-            style={styles.title}
-          >
+          <Text variant="h1" style={styles.title}>
             Your personal journal
           </Text>
-          <Text
-            variant="h1"
-            style={styles.title}
-          >
+          <Text variant="h1" style={styles.title}>
             and AI assistant
           </Text>
-          
+
           <View style={styles.featuresContainer}>
-            <Text
-              variant="h3"
-              style={styles.feature}
-            >
+            <Text variant="h3" style={styles.feature}>
               offline
             </Text>
-            <Text
-              variant="h3"
-              style={styles.featureDot}
-            >
+            <Text variant="h3" style={styles.featureDot}>
               •
             </Text>
-            <Text
-              variant="h3"
-              style={styles.feature}
-            >
+            <Text variant="h3" style={styles.feature}>
               encrypted
             </Text>
-            <Text
-              variant="h3"
-              style={styles.featureDot}
-            >
+            <Text variant="h3" style={styles.featureDot}>
               •
             </Text>
-            <Text
-              variant="h3"
-              style={styles.feature}
-            >
+            <Text variant="h3" style={styles.feature}>
               private
             </Text>
           </View>
@@ -87,7 +69,7 @@ export function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
               Get Started
             </Text>
           </TouchableOpacity>
-          
+
           {/* Legal text */}
           <Text variant="caption" style={styles.legalText}>
             By continuing, you accept our{" "}
@@ -97,8 +79,8 @@ export function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
               onPress={() => Linking.openURL("https://jot.app/terms")}
             >
               Terms of Service
-            </Text>
-            {" "}and{" "}
+            </Text>{" "}
+            and{" "}
             <Text
               variant="caption"
               style={styles.legalLink}
@@ -193,4 +175,3 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
 });
-

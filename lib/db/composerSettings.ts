@@ -64,4 +64,3 @@ export function useComposerSettings(): {
     setLastUsedMode: (mode: ComposerMode) => repo.setLastUsedMode(mode),
   };
 }
-

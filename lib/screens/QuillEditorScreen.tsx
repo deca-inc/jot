@@ -189,16 +189,18 @@ export function QuillEditorScreen({ onBack }: QuillEditorScreenProps = {}) {
           }}
           onSelectionChange={(data) => {
             if (data.range) {
-              editorRef.current?.getFormat(data.range).then((format: Record<string, unknown>) => {
-                setFormatState({
-                  bold: !!format.bold,
-                  italic: !!format.italic,
-                  underline: !!format.underline,
-                  strike: !!format.strike,
-                  header: (format.header as number) || 0,
-                  list: (format.list as string) || null,
+              editorRef.current
+                ?.getFormat(data.range)
+                .then((format: Record<string, unknown>) => {
+                  setFormatState({
+                    bold: !!format.bold,
+                    italic: !!format.italic,
+                    underline: !!format.underline,
+                    strike: !!format.strike,
+                    header: (format.header as number) || 0,
+                    list: (format.list as string) || null,
+                  });
                 });
-              });
             }
           }}
           customJS={`

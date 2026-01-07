@@ -4,9 +4,9 @@
  * Persists download state to survive app restarts
  */
 
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from "expo-secure-store";
 
-const DOWNLOAD_STATUS_KEY = 'model_download_status';
+const DOWNLOAD_STATUS_KEY = "model_download_status";
 
 export interface DownloadStatus {
   modelId: string;
@@ -44,12 +44,14 @@ class ModelDownloadStatusManager {
       if (stored) {
         const status = JSON.parse(stored) as DownloadStatus;
         if (status.isDownloading) {
-          console.log(`[ModelDownloadStatus] Clearing stale download state for ${status.modelId} (app was restarted)`);
+          console.log(
+            `[ModelDownloadStatus] Clearing stale download state for ${status.modelId} (app was restarted)`,
+          );
           await this.clearPersistedState();
         }
       }
     } catch (e) {
-      console.error('[ModelDownloadStatus] Failed to initialize:', e);
+      console.error("[ModelDownloadStatus] Failed to initialize:", e);
     }
 
     this.isInitialized = true;
@@ -80,12 +82,12 @@ class ModelDownloadStatusManager {
         ...this.currentDownload,
         progress: Math.min(100, Math.max(0, progress)),
       };
-      
+
       // Only persist every 5% to avoid too many writes
       if (progress % 5 === 0 || progress === 100) {
         await this.persistState();
       }
-      
+
       this.notifyListeners();
     }
   }
@@ -162,7 +164,7 @@ class ModelDownloadStatusManager {
           JSON.stringify(this.currentDownload),
         );
       } catch (e) {
-        console.error('[ModelDownloadStatus] Failed to persist state:', e);
+        console.error("[ModelDownloadStatus] Failed to persist state:", e);
       }
     }
   }
@@ -174,11 +176,13 @@ class ModelDownloadStatusManager {
     try {
       await SecureStore.deleteItemAsync(DOWNLOAD_STATUS_KEY);
     } catch (e) {
-      console.error('[ModelDownloadStatus] Failed to clear persisted state:', e);
+      console.error(
+        "[ModelDownloadStatus] Failed to clear persisted state:",
+        e,
+      );
     }
   }
 }
 
 // Global singleton instance
 export const modelDownloadStatus = new ModelDownloadStatusManager();
-

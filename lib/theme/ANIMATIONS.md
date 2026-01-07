@@ -24,31 +24,37 @@ Located in `lib/theme/animations.ts`, these presets provide consistent animation
 ## Usage in Components
 
 ### Button Component
+
 - **Press animation**: Scales to 0.96 on press, springs back on release
 - Automatically respects reduced motion preferences
 - Uses `springPresets.button`
 
 ### Card Component
+
 - **Mount animation**: Fades in with gentle spring on first render
 - Uses `springPresets.gentle`
 
 ### Tab Navigation
+
 - **Tap animation**: Subtle scale on tab selection
 - Uses `springPresets.subtle`
 
 ## Adding Animations to New Components
 
 1. Import animation utilities:
+
 ```tsx
 import { springPresets, animatedHelpers } from "../theme";
 ```
 
 2. Create animated values:
+
 ```tsx
 const scale = useRef(new Animated.Value(1)).current;
 ```
 
 3. Use spring animation:
+
 ```tsx
 Animated.spring(scale, {
   toValue: 0.96,
@@ -57,6 +63,7 @@ Animated.spring(scale, {
 ```
 
 4. Check for reduced motion:
+
 ```tsx
 const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
 
@@ -64,7 +71,7 @@ useEffect(() => {
   AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotionEnabled);
   const subscription = AccessibilityInfo.addEventListener(
     "reduceMotionChanged",
-    (event) => setReduceMotionEnabled(event)
+    (event) => setReduceMotionEnabled(event),
   );
   return () => subscription.remove();
 }, []);
@@ -73,8 +80,8 @@ useEffect(() => {
 ## Component Playground
 
 Test all animations in the Component Playground screen (accessible from Settings in dev mode). The playground includes:
+
 - Scale animations
-- Fade animations  
+- Fade animations
 - Slide animations
 - Built-in component animations
-

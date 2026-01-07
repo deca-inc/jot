@@ -16,10 +16,19 @@ import {
   Pressable,
 } from "react-native";
 import { PIConfetti, type PIConfettiMethods } from "react-native-fast-confetti";
-import RenderHtml, { HTMLElementModel, HTMLContentModel } from "react-native-render-html";
+import RenderHtml, {
+  HTMLElementModel,
+  HTMLContentModel,
+} from "react-native-render-html";
 import { useTrackEvent } from "../analytics";
 import { Entry, extractPreviewText } from "../db/entries";
-import { useDeleteEntry, useUpdateEntry, useTogglePinned, useArchiveEntry, useUnarchiveEntry } from "../db/useEntries";
+import {
+  useDeleteEntry,
+  useUpdateEntry,
+  useTogglePinned,
+  useArchiveEntry,
+  useUnarchiveEntry,
+} from "../db/useEntries";
 import {
   renameEntry,
   deleteEntryWithConfirmation,
@@ -28,7 +37,11 @@ import {
 import { spacingPatterns, borderRadius } from "../theme";
 import { type SeasonalTheme } from "../theme/seasonalTheme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { extractCountdownData, formatCountdown, isCountdownComplete } from "../utils/countdown";
+import {
+  extractCountdownData,
+  formatCountdown,
+  isCountdownComplete,
+} from "../utils/countdown";
 import { cancelNotification } from "../utils/notifications";
 import { Card } from "./Card";
 import { Dialog } from "./Dialog";
@@ -69,7 +82,11 @@ function EntryListItemComponent({
     if (entry.type === "ai_chat") {
       // Find the first assistant message (AI response)
       const assistantBlock = entry.blocks.find((b) => b.role === "assistant");
-      if (assistantBlock && assistantBlock.type === "markdown" && assistantBlock.content.trim()) {
+      if (
+        assistantBlock &&
+        assistantBlock.type === "markdown" &&
+        assistantBlock.content.trim()
+      ) {
         // Strip HTML and think tags for preview
         const strippedContent = assistantBlock.content
           .replace(/<think>[\s\S]*?<\/think>/g, "") // Remove think tags
@@ -112,10 +129,17 @@ function EntryListItemComponent({
   const htmlOrMarkdownBlock = React.useMemo(() => {
     if (entry.type === "ai_chat") {
       // Find the first assistant message (AI response)
-      return entry.blocks.find((b) => b.role === "assistant" && (b.type === "markdown" || b.type === "html"));
+      return entry.blocks.find(
+        (b) =>
+          b.role === "assistant" &&
+          (b.type === "markdown" || b.type === "html"),
+      );
     }
     // Look for html block first (new format), then fall back to markdown (legacy)
-    return entry.blocks.find((b) => b.type === "html") || entry.blocks.find((b) => b.type === "markdown");
+    return (
+      entry.blocks.find((b) => b.type === "html") ||
+      entry.blocks.find((b) => b.type === "markdown")
+    );
   }, [entry.blocks, entry.type]);
 
   // For AI chats, always try to render HTML if we have an assistant block
@@ -128,12 +152,16 @@ function EntryListItemComponent({
     if (htmlOrMarkdownBlock?.type === "html") {
       return true; // Always render html blocks as HTML
     }
-    return htmlOrMarkdownBlock && 'content' in htmlOrMarkdownBlock && htmlOrMarkdownBlock.content.includes("<");
+    return (
+      htmlOrMarkdownBlock &&
+      "content" in htmlOrMarkdownBlock &&
+      htmlOrMarkdownBlock.content.includes("<")
+    );
   }, [entry.type, htmlOrMarkdownBlock]);
 
   // Strip <think> tags from content and convert to HTML for preview rendering
   const htmlContent = React.useMemo(() => {
-    if (!htmlOrMarkdownBlock || !('content' in htmlOrMarkdownBlock)) return "";
+    if (!htmlOrMarkdownBlock || !("content" in htmlOrMarkdownBlock)) return "";
 
     const cleanedContent = htmlOrMarkdownBlock.content
       .replace(/<think>[\s\S]*?<\/think>/g, "") // Remove complete <think>...</think> blocks
@@ -325,30 +353,36 @@ function EntryListItemComponent({
         // Extract text content from tnode
         const textContent = tnode?.children?.[0]?.data || tnode?.data || "";
         return (
-          <View style={{
-            flexDirection: "row",
-            alignItems: "flex-start",
-            marginBottom: 2,
-            marginLeft: 0,
-            paddingLeft: 0,
-          }}>
-            <Text style={{
-              fontSize: 14,
-              color: itemTheme.textPrimary,
-              lineHeight: 20,
-              width: 24,
-              textAlign: "center",
-            }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              marginBottom: 2,
+              marginLeft: 0,
+              paddingLeft: 0,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 14,
+                color: itemTheme.textPrimary,
+                lineHeight: 20,
+                width: 24,
+                textAlign: "center",
+              }}
+            >
               {isChecked ? "☑" : "☐"}
             </Text>
-            <Text style={{
-              flex: 1,
-              fontSize: 14,
-              lineHeight: 20,
-              color: itemTheme.textPrimary,
-              textDecorationLine: isChecked ? "line-through" : "none",
-              opacity: isChecked ? 0.6 : 1,
-            }}>
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 14,
+                lineHeight: 20,
+                color: itemTheme.textPrimary,
+                textDecorationLine: isChecked ? "line-through" : "none",
+                opacity: isChecked ? 0.6 : 1,
+              }}
+            >
               {textContent}
             </Text>
           </View>
@@ -372,37 +406,48 @@ function EntryListItemComponent({
         if (dataChecked !== undefined) {
           const isChecked = dataChecked === "true";
           return (
-            <View style={{
-              marginTop: 0,
-              marginBottom: 4,
-              marginLeft: 0,
-              marginRight: 0,
-            }}>
+            <View
+              style={{
+                marginTop: 0,
+                marginBottom: 4,
+                marginLeft: 0,
+                marginRight: 0,
+              }}
+            >
               {children.map((child: any, index: number) => {
                 const textContent = extractText(child);
                 return (
-                  <View key={index} style={{
-                    flexDirection: "row",
-                    alignItems: "flex-start",
-                    marginBottom: 2,
-                  }}>
-                    <Text style={{
-                      fontSize: 14,
-                      color: itemTheme.textPrimary,
-                      lineHeight: 20,
-                      width: 24,
-                      textAlign: "center",
-                    }}>
+                  <View
+                    key={index}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      marginBottom: 2,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: itemTheme.textPrimary,
+                        lineHeight: 20,
+                        width: 24,
+                        textAlign: "center",
+                      }}
+                    >
                       {isChecked ? "☑" : "☐"}
                     </Text>
-                    <Text style={{
-                      flex: 1,
-                      fontSize: 14,
-                      lineHeight: 20,
-                      color: isChecked ? itemTheme.textSecondary : itemTheme.textPrimary,
-                      textDecorationLine: isChecked ? "line-through" : "none",
-                      opacity: isChecked ? 0.6 : 1,
-                    }}>
+                    <Text
+                      style={{
+                        flex: 1,
+                        fontSize: 14,
+                        lineHeight: 20,
+                        color: isChecked
+                          ? itemTheme.textSecondary
+                          : itemTheme.textPrimary,
+                        textDecorationLine: isChecked ? "line-through" : "none",
+                        opacity: isChecked ? 0.6 : 1,
+                      }}
+                    >
                       {textContent}
                     </Text>
                   </View>
@@ -414,39 +459,50 @@ function EntryListItemComponent({
 
         // Regular bullet list
         return (
-          <View style={{
-            marginTop: 0,
-            marginBottom: 4,
-            marginLeft: 8,
-            marginRight: 0,
-          }}>
-            {children.filter((child: any) => child?.tagName === "li").map((child: any, index: number) => {
-              const textContent = extractText(child);
-              return (
-                <View key={index} style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  marginBottom: 2,
-                }}>
-                  <Text style={{
-                    fontSize: 14,
-                    color: itemTheme.textPrimary,
-                    lineHeight: 20,
-                    width: 20,
-                  }}>
-                    •
-                  </Text>
-                  <Text style={{
-                    flex: 1,
-                    fontSize: 14,
-                    lineHeight: 20,
-                    color: itemTheme.textPrimary,
-                  }}>
-                    {textContent}
-                  </Text>
-                </View>
-              );
-            })}
+          <View
+            style={{
+              marginTop: 0,
+              marginBottom: 4,
+              marginLeft: 8,
+              marginRight: 0,
+            }}
+          >
+            {children
+              .filter((child: any) => child?.tagName === "li")
+              .map((child: any, index: number) => {
+                const textContent = extractText(child);
+                return (
+                  <View
+                    key={index}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      marginBottom: 2,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: itemTheme.textPrimary,
+                        lineHeight: 20,
+                        width: 20,
+                      }}
+                    >
+                      •
+                    </Text>
+                    <Text
+                      style={{
+                        flex: 1,
+                        fontSize: 14,
+                        lineHeight: 20,
+                        color: itemTheme.textPrimary,
+                      }}
+                    >
+                      {textContent}
+                    </Text>
+                  </View>
+                );
+              })}
           </View>
         );
       },
@@ -463,39 +519,50 @@ function EntryListItemComponent({
         };
 
         return (
-          <View style={{
-            marginTop: 0,
-            marginBottom: 4,
-            marginLeft: 8,
-            marginRight: 0,
-          }}>
-            {children.filter((child: any) => child?.tagName === "li").map((child: any, index: number) => {
-              const textContent = extractText(child);
-              return (
-                <View key={index} style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  marginBottom: 2,
-                }}>
-                  <Text style={{
-                    fontSize: 14,
-                    color: itemTheme.textPrimary,
-                    lineHeight: 20,
-                    width: 24,
-                  }}>
-                    {index + 1}.
-                  </Text>
-                  <Text style={{
-                    flex: 1,
-                    fontSize: 14,
-                    lineHeight: 20,
-                    color: itemTheme.textPrimary,
-                  }}>
-                    {textContent}
-                  </Text>
-                </View>
-              );
-            })}
+          <View
+            style={{
+              marginTop: 0,
+              marginBottom: 4,
+              marginLeft: 8,
+              marginRight: 0,
+            }}
+          >
+            {children
+              .filter((child: any) => child?.tagName === "li")
+              .map((child: any, index: number) => {
+                const textContent = extractText(child);
+                return (
+                  <View
+                    key={index}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      marginBottom: 2,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: itemTheme.textPrimary,
+                        lineHeight: 20,
+                        width: 24,
+                      }}
+                    >
+                      {index + 1}.
+                    </Text>
+                    <Text
+                      style={{
+                        flex: 1,
+                        fontSize: 14,
+                        lineHeight: 20,
+                        color: itemTheme.textPrimary,
+                      }}
+                    >
+                      {textContent}
+                    </Text>
+                  </View>
+                );
+              })}
           </View>
         );
       },
@@ -697,15 +764,30 @@ function EntryListItemComponent({
           />
         )}
 
-        <View style={entry.type === "countdown" ? styles.countdownCardContent : styles.cardContent}>
-          <View style={entry.type === "countdown" ? styles.countdownContentInner : styles.contentInner}>
+        <View
+          style={
+            entry.type === "countdown"
+              ? styles.countdownCardContent
+              : styles.cardContent
+          }
+        >
+          <View
+            style={
+              entry.type === "countdown"
+                ? styles.countdownContentInner
+                : styles.contentInner
+            }
+          >
             {/* Countdown display - custom layout */}
             {entry.type === "countdown" && countdownData && (
               <View style={styles.countdownDisplay}>
                 <Text
                   variant="caption"
                   numberOfLines={1}
-                  style={[styles.countdownTitle, { color: itemTheme.textSecondary }]}
+                  style={[
+                    styles.countdownTitle,
+                    { color: itemTheme.textSecondary },
+                  ]}
                 >
                   {entry.title}
                 </Text>
@@ -715,50 +797,74 @@ function EntryListItemComponent({
                     { color: itemTheme.textPrimary },
                   ]}
                 >
-                  {formatCountdown(countdownData.targetDate, countdownData.isCountUp)}
+                  {formatCountdown(
+                    countdownData.targetDate,
+                    countdownData.isCountUp,
+                  )}
                 </Text>
                 <Text
                   variant="caption"
-                  style={[styles.countdownTargetDate, { color: itemTheme.textSecondary }]}
+                  style={[
+                    styles.countdownTargetDate,
+                    { color: itemTheme.textSecondary },
+                  ]}
                 >
                   {countdownData.isCountUp ? "Since " : ""}
-                  {new Date(countdownData.targetDate).toLocaleDateString(undefined, {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                    year: new Date(countdownData.targetDate).getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
-                  })}{" "}
-                  {new Date(countdownData.targetDate).toLocaleTimeString(undefined, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
+                  {new Date(countdownData.targetDate).toLocaleDateString(
+                    undefined,
+                    {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      year:
+                        new Date(countdownData.targetDate).getFullYear() !==
+                        new Date().getFullYear()
+                          ? "numeric"
+                          : undefined,
+                    },
+                  )}{" "}
+                  {new Date(countdownData.targetDate).toLocaleTimeString(
+                    undefined,
+                    {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    },
+                  )}
                 </Text>
                 {/* Dismiss button for completed countdowns (not countups, not already archived) */}
-                {!countdownData.isCountUp && !entry.archivedAt && isCountdownComplete(countdownData.targetDate) && (
-                  <TouchableOpacity
-                    style={[
-                      styles.dismissButton,
-                      { backgroundColor: itemTheme.textPrimary + "15" },
-                    ]}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      // Show dialog if there's a rewards note or confetti, otherwise just archive
-                      if (countdownData.rewardsNote || countdownData.confettiEnabled) {
-                        setShowDismissDialog(true);
-                      } else {
-                        handleArchiveCountdown();
-                      }
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      variant="caption"
-                      style={{ color: itemTheme.textPrimary, fontWeight: "600" }}
+                {!countdownData.isCountUp &&
+                  !entry.archivedAt &&
+                  isCountdownComplete(countdownData.targetDate) && (
+                    <TouchableOpacity
+                      style={[
+                        styles.dismissButton,
+                        { backgroundColor: itemTheme.textPrimary + "15" },
+                      ]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        // Show dialog if there's a rewards note or confetti, otherwise just archive
+                        if (
+                          countdownData.rewardsNote ||
+                          countdownData.confettiEnabled
+                        ) {
+                          setShowDismissDialog(true);
+                        } else {
+                          handleArchiveCountdown();
+                        }
+                      }}
+                      activeOpacity={0.7}
                     >
-                      Dismiss
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                      <Text
+                        variant="caption"
+                        style={{
+                          color: itemTheme.textPrimary,
+                          fontWeight: "600",
+                        }}
+                      >
+                        Dismiss
+                      </Text>
+                    </TouchableOpacity>
+                  )}
               </View>
             )}
 

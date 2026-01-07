@@ -34,7 +34,10 @@ type Screen =
 
 // Navigation ref for external navigation (e.g., from notification handler)
 export interface NavigationRef {
-  navigateToCountdownViewer: (entryId: number, showCheckinPrompt?: boolean) => void;
+  navigateToCountdownViewer: (
+    entryId: number,
+    showCheckinPrompt?: boolean,
+  ) => void;
 }
 
 // Global navigation ref
@@ -65,7 +68,9 @@ export function SimpleNavigation() {
   const [countdownViewerEntryId, setCountdownViewerEntryId] = useState<
     number | undefined
   >(undefined);
-  const [checkinParentId, setCheckinParentId] = useState<number | undefined>(undefined);
+  const [checkinParentId, setCheckinParentId] = useState<number | undefined>(
+    undefined,
+  );
   const [showCheckinPrompt, setShowCheckinPrompt] = useState(false);
   const [_homeRefreshKey, _setHomeRefreshKey] = useState(0);
   const _theme = useTheme();
@@ -246,10 +251,7 @@ export function SimpleNavigation() {
     const content = (initialText || "").trim();
 
     // Create HTML block with H1 for the first letter/text
-    const htmlContent =
-      content.length > 0
-        ? `<h1>${content}</h1>`
-        : "<p></p>"; // Empty paragraph to start
+    const htmlContent = content.length > 0 ? `<h1>${content}</h1>` : "<p></p>"; // Empty paragraph to start
 
     const blocks = [
       {
@@ -287,16 +289,19 @@ export function SimpleNavigation() {
     setFullEditorEntryId(undefined);
   }, []);
 
-  const handleOpenEntryEditor = useCallback((entryId: number, entryType?: "journal" | "ai_chat" | "countdown") => {
-    if (entryType === "countdown") {
-      // Open countdown in viewer mode (not edit mode)
-      setCountdownViewerEntryId(entryId);
-      setCurrentScreen("countdownViewer");
-    } else {
-      setEditingEntryId(entryId);
-      setCurrentScreen("entryEditor");
-    }
-  }, []);
+  const handleOpenEntryEditor = useCallback(
+    (entryId: number, entryType?: "journal" | "ai_chat" | "countdown") => {
+      if (entryType === "countdown") {
+        // Open countdown in viewer mode (not edit mode)
+        setCountdownViewerEntryId(entryId);
+        setCurrentScreen("countdownViewer");
+      } else {
+        setEditingEntryId(entryId);
+        setCurrentScreen("entryEditor");
+      }
+    },
+    [],
+  );
 
   // Open a new AI chat without creating an entry first
   // Entry will be created when user sends their first message
@@ -306,15 +311,18 @@ export function SimpleNavigation() {
     setCurrentScreen("entryEditor");
   }, []);
 
-  const handleEntryEditorSave = useCallback((entryId: number) => {
-    // Don't navigate away on save for journal entries (they auto-save)
-    // Only navigate for AI chat or if explicitly closing
-    // React Query cache handles the update automatically
-    // Update editingEntryId when a new entry is created (e.g., from new AI chat)
-    if (!editingEntryId && entryId) {
-      setEditingEntryId(entryId);
-    }
-  }, [editingEntryId]);
+  const handleEntryEditorSave = useCallback(
+    (entryId: number) => {
+      // Don't navigate away on save for journal entries (they auto-save)
+      // Only navigate for AI chat or if explicitly closing
+      // React Query cache handles the update automatically
+      // Update editingEntryId when a new entry is created (e.g., from new AI chat)
+      if (!editingEntryId && entryId) {
+        setEditingEntryId(entryId);
+      }
+    },
+    [editingEntryId],
+  );
 
   const handleEntryEditorCancel = useCallback(async () => {
     // React Query cache handles any updates automatically
@@ -336,15 +344,18 @@ export function SimpleNavigation() {
     setCurrentScreen("countdownComposer");
   }, []);
 
-  const handleCountdownSave = useCallback((_entryId: number) => {
-    // If we were editing from the viewer, go back to viewer
-    if (countdownViewerEntryId) {
-      setCurrentScreen("countdownViewer");
-    } else {
-      setCurrentScreen("home");
-    }
-    setCountdownEntryId(undefined);
-  }, [countdownViewerEntryId]);
+  const handleCountdownSave = useCallback(
+    (_entryId: number) => {
+      // If we were editing from the viewer, go back to viewer
+      if (countdownViewerEntryId) {
+        setCurrentScreen("countdownViewer");
+      } else {
+        setCurrentScreen("home");
+      }
+      setCountdownEntryId(undefined);
+    },
+    [countdownViewerEntryId],
+  );
 
   const handleCountdownCancel = useCallback(() => {
     // If we were editing from the viewer, go back to viewer
@@ -357,11 +368,14 @@ export function SimpleNavigation() {
   }, [countdownViewerEntryId]);
 
   // Countdown viewer handlers (for notification deep linking)
-  const handleNavigateToCountdownViewer = useCallback((entryId: number, checkinPrompt?: boolean) => {
-    setCountdownViewerEntryId(entryId);
-    setShowCheckinPrompt(checkinPrompt ?? false);
-    setCurrentScreen("countdownViewer");
-  }, []);
+  const handleNavigateToCountdownViewer = useCallback(
+    (entryId: number, checkinPrompt?: boolean) => {
+      setCountdownViewerEntryId(entryId);
+      setShowCheckinPrompt(checkinPrompt ?? false);
+      setCurrentScreen("countdownViewer");
+    },
+    [],
+  );
 
   const handleCountdownViewerClose = useCallback(() => {
     setCurrentScreen("home");

@@ -12,12 +12,21 @@
  * - Database as single source of truth
  */
 
-import { Block, Entry, CreateEntryInput, UpdateEntryInput } from "../db/entries";
+import {
+  Block,
+  Entry,
+  CreateEntryInput,
+  UpdateEntryInput,
+} from "../db/entries";
 import type { UseMutationResult } from "@tanstack/react-query";
 
 // Type for the mutation objects returned by useCreateEntry and useUpdateEntry
 type CreateEntryMutation = UseMutationResult<Entry, Error, CreateEntryInput>;
-type UpdateEntryMutation = UseMutationResult<Entry, Error, { id: number; input: UpdateEntryInput; skipCacheUpdate?: boolean }>;
+type UpdateEntryMutation = UseMutationResult<
+  Entry,
+  Error,
+  { id: number; input: UpdateEntryInput; skipCacheUpdate?: boolean }
+>;
 
 export interface JournalActionContext {
   // React Query mutations

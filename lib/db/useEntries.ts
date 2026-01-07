@@ -50,7 +50,8 @@ export const entryKeys = {
   }) => [...entryKeys.searches(), filters] as const,
   details: () => [...entryKeys.all, "detail"] as const,
   detail: (id: number) => [...entryKeys.details(), id] as const,
-  children: (parentId: number) => [...entryKeys.all, "children", parentId] as const,
+  children: (parentId: number) =>
+    [...entryKeys.all, "children", parentId] as const,
 };
 
 /**
@@ -313,7 +314,9 @@ export function useDeleteEntry() {
   const posthog = usePostHog();
 
   return useMutation({
-    mutationFn: async (input: number | { id: number; parentId?: number | null }) => {
+    mutationFn: async (
+      input: number | { id: number; parentId?: number | null },
+    ) => {
       const id = typeof input === "number" ? input : input.id;
       const parentId = typeof input === "number" ? null : input.parentId;
       await entryRepository.delete(id);

@@ -179,7 +179,12 @@ export async function refreshCountdownNotifications(
     };
   } catch (error) {
     console.error("Error refreshing countdown notifications:", error);
-    return { scheduled: 0, cancelled: false, timezoneChanged: false, dstWarnings: 0 };
+    return {
+      scheduled: 0,
+      cancelled: false,
+      timezoneChanged: false,
+      dstWarnings: 0,
+    };
   }
 }
 
@@ -223,9 +228,8 @@ TaskManager.defineTask(BACKGROUND_TASK_NAME, async () => {
  */
 export async function registerBackgroundTask(): Promise<void> {
   try {
-    const isRegistered = await TaskManager.isTaskRegisteredAsync(
-      BACKGROUND_TASK_NAME,
-    );
+    const isRegistered =
+      await TaskManager.isTaskRegisteredAsync(BACKGROUND_TASK_NAME);
 
     if (!isRegistered) {
       await BackgroundFetch.registerTaskAsync(BACKGROUND_TASK_NAME, {
@@ -236,7 +240,10 @@ export async function registerBackgroundTask(): Promise<void> {
       console.log("[NotificationScheduler] Background task registered");
     }
   } catch (error) {
-    console.error("[NotificationScheduler] Error registering background task:", error);
+    console.error(
+      "[NotificationScheduler] Error registering background task:",
+      error,
+    );
   }
 }
 
@@ -245,9 +252,8 @@ export async function registerBackgroundTask(): Promise<void> {
  */
 export async function unregisterBackgroundTask(): Promise<void> {
   try {
-    const isRegistered = await TaskManager.isTaskRegisteredAsync(
-      BACKGROUND_TASK_NAME,
-    );
+    const isRegistered =
+      await TaskManager.isTaskRegisteredAsync(BACKGROUND_TASK_NAME);
 
     if (isRegistered) {
       await BackgroundFetch.unregisterTaskAsync(BACKGROUND_TASK_NAME);

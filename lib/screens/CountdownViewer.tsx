@@ -106,7 +106,9 @@ export function CountdownViewer({
 
   // Timer state for live updates
   const [, setTick] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined,
+  );
 
   // Extract countdown data
   const countdownData = entry ? extractCountdownData(entry.blocks) : null;
@@ -239,10 +241,7 @@ export function CountdownViewer({
         {/* Large Timer Display */}
         <View style={styles.timerContainer}>
           <Text
-            style={[
-              styles.timerText,
-              { color: seasonalTheme.textPrimary },
-            ]}
+            style={[styles.timerText, { color: seasonalTheme.textPrimary }]}
           >
             {formattedTime}
           </Text>
@@ -277,10 +276,14 @@ export function CountdownViewer({
           />
           <Text
             variant="body"
-            style={[styles.targetDateText, { color: seasonalTheme.textSecondary }]}
+            style={[
+              styles.targetDateText,
+              { color: seasonalTheme.textSecondary },
+            ]}
           >
             {countdownData.isCountUp ? "Started" : "Target"}:{" "}
-            {formatDateForDisplay(targetDate)} at {formatTimeForDisplay(targetDate)}
+            {formatDateForDisplay(targetDate)} at{" "}
+            {formatTimeForDisplay(targetDate)}
           </Text>
         </View>
       </View>
@@ -288,11 +291,13 @@ export function CountdownViewer({
       {/* Scrollable Check-ins Section */}
       <View style={styles.checkinsContainer}>
         {/* Check-ins Header */}
-        <View style={[styles.checkinsSectionHeader, { paddingHorizontal: spacingPatterns.screen }]}>
-          <Text
-            variant="h3"
-            style={{ color: seasonalTheme.textPrimary }}
-          >
+        <View
+          style={[
+            styles.checkinsSectionHeader,
+            { paddingHorizontal: spacingPatterns.screen },
+          ]}
+        >
+          <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
             Check-ins
           </Text>
           {checkins.length > 0 && (
@@ -416,7 +421,10 @@ export function CountdownViewer({
           {checkinsLoading ? (
             <Text
               variant="body"
-              style={{ color: seasonalTheme.textSecondary, marginTop: spacingPatterns.md }}
+              style={{
+                color: seasonalTheme.textSecondary,
+                marginTop: spacingPatterns.md,
+              }}
             >
               Loading check-ins...
             </Text>
@@ -447,7 +455,10 @@ export function CountdownViewer({
               </Text>
               <Text
                 variant="caption"
-                style={{ color: seasonalTheme.textSecondary + "80", textAlign: "center" }}
+                style={{
+                  color: seasonalTheme.textSecondary + "80",
+                  textAlign: "center",
+                }}
               >
                 Add a check-in to track your progress
               </Text>
@@ -471,7 +482,10 @@ export function CountdownViewer({
                   <View style={styles.checkinDate}>
                     <Text
                       variant="caption"
-                      style={{ color: seasonalTheme.chipText, fontWeight: "600" }}
+                      style={{
+                        color: seasonalTheme.chipText,
+                        fontWeight: "600",
+                      }}
                     >
                       {formatCheckinDate(checkin.createdAt)}
                     </Text>
@@ -481,7 +495,9 @@ export function CountdownViewer({
                     style={{ color: seasonalTheme.textPrimary }}
                     numberOfLines={2}
                   >
-                    {checkin.title || extractPreviewText(checkin.blocks) || "Untitled check-in"}
+                    {checkin.title ||
+                      extractPreviewText(checkin.blocks) ||
+                      "Untitled check-in"}
                   </Text>
                 </TouchableOpacity>
               ))}

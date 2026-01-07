@@ -40,7 +40,8 @@ export function MenuItem({
   const seasonalTheme = useSeasonalTheme();
 
   const isDestructive = variant === "destructive";
-  const finalIconColor = iconColor || (isDestructive ? "#FF3B30" : seasonalTheme.textPrimary);
+  const finalIconColor =
+    iconColor || (isDestructive ? "#FF3B30" : seasonalTheme.textPrimary);
   const textColor = isDestructive ? "#FF3B30" : seasonalTheme.textPrimary;
 
   return (
@@ -94,4 +95,3 @@ const styles = StyleSheet.create({
     marginRight: spacingPatterns.sm,
   },
 });
-

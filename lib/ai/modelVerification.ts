@@ -46,7 +46,7 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
   const baseDir = getBaseDir();
   const modelsDir = joinPaths(baseDir, "models");
   const modelDir = joinPaths(modelsDir, config.folderName);
-  
+
   const modelPath = joinPaths(modelDir, config.pteFileName);
   const tokenizerPath = config.tokenizerFileName
     ? joinPaths(modelDir, config.tokenizerFileName)
@@ -58,7 +58,9 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
   // Check model file
   const modelInfo = await FileSystem.getInfoAsync(modelPath);
   const modelFileResult = {
-    exists: modelInfo.exists && (modelInfo.exists ? (modelInfo.size || 0) > 0 : false),
+    exists:
+      modelInfo.exists &&
+      (modelInfo.exists ? (modelInfo.size || 0) > 0 : false),
     size: modelInfo.exists ? modelInfo.size : undefined,
     path: modelPath,
   };
@@ -68,7 +70,9 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
   if (tokenizerPath) {
     const tokenizerInfo = await FileSystem.getInfoAsync(tokenizerPath);
     tokenizerFileResult = {
-      exists: tokenizerInfo.exists && (tokenizerInfo.exists ? (tokenizerInfo.size || 0) > 0 : false),
+      exists:
+        tokenizerInfo.exists &&
+        (tokenizerInfo.exists ? (tokenizerInfo.size || 0) > 0 : false),
       size: tokenizerInfo.exists ? tokenizerInfo.size : undefined,
       path: tokenizerPath,
     };
@@ -79,7 +83,9 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
   if (configPath) {
     const configInfo = await FileSystem.getInfoAsync(configPath);
     configFileResult = {
-      exists: configInfo.exists && (configInfo.exists ? (configInfo.size || 0) > 0 : false),
+      exists:
+        configInfo.exists &&
+        (configInfo.exists ? (configInfo.size || 0) > 0 : false),
       size: configInfo.exists ? configInfo.size : undefined,
       path: configPath,
     };
@@ -115,7 +121,7 @@ export async function getStorageInfo(): Promise<{
   // Get available space (if supported)
   let availableSpace: number | undefined;
   let usedSpace: number | undefined;
-  
+
   try {
     const diskInfo = await FileSystem.getFreeDiskStorageAsync();
     availableSpace = diskInfo;
@@ -155,17 +161,17 @@ export async function getStorageInfo(): Promise<{
  */
 export async function logStorageDebugInfo(): Promise<void> {
   console.log("=== Storage Debug Info ===");
-  
+
   const storageInfo = await getStorageInfo();
   console.log("Base directory:", storageInfo.baseDirectory);
   console.log("Models directory:", storageInfo.modelsDirectory);
-  
+
   if (storageInfo.availableSpace) {
     console.log(
       `Available space: ${(storageInfo.availableSpace / 1024 / 1024 / 1024).toFixed(2)} GB`,
     );
   }
-  
+
   if (storageInfo.usedSpace) {
     console.log(
       `Models using: ${(storageInfo.usedSpace / 1024 / 1024).toFixed(2)} MB`,
@@ -222,4 +228,3 @@ export async function verifyAllModels(
     verified,
   };
 }
-

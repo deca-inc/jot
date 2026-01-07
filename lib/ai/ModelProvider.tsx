@@ -9,7 +9,13 @@
  * Note: Actual LLM loading/generation is handled by LLMProvider.
  */
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
 import { useModelSettings } from "../db/modelSettings";
 import { LlmModelConfig, DEFAULT_MODEL, ALL_MODELS } from "./modelConfig";
 import { modelDownloadStatus } from "./modelDownloadStatus";
@@ -34,7 +40,8 @@ export function useModel(): ModelContextValue {
 }
 
 export function ModelProvider({ children }: { children: React.ReactNode }) {
-  const [currentConfig, setCurrentConfig] = useState<LlmModelConfig>(DEFAULT_MODEL);
+  const [currentConfig, setCurrentConfig] =
+    useState<LlmModelConfig>(DEFAULT_MODEL);
   const modelSettings = useModelSettings();
 
   // Initialize and verify models on mount

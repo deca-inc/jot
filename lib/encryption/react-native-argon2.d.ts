@@ -16,7 +16,7 @@ declare module "react-native-argon2" {
   function argon2(
     password: string,
     salt: string,
-    config: Argon2Config
+    config: Argon2Config,
   ): Promise<Argon2Result>;
 
   export default argon2;

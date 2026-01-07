@@ -2,7 +2,7 @@ import { type MigrationRunner } from "../migrationTypes";
 
 export const up: MigrationRunner = async (db) => {
   console.log("[Migration] Adding generation state tracking fields...");
-  
+
   // Add generation state tracking fields
   await db.execAsync(`
     ALTER TABLE entries ADD COLUMN generationStatus TEXT 
@@ -23,7 +23,9 @@ export const up: MigrationRunner = async (db) => {
     ON entries(generationStatus, generationStartedAt);
   `);
 
-  console.log("[Migration] Generation state tracking fields added successfully");
+  console.log(
+    "[Migration] Generation state tracking fields added successfully",
+  );
 };
 
 export const down: MigrationRunner = async (_db) => {

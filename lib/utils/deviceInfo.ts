@@ -20,8 +20,8 @@ const TIER_CONFIGS: Record<DeviceTier, TierConfig> = {
     tier: "high",
     // High-end: M1+, A15+, 8GB+ RAM - can handle larger models
     compatibleModels: [
-      "qwen-3-1.7b",    // Best quality
-      "qwen-3-0.6b",    // Fast option
+      "qwen-3-1.7b", // Best quality
+      "qwen-3-0.6b", // Fast option
       "llama-3.2-1b-instruct",
       "smollm2-1.7b",
       "smollm2-360m",
@@ -34,7 +34,7 @@ const TIER_CONFIGS: Record<DeviceTier, TierConfig> = {
     tier: "mid",
     // Mid-range: A12-A14, 4-6GB RAM - stick to smaller models
     compatibleModels: [
-      "qwen-3-0.6b",    // Best quality for this tier
+      "qwen-3-0.6b", // Best quality for this tier
       "llama-3.2-1b-instruct",
       "smollm2-360m",
       "smollm2-135m",
@@ -46,8 +46,8 @@ const TIER_CONFIGS: Record<DeviceTier, TierConfig> = {
     tier: "low",
     // Low-end: Older devices, limited RAM - only smallest models
     compatibleModels: [
-      "smollm2-360m",   // Best quality for this tier
-      "smollm2-135m",   // Fallback
+      "smollm2-360m", // Best quality for this tier
+      "smollm2-135m", // Fallback
     ],
     recommendedModel: "smollm2-360m",
     description: "Older device (limited RAM)",
@@ -148,13 +148,17 @@ export async function logModelCompatibilityDebug(): Promise<void> {
   console.log(`[ModelSelection] Tier Description: ${config.description}`);
   console.log("[ModelSelection]");
   console.log("[ModelSelection] === Model Selection ===");
-  console.log(`[ModelSelection] Compatible Models: ${config.compatibleModels.join(", ")}`);
+  console.log(
+    `[ModelSelection] Compatible Models: ${config.compatibleModels.join(", ")}`,
+  );
   console.log(`[ModelSelection] Recommended: ${config.recommendedModel}`);
   console.log("[ModelSelection]");
   console.log("[ModelSelection] === All Tiers Reference ===");
   for (const [tierName, tierConfig] of Object.entries(TIER_CONFIGS)) {
     const marker = tierName === tier ? "→" : " ";
-    console.log(`[ModelSelection] ${marker} ${tierName.toUpperCase()}: ${tierConfig.recommendedModel} (${tierConfig.compatibleModels.length} models)`);
+    console.log(
+      `[ModelSelection] ${marker} ${tierName.toUpperCase()}: ${tierConfig.recommendedModel} (${tierConfig.compatibleModels.length} models)`,
+    );
   }
   console.log("[ModelSelection] =============================");
 }

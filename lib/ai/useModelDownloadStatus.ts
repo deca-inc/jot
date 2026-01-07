@@ -20,4 +20,3 @@ export function useModelDownloadStatus(): DownloadStatus | null {
 
   return status;
 }
-

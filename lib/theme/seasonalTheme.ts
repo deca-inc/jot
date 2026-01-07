@@ -10,16 +10,16 @@ export type TimeOfDay = "day" | "night";
 
 /**
  * Seasonal theme object with all color values and theme state
- * 
+ *
  * @property isDark - Convenient boolean for checking if dark mode is active
  * @property timeOfDay - The underlying time of day value ("day" | "night")
- * 
+ *
  * @example
  * const seasonalTheme = useSeasonalTheme();
- * 
+ *
  * // Use isDark for conditional styling
  * const backgroundColor = seasonalTheme.isDark ? "#1e293b" : "#ffffff";
- * 
+ *
  * // Or use theme colors directly (recommended)
  * const backgroundColor = seasonalTheme.cardBg;
  */

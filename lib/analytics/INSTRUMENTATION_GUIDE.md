@@ -5,6 +5,7 @@ This guide identifies strategic locations to add tracking that will automaticall
 ## Privacy First ⚠️
 
 **NEVER track personal content:**
+
 - No journal entries
 - No AI conversation content
 - No user-generated text
@@ -12,12 +13,14 @@ This guide identifies strategic locations to add tracking that will automaticall
 
 ## Strategic Instrumentation Points
 
-### 1. **Button Component** (HIGHEST PRIORITY) 
+### 1. **Button Component** (HIGHEST PRIORITY)
+
 **File:** `lib/components/Button.tsx`
 
 **Why:** This is your central button component used throughout the app. Instrumenting it once covers most button clicks automatically.
 
 **Implementation:**
+
 ```typescript
 // Add at the top of Button.tsx
 import { useTrackEvent } from "../analytics/hooks";
@@ -34,13 +37,14 @@ const handlePress = (e: any) => {
     // Extract button label if it's a string
     label: typeof children === "string" ? children : undefined,
   });
-  
+
   // Call the original onPress
   props.onPress?.(e);
 };
 ```
 
 **Coverage:** This single change captures ALL button interactions across:
+
 - Settings
 - Composer actions (Save, Cancel, etc.)
 - Model management
@@ -50,11 +54,13 @@ const handlePress = (e: any) => {
 ---
 
 ### 2. **SimpleNavigation Component** (HIGHEST PRIORITY)
+
 **File:** `lib/navigation/SimpleNavigation.tsx`
 
 **Why:** This is your navigation hub. Track screen changes here and you capture all navigation automatically.
 
 **Implementation:**
+
 ```typescript
 // Add at the top:
 import { useTrackScreenView } from "../analytics/hooks";
@@ -76,14 +82,15 @@ useEffect(() => {
     fullEditor: "Full Editor",
     entryEditor: "Entry Editor",
   };
-  
-  trackEvent("screen_viewed", { 
-    screen: screenNames[currentScreen] 
+
+  trackEvent("screen_viewed", {
+    screen: screenNames[currentScreen],
   });
 }, [currentScreen, trackEvent]);
 ```
 
 **Coverage:** Captures ALL screen navigation:
+
 - Home ↔ Settings
 - Opening composers
 - Viewing entries
@@ -92,7 +99,9 @@ useEffect(() => {
 ---
 
 ### 3. **Individual Screen Components** (MEDIUM PRIORITY)
-**Files:** 
+
+**Files:**
+
 - `lib/screens/HomeScreen.tsx`
 - `lib/screens/SettingsScreen.tsx`
 - `lib/screens/ComposerScreen.tsx`
@@ -101,6 +110,7 @@ useEffect(() => {
 **Why:** Adds context-specific screen view tracking with properties.
 
 **Implementation (add to each screen):**
+
 ```typescript
 // Add at top of component:
 import { useTrackScreenView } from "../analytics/hooks";
@@ -117,9 +127,9 @@ export function SettingsScreen({ ... }: SettingsScreenProps) {
 }
 
 export function ComposerScreen({ initialType, entryId, ... }: ComposerScreenProps) {
-  useTrackScreenView("Composer", { 
+  useTrackScreenView("Composer", {
     type: initialType,
-    isEditing: !!entryId 
+    isEditing: !!entryId
   });
   // ... rest of component
 }
@@ -130,17 +140,21 @@ export function ComposerScreen({ initialType, entryId, ... }: ComposerScreenProp
 ---
 
 ### 4. **Entry Actions** (MEDIUM PRIORITY)
+
 **Files:**
+
 - `lib/screens/entryActions.ts`
 - `lib/screens/journalActions.ts`
 
 **Why:** These contain the business logic for entry operations. Track here to capture:
+
 - Entry creation
 - Entry deletion
 - Favoriting
 - Tag operations
 
 **Implementation:**
+
 ```typescript
 // In each action function:
 import { useTrackEvent } from "../analytics/hooks";
@@ -150,7 +164,7 @@ export const createJournalEntry = async (data: CreateEntryData) => {
   trackEvent("entry_created", {
     type: "journal",
     hasBlocks: data.blocks.length > 0,
-    blockTypes: data.blocks.map(b => b.type),
+    blockTypes: data.blocks.map((b) => b.type),
     // DO NOT include content, title, or text
   });
 
@@ -163,11 +177,13 @@ export const createJournalEntry = async (data: CreateEntryData) => {
 ---
 
 ### 5. **Settings Changes** (LOW PRIORITY)
+
 **File:** `lib/screens/SettingsScreen.tsx`
 
 **Why:** Track when users change important settings.
 
 **Implementation:**
+
 ```typescript
 // In handleTelemetryToggle:
 trackEvent("telemetry_toggled", { enabled: newValue });
@@ -184,11 +200,13 @@ trackEvent("model_selected", { modelId: selectedModel });
 ---
 
 ### 6. **Model Management** (LOW PRIORITY)
+
 **File:** `lib/components/ModelManagement.tsx`
 
 **Why:** Track model downloads and usage.
 
 **Implementation:**
+
 ```typescript
 trackEvent("model_download_started", { modelId });
 trackEvent("model_download_completed", { modelId, duration });
@@ -202,15 +220,18 @@ trackEvent("model_deleted", { modelId });
 ## Implementation Priority
 
 ### Phase 1 (Do These First):
+
 1. ✅ PostHog Provider (DONE)
 2. **Button Component** - Captures 80% of interactions with one change
 3. **SimpleNavigation** - Captures all navigation automatically
 
 ### Phase 2 (High Value):
+
 4. Screen components with `useTrackScreenView`
 5. Entry lifecycle events
 
 ### Phase 3 (Nice to Have):
+
 6. Settings changes
 7. Model management events
 8. Performance metrics
@@ -220,6 +241,7 @@ trackEvent("model_deleted", { modelId });
 ## What NOT to Track
 
 ❌ **Never track these:**
+
 - Journal entry content
 - AI prompts or responses
 - User-entered text
@@ -229,6 +251,7 @@ trackEvent("model_deleted", { modelId });
 - Search queries
 
 ✅ **Safe to track:**
+
 - Button clicks (with generic labels)
 - Screen views
 - Navigation patterns
@@ -260,9 +283,9 @@ import { useTrackEvent, sanitizeProperties } from "../analytics/hooks";
 
 export function Button({ variant, size, children, ...props }: ButtonProps) {
   const trackEvent = useTrackEvent();
-  
+
   // ... existing code ...
-  
+
   const handlePress = (e: any) => {
     // Track the click
     const eventProperties = sanitizeProperties({
@@ -272,13 +295,13 @@ export function Button({ variant, size, children, ...props }: ButtonProps) {
       disabled,
       loading,
     });
-    
+
     trackEvent("button_clicked", eventProperties);
-    
+
     // Call original handler
     props.onPress?.(e);
   };
-  
+
   return (
     <Animated.View style={[{ transform: [{ scale }] }, style]}>
       <TouchableOpacity
@@ -294,4 +317,3 @@ export function Button({ variant, size, children, ...props }: ButtonProps) {
 ```
 
 This single change instruments every button in your app automatically!
-

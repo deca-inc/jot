@@ -76,7 +76,9 @@ export const QuillRichEditor = forwardRef<
   // Keyboard state - initialize as visible if autoFocus is true
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(autoFocus);
-  const toolbarAnimation = useRef(new Animated.Value(autoFocus ? 1 : 0)).current;
+  const toolbarAnimation = useRef(
+    new Animated.Value(autoFocus ? 1 : 0),
+  ).current;
 
   // Track formatting state
   const [formatState, setFormatState] = useState({
@@ -681,16 +683,18 @@ export const QuillRichEditor = forwardRef<
           }}
           onSelectionChange={(data) => {
             if (data.range) {
-              editorRef.current?.getFormat(data.range).then((format: Record<string, unknown>) => {
-                setFormatState({
-                  bold: !!format.bold,
-                  italic: !!format.italic,
-                  underline: !!format.underline,
-                  strike: !!format.strike,
-                  header: (format.header as number) || 0,
-                  list: (format.list as string) || null,
+              editorRef.current
+                ?.getFormat(data.range)
+                .then((format: Record<string, unknown>) => {
+                  setFormatState({
+                    bold: !!format.bold,
+                    italic: !!format.italic,
+                    underline: !!format.underline,
+                    strike: !!format.strike,
+                    header: (format.header as number) || 0,
+                    list: (format.list as string) || null,
+                  });
                 });
-              });
             }
           }}
           onHtmlChange={handleHtmlChange}
@@ -843,7 +847,9 @@ export const QuillRichEditor = forwardRef<
             })();
 
             // Auto-focus the editor on load if requested
-            ${autoFocus ? `
+            ${
+              autoFocus
+                ? `
             (function() {
               // Wait for quill to be ready, then focus
               setTimeout(function() {
@@ -852,7 +858,9 @@ export const QuillRichEditor = forwardRef<
                 }
               }, 100);
             })();
-            ` : ''}
+            `
+                : ""
+            }
           `}
         />
       </View>

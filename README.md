@@ -51,11 +51,13 @@ src/
 This project is source-available under a restrictive license.
 
 **Permitted:**
+
 - Personal, non-commercial use
 - Forking and local modification for personal use
 - Learning and reference
 
 **Not permitted:**
+
 - Redistribution (modified or unmodified)
 - Commercial use
 - Derivative works for distribution

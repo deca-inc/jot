@@ -153,4 +153,3 @@ export const down: MigrationRunner = async (db) => {
   await db.runAsync("DELETE FROM settings");
   await db.runAsync("DELETE FROM entries_fts");
 };
-

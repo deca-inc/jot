@@ -241,8 +241,8 @@ export function BottomComposer({
                 paddingBottom: isKeyboardVisible
                   ? spacingPatterns.sm
                   : insets.bottom > 0
-                  ? insets.bottom
-                  : spacingPatterns.xxs,
+                    ? insets.bottom
+                    : spacingPatterns.xxs,
               },
             ]}
           >
@@ -297,8 +297,8 @@ export function BottomComposer({
                 paddingBottom: isKeyboardVisible
                   ? spacingPatterns.xxs
                   : insets.bottom > 0
-                  ? insets.bottom
-                  : spacingPatterns.xxs,
+                    ? insets.bottom
+                    : spacingPatterns.xxs,
               },
             ]}
           >

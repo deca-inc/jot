@@ -458,7 +458,9 @@ export function SettingsScreen({
 
           <TouchableOpacity
             style={styles.linkItem}
-            onPress={() => Linking.openURL("https://jot.canny.io/features-bugs")}
+            onPress={() =>
+              Linking.openURL("https://jot.canny.io/features-bugs")
+            }
             activeOpacity={0.7}
           >
             <Text
