@@ -52,6 +52,7 @@ export interface HomeScreenProps {
     entryId: number,
     entryType?: "journal" | "ai_chat" | "countdown",
   ) => void;
+  onEditCountdown?: (entryId: number) => void;
   onCreateNewAIChat?: () => void;
   onCreateCountdown?: () => void;
 }
@@ -61,6 +62,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     onOpenFullEditor,
     onOpenSettings,
     onOpenEntryEditor,
+    onEditCountdown,
     onCreateNewAIChat,
     onCreateCountdown,
     isVisible = true,
@@ -248,6 +250,9 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const onOpenEntryEditorRef = useRef(onOpenEntryEditor);
   onOpenEntryEditorRef.current = onOpenEntryEditor;
 
+  const onEditCountdownRef = useRef(onEditCountdown);
+  onEditCountdownRef.current = onEditCountdown;
+
   const handleToggleFavorite = useCallback((entry: Entry) => {
     toggleFavoriteMutationRef.current.mutate(entry.id);
   }, []);
@@ -275,6 +280,14 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
   const handleEntryPress = useCallback((entry: Entry) => {
     if (onOpenEntryEditorRef.current) {
+      onOpenEntryEditorRef.current(entry.id, entry.type);
+    }
+  }, []);
+
+  const handleEditEntry = useCallback((entry: Entry) => {
+    if (entry.type === "countdown" && onEditCountdownRef.current) {
+      onEditCountdownRef.current(entry.id);
+    } else if (onOpenEntryEditorRef.current) {
       onOpenEntryEditorRef.current(entry.id, entry.type);
     }
   }, []);
@@ -446,6 +459,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
         <EntryListItem
           entry={item.entry}
           onPress={handleEntryPress}
+          onEdit={handleEditEntry}
           onToggleFavorite={handleToggleFavorite}
           onResetCountup={handleResetCountup}
           seasonalTheme={seasonalTheme}
@@ -456,6 +470,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       seasonalTheme,
       formatDateHeader,
       handleEntryPress,
+      handleEditEntry,
       handleToggleFavorite,
       handleResetCountup,
     ],

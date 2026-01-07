@@ -16,7 +16,12 @@ export interface EntryActionContext {
     { id: number; input: UpdateEntryInput },
     unknown
   >;
-  deleteEntry: UseMutationResult<number, Error, number, unknown>;
+  deleteEntry: UseMutationResult<
+    { id: number; parentId: number | null | undefined },
+    Error,
+    number | { id: number; parentId?: number | null },
+    unknown
+  >;
   onNavigateBack?: () => void;
 }
 

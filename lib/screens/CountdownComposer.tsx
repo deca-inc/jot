@@ -18,16 +18,23 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
 import { Text } from "../components";
+import { useDatabase } from "../db/DatabaseProvider";
+import { EntryRepository } from "../db/entries";
 import { useCreateEntry, useUpdateEntry, useEntry } from "../db/useEntries";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { createCountdownBlock, extractCountdownData } from "../utils/countdown";
+import {
+  CheckinRecurrence,
+  createCountdownBlock,
+  extractCountdownData,
+  RecurrenceType,
+  WeekOfMonth,
+} from "../utils/countdown";
 import {
   requestNotificationPermissions,
-  scheduleCountdownNotification,
-  cancelNotification,
   hasNotificationPermissions,
 } from "../utils/notifications";
+import { refreshCountdownNotifications } from "../utils/notificationScheduler";
 
 export interface CountdownComposerProps {
   entryId?: number;
@@ -53,6 +60,29 @@ function formatTimeForDisplay(date: Date): string {
   });
 }
 
+// Day names for weekly recurrence
+const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// Recurrence type labels
+const RECURRENCE_LABELS: Record<RecurrenceType, string> = {
+  none: "None",
+  daily: "Daily",
+  weekly: "Weekly",
+  monthly: "Monthly",
+};
+
+// Week of month labels for monthly recurrence
+const WEEK_OF_MONTH_LABELS: Record<WeekOfMonth, string> = {
+  1: "1st",
+  2: "2nd",
+  3: "3rd",
+  4: "4th",
+  5: "Last",
+};
+
+// Interval options
+const INTERVAL_OPTIONS = [1, 2, 3, 4, 5, 6];
+
 export function CountdownComposer({
   entryId,
   onSave,
@@ -60,6 +90,7 @@ export function CountdownComposer({
 }: CountdownComposerProps) {
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
+  const db = useDatabase();
 
   // Track screen view
   useTrackScreenView("Countdown Composer");
@@ -89,14 +120,35 @@ export function CountdownComposer({
   const [notificationEnabled, setNotificationEnabled] = useState(
     existingData?.notificationEnabled ?? false,
   );
-  const [existingNotificationId, setExistingNotificationId] = useState<
-    string | undefined
-  >(existingData?.notificationId);
   const [showAdvanced, setShowAdvanced] = useState(
     !!(existingData?.rewardsNote || existingData?.confettiEnabled === true),
   );
   const [isSaving, setIsSaving] = useState(false);
   const [hasLoadedExistingData, setHasLoadedExistingData] = useState(false);
+
+  // Check-in recurrence state
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>(
+    existingData?.checkinRecurrence?.type ?? "none",
+  );
+  const [recurrenceInterval, setRecurrenceInterval] = useState<number>(
+    existingData?.checkinRecurrence?.interval ?? 1,
+  );
+  const [recurrenceDayOfWeek, setRecurrenceDayOfWeek] = useState<number>(
+    existingData?.checkinRecurrence?.dayOfWeek ?? new Date().getDay(),
+  );
+  const [recurrenceWeekOfMonth, setRecurrenceWeekOfMonth] =
+    useState<WeekOfMonth>(
+      (existingData?.checkinRecurrence?.weekOfMonth as WeekOfMonth) ?? 1,
+    );
+  const [recurrenceHour, setRecurrenceHour] = useState<number>(
+    existingData?.checkinRecurrence?.hour ?? 9,
+  );
+  const [recurrenceMinute, setRecurrenceMinute] = useState<number>(
+    existingData?.checkinRecurrence?.minute ?? 0,
+  );
+  const [showRecurrenceTimePicker, setShowRecurrenceTimePicker] = useState(
+    Platform.OS === "ios",
+  );
 
   // Sync form state when existing entry data loads
   useEffect(() => {
@@ -109,10 +161,30 @@ export function CountdownComposer({
         setRewardsNote(data.rewardsNote || "");
         setConfettiEnabled(data.confettiEnabled ?? false);
         setNotificationEnabled(data.notificationEnabled ?? false);
-        setExistingNotificationId(data.notificationId);
         setShowAdvanced(
           !!(data.rewardsNote || data.confettiEnabled === true),
         );
+        // Load recurrence data
+        if (data.checkinRecurrence) {
+          setRecurrenceType(data.checkinRecurrence.type);
+          if (data.checkinRecurrence.interval !== undefined) {
+            setRecurrenceInterval(data.checkinRecurrence.interval);
+          }
+          if (data.checkinRecurrence.dayOfWeek !== undefined) {
+            setRecurrenceDayOfWeek(data.checkinRecurrence.dayOfWeek);
+          }
+          if (data.checkinRecurrence.weekOfMonth !== undefined) {
+            setRecurrenceWeekOfMonth(
+              data.checkinRecurrence.weekOfMonth as WeekOfMonth,
+            );
+          }
+          if (data.checkinRecurrence.hour !== undefined) {
+            setRecurrenceHour(data.checkinRecurrence.hour);
+          }
+          if (data.checkinRecurrence.minute !== undefined) {
+            setRecurrenceMinute(data.checkinRecurrence.minute);
+          }
+        }
         setHasLoadedExistingData(true);
       }
     }
@@ -243,6 +315,40 @@ export function CountdownComposer({
     [targetDate],
   );
 
+  // Handle recurrence type change
+  const handleRecurrenceTypeChange = useCallback(
+    async (type: RecurrenceType) => {
+      if (type !== "none" && recurrenceType === "none") {
+        // Switching from none to a recurrence - request permissions
+        const hasPermission = await requestNotificationPermissions();
+        if (!hasPermission) {
+          return; // Don't change type if permissions denied
+        }
+      }
+      setRecurrenceType(type);
+    },
+    [recurrenceType],
+  );
+
+  // Handle recurrence time change
+  const handleRecurrenceTimeChange = useCallback(
+    (event: DateTimePickerEvent, selectedDate?: Date) => {
+      if (Platform.OS === "android") {
+        setShowRecurrenceTimePicker(false);
+      }
+
+      if (selectedDate && event.type === "set") {
+        setRecurrenceHour(selectedDate.getHours());
+        setRecurrenceMinute(selectedDate.getMinutes());
+      }
+    },
+    [],
+  );
+
+  // Build recurrence time as Date for the picker
+  const recurrenceTimeAsDate = new Date();
+  recurrenceTimeAsDate.setHours(recurrenceHour, recurrenceMinute, 0, 0);
+
   const handleSave = useCallback(async () => {
     if (!title.trim()) {
       return;
@@ -251,34 +357,21 @@ export function CountdownComposer({
     setIsSaving(true);
 
     try {
-      let notificationId: string | undefined = existingNotificationId;
-
-      // Handle notification scheduling/cancellation
-      if (!isCountUp) {
-        // Cancel existing notification if notification was disabled or target date changed
-        if (existingNotificationId) {
-          const shouldCancelExisting =
-            !notificationEnabled ||
-            (existingEntry &&
-              extractCountdownData(existingEntry.blocks)?.targetDate !==
-                targetDate.getTime());
-          if (shouldCancelExisting) {
-            await cancelNotification(existingNotificationId);
-            notificationId = undefined;
-          }
+      // Build check-in recurrence config (notifications will be scheduled by the refresh)
+      let checkinRecurrence: CheckinRecurrence | undefined;
+      if (!isCountUp && recurrenceType !== "none") {
+        checkinRecurrence = {
+          type: recurrenceType,
+          interval: recurrenceInterval,
+          hour: recurrenceHour,
+          minute: recurrenceMinute,
+        };
+        if (recurrenceType === "weekly") {
+          checkinRecurrence.dayOfWeek = recurrenceDayOfWeek;
         }
-
-        // Schedule new notification if enabled and target date is in the future
-        if (notificationEnabled && targetDate.getTime() > Date.now()) {
-          // If we already have a valid notification and nothing changed, keep it
-          if (!notificationId) {
-            notificationId =
-              (await scheduleCountdownNotification(
-                entryId ?? 0, // Will be updated after entry creation
-                targetDate.getTime(),
-                title.trim(),
-              )) ?? undefined;
-          }
+        if (recurrenceType === "monthly") {
+          checkinRecurrence.dayOfWeek = recurrenceDayOfWeek;
+          checkinRecurrence.weekOfMonth = recurrenceWeekOfMonth;
         }
       }
 
@@ -289,8 +382,10 @@ export function CountdownComposer({
         rewardsNote: rewardsNote.trim() || undefined,
         confettiEnabled,
         notificationEnabled: isCountUp ? false : notificationEnabled,
-        notificationId,
+        checkinRecurrence,
       });
+
+      let savedEntryId: number;
 
       if (entryId) {
         // Update existing entry
@@ -301,7 +396,7 @@ export function CountdownComposer({
             blocks: [block],
           },
         });
-        onSave?.(entryId);
+        savedEntryId = entryId;
       } else {
         // Create new entry (isPinned defaults to true for countdown in repository)
         const entry = await createEntryRef.current.mutateAsync({
@@ -309,37 +404,14 @@ export function CountdownComposer({
           title: title.trim(),
           blocks: [block],
         });
-
-        // If notification was scheduled with entryId=0, we need to reschedule with the real ID
-        if (notificationId && notificationEnabled && !isCountUp) {
-          await cancelNotification(notificationId);
-          const newNotificationId = await scheduleCountdownNotification(
-            entry.id,
-            targetDate.getTime(),
-            title.trim(),
-          );
-          if (newNotificationId) {
-            // Update the entry with the correct notification ID
-            const updatedBlock = createCountdownBlock({
-              targetDate: targetDate.getTime(),
-              title: title.trim(),
-              isCountUp,
-              rewardsNote: rewardsNote.trim() || undefined,
-              confettiEnabled,
-              notificationEnabled,
-              notificationId: newNotificationId,
-            });
-            await updateEntryRef.current.mutateAsync({
-              id: entry.id,
-              input: {
-                blocks: [updatedBlock],
-              },
-            });
-          }
-        }
-
-        onSave?.(entry.id);
+        savedEntryId = entry.id;
       }
+
+      // Refresh all countdown notifications (centralized scheduling)
+      const entryRepository = new EntryRepository(db);
+      await refreshCountdownNotifications(entryRepository);
+
+      onSave?.(savedEntryId);
     } catch (error) {
       console.error("Error saving countdown:", error);
     } finally {
@@ -352,10 +424,15 @@ export function CountdownComposer({
     rewardsNote,
     confettiEnabled,
     notificationEnabled,
-    existingNotificationId,
-    existingEntry,
     entryId,
     onSave,
+    recurrenceType,
+    recurrenceInterval,
+    recurrenceDayOfWeek,
+    recurrenceWeekOfMonth,
+    recurrenceHour,
+    recurrenceMinute,
+    db,
   ]);
 
   const handleCancel = useCallback(() => {
@@ -730,6 +807,348 @@ export function CountdownComposer({
           </View>
         )}
 
+        {/* Check-in Reminders - only for countdowns, not Time Since */}
+        {!isCountUp && (
+          <View style={styles.formGroup}>
+            <Text
+              variant="caption"
+              style={[styles.label, { color: seasonalTheme.textSecondary }]}
+            >
+              Check-in Reminders
+            </Text>
+
+            {/* Recurrence Type Selector */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={[
+                styles.recurrenceTypeContainer,
+                {
+                  backgroundColor: seasonalTheme.isDark
+                    ? "rgba(255, 255, 255, 0.08)"
+                    : "rgba(0, 0, 0, 0.06)",
+                },
+              ]}
+              contentContainerStyle={styles.recurrenceTypeContent}
+            >
+              {(["none", "daily", "weekly", "monthly"] as const).map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.recurrenceTypeButton,
+                    recurrenceType === type && {
+                      backgroundColor: seasonalTheme.isDark
+                        ? "rgba(255, 255, 255, 0.15)"
+                        : "rgba(255, 255, 255, 0.95)",
+                    },
+                  ]}
+                  onPress={() => handleRecurrenceTypeChange(type)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    variant="caption"
+                    style={{
+                      color:
+                        recurrenceType === type
+                          ? seasonalTheme.textPrimary
+                          : seasonalTheme.textSecondary,
+                      fontWeight: recurrenceType === type ? "600" : "400",
+                    }}
+                  >
+                    {RECURRENCE_LABELS[type]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Interval Selector - for any non-none recurrence */}
+            {recurrenceType !== "none" && (
+              <View style={styles.recurrenceOptionsRow}>
+                <Text
+                  variant="caption"
+                  style={{ color: seasonalTheme.textSecondary }}
+                >
+                  Every:
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.intervalSelector}
+                >
+                  {INTERVAL_OPTIONS.map((interval) => (
+                    <TouchableOpacity
+                      key={interval}
+                      style={[
+                        styles.intervalButton,
+                        {
+                          backgroundColor:
+                            recurrenceInterval === interval
+                              ? seasonalTheme.chipText
+                              : seasonalTheme.isDark
+                                ? "rgba(255, 255, 255, 0.08)"
+                                : "rgba(0, 0, 0, 0.06)",
+                        },
+                      ]}
+                      onPress={() => setRecurrenceInterval(interval)}
+                    >
+                      <Text
+                        variant="caption"
+                        style={{
+                          color:
+                            recurrenceInterval === interval
+                              ? seasonalTheme.isDark
+                                ? "#000"
+                                : "#fff"
+                              : seasonalTheme.textSecondary,
+                          fontWeight:
+                            recurrenceInterval === interval ? "600" : "400",
+                        }}
+                      >
+                        {interval}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <Text
+                  variant="caption"
+                  style={{
+                    color: seasonalTheme.textSecondary,
+                    marginLeft: spacingPatterns.xs,
+                  }}
+                >
+                  {recurrenceType === "daily"
+                    ? recurrenceInterval === 1
+                      ? "day"
+                      : "days"
+                    : recurrenceType === "weekly"
+                      ? recurrenceInterval === 1
+                        ? "week"
+                        : "weeks"
+                      : recurrenceInterval === 1
+                        ? "month"
+                        : "months"}
+                </Text>
+              </View>
+            )}
+
+            {/* Day of Week Selector - for weekly */}
+            {recurrenceType === "weekly" && (
+              <View style={styles.recurrenceOptionsRow}>
+                <Text
+                  variant="caption"
+                  style={{ color: seasonalTheme.textSecondary }}
+                >
+                  On:
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.daySelector}
+                >
+                  {DAYS_OF_WEEK.map((day, index) => (
+                    <TouchableOpacity
+                      key={day}
+                      style={[
+                        styles.dayButton,
+                        {
+                          backgroundColor:
+                            recurrenceDayOfWeek === index
+                              ? seasonalTheme.chipText
+                              : seasonalTheme.isDark
+                                ? "rgba(255, 255, 255, 0.08)"
+                                : "rgba(0, 0, 0, 0.06)",
+                        },
+                      ]}
+                      onPress={() => setRecurrenceDayOfWeek(index)}
+                    >
+                      <Text
+                        variant="caption"
+                        style={{
+                          color:
+                            recurrenceDayOfWeek === index
+                              ? seasonalTheme.isDark
+                                ? "#000"
+                                : "#fff"
+                              : seasonalTheme.textSecondary,
+                          fontWeight:
+                            recurrenceDayOfWeek === index ? "600" : "400",
+                        }}
+                      >
+                        {day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Week of Month + Day of Week Selector - for monthly */}
+            {recurrenceType === "monthly" && (
+              <>
+                <View style={styles.recurrenceOptionsRow}>
+                  <Text
+                    variant="caption"
+                    style={{ color: seasonalTheme.textSecondary }}
+                  >
+                    On the:
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.weekOfMonthSelector}
+                  >
+                    {([1, 2, 3, 4, 5] as WeekOfMonth[]).map((week) => (
+                      <TouchableOpacity
+                        key={week}
+                        style={[
+                          styles.weekOfMonthButton,
+                          {
+                            backgroundColor:
+                              recurrenceWeekOfMonth === week
+                                ? seasonalTheme.chipText
+                                : seasonalTheme.isDark
+                                  ? "rgba(255, 255, 255, 0.08)"
+                                  : "rgba(0, 0, 0, 0.06)",
+                          },
+                        ]}
+                        onPress={() => setRecurrenceWeekOfMonth(week)}
+                      >
+                        <Text
+                          variant="caption"
+                          style={{
+                            color:
+                              recurrenceWeekOfMonth === week
+                                ? seasonalTheme.isDark
+                                  ? "#000"
+                                  : "#fff"
+                                : seasonalTheme.textSecondary,
+                            fontWeight:
+                              recurrenceWeekOfMonth === week ? "600" : "400",
+                          }}
+                        >
+                          {WEEK_OF_MONTH_LABELS[week]}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+                <View style={styles.recurrenceOptionsRow}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.daySelector}
+                  >
+                    {DAYS_OF_WEEK.map((day, index) => (
+                      <TouchableOpacity
+                        key={day}
+                        style={[
+                          styles.dayButton,
+                          {
+                            backgroundColor:
+                              recurrenceDayOfWeek === index
+                                ? seasonalTheme.chipText
+                                : seasonalTheme.isDark
+                                  ? "rgba(255, 255, 255, 0.08)"
+                                  : "rgba(0, 0, 0, 0.06)",
+                          },
+                        ]}
+                        onPress={() => setRecurrenceDayOfWeek(index)}
+                      >
+                        <Text
+                          variant="caption"
+                          style={{
+                            color:
+                              recurrenceDayOfWeek === index
+                                ? seasonalTheme.isDark
+                                  ? "#000"
+                                  : "#fff"
+                                : seasonalTheme.textSecondary,
+                            fontWeight:
+                              recurrenceDayOfWeek === index ? "600" : "400",
+                          }}
+                        >
+                          {day}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </>
+            )}
+
+            {/* Time Picker - for any non-none recurrence */}
+            {recurrenceType !== "none" && (
+              <View style={styles.recurrenceOptionsRow}>
+                <Text
+                  variant="caption"
+                  style={{ color: seasonalTheme.textSecondary }}
+                >
+                  At:
+                </Text>
+                {Platform.OS === "ios" ? (
+                  <DateTimePicker
+                    value={recurrenceTimeAsDate}
+                    mode="time"
+                    display="compact"
+                    onChange={handleRecurrenceTimeChange}
+                    accentColor={seasonalTheme.chipText}
+                    themeVariant={seasonalTheme.isDark ? "dark" : "light"}
+                    style={styles.iosPicker}
+                  />
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={[
+                        styles.timePickerButton,
+                        {
+                          backgroundColor: seasonalTheme.isDark
+                            ? "rgba(255, 255, 255, 0.08)"
+                            : "rgba(255, 255, 255, 0.9)",
+                          borderColor: seasonalTheme.textSecondary + "40",
+                        },
+                      ]}
+                      onPress={() => setShowRecurrenceTimePicker(true)}
+                    >
+                      <Ionicons
+                        name="time-outline"
+                        size={16}
+                        color={seasonalTheme.textSecondary}
+                      />
+                      <Text
+                        variant="body"
+                        style={{
+                          color: seasonalTheme.textPrimary,
+                          marginLeft: 6,
+                        }}
+                      >
+                        {formatTimeForDisplay(recurrenceTimeAsDate)}
+                      </Text>
+                    </TouchableOpacity>
+                    {showRecurrenceTimePicker && (
+                      <DateTimePicker
+                        value={recurrenceTimeAsDate}
+                        mode="time"
+                        display="default"
+                        onChange={handleRecurrenceTimeChange}
+                        themeVariant={seasonalTheme.isDark ? "dark" : "light"}
+                      />
+                    )}
+                  </>
+                )}
+              </View>
+            )}
+
+            <Text
+              variant="caption"
+              style={{ color: seasonalTheme.textSecondary, marginTop: 8 }}
+            >
+              {recurrenceType === "none"
+                ? "No reminders will be scheduled"
+                : "Receive reminders to check in on your progress"}
+            </Text>
+          </View>
+        )}
+
         {/* Advanced Section Toggle */}
         <TouchableOpacity
           style={styles.advancedToggle}
@@ -1009,5 +1428,65 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 16,
     fontWeight: "600",
+  },
+  recurrenceTypeContainer: {
+    borderRadius: borderRadius.md,
+    padding: 4,
+  },
+  recurrenceTypeContent: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  recurrenceTypeButton: {
+    paddingVertical: spacingPatterns.xs,
+    paddingHorizontal: spacingPatterns.sm,
+    borderRadius: borderRadius.md - 2,
+  },
+  recurrenceOptionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacingPatterns.sm,
+    gap: spacingPatterns.sm,
+  },
+  daySelector: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  dayButton: {
+    width: 36,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: borderRadius.sm,
+  },
+  intervalSelector: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  intervalButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: borderRadius.sm,
+  },
+  weekOfMonthSelector: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  weekOfMonthButton: {
+    paddingHorizontal: spacingPatterns.sm,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: borderRadius.sm,
+  },
+  timePickerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacingPatterns.sm,
+    paddingVertical: spacingPatterns.xs,
   },
 });

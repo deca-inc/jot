@@ -34,7 +34,7 @@ type Screen =
 
 // Navigation ref for external navigation (e.g., from notification handler)
 export interface NavigationRef {
-  navigateToCountdownViewer: (entryId: number) => void;
+  navigateToCountdownViewer: (entryId: number, showCheckinPrompt?: boolean) => void;
 }
 
 // Global navigation ref
@@ -65,6 +65,8 @@ export function SimpleNavigation() {
   const [countdownViewerEntryId, setCountdownViewerEntryId] = useState<
     number | undefined
   >(undefined);
+  const [checkinParentId, setCheckinParentId] = useState<number | undefined>(undefined);
+  const [showCheckinPrompt, setShowCheckinPrompt] = useState(false);
   const [_homeRefreshKey, _setHomeRefreshKey] = useState(0);
   const _theme = useTheme();
   const createEntry = useCreateEntry();
@@ -287,8 +289,9 @@ export function SimpleNavigation() {
 
   const handleOpenEntryEditor = useCallback((entryId: number, entryType?: "journal" | "ai_chat" | "countdown") => {
     if (entryType === "countdown") {
-      setCountdownEntryId(entryId);
-      setCurrentScreen("countdownComposer");
+      // Open countdown in viewer mode (not edit mode)
+      setCountdownViewerEntryId(entryId);
+      setCurrentScreen("countdownViewer");
     } else {
       setEditingEntryId(entryId);
       setCurrentScreen("entryEditor");
@@ -315,10 +318,17 @@ export function SimpleNavigation() {
 
   const handleEntryEditorCancel = useCallback(async () => {
     // React Query cache handles any updates automatically
-    setCurrentScreen("home");
+    // If we were creating/editing a check-in, go back to the viewer
+    if (checkinParentId) {
+      setCountdownViewerEntryId(checkinParentId);
+      setCurrentScreen("countdownViewer");
+    } else {
+      setCurrentScreen("home");
+    }
     setEditingEntryId(undefined);
     setComposerEntryType(undefined);
-  }, []);
+    setCheckinParentId(undefined);
+  }, [checkinParentId]);
 
   // Countdown composer handlers
   const handleCreateCountdown = useCallback(() => {
@@ -327,24 +337,62 @@ export function SimpleNavigation() {
   }, []);
 
   const handleCountdownSave = useCallback((_entryId: number) => {
-    setCurrentScreen("home");
+    // If we were editing from the viewer, go back to viewer
+    if (countdownViewerEntryId) {
+      setCurrentScreen("countdownViewer");
+    } else {
+      setCurrentScreen("home");
+    }
     setCountdownEntryId(undefined);
-  }, []);
+  }, [countdownViewerEntryId]);
 
   const handleCountdownCancel = useCallback(() => {
-    setCurrentScreen("home");
+    // If we were editing from the viewer, go back to viewer
+    if (countdownViewerEntryId) {
+      setCurrentScreen("countdownViewer");
+    } else {
+      setCurrentScreen("home");
+    }
     setCountdownEntryId(undefined);
-  }, []);
+  }, [countdownViewerEntryId]);
 
   // Countdown viewer handlers (for notification deep linking)
-  const handleNavigateToCountdownViewer = useCallback((entryId: number) => {
+  const handleNavigateToCountdownViewer = useCallback((entryId: number, checkinPrompt?: boolean) => {
     setCountdownViewerEntryId(entryId);
+    setShowCheckinPrompt(checkinPrompt ?? false);
     setCurrentScreen("countdownViewer");
   }, []);
 
   const handleCountdownViewerClose = useCallback(() => {
     setCurrentScreen("home");
     setCountdownViewerEntryId(undefined);
+    setShowCheckinPrompt(false);
+  }, []);
+
+  // Handler for dismissing check-in prompt
+  const handleDismissCheckinPrompt = useCallback(() => {
+    setShowCheckinPrompt(false);
+  }, []);
+
+  // Handler for editing a countdown from the viewer
+  const handleCountdownViewerEdit = useCallback((entryId: number) => {
+    setCountdownEntryId(entryId);
+    setCurrentScreen("countdownComposer");
+  }, []);
+
+  // Handler for adding a check-in to a countdown
+  const handleAddCheckin = useCallback((parentId: number) => {
+    setCheckinParentId(parentId);
+    setEditingEntryId(undefined);
+    setComposerEntryType("journal");
+    setCurrentScreen("entryEditor");
+  }, []);
+
+  // Handler for opening a check-in from the countdown viewer
+  const handleOpenCheckin = useCallback((entryId: number) => {
+    setEditingEntryId(entryId);
+    setComposerEntryType("journal");
+    setCurrentScreen("entryEditor");
   }, []);
 
   // Register navigation ref for external navigation (e.g., notification handler)
@@ -472,6 +520,7 @@ export function SimpleNavigation() {
           <ComposerScreen
             entryId={editingEntryId}
             initialType={composerEntryType}
+            parentId={checkinParentId}
             onSave={handleEntryEditorSave}
             onCancel={handleEntryEditorCancel}
           />
@@ -491,6 +540,11 @@ export function SimpleNavigation() {
           <CountdownViewer
             entryId={countdownViewerEntryId}
             onClose={handleCountdownViewerClose}
+            onEdit={handleCountdownViewerEdit}
+            onAddCheckin={handleAddCheckin}
+            onOpenCheckin={handleOpenCheckin}
+            showCheckinPrompt={showCheckinPrompt}
+            onDismissCheckinPrompt={handleDismissCheckinPrompt}
           />
         ) : null;
       default:
@@ -523,6 +577,7 @@ export function SimpleNavigation() {
             onOpenFullEditor={handleOpenFullEditor}
             onOpenSettings={handleOpenSettings}
             onOpenEntryEditor={handleOpenEntryEditor}
+            onEditCountdown={handleCountdownViewerEdit}
             onCreateNewAIChat={handleCreateNewAIChat}
             onCreateCountdown={handleCreateCountdown}
           />

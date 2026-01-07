@@ -18,6 +18,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
     "prepare": "husky"
   },
   "dependencies": {
@@ -36,7 +38,6 @@
     "expo-glass-effect": "~0.1.7",
     "expo-linear-gradient": "^15.0.7",
     "expo-localization": "^17.0.7",
-    "expo-notifications": "^0.32.15",
     "expo-secure-store": "~15.0.7",
     "expo-sqlite": "~16.0.9",
     "expo-status-bar": "~3.0.8",
@@ -51,7 +52,7 @@
     "react-native": "0.81.5",
     "react-native-argon2": "^3.0.0",
     "react-native-cn-quill": "^0.7.20",
-    "react-native-executorch": "^0.6.0",
+    "react-native-executorch": "^0.5.15",
     "react-native-fast-confetti": "^1.1.1",
     "react-native-quick-crypto": "^0.7.17",
     "react-native-reanimated": "^4.2.1",

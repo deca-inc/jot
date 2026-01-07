@@ -1,6 +1,25 @@
 import { Block } from "../db/entries";
 
 /**
+ * Check-in recurrence configuration
+ */
+export type RecurrenceType = "none" | "daily" | "weekly" | "monthly";
+
+// Week ordinal for monthly recurrence (1st, 2nd, 3rd, 4th, last)
+export type WeekOfMonth = 1 | 2 | 3 | 4 | 5; // 5 = "last"
+
+export interface CheckinRecurrence {
+  type: RecurrenceType;
+  interval?: number; // Every N days/weeks/months (default 1)
+  dayOfWeek?: number; // 0-6 (Sun-Sat) for weekly and monthly
+  weekOfMonth?: WeekOfMonth; // 1-5 (1st, 2nd, 3rd, 4th, last) for monthly
+  hour?: number; // Hour of day (0-23), defaults to 9
+  minute?: number; // Minute (0-59), defaults to 0
+  nextScheduledAt?: number; // Timestamp of next reminder
+  notificationId?: string; // ID of scheduled check-in notification
+}
+
+/**
  * Data extracted from a countdown entry's blocks
  */
 export interface CountdownData {
@@ -12,6 +31,7 @@ export interface CountdownData {
   confettiTriggeredAt?: number;
   notificationEnabled?: boolean;
   notificationId?: string;
+  checkinRecurrence?: CheckinRecurrence;
 }
 
 /**
@@ -42,6 +62,7 @@ export function extractCountdownData(blocks: Block[]): CountdownData | null {
     confettiTriggeredAt: countdownBlock.confettiTriggeredAt,
     notificationEnabled: countdownBlock.notificationEnabled ?? false,
     notificationId: countdownBlock.notificationId,
+    checkinRecurrence: countdownBlock.checkinRecurrence,
   };
 }
 
@@ -175,6 +196,7 @@ export function createCountdownBlock(data: {
   confettiEnabled?: boolean;
   notificationEnabled?: boolean;
   notificationId?: string;
+  checkinRecurrence?: CheckinRecurrence;
 }): Block {
   return {
     type: "countdown",
@@ -185,5 +207,6 @@ export function createCountdownBlock(data: {
     confettiEnabled: data.confettiEnabled ?? false,
     notificationEnabled: data.notificationEnabled ?? false,
     notificationId: data.notificationId,
+    checkinRecurrence: data.checkinRecurrence,
   };
 }

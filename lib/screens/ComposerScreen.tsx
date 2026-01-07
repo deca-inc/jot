@@ -11,6 +11,7 @@ export interface ComposerScreenProps {
   initialType?: EntryType;
   initialContent?: string;
   entryId?: number; // For editing existing entries
+  parentId?: number; // For creating check-ins linked to a parent entry
   fullScreen?: boolean;
 }
 
@@ -20,6 +21,7 @@ export function ComposerScreen({
   initialType = "journal",
   initialContent = "",
   entryId,
+  parentId,
   fullScreen = false,
 }: ComposerScreenProps) {
   const theme = useTheme();
@@ -62,11 +64,12 @@ export function ComposerScreen({
               title: initialContent.trim()
                 ? initialContent.trim().slice(0, 50) +
                   (initialContent.length > 50 ? "..." : "")
-                : "Untitled",
+                : parentId ? "Check-in" : "Untitled",
               blocks,
               tags: [],
               attachments: [],
               isFavorite: false,
+              parentId,
             });
 
             console.log(

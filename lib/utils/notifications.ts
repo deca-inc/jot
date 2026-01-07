@@ -132,19 +132,29 @@ export interface NotificationData {
 
 /**
  * Setup notification response handler for when user taps a notification
- * @param onNotificationTap Callback when user taps a notification with an entryId
+ * @param onNotificationTap Callback when user taps a notification with an entryId and type
  * @returns Cleanup function to remove the listener
  */
 export function setupNotificationResponseHandler(
-  onNotificationTap: (entryId: number) => void,
+  onNotificationTap: (
+    entryId: number,
+    type: "countdown-complete" | "checkin-reminder",
+  ) => void,
 ): () => void {
   const subscription = Notifications.addNotificationResponseReceivedListener(
     (response) => {
       const data = response.notification.request.content
         .data as NotificationData;
 
-      if (data?.entryId && data?.type === "countdown-complete") {
-        onNotificationTap(data.entryId);
+      if (
+        data?.entryId &&
+        (data?.type === "countdown-complete" ||
+          data?.type === "checkin-reminder")
+      ) {
+        onNotificationTap(
+          data.entryId,
+          data.type as "countdown-complete" | "checkin-reminder",
+        );
       }
     },
   );

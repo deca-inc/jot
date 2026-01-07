@@ -252,7 +252,11 @@ export async function updateJournalTitle(
 }
 
 // Type for delete mutation
-type DeleteEntryMutation = UseMutationResult<number, Error, number>;
+type DeleteEntryMutation = UseMutationResult<
+  { id: number; parentId: number | null | undefined },
+  Error,
+  number | { id: number; parentId?: number | null }
+>;
 
 /**
  * Action: Delete journal entry

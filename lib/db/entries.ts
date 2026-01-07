@@ -69,6 +69,17 @@ export type Block =
       confettiTriggeredAt?: number; // Timestamp when confetti was shown (prevents re-triggering)
       notificationEnabled?: boolean; // Whether to send notification on completion
       notificationId?: string; // ID of scheduled notification (for cancellation)
+      // Check-in reminder recurrence settings
+      checkinRecurrence?: {
+        type: "none" | "daily" | "weekly" | "monthly";
+        interval?: number; // Every N days/weeks/months (default 1)
+        dayOfWeek?: number; // 0-6 (Sun-Sat) for weekly and monthly
+        weekOfMonth?: 1 | 2 | 3 | 4 | 5; // 1-5 (1st, 2nd, 3rd, 4th, last) for monthly
+        hour?: number; // Hour of day (0-23), defaults to 9
+        minute?: number; // Minute (0-59), defaults to 0
+        nextScheduledAt?: number; // Timestamp of next reminder
+        notificationId?: string; // ID of scheduled check-in notification
+      };
       role?: "user" | "assistant" | "system";
     };
 
@@ -84,6 +95,7 @@ export interface Entry {
   isFavorite: boolean;
   isPinned: boolean;
   archivedAt: number | null;
+  parentId: number | null;
   embedding: Uint8Array | null;
   embeddingModel: string | null;
   embeddingCreatedAt: number | null;
@@ -102,6 +114,7 @@ export interface CreateEntryInput {
   attachments?: string[];
   isFavorite?: boolean;
   isPinned?: boolean;
+  parentId?: number;
 }
 
 export interface UpdateEntryInput {
@@ -156,15 +169,15 @@ export class EntryRepository {
    */
   async create(input: CreateEntryInput): Promise<Entry> {
     const now = Date.now();
-    // Default isPinned to true for countdown entries
+    // Default isPinned to true for countdown entries (but not for child entries)
     const isPinned =
       input.isPinned !== undefined
         ? input.isPinned
-        : input.type === "countdown";
+        : input.type === "countdown" && !input.parentId;
 
     const result = await this.db.runAsync(
-      `INSERT INTO entries (type, title, blocks, tags, attachments, isFavorite, isPinned, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO entries (type, title, blocks, tags, attachments, isFavorite, isPinned, parentId, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         input.type,
         input.title,
@@ -173,6 +186,7 @@ export class EntryRepository {
         JSON.stringify(input.attachments || []),
         input.isFavorite ? 1 : 0,
         isPinned ? 1 : 0,
+        input.parentId ?? null,
         now,
         now,
       ],
@@ -202,6 +216,7 @@ export class EntryRepository {
       isFavorite: number;
       isPinned: number;
       archivedAt: number | null;
+      parentId: number | null;
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
@@ -226,6 +241,8 @@ export class EntryRepository {
     type?: EntryType;
     isFavorite?: boolean;
     includeArchived?: boolean;
+    includeChildren?: boolean;
+    parentId?: number;
     tag?: string;
     dateFrom?: number;
     dateTo?: number;
@@ -240,6 +257,14 @@ export class EntryRepository {
     // Filter out archived entries by default
     if (!options?.includeArchived) {
       query += " AND archivedAt IS NULL";
+    }
+
+    // Filter by parentId or exclude child entries by default
+    if (options?.parentId !== undefined) {
+      query += " AND parentId = ?";
+      params.push(options.parentId);
+    } else if (!options?.includeChildren) {
+      query += " AND parentId IS NULL";
     }
 
     if (options?.type) {
@@ -292,6 +317,7 @@ export class EntryRepository {
       isFavorite: number;
       isPinned: number;
       archivedAt: number | null;
+      parentId: number | null;
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
@@ -313,6 +339,7 @@ export class EntryRepository {
     type?: EntryType;
     isFavorite?: boolean;
     includeArchived?: boolean;
+    includeChildren?: boolean;
     dateFrom?: number;
     dateTo?: number;
     limit?: number;
@@ -335,6 +362,11 @@ export class EntryRepository {
     // Filter out archived entries by default
     if (!options.includeArchived) {
       query += " AND e.archivedAt IS NULL";
+    }
+
+    // Exclude child entries by default
+    if (!options.includeChildren) {
+      query += " AND e.parentId IS NULL";
     }
 
     if (options.type) {
@@ -380,6 +412,7 @@ export class EntryRepository {
       isFavorite: number;
       isPinned: number;
       archivedAt: number | null;
+      parentId: number | null;
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
@@ -559,6 +592,7 @@ export class EntryRepository {
       isFavorite: number;
       isPinned: number;
       archivedAt: number | null;
+      parentId: number | null;
       embedding: Uint8Array | null;
       embeddingModel: string | null;
       embeddingCreatedAt: number | null;
@@ -579,6 +613,28 @@ export class EntryRepository {
   }
 
   /**
+   * Get child entries (check-ins) for a parent entry
+   */
+  async getChildEntries(parentId: number): Promise<Entry[]> {
+    return this.getAll({
+      parentId,
+      orderBy: "createdAt",
+      order: "DESC",
+    });
+  }
+
+  /**
+   * Count child entries for a parent entry
+   */
+  async countChildEntries(parentId: number): Promise<number> {
+    const result = await this.db.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM entries WHERE parentId = ? AND archivedAt IS NULL`,
+      [parentId],
+    );
+    return result?.count ?? 0;
+  }
+
+  /**
    * Map database row to Entry object
    */
   private mapRowToEntry(row: {
@@ -591,6 +647,7 @@ export class EntryRepository {
     isFavorite: number;
     isPinned: number;
     archivedAt: number | null;
+    parentId?: number | null;
     embedding: Uint8Array | null;
     embeddingModel: string | null;
     embeddingCreatedAt: number | null;
@@ -612,6 +669,7 @@ export class EntryRepository {
       isFavorite: row.isFavorite === 1,
       isPinned: row.isPinned === 1,
       archivedAt: row.archivedAt,
+      parentId: row.parentId ?? null,
       embedding: row.embedding,
       embeddingModel: row.embeddingModel,
       embeddingCreatedAt: row.embeddingCreatedAt,

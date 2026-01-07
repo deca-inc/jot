@@ -1,13 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { useState, useEffect, useRef } from "react";
-import { LogBox } from "react-native";
+import { AppState, LogBox } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { LLMProvider } from "./lib/ai/LLMProvider";
 import { ModelProvider } from "./lib/ai/ModelProvider";
 import { ConditionalPostHogProvider } from "./lib/analytics/PostHogProvider";
 import { ToastProvider } from "./lib/components/ToastProvider";
 import { DatabaseProvider, useDatabase } from "./lib/db/DatabaseProvider";
+import { EntryRepository } from "./lib/db/entries";
 import { OnboardingSettingsRepository } from "./lib/db/onboardingSettings";
 import { getOrCreateMasterKey } from "./lib/encryption/keyDerivation";
 import { OnboardingFlow } from "./lib/navigation/OnboardingFlow";
@@ -22,6 +23,10 @@ import {
   getLastNotificationResponse,
   NotificationData,
 } from "./lib/utils/notifications";
+import {
+  refreshCountdownNotifications,
+  registerBackgroundTask,
+} from "./lib/utils/notificationScheduler";
 
 // Suppress harmless warnings
 LogBox.ignoreLogs([
@@ -127,10 +132,15 @@ function OnboardingWrapper() {
   // Handle notification responses (user tapping on notification)
   useEffect(() => {
     // Handler for when user taps a notification
-    const handleNotificationTap = (entryId: number) => {
+    const handleNotificationTap = (
+      entryId: number,
+      type: "countdown-complete" | "checkin-reminder",
+    ) => {
       const navRef = getNavigationRef();
       if (navRef) {
-        navRef.navigateToCountdownViewer(entryId);
+        // For check-in reminders, show the check-in prompt
+        const showCheckinPrompt = type === "checkin-reminder";
+        navRef.navigateToCountdownViewer(entryId, showCheckinPrompt);
       }
     };
 
@@ -146,11 +156,18 @@ function OnboardingWrapper() {
         if (response) {
           const data = response.notification.request.content
             .data as NotificationData;
-          if (data?.entryId && data?.type === "countdown-complete") {
+          if (
+            data?.entryId &&
+            (data?.type === "countdown-complete" ||
+              data?.type === "checkin-reminder")
+          ) {
             hasHandledInitialNotificationRef.current = true;
             // Delay slightly to ensure navigation is ready
             setTimeout(() => {
-              handleNotificationTap(data.entryId as number);
+              handleNotificationTap(
+                data.entryId as number,
+                data.type as "countdown-complete" | "checkin-reminder",
+              );
             }, 500);
           }
         }
@@ -163,6 +180,28 @@ function OnboardingWrapper() {
 
     return cleanup;
   }, []);
+
+  // Refresh countdown notifications on app open and when returning to foreground
+  useEffect(() => {
+    const entryRepository = new EntryRepository(db);
+
+    // Refresh notifications immediately on mount
+    refreshCountdownNotifications(entryRepository);
+
+    // Register background task
+    registerBackgroundTask();
+
+    // Also refresh when app comes to foreground
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        refreshCountdownNotifications(entryRepository);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [db]);
 
   const handleOnboardingComplete = async () => {
     try {

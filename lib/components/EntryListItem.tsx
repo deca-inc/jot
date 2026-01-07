@@ -39,6 +39,7 @@ import { Text } from "./Text";
 export interface EntryListItemProps {
   entry: Entry;
   onPress?: (entry: Entry) => void;
+  onEdit?: (entry: Entry) => void;
   onToggleFavorite?: (entry: Entry) => void;
   onTogglePinned?: (entry: Entry) => void;
   onArchive?: (entry: Entry) => void;
@@ -49,6 +50,7 @@ export interface EntryListItemProps {
 function EntryListItemComponent({
   entry,
   onPress,
+  onEdit,
   onToggleFavorite,
   onTogglePinned,
   onArchive,
@@ -847,7 +849,18 @@ function EntryListItemComponent({
 
       {/* Menu Modal */}
       <Dialog visible={showMenu} onRequestClose={() => setShowMenu(false)}>
-        {/* Reset button at top for countup entries */}
+        {/* Edit button for countdown entries */}
+        {entry.type === "countdown" && onEdit && (
+          <MenuItem
+            icon="pencil-outline"
+            label="Edit Timer"
+            onPress={() => {
+              setShowMenu(false);
+              onEdit(entry);
+            }}
+          />
+        )}
+        {/* Reset button for countup entries */}
         {entry.type === "countdown" && countdownData?.isCountUp && (
           <MenuItem
             icon="refresh-outline"

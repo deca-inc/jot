@@ -50,6 +50,7 @@ export const entryKeys = {
   }) => [...entryKeys.searches(), filters] as const,
   details: () => [...entryKeys.all, "detail"] as const,
   detail: (id: number) => [...entryKeys.details(), id] as const,
+  children: (parentId: number) => [...entryKeys.all, "children", parentId] as const,
 };
 
 /**
@@ -204,11 +205,20 @@ export function useCreateEntry() {
             blockCount: entry.blocks.length,
             isFavorite: entry.isFavorite,
             hasAttachments: entry.attachments && entry.attachments.length > 0,
+            hasParent: !!entry.parentId,
           }),
         );
       }
       // Add to detail cache
       queryClient.setQueryData(entryKeys.detail(entry.id), entry);
+
+      // If this is a child entry (check-in), invalidate the parent's children cache
+      if (entry.parentId) {
+        queryClient.invalidateQueries({
+          queryKey: entryKeys.children(entry.parentId),
+        });
+        return; // Don't add child entries to the main list
+      }
 
       // Update ALL infinite query caches directly
       queryClient.setQueriesData<InfiniteEntryData | undefined>(
@@ -295,6 +305,7 @@ export function useUpdateEntry() {
 
 /**
  * Hook to delete an entry
+ * @param input - Either just the entry id (number) or an object with id and optional parentId
  */
 export function useDeleteEntry() {
   const entryRepository = useEntryRepository();
@@ -302,17 +313,26 @@ export function useDeleteEntry() {
   const posthog = usePostHog();
 
   return useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (input: number | { id: number; parentId?: number | null }) => {
+      const id = typeof input === "number" ? input : input.id;
+      const parentId = typeof input === "number" ? null : input.parentId;
       await entryRepository.delete(id);
-      return id;
+      return { id, parentId };
     },
-    onSuccess: (id) => {
+    onSuccess: ({ id, parentId }) => {
       // Track entry deletion
       if (posthog) {
         posthog.capture("entry_deleted", { entryId: id });
       }
       // Remove from detail cache immediately
       queryClient.removeQueries({ queryKey: entryKeys.detail(id) });
+
+      // If this was a child entry, invalidate the parent's children cache
+      if (parentId) {
+        queryClient.invalidateQueries({
+          queryKey: entryKeys.children(parentId),
+        });
+      }
 
       // Update ALL infinite query caches directly
       queryClient.setQueriesData<InfiniteEntryData | undefined>(
@@ -531,5 +551,22 @@ export function useUnarchiveEntry() {
         },
       );
     },
+  });
+}
+
+/**
+ * Hook to fetch child entries (check-ins) for a parent entry
+ */
+export function useChildEntries(parentId: number | undefined) {
+  const entryRepository = useEntryRepository();
+
+  return useQuery({
+    queryKey: entryKeys.children(parentId!),
+    queryFn: async () => {
+      if (!parentId) return [];
+      return entryRepository.getChildEntries(parentId);
+    },
+    enabled: !!parentId,
+    refetchOnMount: "always",
   });
 }
