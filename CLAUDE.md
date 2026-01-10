@@ -101,6 +101,7 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 - **Database**: SQLite (via `expo-sqlite` or `better-sqlite3` for desktop). Full-text search with FTS5.
 - **Files**: Attachments stored under app data directory. Metadata in DB.
 - **Schema versioning**: Migration table; deterministic up/down migrations.
+- **Creating migrations**: Always use `pnpm create:migration <name>` to create new migrations. This script generates the correct timestamp and automatically registers the migration. **Never create migration files manually** - incorrect timestamps cause migrations to run out of order.
 
 ### Backup Integrations (Planned)
 
@@ -579,6 +580,7 @@ _Backup functionality is not yet implemented. The following describes the planne
 - **`pnpm lint`** - Run ESLint to check for code style issues
 - **`pnpm lint:fix`** - Auto-fix ESLint issues (import sorting, trailing commas, etc.)
 - **`pnpm typecheck`** - Run TypeScript type checking without emitting files
+- **`pnpm create:migration <name>`** - Create a new database migration (generates timestamp, creates file, registers it)
 
 ### Code Style (Enforced by ESLint)
 

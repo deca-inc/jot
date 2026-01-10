@@ -24,16 +24,17 @@ const withAndroidWidget = (config) => {
       application.receiver = [];
     }
 
-    // Check if receiver already exists
-    const receiverExists = application.receiver.some(
+    // Check if Countdown widget receiver already exists
+    const countdownReceiverExists = application.receiver.some(
       (r) =>
         r.$?.["android:name"] === `${widgetPackage}.CountdownWidgetProvider`,
     );
 
-    if (!receiverExists) {
+    if (!countdownReceiverExists) {
       application.receiver.push({
         $: {
           "android:name": `${widgetPackage}.CountdownWidgetProvider`,
+          "android:label": "@string/countdown_widget_name",
           "android:exported": "true",
         },
         "intent-filter": [
@@ -58,6 +59,40 @@ const withAndroidWidget = (config) => {
       });
     }
 
+    // Check if Jot widget receiver already exists
+    const jotReceiverExists = application.receiver.some(
+      (r) => r.$?.["android:name"] === `${widgetPackage}.JotWidgetProvider`,
+    );
+
+    if (!jotReceiverExists) {
+      application.receiver.push({
+        $: {
+          "android:name": `${widgetPackage}.JotWidgetProvider`,
+          "android:label": "@string/jot_widget_name",
+          "android:exported": "true",
+        },
+        "intent-filter": [
+          {
+            action: [
+              {
+                $: {
+                  "android:name": "android.appwidget.action.APPWIDGET_UPDATE",
+                },
+              },
+            ],
+          },
+        ],
+        "meta-data": [
+          {
+            $: {
+              "android:name": "android.appwidget.provider",
+              "android:resource": "@xml/jot_widget_info",
+            },
+          },
+        ],
+      });
+    }
+
     // Add widget configure activity
     if (!application.activity) {
       application.activity = [];
@@ -65,14 +100,13 @@ const withAndroidWidget = (config) => {
 
     const configActivityExists = application.activity.some(
       (a) =>
-        a.$?.["android:name"] ===
-        `${widgetPackage}.CountdownWidgetConfigureActivity`,
+        a.$?.["android:name"] === `${widgetPackage}.JotWidgetConfigureActivity`,
     );
 
     if (!configActivityExists) {
       application.activity.push({
         $: {
-          "android:name": `${widgetPackage}.CountdownWidgetConfigureActivity`,
+          "android:name": `${widgetPackage}.JotWidgetConfigureActivity`,
           "android:exported": "true",
           "android:theme": "@android:style/Theme.Material.NoActionBar",
         },
@@ -178,8 +212,9 @@ const withAndroidWidget = (config) => {
       const kotlinFiles = [
         "WidgetDataStore.kt",
         "CountdownFormatter.kt",
+        "JotWidgetProvider.kt",
         "CountdownWidgetProvider.kt",
-        "CountdownWidgetConfigureActivity.kt",
+        "JotWidgetConfigureActivity.kt",
       ];
 
       for (const file of kotlinFiles) {
@@ -205,9 +240,9 @@ const withAndroidWidget = (config) => {
       const layoutDir = path.join(resDestDir, "layout");
       fs.mkdirSync(layoutDir, { recursive: true });
       const layoutFiles = [
-        "countdown_widget.xml",
-        "countdown_widget_configure.xml",
-        "countdown_widget_configure_item.xml",
+        "jot_widget.xml",
+        "jot_widget_configure.xml",
+        "jot_widget_configure_item.xml",
       ];
       for (const file of layoutFiles) {
         const srcPath = path.join(resSourceDir, "layout", file);
@@ -233,20 +268,23 @@ const withAndroidWidget = (config) => {
       // Copy xml files (widget info)
       const xmlDir = path.join(resDestDir, "xml");
       fs.mkdirSync(xmlDir, { recursive: true });
-      const xmlSrc = path.join(
-        resSourceDir,
-        "xml",
+
+      const widgetInfoFiles = [
+        "jot_widget_info.xml",
         "countdown_widget_info.xml",
-      );
-      let xmlDest = path.join(xmlDir, "countdown_widget_info.xml");
-      if (fs.existsSync(xmlSrc)) {
-        let xmlContent = fs.readFileSync(xmlSrc, "utf8");
-        // Update configure activity class name
-        xmlContent = xmlContent.replace(
-          /com\.dotdotdot\.jot\.widget/g,
-          `${packageName}.widget`,
-        );
-        fs.writeFileSync(xmlDest, xmlContent);
+      ];
+      for (const file of widgetInfoFiles) {
+        const xmlSrc = path.join(resSourceDir, "xml", file);
+        const xmlDest = path.join(xmlDir, file);
+        if (fs.existsSync(xmlSrc)) {
+          let xmlContent = fs.readFileSync(xmlSrc, "utf8");
+          // Update configure activity class name
+          xmlContent = xmlContent.replace(
+            /com\.dotdotdot\.jot\.widget/g,
+            `${packageName}.widget`,
+          );
+          fs.writeFileSync(xmlDest, xmlContent);
+        }
       }
 
       // Merge strings

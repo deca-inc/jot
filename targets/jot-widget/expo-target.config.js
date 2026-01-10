@@ -2,8 +2,8 @@
 /** @type {import('@bacons/apple-targets').Config} */
 module.exports = {
   type: "widget",
-  name: "CountdownWidget",
-  bundleIdentifier: ".countdown-widget",
+  name: "JotWidget",
+  bundleIdentifier: ".jot-widget",
   deploymentTarget: "17.0",
   frameworks: ["SwiftUI", "WidgetKit"],
   entitlements: {

@@ -1,31 +1,50 @@
 import WidgetKit
 import SwiftUI
 
-/// Main countdown widget definition
+/// Small countdown widget - displays a single countdown timer
 struct CountdownWidget: Widget {
     let kind: String = "CountdownWidget"
 
     var body: some WidgetConfiguration {
         IntentConfiguration(
             kind: kind,
-            intent: CountdownWidgetConfigurationIntent.self,
-            provider: CountdownTimelineProvider()
+            intent: JotWidgetConfigurationIntent.self,
+            provider: JotTimelineProvider()
         ) { entry in
-            CountdownWidgetView(entry: entry)
+            JotWidgetView(entry: entry)
         }
         .configurationDisplayName("Countdown")
         .description("Display a countdown or time since timer.")
         .supportedFamilies([
             .systemSmall,
-            .systemMedium,
             .accessoryCircular,
             .accessoryRectangular
         ])
     }
 }
 
+/// Main Jot widget - displays recent countdowns and quick entry creation
+struct JotWidget: Widget {
+    let kind: String = "JotWidget"
+
+    var body: some WidgetConfiguration {
+        IntentConfiguration(
+            kind: kind,
+            intent: JotWidgetConfigurationIntent.self,
+            provider: JotTimelineProvider()
+        ) { entry in
+            JotWidgetView(entry: entry)
+        }
+        .configurationDisplayName("Jot")
+        .description("See recent countdowns and quickly create entries.")
+        .supportedFamilies([
+            .systemMedium
+        ])
+    }
+}
+
 /// Widget preview provider
-struct CountdownWidget_Previews: PreviewProvider {
+struct JotWidget_Previews: PreviewProvider {
     static var previews: some View {
         let sampleCountdown = WidgetCountdownData(
             entryId: 1,
@@ -36,17 +55,17 @@ struct CountdownWidget_Previews: PreviewProvider {
             updatedAt: Int(Date().timeIntervalSince1970 * 1000)
         )
 
-        CountdownWidgetView(entry: CountdownEntry(
+        JotWidgetView(entry: JotEntry(
             date: Date(),
             countdown: sampleCountdown,
-            configuration: CountdownWidgetConfigurationIntent()
+            configuration: JotWidgetConfigurationIntent()
         ))
         .previewContext(WidgetPreviewContext(family: .systemSmall))
 
-        CountdownWidgetView(entry: CountdownEntry(
+        JotWidgetView(entry: JotEntry(
             date: Date(),
             countdown: sampleCountdown,
-            configuration: CountdownWidgetConfigurationIntent()
+            configuration: JotWidgetConfigurationIntent()
         ))
         .previewContext(WidgetPreviewContext(family: .systemMedium))
     }

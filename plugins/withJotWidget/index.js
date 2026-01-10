@@ -4,11 +4,11 @@ const withIOSWidget = require("./ios/withIOSWidget");
 const withAndroidWidget = require("./android/withAndroidWidget");
 
 /**
- * Expo config plugin for countdown widgets
+ * Expo config plugin for Jot widgets
  * Adds iOS WidgetKit extension and Android App Widget
  */
-const withCountdownWidget = (config) => {
+const withJotWidget = (config) => {
   return withPlugins(config, [withIOSWidget, withAndroidWidget]);
 };
 
-module.exports = withCountdownWidget;
+module.exports = withJotWidget;

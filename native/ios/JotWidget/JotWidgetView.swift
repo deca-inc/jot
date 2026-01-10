@@ -2,8 +2,8 @@ import SwiftUI
 import WidgetKit
 
 /// Main widget view
-struct CountdownWidgetView: View {
-    var entry: CountdownTimelineProvider.Entry
+struct JotWidgetView: View {
+    var entry: JotTimelineProvider.Entry
 
     @Environment(\.widgetFamily) var widgetFamily
 

@@ -30,7 +30,7 @@
 			<key>INIntentIneligibleForSuggestions</key>
 			<true/>
 			<key>INIntentName</key>
-			<string>CountdownWidgetConfiguration</string>
+			<string>JotWidgetConfiguration</string>
 			<key>INIntentParameters</key>
 			<array>
 				<dict>

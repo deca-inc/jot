@@ -8,8 +8,8 @@ const {
 const fs = require("fs");
 const path = require("path");
 
-const WIDGET_TARGET_NAME = "CountdownWidgetExtension";
-const WIDGET_BUNDLE_ID_SUFFIX = ".CountdownWidget";
+const WIDGET_TARGET_NAME = "JotWidgetExtension";
+const WIDGET_BUNDLE_ID_SUFFIX = ".JotWidget";
 const APP_GROUP_ID = "group.com.betazeta.jot.widgets";
 
 /**
@@ -89,7 +89,7 @@ const withIOSWidget = (config) => {
         projectRoot,
         "native",
         "ios",
-        "CountdownWidget",
+        "JotWidget",
       );
 
       // Create widget extension directory
@@ -97,13 +97,13 @@ const withIOSWidget = (config) => {
 
       // Copy Swift source files
       const swiftFiles = [
-        "CountdownWidgetBundle.swift",
-        "CountdownWidget.swift",
-        "CountdownTimelineProvider.swift",
-        "CountdownWidgetView.swift",
+        "JotWidgetBundle.swift",
+        "JotWidget.swift",
+        "JotTimelineProvider.swift",
+        "JotWidgetView.swift",
         "CountdownFormatter.swift",
         "WidgetDataStore.swift",
-        "CountdownIntentHandler.swift",
+        "JotIntentHandler.swift",
       ];
 
       for (const file of swiftFiles) {
@@ -124,11 +124,11 @@ const withIOSWidget = (config) => {
       // Copy intent definition
       const intentSrc = path.join(
         widgetSourceDir,
-        "CountdownWidgetConfigurationIntent.intentdefinition",
+        "JotWidgetConfigurationIntent.intentdefinition",
       );
       const intentDest = path.join(
         widgetDir,
-        "CountdownWidgetConfigurationIntent.intentdefinition",
+        "JotWidgetConfigurationIntent.intentdefinition",
       );
       if (fs.existsSync(intentSrc)) {
         fs.copyFileSync(intentSrc, intentDest);

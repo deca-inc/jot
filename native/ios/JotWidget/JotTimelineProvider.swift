@@ -2,19 +2,19 @@ import WidgetKit
 import SwiftUI
 
 /// Timeline entry for countdown widget
-struct CountdownEntry: TimelineEntry {
+struct JotEntry: TimelineEntry {
     let date: Date
     let countdown: WidgetCountdownData?
-    let configuration: CountdownWidgetConfigurationIntent
+    let configuration: JotWidgetConfigurationIntent
 }
 
 /// Timeline provider for countdown widget
-struct CountdownTimelineProvider: IntentTimelineProvider {
-    typealias Entry = CountdownEntry
-    typealias Intent = CountdownWidgetConfigurationIntent
+struct JotTimelineProvider: IntentTimelineProvider {
+    typealias Entry = JotEntry
+    typealias Intent = JotWidgetConfigurationIntent
 
-    func placeholder(in context: Context) -> CountdownEntry {
-        CountdownEntry(
+    func placeholder(in context: Context) -> JotEntry {
+        JotEntry(
             date: Date(),
             countdown: WidgetCountdownData(
                 entryId: 0,
@@ -24,20 +24,20 @@ struct CountdownTimelineProvider: IntentTimelineProvider {
                 isPinned: false,
                 updatedAt: Int(Date().timeIntervalSince1970 * 1000)
             ),
-            configuration: CountdownWidgetConfigurationIntent()
+            configuration: JotWidgetConfigurationIntent()
         )
     }
 
-    func getSnapshot(for configuration: CountdownWidgetConfigurationIntent, in context: Context, completion: @escaping (CountdownEntry) -> Void) {
+    func getSnapshot(for configuration: JotWidgetConfigurationIntent, in context: Context, completion: @escaping (JotEntry) -> Void) {
         let countdown = getSelectedCountdown(for: configuration)
-        let entry = CountdownEntry(date: Date(), countdown: countdown, configuration: configuration)
+        let entry = JotEntry(date: Date(), countdown: countdown, configuration: configuration)
         completion(entry)
     }
 
-    func getTimeline(for configuration: CountdownWidgetConfigurationIntent, in context: Context, completion: @escaping (Timeline<CountdownEntry>) -> Void) {
+    func getTimeline(for configuration: JotWidgetConfigurationIntent, in context: Context, completion: @escaping (Timeline<JotEntry>) -> Void) {
         let countdown = getSelectedCountdown(for: configuration)
 
-        var entries: [CountdownEntry] = []
+        var entries: [JotEntry] = []
         let currentDate = Date()
 
         // Generate timeline entries
@@ -49,7 +49,7 @@ struct CountdownTimelineProvider: IntentTimelineProvider {
                 // Countdown completed - update once per hour
                 for hourOffset in 0..<12 {
                     let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-                    entries.append(CountdownEntry(date: entryDate, countdown: countdown, configuration: configuration))
+                    entries.append(JotEntry(date: entryDate, countdown: countdown, configuration: configuration))
                 }
             } else {
                 // Active countdown - update more frequently as we approach target
@@ -60,38 +60,38 @@ struct CountdownTimelineProvider: IntentTimelineProvider {
                     for minuteOffset in 0..<60 {
                         let entryDate = Calendar.current.date(byAdding: .minute, value: minuteOffset, to: currentDate)!
                         if entryDate <= targetDate.addingTimeInterval(60) {
-                            entries.append(CountdownEntry(date: entryDate, countdown: countdown, configuration: configuration))
+                            entries.append(JotEntry(date: entryDate, countdown: countdown, configuration: configuration))
                         }
                     }
                 } else if timeUntilTarget < 86400 {
                     // Less than 1 day - update every hour
                     for hourOffset in 0..<24 {
                         let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-                        entries.append(CountdownEntry(date: entryDate, countdown: countdown, configuration: configuration))
+                        entries.append(JotEntry(date: entryDate, countdown: countdown, configuration: configuration))
                     }
                 } else {
                     // More than 1 day - update every 6 hours
                     for sixHourOffset in 0..<8 {
                         let entryDate = Calendar.current.date(byAdding: .hour, value: sixHourOffset * 6, to: currentDate)!
-                        entries.append(CountdownEntry(date: entryDate, countdown: countdown, configuration: configuration))
+                        entries.append(JotEntry(date: entryDate, countdown: countdown, configuration: configuration))
                     }
                 }
             }
         } else {
             // No countdown selected - single entry
-            entries.append(CountdownEntry(date: currentDate, countdown: nil, configuration: configuration))
+            entries.append(JotEntry(date: currentDate, countdown: nil, configuration: configuration))
         }
 
         // Ensure we have at least one entry
         if entries.isEmpty {
-            entries.append(CountdownEntry(date: currentDate, countdown: countdown, configuration: configuration))
+            entries.append(JotEntry(date: currentDate, countdown: countdown, configuration: configuration))
         }
 
         let timeline = Timeline(entries: entries, policy: .atEnd)
         completion(timeline)
     }
 
-    private func getSelectedCountdown(for configuration: CountdownWidgetConfigurationIntent) -> WidgetCountdownData? {
+    private func getSelectedCountdown(for configuration: JotWidgetConfigurationIntent) -> WidgetCountdownData? {
         guard let selectedCountdown = configuration.countdown,
               let entryIdString = selectedCountdown.identifier,
               let entryId = Int(entryIdString) else {

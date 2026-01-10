@@ -9,7 +9,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.Promise
 
 class WidgetBridgeModule : Module() {
-  private val widgetPrefsName = "countdown_widget_data"
+  private val widgetPrefsName = "jot_widget_data"
   private val widgetDataKey = "countdownWidgets"
 
   override fun definition() = ModuleDefinition {
@@ -49,10 +49,10 @@ class WidgetBridgeModule : Module() {
         val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
         intent.setPackage(context.packageName)
 
-        // Get all widget IDs for CountdownWidgetProvider
+        // Get all widget IDs for JotWidgetProvider
         val appWidgetManager = AppWidgetManager.getInstance(context)
         val widgetProviderClass = try {
-          Class.forName("${context.packageName}.widget.CountdownWidgetProvider")
+          Class.forName("${context.packageName}.widget.JotWidgetProvider")
         } catch (e: ClassNotFoundException) {
           // Widget provider not yet created
           promise.resolve(true)

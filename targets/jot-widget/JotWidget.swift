@@ -55,7 +55,7 @@ struct CountdownEntityQuery: EntityQuery {
 // MARK: - Timeline Entry
 
 /// Timeline entry for countdown widget
-struct CountdownEntry: TimelineEntry {
+struct JotEntry: TimelineEntry {
     let date: Date
     let countdown: WidgetCountdownData?
     let allCountdowns: [WidgetCountdownData] // For large widget list view
@@ -65,11 +65,11 @@ struct CountdownEntry: TimelineEntry {
 // MARK: - Timeline Provider
 
 /// Timeline provider for countdown widget
-struct CountdownTimelineProvider: AppIntentTimelineProvider {
-    typealias Entry = CountdownEntry
+struct JotTimelineProvider: AppIntentTimelineProvider {
+    typealias Entry = JotEntry
     typealias Intent = SelectCountdownIntent
 
-    func placeholder(in context: Context) -> CountdownEntry {
+    func placeholder(in context: Context) -> JotEntry {
         let sampleCountdown = WidgetCountdownData(
             entryId: 0,
             title: "My Countdown",
@@ -78,7 +78,7 @@ struct CountdownTimelineProvider: AppIntentTimelineProvider {
             isPinned: false,
             updatedAt: Int(Date().timeIntervalSince1970 * 1000)
         )
-        return CountdownEntry(
+        return JotEntry(
             date: Date(),
             countdown: sampleCountdown,
             allCountdowns: [sampleCountdown],
@@ -86,10 +86,10 @@ struct CountdownTimelineProvider: AppIntentTimelineProvider {
         )
     }
 
-    func snapshot(for configuration: SelectCountdownIntent, in context: Context) async -> CountdownEntry {
+    func snapshot(for configuration: SelectCountdownIntent, in context: Context) async -> JotEntry {
         let allCountdowns = WidgetDataStore.shared.getAllCountdowns()
         let countdown = getSelectedCountdown(for: configuration) ?? allCountdowns.first
-        return CountdownEntry(
+        return JotEntry(
             date: Date(),
             countdown: countdown,
             allCountdowns: allCountdowns,
@@ -97,11 +97,11 @@ struct CountdownTimelineProvider: AppIntentTimelineProvider {
         )
     }
 
-    func timeline(for configuration: SelectCountdownIntent, in context: Context) async -> Timeline<CountdownEntry> {
+    func timeline(for configuration: SelectCountdownIntent, in context: Context) async -> Timeline<JotEntry> {
         let allCountdowns = WidgetDataStore.shared.getAllCountdowns()
         let selectedCountdown = getSelectedCountdown(for: configuration) ?? allCountdowns.first
 
-        var entries: [CountdownEntry] = []
+        var entries: [JotEntry] = []
         let currentDate = Date()
 
         // Generate timeline entries for time-based updates
@@ -113,7 +113,7 @@ struct CountdownTimelineProvider: AppIntentTimelineProvider {
                 // Countdown completed - update once per hour
                 for hourOffset in 0..<12 {
                     let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-                    entries.append(CountdownEntry(
+                    entries.append(JotEntry(
                         date: entryDate,
                         countdown: countdown,
                         allCountdowns: allCountdowns,
@@ -128,7 +128,7 @@ struct CountdownTimelineProvider: AppIntentTimelineProvider {
                     for minuteOffset in 0..<60 {
                         let entryDate = Calendar.current.date(byAdding: .minute, value: minuteOffset, to: currentDate)!
                         if entryDate <= targetDate.addingTimeInterval(60) {
-                            entries.append(CountdownEntry(
+                            entries.append(JotEntry(
                                 date: entryDate,
                                 countdown: countdown,
                                 allCountdowns: allCountdowns,
@@ -140,7 +140,7 @@ struct CountdownTimelineProvider: AppIntentTimelineProvider {
                     // Less than 1 day - update every hour
                     for hourOffset in 0..<24 {
                         let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-                        entries.append(CountdownEntry(
+                        entries.append(JotEntry(
                             date: entryDate,
                             countdown: countdown,
                             allCountdowns: allCountdowns,
@@ -151,7 +151,7 @@ struct CountdownTimelineProvider: AppIntentTimelineProvider {
                     // More than 1 day - update every 6 hours
                     for sixHourOffset in 0..<8 {
                         let entryDate = Calendar.current.date(byAdding: .hour, value: sixHourOffset * 6, to: currentDate)!
-                        entries.append(CountdownEntry(
+                        entries.append(JotEntry(
                             date: entryDate,
                             countdown: countdown,
                             allCountdowns: allCountdowns,
@@ -164,7 +164,7 @@ struct CountdownTimelineProvider: AppIntentTimelineProvider {
 
         // Ensure we have at least one entry
         if entries.isEmpty {
-            entries.append(CountdownEntry(
+            entries.append(JotEntry(
                 date: currentDate,
                 countdown: selectedCountdown,
                 allCountdowns: allCountdowns,
@@ -186,9 +186,9 @@ struct CountdownTimelineProvider: AppIntentTimelineProvider {
     }
 }
 
-// MARK: - Widget Definition
+// MARK: - Widget Definitions
 
-/// Main countdown widget definition
+/// Small countdown widget - displays a single countdown timer
 struct CountdownWidget: Widget {
     let kind: String = "CountdownWidget"
 
@@ -196,19 +196,39 @@ struct CountdownWidget: Widget {
         AppIntentConfiguration(
             kind: kind,
             intent: SelectCountdownIntent.self,
-            provider: CountdownTimelineProvider()
+            provider: JotTimelineProvider()
         ) { entry in
-            CountdownWidgetView(entry: entry)
+            JotWidgetView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Countdown")
         .description("Display a countdown or time since timer.")
         .supportedFamilies([
             .systemSmall,
-            .systemMedium,
-            .systemLarge,
             .accessoryCircular,
             .accessoryRectangular
+        ])
+    }
+}
+
+/// Main Jot widget - displays recent countdowns and quick entry creation
+struct JotWidget: Widget {
+    let kind: String = "JotWidget"
+
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(
+            kind: kind,
+            intent: SelectCountdownIntent.self,
+            provider: JotTimelineProvider()
+        ) { entry in
+            JotWidgetView(entry: entry)
+                .containerBackground(.fill.tertiary, for: .widget)
+        }
+        .configurationDisplayName("Jot")
+        .description("See recent countdowns and quickly create entries.")
+        .supportedFamilies([
+            .systemMedium,
+            .systemLarge
         ])
     }
 }
@@ -216,7 +236,7 @@ struct CountdownWidget: Widget {
 // MARK: - Preview
 
 #Preview(as: .systemLarge) {
-    CountdownWidget()
+    JotWidget()
 } timeline: {
     let sampleCountdowns = [
         WidgetCountdownData(
@@ -244,7 +264,7 @@ struct CountdownWidget: Widget {
             updatedAt: Int(Date().timeIntervalSince1970 * 1000)
         )
     ]
-    CountdownEntry(
+    JotEntry(
         date: Date(),
         countdown: sampleCountdowns[0],
         allCountdowns: sampleCountdowns,

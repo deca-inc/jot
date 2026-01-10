@@ -12,9 +12,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
 /**
- * Activity for configuring which countdown to display in a widget
+ * Activity for configuring which countdown to display in a Jot widget
  */
-class CountdownWidgetConfigureActivity : Activity() {
+class JotWidgetConfigureActivity : Activity() {
 
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
@@ -37,7 +37,7 @@ class CountdownWidgetConfigureActivity : Activity() {
 
         // Get layout resource ID
         val layoutId = resources.getIdentifier(
-            "countdown_widget_configure",
+            "jot_widget_configure",
             "layout",
             packageName
         )
@@ -75,7 +75,7 @@ class CountdownWidgetConfigureActivity : Activity() {
 
         // Update the widget
         val appWidgetManager = AppWidgetManager.getInstance(this)
-        CountdownWidgetProvider.updateAppWidget(this, appWidgetManager, appWidgetId)
+        JotWidgetProvider.updateAppWidget(this, appWidgetManager, appWidgetId)
 
         // Return success
         val resultValue = Intent()
@@ -106,7 +106,7 @@ class CountdownWidgetConfigureActivity : Activity() {
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
             val layoutId = resources.getIdentifier(
-                "countdown_widget_configure_item",
+                "jot_widget_configure_item",
                 "layout",
                 packageName
             )

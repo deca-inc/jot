@@ -1,10 +1,10 @@
 import Intents
 
 /// Intent handler for providing dynamic countdown options
-class CountdownIntentHandler: NSObject, CountdownWidgetConfigurationIntentHandling {
+class JotIntentHandler: NSObject, JotWidgetConfigurationIntentHandling {
 
     func provideCountdownOptionsCollection(
-        for intent: CountdownWidgetConfigurationIntent,
+        for intent: JotWidgetConfigurationIntent,
         with completion: @escaping (INObjectCollection<CountdownItem>?, Error?) -> Void
     ) {
         let countdowns = WidgetDataStore.shared.getAllCountdowns()
@@ -20,7 +20,7 @@ class CountdownIntentHandler: NSObject, CountdownWidgetConfigurationIntentHandli
         completion(collection, nil)
     }
 
-    func defaultCountdown(for intent: CountdownWidgetConfigurationIntent) -> CountdownItem? {
+    func defaultCountdown(for intent: JotWidgetConfigurationIntent) -> CountdownItem? {
         guard let firstCountdown = WidgetDataStore.shared.getAllCountdowns().first else {
             return nil
         }

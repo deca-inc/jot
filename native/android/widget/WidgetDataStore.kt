@@ -19,7 +19,7 @@ data class WidgetCountdownData(
  * Reads countdown data from SharedPreferences
  */
 object WidgetDataStore {
-    private const val PREFS_NAME = "countdown_widget_data"
+    private const val PREFS_NAME = "jot_widget_data"
     private const val WIDGET_DATA_KEY = "countdownWidgets"
 
     /**
