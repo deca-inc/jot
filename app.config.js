@@ -6,6 +6,7 @@ module.exports = ({ config }) => {
     name: isDev ? "Jot (Dev)" : "Jot",
     owner: "beta-zeta-inc",
     slug: "jot",
+    scheme: "jot",
     version: "1.0.6",
     orientation: "portrait",
     icon: isDev ? "./assets/icon-dev.png" : "./assets/icon.png",
@@ -19,6 +20,7 @@ module.exports = ({ config }) => {
     ios: {
       supportsTablet: true,
       bundleIdentifier: isDev ? "com.betazeta.jot.dev" : "com.betazeta.jot",
+      appleTeamId: "RQ4KTR2333",
       infoPlist: {
         UIBackgroundModes: ["fetch", "processing", "remote-notification"],
         BGTaskSchedulerPermittedIdentifiers: [
@@ -26,6 +28,11 @@ module.exports = ({ config }) => {
           "com.betazeta.jot.background-download",
         ],
         ITSAppUsesNonExemptEncryption: false,
+      },
+      entitlements: {
+        "com.apple.security.application-groups": [
+          "group.com.betazeta.jot.widgets",
+        ],
       },
     },
     android: {
@@ -79,6 +86,7 @@ module.exports = ({ config }) => {
           sounds: [],
         },
       ],
+      "@bacons/apple-targets",
     ],
     updates: {
       url: "https://u.expo.dev/0218f474-abc5-4575-ab99-0fa81a34e435",

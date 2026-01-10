@@ -1,5 +1,6 @@
 import React from "react";
 import { View, StyleSheet, ActivityIndicator } from "react-native";
+import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 import { useModelDownloadStatus } from "../ai/useModelDownloadStatus";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -30,7 +31,10 @@ export function ModelDownloadIndicator({
   const isBanner = variant === "banner";
 
   return (
-    <View
+    <Animated.View
+      entering={FadeIn.duration(200)}
+      exiting={FadeOut.duration(150)}
+      layout={Layout.springify().damping(15).stiffness(100)}
       style={[
         isBanner ? styles.container : styles.inlineContainer,
         isBanner && {
@@ -38,7 +42,7 @@ export function ModelDownloadIndicator({
         },
       ]}
     >
-      <View style={styles.content}>
+      <Animated.View style={styles.content}>
         <ActivityIndicator size="small" color={theme.colors.accent} />
         <View style={styles.textContainer}>
           <Text
@@ -55,7 +59,7 @@ export function ModelDownloadIndicator({
             {downloadStatus.error ? "Failed" : "In progress"}
           </Text>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Progress bar */}
       <View
@@ -80,7 +84,7 @@ export function ModelDownloadIndicator({
           ]}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

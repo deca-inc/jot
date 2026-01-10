@@ -16,6 +16,7 @@ import {
   getSeasonalTheme,
   type SeasonalTheme,
 } from "./seasonalTheme";
+import { getCachedThemeSettings, cacheThemeSettings } from "./themeCache";
 
 interface SeasonalThemeContextValue {
   theme: SeasonalTheme;
@@ -31,67 +32,101 @@ interface SeasonalThemeProviderProps {
   children: React.ReactNode;
 }
 
+/**
+ * Calculate theme from settings - module-level function for use during initialization
+ */
+function calculateThemeFromSettings(
+  currentSettings: ThemeSettings,
+  scheme: string | null | undefined,
+): SeasonalTheme {
+  const now = new Date();
+  let season: Season;
+  let timeOfDay: TimeOfDay;
+
+  if (currentSettings.mode === "manual" && currentSettings.season) {
+    season = currentSettings.season;
+
+    // Handle timeOfDay: can be "system", TimeOfDay, or undefined
+    if (
+      currentSettings.timeOfDay === "system" ||
+      currentSettings.useSystemTimeOfDay
+    ) {
+      // Use system color scheme to determine time of day
+      timeOfDay = scheme === "dark" ? "night" : "day";
+    } else if (currentSettings.timeOfDay) {
+      // In this branch, timeOfDay cannot be "system" due to the previous check
+      timeOfDay = currentSettings.timeOfDay as TimeOfDay;
+    } else {
+      timeOfDay = getTimeOfDay(now);
+    }
+  } else {
+    // Auto mode: season rotates automatically
+    season = getSeason(now);
+
+    // Handle timeOfDay: can respect manual selection even in auto mode
+    if (
+      currentSettings.timeOfDay === "system" ||
+      currentSettings.useSystemTimeOfDay
+    ) {
+      // Use system color scheme to determine time of day
+      timeOfDay = scheme === "dark" ? "night" : "day";
+    } else if (currentSettings.timeOfDay) {
+      // In this branch, timeOfDay cannot be "system" due to the previous check
+      // Respect manual timeOfDay selection even in auto mode
+      timeOfDay = currentSettings.timeOfDay as TimeOfDay;
+    } else {
+      // Fall back to time-based calculation
+      timeOfDay = getTimeOfDay(now);
+    }
+  }
+
+  return getSeasonalTheme(season, timeOfDay);
+}
+
+/**
+ * Get initial theme state synchronously from cache
+ * This prevents the jarring theme flash on app start
+ */
+function getInitialThemeState(colorScheme: string | null | undefined): {
+  settings: ThemeSettings | null;
+  theme: SeasonalTheme | null;
+} {
+  const cachedSettings = getCachedThemeSettings();
+
+  if (cachedSettings) {
+    return {
+      settings: cachedSettings,
+      theme: calculateThemeFromSettings(cachedSettings, colorScheme),
+    };
+  }
+
+  return {
+    settings: null,
+    theme: null,
+  };
+}
+
 export function SeasonalThemeProvider({
   children,
 }: SeasonalThemeProviderProps) {
   const { getSettings } = useThemeSettings();
   const colorScheme = useColorScheme();
-  const [settings, setSettings] = useState<ThemeSettings | null>(null);
-  const [theme, setTheme] = useState<SeasonalTheme | null>(null);
 
-  // Use a stable function that doesn't need to be memoized
-  const calculateThemeInternal = (
-    currentSettings: ThemeSettings,
-    scheme: string | null | undefined,
-  ) => {
-    const now = new Date();
-    let season: Season;
-    let timeOfDay: TimeOfDay;
-
-    if (currentSettings.mode === "manual" && currentSettings.season) {
-      season = currentSettings.season;
-
-      // Handle timeOfDay: can be "system", TimeOfDay, or undefined
-      if (
-        currentSettings.timeOfDay === "system" ||
-        currentSettings.useSystemTimeOfDay
-      ) {
-        // Use system color scheme to determine time of day
-        timeOfDay = scheme === "dark" ? "night" : "day";
-      } else if (currentSettings.timeOfDay) {
-        // In this branch, timeOfDay cannot be "system" due to the previous check
-        timeOfDay = currentSettings.timeOfDay as TimeOfDay;
-      } else {
-        timeOfDay = getTimeOfDay(now);
-      }
-    } else {
-      // Auto mode: season rotates automatically
-      season = getSeason(now);
-
-      // Handle timeOfDay: can respect manual selection even in auto mode
-      if (
-        currentSettings.timeOfDay === "system" ||
-        currentSettings.useSystemTimeOfDay
-      ) {
-        // Use system color scheme to determine time of day
-        timeOfDay = scheme === "dark" ? "night" : "day";
-      } else if (currentSettings.timeOfDay) {
-        // In this branch, timeOfDay cannot be "system" due to the previous check
-        // Respect manual timeOfDay selection even in auto mode
-        timeOfDay = currentSettings.timeOfDay as TimeOfDay;
-      } else {
-        // Fall back to time-based calculation
-        timeOfDay = getTimeOfDay(now);
-      }
-    }
-
-    return getSeasonalTheme(season, timeOfDay);
-  };
+  // Initialize with cached settings for instant theme on app start
+  // This avoids the flash/jarring theme change on 2nd+ launches
+  const initialState = getInitialThemeState(colorScheme);
+  const [settings, setSettings] = useState<ThemeSettings | null>(
+    initialState.settings,
+  );
+  const [theme, setTheme] = useState<SeasonalTheme | null>(initialState.theme);
 
   const refreshTheme = useCallback(async () => {
     try {
       const currentSettings = await getSettings();
-      const newTheme = calculateThemeInternal(currentSettings, colorScheme);
+      const newTheme = calculateThemeFromSettings(currentSettings, colorScheme);
+
+      // Cache settings for next app launch
+      cacheThemeSettings(currentSettings);
 
       // Only update state if theme reference actually changed (thanks to caching)
       setTheme((prevTheme) => {
@@ -117,7 +152,10 @@ export function SeasonalThemeProvider({
       // Default to auto mode on error
       const defaultSettings = { mode: "auto" as const };
       setSettings(defaultSettings);
-      const defaultTheme = calculateThemeInternal(defaultSettings, colorScheme);
+      const defaultTheme = calculateThemeFromSettings(
+        defaultSettings,
+        colorScheme,
+      );
       setTheme(defaultTheme);
     }
   }, [getSettings, colorScheme]);
@@ -157,7 +195,7 @@ export function SeasonalThemeProvider({
 
   const contextValue = useMemo(
     () => ({
-      theme: theme || calculateThemeInternal({ mode: "auto" }, colorScheme),
+      theme: theme || calculateThemeFromSettings({ mode: "auto" }, colorScheme),
       settings,
       refreshTheme,
     }),

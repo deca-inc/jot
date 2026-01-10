@@ -6,12 +6,20 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTrackScreenView } from "../analytics";
-import { Text } from "../components";
+import { useTrackScreenView, useTrackEvent } from "../analytics";
+import { Text, Dialog, MenuItem } from "../components";
 import { Entry, extractPreviewText } from "../db/entries";
-import { useEntry, useChildEntries } from "../db/useEntries";
+import {
+  useEntry,
+  useChildEntries,
+  useUpdateEntry,
+  useDeleteEntry,
+  useArchiveEntry,
+  useUnarchiveEntry,
+} from "../db/useEntries";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import {
@@ -19,6 +27,7 @@ import {
   formatCountdown,
   calculateTimeRemaining,
 } from "../utils/countdown";
+import { cancelNotification } from "../utils/notifications";
 
 export interface CountdownViewerProps {
   entryId: number;
@@ -104,6 +113,17 @@ export function CountdownViewer({
   // State for refreshing
   const [refreshing, setRefreshing] = useState(false);
 
+  // State for overflow menu and dialogs
+  const [showMenu, setShowMenu] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+
+  // Mutations
+  const updateEntryMutation = useUpdateEntry();
+  const deleteEntryMutation = useDeleteEntry();
+  const archiveEntryMutation = useArchiveEntry();
+  const unarchiveEntryMutation = useUnarchiveEntry();
+  const trackEvent = useTrackEvent();
+
   // Timer state for live updates
   const [, setTick] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(
@@ -160,6 +180,102 @@ export function CountdownViewer({
     [onOpenCheckin],
   );
 
+  // Handler: Delete countdown
+  const handleDelete = useCallback(async () => {
+    Alert.alert(
+      "Delete Countdown",
+      "Are you sure you want to delete this countdown and all its check-ins? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Cancel notification if exists
+              if (countdownData?.notificationId) {
+                await cancelNotification(countdownData.notificationId);
+              }
+              await deleteEntryMutation.mutateAsync(entryId);
+              trackEvent("Delete Entry", { entryType: "countdown" });
+              onClose?.();
+            } catch (error) {
+              console.error("[CountdownViewer] Error deleting:", error);
+              Alert.alert("Error", "Failed to delete countdown");
+            }
+          },
+        },
+      ],
+    );
+  }, [
+    countdownData?.notificationId,
+    deleteEntryMutation,
+    entryId,
+    trackEvent,
+    onClose,
+  ]);
+
+  // Handler: Archive/Unarchive countdown
+  const handleArchive = useCallback(async () => {
+    try {
+      if (entry?.archivedAt) {
+        await unarchiveEntryMutation.mutateAsync(entryId);
+        trackEvent("Unarchive Entry", { entryType: "countdown" });
+      } else {
+        // Cancel notification before archiving
+        if (countdownData?.notificationId) {
+          await cancelNotification(countdownData.notificationId);
+        }
+        await archiveEntryMutation.mutateAsync(entryId);
+        trackEvent("Archive Entry", { entryType: "countdown" });
+      }
+    } catch (error) {
+      console.error("[CountdownViewer] Error archiving:", error);
+      Alert.alert("Error", "Failed to archive countdown");
+    }
+  }, [
+    entry?.archivedAt,
+    countdownData?.notificationId,
+    archiveEntryMutation,
+    unarchiveEntryMutation,
+    entryId,
+    trackEvent,
+  ]);
+
+  // Handler: Reset countup timer
+  const handleResetCountup = useCallback(async () => {
+    if (!entry || !countdownData?.isCountUp) return;
+
+    try {
+      // Create updated blocks with new targetDate (now)
+      const updatedBlocks = entry.blocks.map((block) => {
+        if (block.type === "countdown") {
+          return {
+            ...block,
+            targetDate: Date.now(),
+          };
+        }
+        return block;
+      });
+
+      await updateEntryMutation.mutateAsync({
+        id: entryId,
+        input: { blocks: updatedBlocks },
+      });
+      trackEvent("Reset Countup", { entryType: "countdown" });
+      setShowResetDialog(false);
+    } catch (error) {
+      console.error("[CountdownViewer] Error resetting countup:", error);
+      Alert.alert("Error", "Failed to reset timer");
+    }
+  }, [
+    entry,
+    countdownData?.isCountUp,
+    updateEntryMutation,
+    entryId,
+    trackEvent,
+  ]);
+
   // Loading state
   if (isLoading || !entry || !countdownData) {
     return (
@@ -215,13 +331,15 @@ export function CountdownViewer({
         >
           {countdownData.isCountUp ? "Time Since" : "Countdown"}
         </Text>
-        <TouchableOpacity onPress={handleEdit} style={styles.editButton}>
-          <Text
-            variant="body"
-            style={{ color: seasonalTheme.chipText, fontWeight: "600" }}
-          >
-            Edit
-          </Text>
+        <TouchableOpacity
+          onPress={() => setShowMenu(true)}
+          style={styles.menuButton}
+        >
+          <Ionicons
+            name="ellipsis-horizontal"
+            size={24}
+            color={seasonalTheme.textPrimary}
+          />
         </TouchableOpacity>
       </View>
 
@@ -540,6 +658,117 @@ export function CountdownViewer({
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Overflow Menu Dialog */}
+      <Dialog visible={showMenu} onRequestClose={() => setShowMenu(false)}>
+        <MenuItem
+          icon="pencil-outline"
+          label="Edit Timer"
+          onPress={() => {
+            setShowMenu(false);
+            handleEdit();
+          }}
+        />
+        {countdownData.isCountUp && (
+          <MenuItem
+            icon="refresh-outline"
+            label="Reset Timer"
+            onPress={() => {
+              setShowMenu(false);
+              setShowResetDialog(true);
+            }}
+          />
+        )}
+        <MenuItem
+          icon={entry.archivedAt ? "arrow-undo-outline" : "archive-outline"}
+          label={entry.archivedAt ? "Unarchive" : "Archive"}
+          onPress={() => {
+            setShowMenu(false);
+            handleArchive();
+          }}
+        />
+        <MenuItem
+          icon="trash-outline"
+          label="Delete"
+          variant="destructive"
+          onPress={() => {
+            setShowMenu(false);
+            handleDelete();
+          }}
+        />
+      </Dialog>
+
+      {/* Reset Timer Dialog */}
+      <Dialog
+        visible={showResetDialog}
+        onRequestClose={() => setShowResetDialog(false)}
+        containerStyle={styles.resetDialog}
+      >
+        <Text
+          variant="h3"
+          style={{
+            color: seasonalTheme.textPrimary,
+            marginBottom: spacingPatterns.sm,
+            textAlign: "center",
+          }}
+        >
+          Reset Timer?
+        </Text>
+        {countdownData.rewardsNote && (
+          <Text
+            variant="body"
+            style={{
+              color: seasonalTheme.textSecondary,
+              marginBottom: spacingPatterns.md,
+              textAlign: "center",
+              lineHeight: 22,
+            }}
+          >
+            {countdownData.rewardsNote}
+          </Text>
+        )}
+        <Text
+          variant="caption"
+          style={{
+            color: seasonalTheme.textSecondary,
+            marginBottom: spacingPatterns.md,
+            textAlign: "center",
+          }}
+        >
+          This will start the timer from now.
+        </Text>
+        <View style={styles.resetButtons}>
+          <TouchableOpacity
+            style={[
+              styles.resetButton,
+              {
+                backgroundColor: seasonalTheme.textSecondary + "20",
+              },
+            ]}
+            onPress={() => setShowResetDialog(false)}
+          >
+            <Text style={{ color: seasonalTheme.textPrimary }}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.resetButton,
+              {
+                backgroundColor: seasonalTheme.textPrimary,
+              },
+            ]}
+            onPress={handleResetCountup}
+          >
+            <Text
+              style={{
+                color: seasonalTheme.gradient.middle,
+                fontWeight: "600",
+              }}
+            >
+              Reset
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Dialog>
     </View>
   );
 }
@@ -559,6 +788,10 @@ const styles = StyleSheet.create({
     marginLeft: -spacingPatterns.xs,
   },
   editButton: {
+    padding: spacingPatterns.xs,
+    marginRight: -spacingPatterns.xs,
+  },
+  menuButton: {
     padding: spacingPatterns.xs,
     marginRight: -spacingPatterns.xs,
   },
@@ -687,5 +920,21 @@ const styles = StyleSheet.create({
   },
   addCheckinText: {
     fontWeight: "600",
+  },
+  resetDialog: {
+    width: "80%",
+    maxWidth: 400,
+    padding: spacingPatterns.lg,
+  },
+  resetButtons: {
+    flexDirection: "row",
+    gap: spacingPatterns.sm,
+  },
+  resetButton: {
+    flex: 1,
+    paddingVertical: spacingPatterns.sm,
+    paddingHorizontal: spacingPatterns.md,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
   },
 });

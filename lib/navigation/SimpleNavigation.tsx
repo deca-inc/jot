@@ -5,6 +5,7 @@ import {
   PanResponder,
   Animated,
   BackHandler,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCreateEntry } from "../db/useEntries";
@@ -416,6 +417,59 @@ export function SimpleNavigation() {
     });
     return () => setNavigationRef(null);
   }, [handleNavigateToCountdownViewer]);
+
+  // Handle deep links from widgets
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      const url = event.url;
+
+      // Parse jot://countdown/{entryId} - view existing countdown
+      const countdownMatch = url.match(/^jot:\/\/countdown\/(\d+)$/);
+      if (countdownMatch) {
+        const entryId = parseInt(countdownMatch[1], 10);
+        if (!isNaN(entryId)) {
+          handleNavigateToCountdownViewer(entryId);
+        }
+        return;
+      }
+
+      // Parse jot://create/{type} - quick create from widget
+      const createMatch = url.match(
+        /^jot:\/\/create\/(journal|chat|countdown)$/,
+      );
+      if (createMatch) {
+        const type = createMatch[1];
+        switch (type) {
+          case "journal":
+            handleOpenFullEditor();
+            break;
+          case "chat":
+            handleCreateNewAIChat();
+            break;
+          case "countdown":
+            handleCreateCountdown();
+            break;
+        }
+        return;
+      }
+    };
+
+    // Handle URL that opened the app (cold start)
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleDeepLink({ url });
+      }
+    });
+
+    // Handle URL while app is running (warm start)
+    const subscription = Linking.addEventListener("url", handleDeepLink);
+    return () => subscription.remove();
+  }, [
+    handleNavigateToCountdownViewer,
+    handleOpenFullEditor,
+    handleCreateNewAIChat,
+    handleCreateCountdown,
+  ]);
 
   const handleSettingsBack = useCallback(() => {
     setCurrentScreen("home");

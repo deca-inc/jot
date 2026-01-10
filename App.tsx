@@ -27,6 +27,7 @@ import {
   refreshCountdownNotifications,
   registerBackgroundTask,
 } from "./lib/utils/notificationScheduler";
+import { syncCountdownsToWidgets } from "./lib/widgets/widgetDataBridge";
 
 // Suppress harmless warnings
 LogBox.ignoreLogs([
@@ -181,12 +182,26 @@ function OnboardingWrapper() {
     return cleanup;
   }, []);
 
-  // Refresh countdown notifications on app open and when returning to foreground
+  // Refresh countdown notifications and sync widgets on app open and when returning to foreground
   useEffect(() => {
     const entryRepository = new EntryRepository(db);
 
-    // Refresh notifications immediately on mount
-    refreshCountdownNotifications(entryRepository);
+    // Function to refresh notifications and sync widgets
+    const refreshAndSync = async () => {
+      // Refresh notifications
+      await refreshCountdownNotifications(entryRepository);
+
+      // Sync countdown data to widgets
+      try {
+        const countdowns = await entryRepository.getAll({ type: "countdown" });
+        await syncCountdownsToWidgets(countdowns);
+      } catch (error) {
+        console.warn("[App] Failed to sync widgets:", error);
+      }
+    };
+
+    // Refresh immediately on mount
+    refreshAndSync();
 
     // Register background task
     registerBackgroundTask();
@@ -194,7 +209,7 @@ function OnboardingWrapper() {
     // Also refresh when app comes to foreground
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
-        refreshCountdownNotifications(entryRepository);
+        refreshAndSync();
       }
     });
 

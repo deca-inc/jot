@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
+import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 import { ALL_MODELS } from "../ai/modelConfig";
 import { ensureModelPresent, getModelSize } from "../ai/modelManager";
 import {
@@ -136,7 +137,12 @@ export function PendingDownloadBanner() {
       : 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: seasonalTheme.cardBg }]}>
+    <Animated.View
+      entering={FadeIn.duration(200)}
+      exiting={FadeOut.duration(150)}
+      layout={Layout.springify().damping(15).stiffness(100)}
+      style={[styles.container, { backgroundColor: seasonalTheme.cardBg }]}
+    >
       <View style={styles.content}>
         <View style={styles.iconContainer}>
           {isResuming ? (
@@ -220,7 +226,7 @@ export function PendingDownloadBanner() {
           ]}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

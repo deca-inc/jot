@@ -156,13 +156,6 @@ export async function refreshCountdownNotifications(
       console.log(
         `[NotificationScheduler] ${dstWarnings.length} notification(s) cross a DST transition`,
       );
-      for (const warning of dstWarnings) {
-        const offsetMinutes = warning.transition.offsetChange;
-        const direction = offsetMinutes < 0 ? "forward" : "back";
-        console.log(
-          `  - "${warning.notification.title}" at ${new Date(warning.notification.triggerTime).toLocaleString()} (clocks ${direction} ${Math.abs(offsetMinutes)} min)`,
-        );
-      }
     }
 
     await scheduleNotifications(notifications);

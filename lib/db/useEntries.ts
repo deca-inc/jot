@@ -6,11 +6,13 @@ import {
   InfiniteData,
 } from "@tanstack/react-query";
 import { usePostHog, sanitizeProperties } from "../analytics";
+import { syncCountdownsToWidgets } from "../widgets/widgetDataBridge";
 import {
   useEntryRepository,
   Entry,
   CreateEntryInput,
   UpdateEntryInput,
+  EntryRepository,
 } from "./entries";
 
 // Type for paginated entry results from infinite queries
@@ -53,6 +55,38 @@ export const entryKeys = {
   children: (parentId: number) =>
     [...entryKeys.all, "children", parentId] as const,
 };
+
+/**
+ * Helper to sync widget data after countdown changes
+ * Only syncs if the entry is a countdown type
+ */
+async function syncWidgetsIfCountdown(
+  entry: Entry,
+  entryRepository: EntryRepository,
+): Promise<void> {
+  if (entry.type !== "countdown") return;
+
+  try {
+    const countdowns = await entryRepository.getAll({ type: "countdown" });
+    await syncCountdownsToWidgets(countdowns);
+  } catch (error) {
+    console.warn("[useEntries] Failed to sync widgets:", error);
+  }
+}
+
+/**
+ * Helper to sync widget data after countdown deletion
+ */
+async function syncWidgetsAfterDelete(
+  entryRepository: EntryRepository,
+): Promise<void> {
+  try {
+    const countdowns = await entryRepository.getAll({ type: "countdown" });
+    await syncCountdownsToWidgets(countdowns);
+  } catch (error) {
+    console.warn("[useEntries] Failed to sync widgets after delete:", error);
+  }
+}
 
 /**
  * Hook to fetch a single entry by ID
@@ -195,7 +229,9 @@ export function useCreateEntry() {
     mutationFn: async (input: CreateEntryInput) => {
       return entryRepository.create(input);
     },
-    onSuccess: (entry) => {
+    onSuccess: async (entry) => {
+      // Sync widgets if this is a countdown
+      syncWidgetsIfCountdown(entry, entryRepository);
       // Track entry creation
       if (posthog) {
         posthog.capture(
@@ -269,7 +305,10 @@ export function useUpdateEntry() {
     }) => {
       return entryRepository.update(id, input);
     },
-    onSuccess: (entry, variables) => {
+    onSuccess: async (entry, variables) => {
+      // Sync widgets if this is a countdown (do this regardless of skipCacheUpdate)
+      syncWidgetsIfCountdown(entry, entryRepository);
+
       // Skip cache update if requested (e.g., during active editing to prevent HTML escaping)
       if (variables.skipCacheUpdate) {
         return;
@@ -322,7 +361,9 @@ export function useDeleteEntry() {
       await entryRepository.delete(id);
       return { id, parentId };
     },
-    onSuccess: ({ id, parentId }) => {
+    onSuccess: async ({ id, parentId }) => {
+      // Always sync widgets after delete (lightweight if no countdowns changed)
+      syncWidgetsAfterDelete(entryRepository);
       // Track entry deletion
       if (posthog) {
         posthog.capture("entry_deleted", { entryId: id });
@@ -422,7 +463,9 @@ export function useTogglePinned() {
     mutationFn: async (id: number) => {
       return entryRepository.togglePinned(id);
     },
-    onSuccess: (entry) => {
+    onSuccess: async (entry) => {
+      // Sync widgets if this is a countdown (pinned status affects widget sort order)
+      syncWidgetsIfCountdown(entry, entryRepository);
       // Track pin toggle
       if (posthog) {
         posthog.capture("entry_pinned", {
@@ -451,7 +494,9 @@ export function useArchiveEntry() {
     mutationFn: async (id: number) => {
       return entryRepository.archive(id);
     },
-    onSuccess: (entry) => {
+    onSuccess: async (entry) => {
+      // Sync widgets if this is a countdown (archived countdowns are excluded from widgets)
+      syncWidgetsIfCountdown(entry, entryRepository);
       // Track archive
       if (posthog) {
         posthog.capture("entry_archived", {
@@ -498,7 +543,9 @@ export function useUnarchiveEntry() {
     mutationFn: async (id: number) => {
       return entryRepository.unarchive(id);
     },
-    onSuccess: (entry) => {
+    onSuccess: async (entry) => {
+      // Sync widgets if this is a countdown (unarchived countdowns should appear in widgets)
+      syncWidgetsIfCountdown(entry, entryRepository);
       // Track unarchive
       if (posthog) {
         posthog.capture("entry_unarchived", {
