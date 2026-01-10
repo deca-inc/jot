@@ -527,6 +527,9 @@ export function useArchiveEntry() {
           return oldData;
         },
       );
+
+      // Also invalidate all entry queries to ensure UI updates
+      await queryClient.invalidateQueries({ queryKey: entryKeys.all });
     },
   });
 }

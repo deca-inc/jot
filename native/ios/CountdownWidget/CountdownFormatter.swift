@@ -40,31 +40,17 @@ struct CountdownFormatter {
                     return "<5m"
                 }
             } else {
-                // Countdown ended
-                if totalMinutes < 5 {
-                    return "Just Now"
-                }
-                if totalMinutes < 30 {
-                    return "<30m ago"
-                }
-                if totalMinutes < 60 {
-                    return "<1h ago"
-                }
-            }
-
-            if totalMinutes == 0 {
-                return isPast ? "<1h ago" : "<1h"
+                // Countdown ended - show checkmark
+                return "✓"
             }
 
             // Less than a day: show hours and minutes
             if hours > 0 {
-                let timeStr = minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
-                return isPast ? "\(timeStr) ago" : timeStr
+                return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
             }
 
             // Less than an hour: show just minutes
-            let timeStr = "\(minutes)m"
-            return isPast ? "\(timeStr) ago" : timeStr
+            return "\(minutes)m"
         }
 
         // Calculate larger units
@@ -82,12 +68,13 @@ struct CountdownFormatter {
             timeStr = hours > 0 ? "\(days)d \(hours)h" : "\(days)d"
         }
 
-        // For countup, never show "ago"
+        // For countup, never show negative prefix
         if isCountUp {
             return timeStr
         }
 
-        return isPast ? "\(timeStr) ago" : timeStr
+        // For past countdowns, show checkmark
+        return isPast ? "✓" : timeStr
     }
 
     /// Get a short status label
@@ -101,5 +88,10 @@ struct CountdownFormatter {
         } else {
             return "Countdown"
         }
+    }
+
+    /// Check if a countdown is complete (not for countUp)
+    static func isComplete(targetDate: Date, isCountUp: Bool) -> Bool {
+        return !isCountUp && targetDate < Date()
     }
 }

@@ -86,13 +86,11 @@ export function calculateTimeRemaining(targetDate: number): TimeRemaining {
 /**
  * Format countdown/time since for display
  * Shows max 2 units: "5d", "3w 2d", "1y 5w"
- * For countdown: adds "ago" suffix when past
+ * For countdown: shows negative prefix when past (e.g., "-10h 27m")
  * Special cases for countdowns near completion:
  * - <5m remaining: "<5m"
  * - <1m remaining: "<1m"
- * - Ended <5m ago: "Ended just now"
- * - Ended <30m ago: "<30m ago"
- * - Ended <1h ago: "<1h ago"
+ * - Complete: "Complete" when past
  */
 export function formatCountdown(
   targetDate: number,
@@ -117,30 +115,16 @@ export function formatCountdown(
       if (totalMinutes < 5) {
         return "<5m";
       }
-    } else {
-      // Countdown ended - show how long ago
-      if (totalMinutes < 5) {
-        return "Just Now";
-      }
-      if (totalMinutes < 30) {
-        return "<30m ago";
-      }
-      if (totalMinutes < 60) {
-        return "<1h ago";
-      }
     }
 
-    if (totalMinutes === 0) {
-      return isPast ? "<1h ago" : "<1h";
-    }
     // Less than a day: show hours and minutes
     if (hours > 0) {
       const timeStr = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-      return isPast ? `${timeStr} ago` : timeStr;
+      return isPast ? `-${timeStr}` : timeStr;
     }
     // Less than an hour: show just minutes
-    const timeStr = `${minutes}m`;
-    return isPast ? `${timeStr} ago` : timeStr;
+    const timeStr = totalMinutes > 0 ? `${totalMinutes}m` : "0m";
+    return isPast ? `-${timeStr}` : timeStr;
   }
 
   // Calculate larger units
@@ -161,12 +145,13 @@ export function formatCountdown(
     timeStr = hours > 0 ? `${days}d ${hours}h` : `${days}d`;
   }
 
-  // For countup, never show "ago"
+  // For countup, never show negative prefix
   if (isCountUp) {
     return timeStr;
   }
 
-  return isPast ? `${timeStr} ago` : timeStr;
+  // For past countdowns, show negative time
+  return isPast ? `-${timeStr}` : timeStr;
 }
 
 /**

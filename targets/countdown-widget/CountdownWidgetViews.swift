@@ -51,6 +51,10 @@ struct SmallWidgetView: View {
             targetDate: countdown.targetDateAsDate,
             isCountUp: countdown.isCountUp
         )
+        let status = CountdownFormatter.statusLabel(
+            targetDate: countdown.targetDateAsDate,
+            isCountUp: countdown.isCountUp
+        )
 
         VStack(alignment: .leading, spacing: 4) {
             // Type icon and title row
@@ -76,7 +80,7 @@ struct SmallWidgetView: View {
                 .lineLimit(1)
 
             // Type label
-            Text(countdown.isCountUp ? "Time Since" : "Countdown")
+            Text(status)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -264,6 +268,11 @@ struct CountdownRowView: View {
     let showDivider: Bool
 
     var body: some View {
+        let status = CountdownFormatter.statusLabel(
+            targetDate: countdown.targetDateAsDate,
+            isCountUp: countdown.isCountUp
+        )
+
         Link(destination: URL(string: "jot://countdown/\(countdown.entryId)")!) {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
@@ -280,7 +289,7 @@ struct CountdownRowView: View {
                             .foregroundColor(.primary)
                             .lineLimit(1)
 
-                        Text(countdown.isCountUp ? "Time Since" : "Countdown")
+                        Text(status)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

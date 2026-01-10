@@ -56,31 +56,17 @@ object CountdownFormatter {
                     return "<5m"
                 }
             } else {
-                // Countdown ended
-                if (totalMinutes < 5) {
-                    return "Just Now"
-                }
-                if (totalMinutes < 30) {
-                    return "<30m ago"
-                }
-                if (totalMinutes < 60) {
-                    return "<1h ago"
-                }
-            }
-
-            if (totalMinutes == 0) {
-                return if (isPast) "<1h ago" else "<1h"
+                // Countdown ended - show checkmark
+                return "✓"
             }
 
             // Less than a day: show hours and minutes
             if (hours > 0) {
-                val timeStr = if (minutes > 0) "${hours}h ${minutes}m" else "${hours}h"
-                return if (isPast) "$timeStr ago" else timeStr
+                return if (minutes > 0) "${hours}h ${minutes}m" else "${hours}h"
             }
 
             // Less than an hour: show just minutes
-            val timeStr = "${minutes}m"
-            return if (isPast) "$timeStr ago" else timeStr
+            return "${minutes}m"
         }
 
         // Calculate larger units
@@ -94,12 +80,13 @@ object CountdownFormatter {
             else -> if (hours > 0) "${days}d ${hours}h" else "${days}d"
         }
 
-        // For countup, never show "ago"
+        // For countup, never show negative prefix
         if (isCountUp) {
             return timeStr
         }
 
-        return if (isPast) "$timeStr ago" else timeStr
+        // For past countdowns, show checkmark
+        return if (isPast) "✓" else timeStr
     }
 
     /**
@@ -113,5 +100,12 @@ object CountdownFormatter {
             isPast -> "Completed"
             else -> "Countdown"
         }
+    }
+
+    /**
+     * Check if a countdown is complete (not for countUp)
+     */
+    fun isComplete(targetDate: Long, isCountUp: Boolean): Boolean {
+        return !isCountUp && targetDate < System.currentTimeMillis()
     }
 }
