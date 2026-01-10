@@ -26,7 +26,9 @@ object WidgetDataStore {
      * Get all countdown data from shared storage
      */
     fun getAllCountdowns(context: Context): List<WidgetCountdownData> {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        // Use applicationContext to ensure we read from the same SharedPreferences as the app
+        val appContext = context.applicationContext
+        val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val jsonString = prefs.getString(WIDGET_DATA_KEY, null) ?: return emptyList()
 
         return try {

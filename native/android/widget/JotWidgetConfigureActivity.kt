@@ -4,12 +4,12 @@ import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.BaseAdapter
+import android.widget.ListView
 import android.widget.TextView
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 
 /**
  * Activity for configuring which countdown to display in a Jot widget
@@ -43,15 +43,6 @@ class JotWidgetConfigureActivity : Activity() {
         )
         setContentView(layoutId)
 
-        // Set up the RecyclerView
-        val recyclerViewId = resources.getIdentifier(
-            "countdown_list",
-            "id",
-            packageName
-        )
-        val recyclerView = findViewById<RecyclerView>(recyclerViewId)
-        recyclerView.layoutManager = LinearLayoutManager(this)
-
         // Get available countdowns
         val countdowns = WidgetDataStore.getAllCountdowns(this)
 
@@ -59,13 +50,19 @@ class JotWidgetConfigureActivity : Activity() {
             // No countdowns available - show message and close
             val emptyId = resources.getIdentifier("empty_message", "id", packageName)
             findViewById<View>(emptyId)?.visibility = View.VISIBLE
-            recyclerView.visibility = View.GONE
             return
         }
 
-        // Set up adapter
-        recyclerView.adapter = CountdownAdapter(countdowns) { selectedCountdown ->
-            onCountdownSelected(selectedCountdown)
+        // Set up the ListView
+        val listViewId = resources.getIdentifier(
+            "countdown_list",
+            "id",
+            packageName
+        )
+        val listView = findViewById<ListView>(listViewId)
+        listView.adapter = CountdownAdapter(countdowns)
+        listView.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
+            onCountdownSelected(countdowns[position])
         }
     }
 
@@ -85,49 +82,34 @@ class JotWidgetConfigureActivity : Activity() {
     }
 
     /**
-     * RecyclerView adapter for countdown list
+     * Simple adapter for countdown list
      */
     private inner class CountdownAdapter(
-        private val countdowns: List<WidgetCountdownData>,
-        private val onItemClick: (WidgetCountdownData) -> Unit
-    ) : RecyclerView.Adapter<CountdownAdapter.ViewHolder>() {
+        private val countdowns: List<WidgetCountdownData>
+    ) : BaseAdapter() {
 
-        inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-            val titleText: TextView
-            val timeText: TextView
+        override fun getCount() = countdowns.size
+        override fun getItem(position: Int) = countdowns[position]
+        override fun getItemId(position: Int) = position.toLong()
 
-            init {
-                val titleId = resources.getIdentifier("item_title", "id", packageName)
-                val timeId = resources.getIdentifier("item_time", "id", packageName)
-                titleText = itemView.findViewById(titleId)
-                timeText = itemView.findViewById(timeId)
-            }
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val layoutId = resources.getIdentifier(
-                "jot_widget_configure_item",
-                "layout",
-                packageName
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView ?: layoutInflater.inflate(
+                resources.getIdentifier("jot_widget_configure_item", "layout", packageName),
+                parent,
+                false
             )
-            val view = LayoutInflater.from(parent.context).inflate(layoutId, parent, false)
-            return ViewHolder(view)
-        }
 
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val countdown = countdowns[position]
+            val titleId = resources.getIdentifier("item_title", "id", packageName)
+            val timeId = resources.getIdentifier("item_time", "id", packageName)
 
-            holder.titleText.text = countdown.title
-            holder.timeText.text = CountdownFormatter.format(
+            view.findViewById<TextView>(titleId).text = countdown.title
+            view.findViewById<TextView>(timeId).text = CountdownFormatter.format(
                 countdown.targetDate,
                 countdown.isCountUp
             )
 
-            holder.itemView.setOnClickListener {
-                onItemClick(countdown)
-            }
+            return view
         }
-
-        override fun getItemCount() = countdowns.size
     }
 }

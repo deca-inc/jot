@@ -38,6 +38,7 @@ LogBox.ignoreLogs([
   "Background tasks are not supported on iOS simulators", // Expected simulator limitation
   "You seem to update props of the", // RenderHTML throttling warning (we handle this internally)
   "You seem to update the renderers prop", // RenderHTML throttling warning
+  "expo-background-fetch: This library is deprecated", // Will migrate to expo-background-task later
 ]);
 
 // Create a query client with optimized cache settings for better performance

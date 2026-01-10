@@ -93,6 +93,25 @@ const withAndroidWidget = (config) => {
       });
     }
 
+    // Add widget service for scrollable list
+    if (!application.service) {
+      application.service = [];
+    }
+
+    const serviceExists = application.service.some(
+      (s) => s.$?.["android:name"] === `${widgetPackage}.JotWidgetService`,
+    );
+
+    if (!serviceExists) {
+      application.service.push({
+        $: {
+          "android:name": `${widgetPackage}.JotWidgetService`,
+          "android:permission": "android.permission.BIND_REMOTEVIEWS",
+          "android:exported": "false",
+        },
+      });
+    }
+
     // Add widget configure activity
     if (!application.activity) {
       application.activity = [];
@@ -169,6 +188,12 @@ const withAndroidWidget = (config) => {
                 "android:host": "countdown",
               },
             },
+            {
+              $: {
+                "android:scheme": "jot",
+                "android:host": "create",
+              },
+            },
           ],
         });
       }
@@ -213,6 +238,7 @@ const withAndroidWidget = (config) => {
         "WidgetDataStore.kt",
         "CountdownFormatter.kt",
         "JotWidgetProvider.kt",
+        "JotWidgetService.kt",
         "CountdownWidgetProvider.kt",
         "JotWidgetConfigureActivity.kt",
       ];
@@ -241,8 +267,12 @@ const withAndroidWidget = (config) => {
       fs.mkdirSync(layoutDir, { recursive: true });
       const layoutFiles = [
         "jot_widget.xml",
+        "jot_widget_preview.xml",
+        "jot_widget_medium.xml",
+        "jot_widget_medium_preview.xml",
         "jot_widget_configure.xml",
         "jot_widget_configure_item.xml",
+        "jot_widget_list_item.xml",
       ];
       for (const file of layoutFiles) {
         const srcPath = path.join(resSourceDir, "layout", file);
@@ -255,14 +285,22 @@ const withAndroidWidget = (config) => {
       // Copy drawable files
       const drawableDir = path.join(resDestDir, "drawable");
       fs.mkdirSync(drawableDir, { recursive: true });
-      const drawableSrc = path.join(
-        resSourceDir,
-        "drawable",
+      const drawableFiles = [
         "widget_background.xml",
-      );
-      const drawableDest = path.join(drawableDir, "widget_background.xml");
-      if (fs.existsSync(drawableSrc)) {
-        fs.copyFileSync(drawableSrc, drawableDest);
+        "ic_widget_journal.xml",
+        "ic_widget_chat.xml",
+        "ic_widget_countdown.xml",
+        "ic_widget_arrow_down.xml",
+        "ic_widget_arrow_up.xml",
+        "ic_widget_chevron_left.xml",
+        "ic_widget_chevron_right.xml",
+      ];
+      for (const file of drawableFiles) {
+        const drawableSrc = path.join(resSourceDir, "drawable", file);
+        const drawableDest = path.join(drawableDir, file);
+        if (fs.existsSync(drawableSrc)) {
+          fs.copyFileSync(drawableSrc, drawableDest);
+        }
       }
 
       // Copy xml files (widget info)

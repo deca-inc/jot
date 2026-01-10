@@ -27,9 +27,11 @@
         android:gravity="center"
         android:layout_marginTop="32dp" />
 
-    <androidx.recyclerview.widget.RecyclerView
+    <ListView
         android:id="@+id/countdown_list"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:divider="#333333"
+        android:dividerHeight="1dp" />
 
 </LinearLayout>

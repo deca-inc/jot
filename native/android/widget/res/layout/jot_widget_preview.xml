@@ -1,47 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="12dp"
     android:background="@drawable/widget_background">
 
-    <!-- Status indicator at top -->
     <TextView
-        android:id="@+id/widget_status"
+        android:id="@+id/preview_status"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentTop="true"
         android:layout_alignParentStart="true"
+        android:text="COUNTDOWN"
         android:textSize="11sp"
-        android:textColor="#999999"
+        android:textColor="#FFB74D"
         android:textAllCaps="true"
         android:letterSpacing="0.05" />
 
-    <!-- Title -->
     <TextView
-        android:id="@+id/widget_title"
+        android:id="@+id/preview_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/widget_status"
+        android:layout_below="@id/preview_status"
         android:layout_marginTop="2dp"
+        android:text="My Event"
         android:textSize="14sp"
         android:textColor="#FFFFFF"
-        android:maxLines="2"
-        android:ellipsize="end" />
+        android:maxLines="2" />
 
-    <!-- Large time display - centered vertically -->
     <TextView
-        android:id="@+id/widget_time"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
+        android:text="14d 6h"
         android:textSize="32sp"
         android:textStyle="bold"
         android:textColor="#FFFFFF"
         android:fontFamily="sans-serif-medium"
-        android:gravity="center"
-        android:maxLines="1" />
+        android:gravity="center" />
 
     <!-- Bottom navigation row -->
     <LinearLayout
@@ -53,7 +49,6 @@
 
         <!-- Left arrow -->
         <ImageView
-            android:id="@+id/btn_prev"
             android:layout_width="28dp"
             android:layout_height="28dp"
             android:src="@drawable/ic_widget_chevron_left"
@@ -62,10 +57,10 @@
 
         <!-- Target date - takes remaining space -->
         <TextView
-            android:id="@+id/widget_target_date"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:text="Jan 24, 2026"
             android:textSize="11sp"
             android:textColor="#666666"
             android:gravity="center"
@@ -73,7 +68,6 @@
 
         <!-- Right arrow -->
         <ImageView
-            android:id="@+id/btn_next"
             android:layout_width="28dp"
             android:layout_height="28dp"
             android:src="@drawable/ic_widget_chevron_right"
