@@ -507,35 +507,6 @@ export function CountdownViewer({
             />
           }
         >
-          {/* Rewards Note (if any) */}
-          {countdownData.rewardsNote && (
-            <View
-              style={[
-                styles.rewardsCard,
-                {
-                  backgroundColor: seasonalTheme.isDark
-                    ? "rgba(255, 255, 255, 0.08)"
-                    : "rgba(255, 255, 255, 0.9)",
-                },
-              ]}
-            >
-              <Ionicons
-                name="gift-outline"
-                size={20}
-                color={seasonalTheme.chipText}
-              />
-              <Text
-                variant="body"
-                style={[
-                  styles.rewardsText,
-                  { color: seasonalTheme.textPrimary },
-                ]}
-              >
-                {countdownData.rewardsNote}
-              </Text>
-            </View>
-          )}
-
           {checkinsLoading ? (
             <Text
               variant="body"
