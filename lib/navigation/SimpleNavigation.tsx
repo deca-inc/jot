@@ -20,7 +20,6 @@ import { CountdownComposer } from "../screens/CountdownComposer";
 import { CountdownViewer } from "../screens/CountdownViewer";
 import { springPresets } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useTheme } from "../theme/ThemeProvider";
 
 type Screen =
   | "home"
@@ -72,9 +71,7 @@ export function SimpleNavigation() {
   const [checkinParentId, setCheckinParentId] = useState<number | undefined>(
     undefined,
   );
-  const [showCheckinPrompt, setShowCheckinPrompt] = useState(false);
   const [_homeRefreshKey, _setHomeRefreshKey] = useState(0);
-  const _theme = useTheme();
   const createEntry = useCreateEntry();
   const swipeX = useRef(new Animated.Value(0)).current;
   const screenWidth = useRef(0);
@@ -369,24 +366,14 @@ export function SimpleNavigation() {
   }, [countdownViewerEntryId]);
 
   // Countdown viewer handlers (for notification deep linking)
-  const handleNavigateToCountdownViewer = useCallback(
-    (entryId: number, checkinPrompt?: boolean) => {
-      setCountdownViewerEntryId(entryId);
-      setShowCheckinPrompt(checkinPrompt ?? false);
-      setCurrentScreen("countdownViewer");
-    },
-    [],
-  );
+  const handleNavigateToCountdownViewer = useCallback((entryId: number) => {
+    setCountdownViewerEntryId(entryId);
+    setCurrentScreen("countdownViewer");
+  }, []);
 
   const handleCountdownViewerClose = useCallback(() => {
     setCurrentScreen("home");
     setCountdownViewerEntryId(undefined);
-    setShowCheckinPrompt(false);
-  }, []);
-
-  // Handler for dismissing check-in prompt
-  const handleDismissCheckinPrompt = useCallback(() => {
-    setShowCheckinPrompt(false);
   }, []);
 
   // Handler for editing a countdown from the viewer
@@ -611,8 +598,6 @@ export function SimpleNavigation() {
             onEdit={handleCountdownViewerEdit}
             onAddCheckin={handleAddCheckin}
             onOpenCheckin={handleOpenCheckin}
-            showCheckinPrompt={showCheckinPrompt}
-            onDismissCheckinPrompt={handleDismissCheckinPrompt}
           />
         ) : null;
       default:

@@ -86,8 +86,6 @@ export function CountdownViewer({
   onEdit,
   onAddCheckin,
   onOpenCheckin,
-  showCheckinPrompt = false,
-  onDismissCheckinPrompt,
 }: CountdownViewerProps) {
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
@@ -103,12 +101,6 @@ export function CountdownViewer({
     useChildEntries(entryId);
 
   // State for check-in prompt visibility (synced with prop)
-  const [showPrompt, setShowPrompt] = useState(showCheckinPrompt);
-
-  // Sync local prompt state with prop
-  useEffect(() => {
-    setShowPrompt(showCheckinPrompt);
-  }, [showCheckinPrompt]);
 
   // State for refreshing
   const [refreshing, setRefreshing] = useState(false);
@@ -163,15 +155,8 @@ export function CountdownViewer({
   }, [onEdit, entryId]);
 
   const handleAddCheckin = useCallback(() => {
-    setShowPrompt(false);
-    onDismissCheckinPrompt?.();
     onAddCheckin?.(entryId);
-  }, [onAddCheckin, entryId, onDismissCheckinPrompt]);
-
-  const handleDismissPrompt = useCallback(() => {
-    setShowPrompt(false);
-    onDismissCheckinPrompt?.();
-  }, [onDismissCheckinPrompt]);
+  }, [onAddCheckin, entryId]);
 
   const handleOpenCheckin = useCallback(
     (checkinId: number) => {
@@ -427,70 +412,6 @@ export function CountdownViewer({
             </Text>
           )}
         </View>
-
-        {/* Check-in Prompt (shown when arriving from notification) */}
-        {showPrompt && (
-          <View
-            style={[
-              styles.promptCard,
-              {
-                backgroundColor: seasonalTheme.chipBg,
-                borderColor: seasonalTheme.chipText + "40",
-                marginHorizontal: spacingPatterns.screen,
-              },
-            ]}
-          >
-            <Ionicons
-              name="create-outline"
-              size={24}
-              color={seasonalTheme.chipText}
-            />
-            <View style={styles.promptContent}>
-              <Text
-                variant="body"
-                style={{ color: seasonalTheme.chipText, fontWeight: "600" }}
-              >
-                Time for your check-in!
-              </Text>
-              <Text
-                variant="caption"
-                style={{ color: seasonalTheme.chipText, marginTop: 2 }}
-              >
-                How are things going?
-              </Text>
-            </View>
-            <View style={styles.promptButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.promptButton,
-                  { backgroundColor: seasonalTheme.chipText },
-                ]}
-                onPress={handleAddCheckin}
-              >
-                <Text
-                  variant="caption"
-                  style={{
-                    color: seasonalTheme.isDark ? "#000" : "#fff",
-                    fontWeight: "600",
-                  }}
-                >
-                  Add Check-in
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.laterButton}
-                onPress={handleDismissPrompt}
-              >
-                <Text
-                  variant="caption"
-                  style={{ color: seasonalTheme.chipText }}
-                >
-                  Later
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* Scrollable Check-ins List */}
         <ScrollView
