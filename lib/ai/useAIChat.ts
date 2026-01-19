@@ -9,7 +9,7 @@
 
 import { useCallback, useRef } from "react";
 import { Message } from "react-native-executorch";
-import { useLLMContext } from "./LLMProvider";
+import { useLLMContext } from "./UnifiedModelProvider";
 
 export interface UseAIChatOptions {
   /** Callback while response is generating */
@@ -18,6 +18,10 @@ export interface UseAIChatOptions {
   onResponseComplete?: (response: string) => void;
   /** Callback on error */
   onError?: (error: string) => void;
+  /** Custom system prompt (from agent) */
+  systemPrompt?: string;
+  /** Think mode (from agent) */
+  thinkMode?: "no-think" | "think" | "none";
 }
 
 /**
@@ -31,10 +35,22 @@ function stripThinkTags(text: string): string {
 }
 
 export function useAIChat(options: UseAIChatOptions = {}) {
-  const { onResponseUpdate, onResponseComplete, onError } = options;
+  const {
+    onResponseUpdate,
+    onResponseComplete,
+    onError,
+    systemPrompt,
+    thinkMode,
+  } = options;
 
   // Get shared LLM from context
   const llm = useLLMContext();
+
+  // Track agent options with refs
+  const systemPromptRef = useRef(systemPrompt);
+  systemPromptRef.current = systemPrompt;
+  const thinkModeRef = useRef(thinkMode);
+  thinkModeRef.current = thinkMode;
 
   // Track message history for this conversation
   const messageHistoryRef = useRef<Message[]>([]);
@@ -59,23 +75,17 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       // Note: We don't check llm.isReady here - the provider's sendMessage
       // will trigger lazy loading and wait for the model to be ready
 
-      let cleanedUserMessage = userMessage.trim();
-      if (cleanedUserMessage.indexOf("/think") !== 0) {
-        cleanedUserMessage = `/no_think ${cleanedUserMessage}`;
-      }
-
-      // Add user message to history
-      const userMsg: Message = { role: "user", content: cleanedUserMessage };
+      // Add user message to history (don't modify with /no_think prefix - let the provider handle it)
+      const userMsg: Message = { role: "user", content: userMessage.trim() };
       messageHistoryRef.current = [...messageHistoryRef.current, userMsg];
 
       try {
-        // Send all messages (LLMProvider handles system prompt and context limits)
-        const response = await llm.sendMessage(
-          messageHistoryRef.current,
-          onResponseUpdateRef.current
-            ? { responseCallback: onResponseUpdateRef.current }
-            : undefined,
-        );
+        // Send all messages with agent options (provider handles system prompt and think mode)
+        const response = await llm.sendMessage(messageHistoryRef.current, {
+          responseCallback: onResponseUpdateRef.current,
+          systemPrompt: systemPromptRef.current,
+          thinkMode: thinkModeRef.current,
+        });
         const cleanResponse = stripThinkTags(response);
 
         // Add assistant response to history

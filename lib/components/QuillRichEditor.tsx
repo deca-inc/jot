@@ -35,6 +35,16 @@ export interface QuillRichEditorRef {
   getHtml: () => Promise<string | undefined>;
   focus: () => void;
   blur: () => void;
+  /** Insert text at current cursor position (or end if no cursor) */
+  insertText: (text: string) => Promise<void>;
+  /** Insert HTML at current cursor position (or end if no cursor) */
+  insertHtml: (html: string) => Promise<void>;
+  /** Insert an audio attachment embed */
+  insertAudioAttachment: (options: {
+    id: string;
+    src: string;
+    duration: number;
+  }) => Promise<void>;
 }
 
 interface QuillRichEditorProps {
@@ -100,6 +110,59 @@ export const QuillRichEditor = forwardRef<
     },
     blur: () => {
       editorRef.current?.blur();
+    },
+    insertText: async (text: string) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      // Get current selection, or use end of document
+      const selection = await editor.getSelection();
+      const index = selection?.index ?? (await editor.getLength()) - 1;
+
+      // Insert the text at cursor position (no formats = plain text)
+      editor.insertText(index, text);
+
+      // Move cursor to end of inserted text
+      editor.setSelection(index + text.length, 0);
+    },
+    insertHtml: async (html: string) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      // Get current selection, or use end of document
+      const selection = await editor.getSelection();
+      const index = selection?.index ?? (await editor.getLength()) - 1;
+
+      // Use clipboard.dangerouslyPasteHTML to insert HTML content
+      // This properly converts HTML to Quill Delta format
+      editor.dangerouslyPasteHTML(index, html);
+    },
+    insertAudioAttachment: async (options: {
+      id: string;
+      src: string;
+      duration: number;
+    }) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      // Get current selection, or use end of document
+      const selection = await editor.getSelection();
+      const index = selection?.index ?? (await editor.getLength()) - 1;
+
+      // Insert newline first (BlockEmbeds need their own line)
+      editor.insertText(index, "\n");
+
+      // Insert the custom audio-attachment embed
+      // Value is a JSON string with all the data we need
+      const value = JSON.stringify({
+        id: options.id,
+        src: options.src,
+        duration: options.duration,
+      });
+      editor.insertEmbed(index + 1, "audio-attachment", value);
+
+      // Move cursor after the embed
+      editor.setSelection(index + 2, 0);
     },
   }));
 
@@ -432,6 +495,104 @@ export const QuillRichEditor = forwardRef<
       border-radius: 8px;
       overflow-x: auto;
     }
+    /* Audio attachment player styling */
+    .audio-attachment {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)"};
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin: 12px 0;
+      user-select: none;
+      -webkit-user-select: none;
+      width: 100%;
+      box-sizing: border-box;
+      position: relative;
+    }
+    .audio-attachment audio {
+      display: none;
+    }
+    .audio-delete-btn {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: none;
+      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)"};
+      color: ${seasonalTheme.textPrimary};
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      padding: 0;
+      opacity: 0.7;
+      z-index: 10;
+    }
+    .audio-delete-btn:hover {
+      background: ${seasonalTheme.isDark ? "rgba(255,100,100,0.4)" : "rgba(200,50,50,0.3)"};
+      opacity: 1;
+    }
+    .audio-delete-btn:active {
+      transform: scale(0.9);
+    }
+    .audio-delete-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+    .audio-play-btn {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+      border-radius: 50%;
+      border: none;
+      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.08)"};
+      color: ${seasonalTheme.textPrimary};
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      padding: 0;
+    }
+    .audio-play-btn:hover {
+      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)"};
+    }
+    .audio-play-btn:active {
+      transform: scale(0.95);
+    }
+    .audio-play-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+    .audio-play-btn.playing svg {
+      /* Pause icon */
+    }
+    .audio-progress {
+      flex: 1;
+      height: 6px;
+      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"};
+      border-radius: 3px;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .audio-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: ${seasonalTheme.textPrimary};
+      border-radius: 3px;
+      transition: width 0.1s linear;
+    }
+    .audio-duration {
+      font-size: 13px;
+      color: ${seasonalTheme.textSecondary};
+      min-width: 40px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
   `;
 
   // Render toolbar buttons (shared between iOS and Android)
@@ -700,6 +861,64 @@ export const QuillRichEditor = forwardRef<
           onHtmlChange={handleHtmlChange}
           customStyles={[customStyles]}
           customJS={`
+            // Register custom AudioAttachment blot BEFORE Quill initializes
+            (function() {
+              var BlockEmbed = Quill.import('blots/block/embed');
+
+              class AudioAttachmentBlot extends BlockEmbed {
+                static create(value) {
+                  var node = super.create();
+
+                  // Parse the JSON value
+                  var data = {};
+                  try {
+                    data = typeof value === 'string' ? JSON.parse(value) : value;
+                  } catch(e) {
+                    console.error('AudioAttachmentBlot parse error:', e);
+                  }
+
+                  var id = data.id || '';
+                  var src = data.src || '';
+                  var duration = parseFloat(data.duration) || 0;
+
+                  // Format duration
+                  var mins = Math.floor(duration / 60);
+                  var secs = Math.floor(duration % 60);
+                  var durationStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
+
+                  // Set attributes
+                  node.setAttribute('data-attachment-id', id);
+                  node.setAttribute('data-value', typeof value === 'string' ? value : JSON.stringify(value));
+                  node.setAttribute('contenteditable', 'false');
+
+                  // Build inner HTML with delete button
+                  node.innerHTML =
+                    '<button class="audio-delete-btn" type="button" title="Delete audio">' +
+                      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>' +
+                    '</button>' +
+                    '<button class="audio-play-btn" type="button">' +
+                      '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M8 5v14l11-7z"/></svg>' +
+                    '</button>' +
+                    '<div class="audio-progress"><div class="audio-progress-bar"></div></div>' +
+                    '<span class="audio-duration">' + durationStr + '</span>' +
+                    '<audio src="' + src + '" preload="metadata"></audio>';
+
+                  return node;
+                }
+
+                static value(node) {
+                  return node.getAttribute('data-value') || '{}';
+                }
+              }
+
+              AudioAttachmentBlot.blotName = 'audio-attachment';
+              AudioAttachmentBlot.tagName = 'DIV';
+              AudioAttachmentBlot.className = 'audio-attachment';
+
+              Quill.register(AudioAttachmentBlot, true);
+              console.log('AudioAttachmentBlot registered');
+            })();
+
             // Auto-scroll cursor into view when typing or focusing
             (function() {
               function scrollCursorIntoView() {
@@ -861,6 +1080,183 @@ export const QuillRichEditor = forwardRef<
             `
                 : ""
             }
+
+            // Audio player functionality
+            (function() {
+              var currentAudio = null;
+              var currentBtn = null;
+              var currentProgressBar = null;
+              var currentDurationEl = null;
+              var animationFrame = null;
+
+              var playSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+              var pauseSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+
+              // Delete button handler
+              document.addEventListener('click', function(e) {
+                var deleteBtn = e.target.closest('.audio-delete-btn');
+                if (!deleteBtn) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                var container = deleteBtn.closest('.audio-attachment');
+                if (!container) return;
+
+                // Stop any playing audio first
+                var audio = container.querySelector('audio');
+                if (audio && currentAudio === audio) {
+                  audio.pause();
+                  currentAudio = null;
+                  currentBtn = null;
+                  currentProgressBar = null;
+                  currentDurationEl = null;
+                  if (animationFrame) {
+                    cancelAnimationFrame(animationFrame);
+                  }
+                }
+
+                // Find the blot and remove it via Quill
+                try {
+                  var blot = Quill.find(container);
+                  if (blot && quill) {
+                    var index = quill.getIndex(blot);
+                    var length = blot.length ? blot.length() : 1;
+                    quill.deleteText(index, length, 'user');
+                  } else {
+                    // Fallback: just remove the DOM node
+                    container.remove();
+                  }
+                } catch (err) {
+                  console.error('Error deleting audio attachment:', err);
+                  // Fallback: just remove the DOM node
+                  container.remove();
+                }
+              }, true);
+
+              function formatTime(seconds) {
+                var mins = Math.floor(seconds / 60);
+                var secs = Math.floor(seconds % 60);
+                return mins + ':' + (secs < 10 ? '0' : '') + secs;
+              }
+
+              function updateProgress() {
+                if (currentAudio && currentProgressBar && currentDurationEl) {
+                  var progress = (currentAudio.currentTime / currentAudio.duration) * 100;
+                  currentProgressBar.style.width = progress + '%';
+                  currentDurationEl.textContent = formatTime(currentAudio.currentTime);
+
+                  if (!currentAudio.paused) {
+                    animationFrame = requestAnimationFrame(updateProgress);
+                  }
+                }
+              }
+
+              function stopCurrent() {
+                if (currentAudio) {
+                  currentAudio.pause();
+                  currentAudio.currentTime = 0;
+                }
+                if (currentBtn) {
+                  currentBtn.innerHTML = playSvg;
+                  currentBtn.classList.remove('playing');
+                }
+                if (currentProgressBar) {
+                  currentProgressBar.style.width = '0%';
+                }
+                if (currentDurationEl && currentAudio) {
+                  currentDurationEl.textContent = formatTime(currentAudio.duration || 0);
+                }
+                if (animationFrame) {
+                  cancelAnimationFrame(animationFrame);
+                }
+                currentAudio = null;
+                currentBtn = null;
+                currentProgressBar = null;
+                currentDurationEl = null;
+              }
+
+              document.addEventListener('click', function(e) {
+                var playBtn = e.target.closest('.audio-play-btn');
+                if (!playBtn) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                var container = playBtn.closest('.audio-attachment');
+                if (!container) return;
+
+                var audio = container.querySelector('audio');
+                var progressBar = container.querySelector('.audio-progress-bar');
+                var durationEl = container.querySelector('.audio-duration');
+
+                if (!audio) return;
+
+                // If clicking on currently playing audio, toggle pause
+                if (currentAudio === audio) {
+                  if (audio.paused) {
+                    audio.play();
+                    playBtn.innerHTML = pauseSvg;
+                    playBtn.classList.add('playing');
+                    updateProgress();
+                  } else {
+                    audio.pause();
+                    playBtn.innerHTML = playSvg;
+                    playBtn.classList.remove('playing');
+                  }
+                  return;
+                }
+
+                // Stop any currently playing audio
+                stopCurrent();
+
+                // Start new audio
+                currentAudio = audio;
+                currentBtn = playBtn;
+                currentProgressBar = progressBar;
+                currentDurationEl = durationEl;
+
+                audio.play();
+                playBtn.innerHTML = pauseSvg;
+                playBtn.classList.add('playing');
+                updateProgress();
+
+                // Handle audio end
+                audio.onended = function() {
+                  stopCurrent();
+                };
+              }, true);
+
+              // Click on progress bar to seek
+              document.addEventListener('click', function(e) {
+                var progressContainer = e.target.closest('.audio-progress');
+                if (!progressContainer) return;
+
+                var container = progressContainer.closest('.audio-attachment');
+                if (!container) return;
+
+                var audio = container.querySelector('audio');
+                if (!audio || !audio.duration) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                var rect = progressContainer.getBoundingClientRect();
+                var clickX = e.clientX - rect.left;
+                var percent = clickX / rect.width;
+                audio.currentTime = percent * audio.duration;
+
+                var progressBar = container.querySelector('.audio-progress-bar');
+                if (progressBar) {
+                  progressBar.style.width = (percent * 100) + '%';
+                }
+
+                var durationEl = container.querySelector('.audio-duration');
+                if (durationEl) {
+                  durationEl.textContent = formatTime(audio.currentTime);
+                }
+              }, true);
+            })();
           `}
         />
       </View>

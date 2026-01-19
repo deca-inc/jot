@@ -29,6 +29,7 @@
     "@tanstack/react-query": "^5.90.6",
     "expo": "~54.0.25",
     "expo-application": "^7.0.7",
+    "expo-audio": "^1.1.1",
     "expo-background-fetch": "~14.0.8",
     "expo-background-task": "~1.0.9",
     "expo-blur": "~15.0.7",
@@ -54,7 +55,7 @@
     "react-native": "0.81.5",
     "react-native-argon2": "^3.0.0",
     "react-native-cn-quill": "^0.7.20",
-    "react-native-executorch": "^0.5.15",
+    "react-native-executorch": "^0.6.0",
     "react-native-fast-confetti": "^1.1.1",
     "react-native-mmkv": "^4.1.1",
     "react-native-quick-crypto": "^0.7.17",
@@ -94,8 +95,6 @@
       "expo-keep-awake": "15.0.7",
       "expo-modules-core": "3.0.23"
     },
-    "patchedDependencies": {
-      "react-native-executorch@0.5.15": "patches/react-native-executorch@0.5.15.patch"
-    }
+    "patchedDependencies": {}
   }
 }

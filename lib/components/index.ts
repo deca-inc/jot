@@ -19,3 +19,5 @@ export * from "./FloatingActionButton";
 export * from "./AIComposerInput";
 export * from "./SearchDropdown";
 export * from "./QuillRichEditor";
+export * from "./VoiceRecordButton";
+export * from "./ModelManagementModal";

@@ -29,7 +29,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALL_MODELS, getModelById } from "../ai/modelConfig";
 import { useAIChat } from "../ai/useAIChat";
 import { useTrackScreenView } from "../analytics";
-import { Dialog, Text, FloatingComposerHeader } from "../components";
+import {
+  Dialog,
+  Text,
+  FloatingComposerHeader,
+  ModelManagementModal,
+} from "../components";
+import { type Agent, useAgents } from "../db/agents";
 import { Block } from "../db/entries";
 import { useModelSettings, ModelDownloadInfo } from "../db/modelSettings";
 import { useEntry, useCreateEntry, useUpdateEntry } from "../db/useEntries";
@@ -280,6 +286,7 @@ export function AIChatComposer({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const modelSettings = useModelSettings();
+  const agentsRepo = useAgents();
 
   // Track screen view
   useTrackScreenView("AI Chat Composer");
@@ -295,17 +302,28 @@ export function AIChatComposer({
     150,
   );
 
-  // Load downloaded models on mount
+  // Agent state
+  const [currentAgent, setCurrentAgent] = useState<Agent | null>(null);
+
+  // Model management modal state
+  const [showModelManager, setShowModelManager] = useState(false);
+
+  // Load downloaded models and default agent on mount
   useEffect(() => {
-    const loadModels = async () => {
-      const [downloaded, selected] = await Promise.all([
+    const loadSettings = async () => {
+      const [downloaded, selected, defaultAgent] = await Promise.all([
         modelSettings.getDownloadedModels(),
         modelSettings.getSelectedModelId(),
+        agentsRepo.getDefault(),
       ]);
       setDownloadedModels(downloaded);
       setSelectedModelId(selected);
+      // Use default agent initially (will be overridden by entry's agent if available)
+      if (defaultAgent) {
+        setCurrentAgent(defaultAgent);
+      }
     };
-    loadModels();
+    loadSettings();
   }, []);
 
   // Get display name for selected model
@@ -331,6 +349,19 @@ export function AIChatComposer({
   const entryRef = useRef(entry);
   entryRef.current = entry;
 
+  // Load entry's agent when opening existing conversation
+  useEffect(() => {
+    const loadEntryAgent = async () => {
+      if (entry?.agentId) {
+        const agent = await agentsRepo.getById(entry.agentId);
+        if (agent) {
+          setCurrentAgent(agent);
+        }
+      }
+    };
+    loadEntryAgent();
+  }, [entry?.agentId]);
+
   const createEntry = useCreateEntry();
   const updateEntry = useUpdateEntry();
 
@@ -338,13 +369,15 @@ export function AIChatComposer({
   const updateEntryRef = useRef(updateEntry);
   updateEntryRef.current = updateEntry;
 
-  // Use the simplified AI chat hook
+  // Use the simplified AI chat hook with agent settings
   const {
     isGenerating,
     sendMessage: aiSendMessage,
     setMessageHistory,
     stop: stopGeneration,
   } = useAIChat({
+    systemPrompt: currentAgent?.systemPrompt,
+    thinkMode: currentAgent?.thinkMode,
     onResponseComplete: async (response) => {
       // Save completed response to database
       const entryId = currentEntryIdRef.current;
@@ -681,6 +714,7 @@ export function AIChatComposer({
           type: "ai_chat",
           title,
           blocks: [{ type: "markdown", content: messageText, role: "user" }],
+          agentId: currentAgent?.id,
         });
 
         entryIdToUse = newEntry.id;
@@ -1233,6 +1267,13 @@ export function AIChatComposer({
           />
         </TouchableOpacity>
       </View>
+
+      {/* Model Management Modal */}
+      <ModelManagementModal
+        visible={showModelManager}
+        onClose={() => setShowModelManager(false)}
+        initialTab="llms"
+      />
     </View>
   );
 }

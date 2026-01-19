@@ -3,8 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { useState, useEffect, useRef } from "react";
 import { AppState, LogBox } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { LLMProvider } from "./lib/ai/LLMProvider";
-import { ModelProvider } from "./lib/ai/ModelProvider";
+import { UnifiedModelProvider } from "./lib/ai/UnifiedModelProvider";
 import { ConditionalPostHogProvider } from "./lib/analytics/PostHogProvider";
 import { ToastProvider } from "./lib/components/ToastProvider";
 import { DatabaseProvider, useDatabase } from "./lib/db/DatabaseProvider";
@@ -36,6 +35,7 @@ LogBox.ignoreLogs([
   "_UIKBFeedbackGenerator", // Keyboard feedback generator warnings
   "TextInputUI", // TextInput accumulator timing warnings
   "Background tasks are not supported on iOS simulators", // Expected simulator limitation
+  "Skipped registering task", // Background task registration on simulator
   "You seem to update props of the", // RenderHTML throttling warning (we handle this internally)
   "You seem to update the renderers prop", // RenderHTML throttling warning
   "expo-background-fetch: This library is deprecated", // Will migrate to expo-background-task later
@@ -236,22 +236,20 @@ function OnboardingWrapper() {
   }
 
   return (
-    <ModelProvider>
-      <LLMProvider>
-        <ThemeProvider>
-          <SeasonalThemeProvider>
-            <ToastProvider>
-              <StatusBarController />
-              {showOnboarding ? (
-                <OnboardingFlow onComplete={handleOnboardingComplete} />
-              ) : (
-                <SimpleNavigation />
-              )}
-            </ToastProvider>
-          </SeasonalThemeProvider>
-        </ThemeProvider>
-      </LLMProvider>
-    </ModelProvider>
+    <UnifiedModelProvider>
+      <ThemeProvider>
+        <SeasonalThemeProvider>
+          <ToastProvider>
+            <StatusBarController />
+            {showOnboarding ? (
+              <OnboardingFlow onComplete={handleOnboardingComplete} />
+            ) : (
+              <SimpleNavigation />
+            )}
+          </ToastProvider>
+        </SeasonalThemeProvider>
+      </ThemeProvider>
+    </UnifiedModelProvider>
   );
 }
 

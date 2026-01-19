@@ -1,18 +1,23 @@
 import { SQLiteDatabase } from "expo-sqlite";
-import { MODEL_IDS } from "../ai/modelConfig";
+import { MODEL_IDS, ModelType } from "../ai/modelConfig";
 import { useDatabase } from "./DatabaseProvider";
 
 export interface ModelDownloadInfo {
   modelId: string;
+  modelType?: ModelType; // 'llm' | 'speech-to-text' - defaults to 'llm' for backward compat
   downloadedAt: number;
   ptePath: string;
   tokenizerPath?: string;
   tokenizerConfigPath?: string;
+  // STT-specific paths (for speech-to-text models)
+  encoderPath?: string;
+  decoderPath?: string;
   size: number; // Size in bytes
 }
 
 export interface ModelSettings {
   selectedModelId: string;
+  selectedSttModelId?: string; // Selected speech-to-text model
   downloadedModels: ModelDownloadInfo[];
 }
 
@@ -108,6 +113,34 @@ export class ModelSettingsRepository {
     const models = await this.getDownloadedModels();
     return models.find((m) => m.modelId === modelId) ?? null;
   }
+
+  // STT Model Methods
+
+  async getSelectedSttModelId(): Promise<string | null> {
+    const settings = await this.get();
+    return settings?.selectedSttModelId ?? null;
+  }
+
+  async setSelectedSttModelId(modelId: string): Promise<void> {
+    const settings = (await this.get()) || {
+      selectedModelId: "",
+      selectedSttModelId: modelId,
+      downloadedModels: [],
+    };
+    settings.selectedSttModelId = modelId;
+    await this.set(settings);
+  }
+
+  async getDownloadedModelsByType(
+    modelType: ModelType,
+  ): Promise<ModelDownloadInfo[]> {
+    const models = await this.getDownloadedModels();
+    return models.filter((m) => {
+      // Default to 'llm' for backward compatibility
+      const type = m.modelType ?? "llm";
+      return type === modelType;
+    });
+  }
 }
 
 export function useModelSettings(): {
@@ -120,6 +153,12 @@ export function useModelSettings(): {
   getDownloadedModels: () => Promise<ModelDownloadInfo[]>;
   isModelDownloaded: (modelId: string) => Promise<boolean>;
   getModelDownloadInfo: (modelId: string) => Promise<ModelDownloadInfo | null>;
+  // STT methods
+  getSelectedSttModelId: () => Promise<string | null>;
+  setSelectedSttModelId: (modelId: string) => Promise<void>;
+  getDownloadedModelsByType: (
+    modelType: ModelType,
+  ) => Promise<ModelDownloadInfo[]>;
 } {
   const db = useDatabase();
   const repo = new ModelSettingsRepository(db);
@@ -138,5 +177,11 @@ export function useModelSettings(): {
     isModelDownloaded: (modelId: string) => repo.isModelDownloaded(modelId),
     getModelDownloadInfo: (modelId: string) =>
       repo.getModelDownloadInfo(modelId),
+    // STT methods
+    getSelectedSttModelId: () => repo.getSelectedSttModelId(),
+    setSelectedSttModelId: (modelId: string) =>
+      repo.setSelectedSttModelId(modelId),
+    getDownloadedModelsByType: (modelType: ModelType) =>
+      repo.getDownloadedModelsByType(modelType),
   };
 }

@@ -1,7 +1,11 @@
 import { Asset } from "expo-asset";
 import { Paths } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
-import { BundledAssetSource, LlmModelConfig } from "./modelConfig";
+import {
+  BundledAssetSource,
+  LlmModelConfig,
+  SpeechToTextModelConfig,
+} from "./modelConfig";
 import { modelDownloadStatus } from "./modelDownloadStatus";
 import { persistentDownloadManager } from "./persistentDownloadManager";
 
@@ -368,6 +372,230 @@ export async function getModelSize(config: LlmModelConfig): Promise<number> {
     return totalSize;
   } catch (e) {
     console.error(`[getModelSize] Error calculating size:`, e);
+    return 0;
+  }
+}
+
+// =============================================================================
+// SPEECH-TO-TEXT MODEL FUNCTIONS
+// =============================================================================
+
+export interface EnsureSTTResult {
+  encoderPath: string;
+  decoderPath: string;
+  tokenizerPath: string;
+}
+
+/**
+ * Ensure STT model files are present (encoder, decoder, tokenizer)
+ * Downloads from remote if not already cached.
+ */
+export async function ensureSTTModelPresent(
+  config: SpeechToTextModelConfig,
+  onProgress?: (progress: number) => void,
+): Promise<EnsureSTTResult> {
+  await ensureModelsDir();
+  const modelDir = await ensureModelsDir(config.folderName);
+
+  // Check if all files already exist
+  const encoderPath = joinPaths(modelDir, config.encoderFileName);
+  const decoderPath = joinPaths(modelDir, config.decoderFileName);
+  const tokenizerPath = joinPaths(modelDir, config.tokenizerFileName);
+
+  const [encoderInfo, decoderInfo, tokenizerInfo] = await Promise.all([
+    FileSystem.getInfoAsync(encoderPath),
+    FileSystem.getInfoAsync(decoderPath),
+    FileSystem.getInfoAsync(tokenizerPath),
+  ]);
+
+  const allExist =
+    encoderInfo.exists &&
+    encoderInfo.size &&
+    encoderInfo.size > 0 &&
+    decoderInfo.exists &&
+    decoderInfo.size &&
+    decoderInfo.size > 0 &&
+    tokenizerInfo.exists &&
+    tokenizerInfo.size &&
+    tokenizerInfo.size > 0;
+
+  if (allExist) {
+    console.log(
+      `[ensureSTTModelPresent] All files cached for ${config.modelId}`,
+    );
+    onProgress?.(1.0);
+    return { encoderPath, decoderPath, tokenizerPath };
+  }
+
+  // Need to download - start tracking
+  modelDownloadStatus.startDownload(config.modelId, config.displayName);
+
+  try {
+    // Download encoder (40% of progress)
+    let finalEncoderPath = encoderPath;
+    if (!encoderInfo.exists || !encoderInfo.size) {
+      if (config.encoderSource.kind === "unavailable") {
+        throw new Error(
+          `Encoder not available: ${config.encoderSource.reason}`,
+        );
+      } else if (config.encoderSource.kind === "remote") {
+        console.log(
+          `[ensureSTTModelPresent] Downloading encoder: ${config.encoderSource.url}`,
+        );
+        finalEncoderPath = await ensureFromRemoteToFolder(
+          config.encoderSource.url,
+          config.folderName,
+          config.encoderFileName,
+          config.modelId,
+          config.displayName,
+          "model",
+          (progress) => {
+            const overallProgress = progress * 0.4;
+            onProgress?.(overallProgress);
+            modelDownloadStatus.updateProgress(
+              config.modelId,
+              Math.round(overallProgress * 100),
+            );
+          },
+        );
+      } else {
+        throw new Error("Bundled STT assets not yet supported");
+      }
+    } else {
+      onProgress?.(0.4);
+      modelDownloadStatus.updateProgress(config.modelId, 40);
+    }
+
+    // Download decoder (50% of progress, starting from 40%)
+    let finalDecoderPath = decoderPath;
+    if (!decoderInfo.exists || !decoderInfo.size) {
+      if (config.decoderSource.kind === "unavailable") {
+        throw new Error(
+          `Decoder not available: ${config.decoderSource.reason}`,
+        );
+      } else if (config.decoderSource.kind === "remote") {
+        console.log(
+          `[ensureSTTModelPresent] Downloading decoder: ${config.decoderSource.url}`,
+        );
+        finalDecoderPath = await ensureFromRemoteToFolder(
+          config.decoderSource.url,
+          config.folderName,
+          config.decoderFileName,
+          config.modelId,
+          config.displayName,
+          "model",
+          (progress) => {
+            const overallProgress = 0.4 + progress * 0.5;
+            onProgress?.(overallProgress);
+            modelDownloadStatus.updateProgress(
+              config.modelId,
+              Math.round(overallProgress * 100),
+            );
+          },
+        );
+      } else {
+        throw new Error("Bundled STT assets not yet supported");
+      }
+    } else {
+      onProgress?.(0.9);
+      modelDownloadStatus.updateProgress(config.modelId, 90);
+    }
+
+    // Download tokenizer (10% of progress, starting from 90%)
+    let finalTokenizerPath = tokenizerPath;
+    if (!tokenizerInfo.exists || !tokenizerInfo.size) {
+      if (config.tokenizerSource.kind === "unavailable") {
+        throw new Error(
+          `Tokenizer not available: ${config.tokenizerSource.reason}`,
+        );
+      } else if (config.tokenizerSource.kind === "remote") {
+        console.log(
+          `[ensureSTTModelPresent] Downloading tokenizer: ${config.tokenizerSource.url}`,
+        );
+        finalTokenizerPath = await ensureFromRemoteToFolder(
+          config.tokenizerSource.url,
+          config.folderName,
+          config.tokenizerFileName,
+          config.modelId,
+          config.displayName,
+          "tokenizer",
+          (progress) => {
+            const overallProgress = 0.9 + progress * 0.1;
+            onProgress?.(overallProgress);
+            modelDownloadStatus.updateProgress(
+              config.modelId,
+              Math.round(overallProgress * 100),
+            );
+          },
+        );
+      } else {
+        throw new Error("Bundled STT assets not yet supported");
+      }
+    }
+
+    // Complete
+    modelDownloadStatus.completeDownload(config.modelId);
+    onProgress?.(1.0);
+
+    console.log(
+      `[ensureSTTModelPresent] All files downloaded for ${config.modelId}`,
+    );
+    return {
+      encoderPath: finalEncoderPath,
+      decoderPath: finalDecoderPath,
+      tokenizerPath: finalTokenizerPath,
+    };
+  } catch (e) {
+    modelDownloadStatus.failDownload(
+      config.modelId,
+      e instanceof Error ? e.message : "Download failed",
+    );
+    throw e;
+  }
+}
+
+/**
+ * Delete a downloaded STT model from the device
+ */
+export async function deleteSTTModel(
+  config: SpeechToTextModelConfig,
+): Promise<void> {
+  const modelDir = joinPaths(modelsDir, config.folderName);
+  const info = await FileSystem.getInfoAsync(modelDir);
+  if (info.exists) {
+    await FileSystem.deleteAsync(modelDir, { idempotent: true });
+    console.log(`[deleteSTTModel] Deleted model directory: ${modelDir}`);
+  }
+}
+
+/**
+ * Get the size of a downloaded STT model in bytes
+ */
+export async function getSTTModelSize(
+  config: SpeechToTextModelConfig,
+): Promise<number> {
+  const modelDir = joinPaths(modelsDir, config.folderName);
+  const info = await FileSystem.getInfoAsync(modelDir);
+
+  if (!info.exists) {
+    return 0;
+  }
+
+  try {
+    const files = await FileSystem.readDirectoryAsync(modelDir);
+    let totalSize = 0;
+
+    for (const file of files) {
+      const filePath = joinPaths(modelDir, file);
+      const fileInfo = await FileSystem.getInfoAsync(filePath);
+      if (fileInfo.exists && fileInfo.size) {
+        totalSize += fileInfo.size;
+      }
+    }
+
+    return totalSize;
+  } catch (e) {
+    console.error(`[getSTTModelSize] Error calculating size:`, e);
     return 0;
   }
 }

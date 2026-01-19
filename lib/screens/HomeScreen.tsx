@@ -16,7 +16,7 @@ import {
   Alert,
 } from "react-native";
 import { DEFAULT_MODEL, getModelById } from "../ai/modelConfig";
-import { useModel } from "../ai/ModelProvider";
+import { useModel } from "../ai/UnifiedModelProvider";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
 import {
   Text,

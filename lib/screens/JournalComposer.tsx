@@ -1,8 +1,22 @@
-import React, { useCallback, useEffect, useRef, useMemo } from "react";
+import * as FileSystem from "expo-file-system/legacy";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+  useState,
+} from "react";
 import { View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
-import { FloatingComposerHeader, QuillRichEditor } from "../components";
+import { saveAttachment, getAttachmentDataUri } from "../attachments";
+import {
+  FloatingComposerHeader,
+  ModelManagementModal,
+  QuillRichEditor,
+  VoiceRecordButton,
+} from "../components";
+import { useAttachmentsRepository } from "../db/attachmentsRepository";
 import { useEntry, useUpdateEntry } from "../db/useEntries";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -32,13 +46,22 @@ export function JournalComposer({
   useTrackScreenView("Journal Composer");
   const insets = useSafeAreaInsets();
 
+  // Model management modal state
+  const [showModelModal, setShowModelModal] = useState(false);
+
   // Use react-query hooks
   const { data: entry, isLoading: _isLoadingEntry } = useEntry(entryId);
   const updateEntryMutation = useUpdateEntry();
 
+  // Attachments repository for tracking attachment metadata
+  const attachmentsRepo = useAttachmentsRepository();
+
   // Stabilize mutation and callbacks with refs
   const updateEntryMutationRef = useRef(updateEntryMutation);
   updateEntryMutationRef.current = updateEntryMutation;
+
+  const attachmentsRepoRef = useRef(attachmentsRepo);
+  attachmentsRepoRef.current = attachmentsRepo;
 
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
@@ -124,6 +147,17 @@ export function JournalComposer({
 
         try {
           await saveJournalContent(entryId, htmlToSave, "", actionContext);
+
+          // Sync attachments - diff HTML against database and cleanup orphans
+          const { deleted } = await attachmentsRepoRef.current.syncForEntry(
+            entryId,
+            htmlToSave,
+          );
+          if (deleted.length > 0) {
+            console.log(
+              `[JournalComposer] Cleaned up ${deleted.length} orphaned attachments`,
+            );
+          }
         } catch (error) {
           console.error("[JournalComposer] Error saving:", error);
         }
@@ -156,6 +190,9 @@ export function JournalComposer({
     if (currentContent.trim() && !isDeletingRef.current) {
       try {
         await saveJournalContent(entryId, currentContent, "", actionContext);
+
+        // Sync attachments on back press too
+        await attachmentsRepoRef.current.syncForEntry(entryId, currentContent);
       } catch (error) {
         console.error("[JournalComposer] Error saving on back:", error);
       }
@@ -182,6 +219,81 @@ export function JournalComposer({
     },
     [debouncedSave],
   );
+
+  // Handle voice transcription completion - insert audio + text into editor
+  const handleTranscriptionComplete = useCallback(
+    async (result: {
+      text: string;
+      audioUri: string | null;
+      duration: number;
+    }) => {
+      if (!editorRef.current) return;
+
+      // Save audio as encrypted attachment and insert audio player
+      if (result.audioUri) {
+        try {
+          // Save to encrypted attachment storage
+          const attachment = await saveAttachment(
+            result.audioUri,
+            entryId,
+            "audio",
+            "audio/wav",
+            undefined,
+            result.duration,
+          );
+
+          // Insert attachment record into database for tracking
+          await attachmentsRepoRef.current.insert({
+            id: attachment.id,
+            entryId,
+            type: "audio",
+            mimeType: "audio/wav",
+            filename: attachment.filename,
+            size: attachment.size,
+            duration: attachment.duration,
+          });
+
+          // Get the audio as a base64 data URI
+          const dataUri = await getAttachmentDataUri(
+            entryId,
+            attachment.id,
+            "audio/wav",
+          );
+
+          // Insert audio attachment using custom Quill blot
+          await editorRef.current.insertAudioAttachment({
+            id: attachment.id,
+            src: dataUri,
+            duration: result.duration,
+          });
+
+          // Clean up the temp file
+          await FileSystem.deleteAsync(result.audioUri, { idempotent: true });
+
+          // Format duration for logging
+          const mins = Math.floor(result.duration / 60);
+          const secs = Math.floor(result.duration % 60);
+          const durationStr = `${mins}:${secs.toString().padStart(2, "0")}`;
+          console.log(
+            `[JournalComposer] Saved audio attachment: ${attachment.id} (${durationStr})`,
+          );
+        } catch (err) {
+          console.error("[JournalComposer] Failed to save audio:", err);
+        }
+      }
+
+      // Insert transcription text after the audio
+      if (result.text.trim()) {
+        editorRef.current?.insertHtml(`<p>${result.text}</p>`);
+      }
+    },
+    [entryId],
+  );
+
+  // Handle no voice model available - open model modal to voice tab
+  const handleNoModelAvailable = useCallback(() => {
+    setShowModelModal(true);
+  }, []);
 
   // Show UI shell immediately - content loads progressively
   return (
@@ -220,6 +332,29 @@ export function JournalComposer({
           />
         )}
       </View>
+
+      {/* Voice Record FAB */}
+      <View
+        style={[
+          styles.fab,
+          {
+            bottom: insets.bottom + spacingPatterns.lg,
+          },
+        ]}
+      >
+        <VoiceRecordButton
+          onTranscriptionComplete={handleTranscriptionComplete}
+          onNoModelAvailable={handleNoModelAvailable}
+          size="large"
+        />
+      </View>
+
+      {/* Model Management Modal */}
+      <ModelManagementModal
+        visible={showModelModal}
+        onClose={() => setShowModelModal(false)}
+        initialTab="voice"
+      />
     </View>
   );
 }
@@ -230,5 +365,10 @@ const styles = StyleSheet.create({
   },
   editorContainer: {
     flex: 1,
+  },
+  fab: {
+    position: "absolute",
+    right: spacingPatterns.lg,
+    zIndex: 100,
   },
 });

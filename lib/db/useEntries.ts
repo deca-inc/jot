@@ -6,6 +6,7 @@ import {
   InfiniteData,
 } from "@tanstack/react-query";
 import { usePostHog, sanitizeProperties } from "../analytics";
+import { deleteAllAttachments } from "../attachments";
 import { syncCountdownsToWidgets } from "../widgets/widgetDataBridge";
 import {
   useEntryRepository,
@@ -358,6 +359,19 @@ export function useDeleteEntry() {
     ) => {
       const id = typeof input === "number" ? input : input.id;
       const parentId = typeof input === "number" ? null : input.parentId;
+
+      // Delete attachment files before deleting the entry
+      // (Database records will cascade delete via foreign key)
+      try {
+        await deleteAllAttachments(id);
+      } catch (err) {
+        console.warn(
+          `[useDeleteEntry] Failed to delete attachments for entry ${id}:`,
+          err,
+        );
+        // Continue with entry deletion even if attachment cleanup fails
+      }
+
       await entryRepository.delete(id);
       return { id, parentId };
     },

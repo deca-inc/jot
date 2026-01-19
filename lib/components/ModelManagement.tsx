@@ -14,7 +14,7 @@ import {
   deleteModel,
   getModelSize,
 } from "../ai/modelManager";
-import { useModel } from "../ai/ModelProvider";
+import { useModel } from "../ai/UnifiedModelProvider";
 import { useModelSettings } from "../db/modelSettings";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";

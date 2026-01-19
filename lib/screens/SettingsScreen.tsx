@@ -18,9 +18,9 @@ import {
   Card,
   Button,
   ThemeControl,
-  ModelManagement,
   PendingDownloads,
 } from "../components";
+import { ModelManagementModal } from "../components/ModelManagementModal";
 import { useModelSettings } from "../db/modelSettings";
 import { useOnboardingSettings } from "../db/onboardingSettings";
 import { useTelemetrySettings } from "../db/telemetrySettings";
@@ -51,6 +51,7 @@ export function SettingsScreen({
   const [telemetryEnabled, setTelemetryEnabled] = useState<boolean | null>(
     null,
   );
+  const [showModelModal, setShowModelModal] = useState(false);
 
   // Track screen view
   useTrackScreenView("Settings");
@@ -283,7 +284,50 @@ export function SettingsScreen({
             <PendingDownloads />
           </View>
 
-          <ModelManagement />
+          {/* Model Manager Button */}
+          <TouchableOpacity
+            style={[
+              styles.modelManagerButton,
+              { backgroundColor: `${theme.colors.accent}15` },
+            ]}
+            onPress={() => setShowModelModal(true)}
+          >
+            <View style={styles.modelManagerButtonContent}>
+              <Ionicons
+                name="hardware-chip-outline"
+                size={20}
+                color={theme.colors.accent}
+              />
+              <View style={styles.modelManagerButtonText}>
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontWeight: "500",
+                  }}
+                >
+                  Manage Models
+                </Text>
+                <Text
+                  variant="caption"
+                  style={{ color: seasonalTheme.textSecondary }}
+                >
+                  Download, select, and configure AI models
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={seasonalTheme.textSecondary}
+              />
+            </View>
+          </TouchableOpacity>
+
+          {/* Model Management Modal */}
+          <ModelManagementModal
+            visible={showModelModal}
+            onClose={() => setShowModelModal(false)}
+          />
         </Card>
 
         <Card
@@ -820,5 +864,19 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontSize: 14,
+  },
+  modelManagerButton: {
+    marginTop: spacingPatterns.md,
+    padding: spacingPatterns.sm,
+    borderRadius: 8,
+  },
+  modelManagerButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.sm,
+  },
+  modelManagerButtonText: {
+    flex: 1,
+    gap: 2,
   },
 });

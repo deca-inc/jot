@@ -28,6 +28,8 @@ module.exports = ({ config }) => {
           "com.betazeta.jot.background-download",
         ],
         ITSAppUsesNonExemptEncryption: false,
+        NSMicrophoneUsageDescription:
+          "Jot uses the microphone to transcribe voice notes using on-device speech recognition.",
       },
       entitlements: {
         "com.apple.security.application-groups": [
@@ -53,6 +55,7 @@ module.exports = ({ config }) => {
         "ACCESS_NETWORK_STATE",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO",
       ],
       requestLegacyExternalStorage: true,
     },

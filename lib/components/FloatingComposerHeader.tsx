@@ -25,6 +25,8 @@ export interface FloatingComposerHeaderProps {
   disabled?: boolean;
   deleteConfirmTitle?: string;
   deleteConfirmMessage?: string;
+  /** Optional content to render in the top-right area (before settings button) */
+  rightContent?: React.ReactNode;
 }
 
 export function FloatingComposerHeader({
@@ -34,6 +36,7 @@ export function FloatingComposerHeader({
   disabled = false,
   deleteConfirmTitle = "Delete Entry",
   deleteConfirmMessage = "Are you sure you want to delete this entry? This action cannot be undone.",
+  rightContent,
 }: FloatingComposerHeaderProps) {
   const seasonalTheme = useSeasonalTheme();
   const [showMenu, setShowMenu] = useState(false);
@@ -111,6 +114,32 @@ export function FloatingComposerHeader({
         </ButtonWrapper>
       </View>
 
+      {/* Right Content (e.g., voice button) */}
+      {rightContent && (
+        <View
+          style={[
+            styles.floatingButton,
+            styles.rightContentContainer,
+            needsBackgroundFallback && styles.fallbackShadow,
+          ]}
+        >
+          <ButtonWrapper
+            {...(glassAvailable && {
+              glassEffectStyle: "regular",
+              tintColor: seasonalTheme.cardBg,
+            })}
+            style={[
+              styles.buttonGlass,
+              needsBackgroundFallback && {
+                backgroundColor: seasonalTheme.glassFallbackBg,
+              },
+            ]}
+          >
+            <View style={styles.button}>{rightContent}</View>
+          </ButtonWrapper>
+        </View>
+      )}
+
       {/* Floating Settings Button */}
       {entryId && (
         <View
@@ -171,6 +200,9 @@ const styles = StyleSheet.create({
   },
   backButtonContainer: {
     left: spacingPatterns.sm,
+  },
+  rightContentContainer: {
+    right: spacingPatterns.sm + 44 + spacingPatterns.xs, // Position to left of settings button
   },
   settingsButtonContainer: {
     right: spacingPatterns.sm,

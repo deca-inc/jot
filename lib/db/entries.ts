@@ -102,6 +102,7 @@ export interface Entry {
   generationStatus: GenerationStatus | null;
   generationStartedAt: number | null;
   generationModelId: string | null;
+  agentId: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -115,6 +116,7 @@ export interface CreateEntryInput {
   isFavorite?: boolean;
   isPinned?: boolean;
   parentId?: number;
+  agentId?: number;
 }
 
 export interface UpdateEntryInput {
@@ -128,6 +130,7 @@ export interface UpdateEntryInput {
   generationStatus?: GenerationStatus;
   generationStartedAt?: number | null;
   generationModelId?: string | null;
+  agentId?: number | null;
 }
 
 /**
@@ -176,8 +179,8 @@ export class EntryRepository {
         : input.type === "countdown" && !input.parentId;
 
     const result = await this.db.runAsync(
-      `INSERT INTO entries (type, title, blocks, tags, attachments, isFavorite, isPinned, parentId, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO entries (type, title, blocks, tags, attachments, isFavorite, isPinned, parentId, agentId, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         input.type,
         input.title,
@@ -187,6 +190,7 @@ export class EntryRepository {
         input.isFavorite ? 1 : 0,
         isPinned ? 1 : 0,
         input.parentId ?? null,
+        input.agentId ?? null,
         now,
         now,
       ],
@@ -223,6 +227,7 @@ export class EntryRepository {
       generationStatus: GenerationStatus | null;
       generationStartedAt: number | null;
       generationModelId: string | null;
+      agentId: number | null;
       createdAt: number;
       updatedAt: number;
     }>(`SELECT * FROM entries WHERE id = ?`, [id]);
@@ -488,6 +493,11 @@ export class EntryRepository {
       params.push(input.generationModelId);
     }
 
+    if (input.agentId !== undefined) {
+      updates.push("agentId = ?");
+      params.push(input.agentId);
+    }
+
     if (updates.length === 0) {
       const entry = await this.getById(id);
       if (!entry) {
@@ -654,6 +664,7 @@ export class EntryRepository {
     generationStatus?: GenerationStatus | null;
     generationStartedAt?: number | null;
     generationModelId?: string | null;
+    agentId?: number | null;
     createdAt: number;
     updatedAt: number;
   }): Entry {
@@ -676,6 +687,7 @@ export class EntryRepository {
       generationStatus: row.generationStatus ?? null,
       generationStartedAt: row.generationStartedAt ?? null,
       generationModelId: row.generationModelId ?? null,
+      agentId: row.agentId ?? null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

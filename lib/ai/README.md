@@ -8,21 +8,23 @@ The implementation is split into layers:
 
 ### Core Services
 
-1. **`LLMProvider` component** (`LLMProvider.tsx`) - Singleton LLM context
+1. **`UnifiedModelProvider` component** (`UnifiedModelProvider.tsx`) - Unified model context
    - Keeps a single LLM instance mounted at the app level (prevents OOM)
-   - Handles model loading via `react-native-executorch`
-   - Provides `useLLMContext()` hook for components
+   - Handles both LLM and Speech-to-Text model loading via `react-native-executorch`
+   - Provides `useLLMContext()` and `useModel()` hooks for components
    - Manages background task registration
+   - Verifies downloaded models still exist on disk
+   - Cleans up stale download state
 
 2. **`useAIChat` hook** (`useAIChat.ts`) - Simple hook for AI chat
-   - Uses the shared LLM from `LLMProvider`
+   - Uses the shared LLM from `UnifiedModelProvider`
    - Handles message history and callbacks for a single conversation
    - Auto-saves responses to database even if component unmounts during generation
 
-3. **`ModelProvider` component** (`ModelProvider.tsx`) - Model initialization
-   - Verifies downloaded models still exist on disk
-   - Cleans up stale download state
-   - Provides model config context for settings UI
+3. **`useSpeechToText` hook** (`useSpeechToText.ts`) - Speech-to-text transcription
+   - Uses Whisper models via `react-native-executorch`
+   - Chunked recording for live transcription preview
+   - Returns audio file URI for saving as attachment
 
 ### Download Management
 
@@ -119,7 +121,7 @@ function MyComponent() {
 ### Direct LLM Access
 
 ```typescript
-import { useLLMContext } from "./lib/ai/LLMProvider";
+import { useLLMContext } from "./lib/ai/UnifiedModelProvider";
 
 function MyComponent() {
   const llm = useLLMContext();
