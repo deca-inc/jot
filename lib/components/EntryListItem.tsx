@@ -890,7 +890,7 @@ function EntryListItemComponent({
                     contentWidth={htmlContentWidth}
                     source={{ html: htmlContent }}
                     tagsStyles={htmlTagsStyles}
-                    ignoredDomTags={["think"]}
+                    ignoredDomTags={["think", "audio"]}
                     renderers={htmlRenderers}
                     customHTMLElementModels={{
                       checklist: HTMLElementModel.fromCustomModel({
