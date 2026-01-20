@@ -9,7 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { getModelById } from "../ai/modelConfig";
 import { type Agent, type ThinkMode } from "../db/agents";
+import { type ModelDownloadInfo } from "../db/modelSettings";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -17,10 +19,12 @@ import { Text } from "./Text";
 
 interface AgentEditorProps {
   agent?: Agent | null;
+  downloadedModels: ModelDownloadInfo[];
   onSave: (data: {
     name: string;
     systemPrompt: string;
     thinkMode: ThinkMode;
+    modelId: string;
   }) => void;
   onCancel: () => void;
   isLoading?: boolean;
@@ -44,12 +48,13 @@ const THINK_MODE_OPTIONS: {
   {
     value: "none",
     label: "None",
-    description: "No system prompt - raw model responses",
+    description: "Use model's default behavior",
   },
 ];
 
 export function AgentEditor({
   agent,
+  downloadedModels,
   onSave,
   onCancel,
   isLoading = false,
@@ -57,22 +62,33 @@ export function AgentEditor({
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
 
+  // Filter to only LLM models
+  const llmModels = downloadedModels.filter(
+    (m) => !m.modelType || m.modelType === "llm",
+  );
+
   const [name, setName] = useState(agent?.name ?? "");
   const [systemPrompt, setSystemPrompt] = useState(agent?.systemPrompt ?? "");
   const [thinkMode, setThinkMode] = useState<ThinkMode>(
     agent?.thinkMode ?? "no-think",
   );
+  const [modelId, setModelId] = useState<string>(
+    agent?.modelId ?? llmModels[0]?.modelId ?? "",
+  );
   const [showThinkModeDropdown, setShowThinkModeDropdown] = useState(false);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
 
   // Reset form when agent changes
   useEffect(() => {
     setName(agent?.name ?? "");
     setSystemPrompt(agent?.systemPrompt ?? "");
     setThinkMode(agent?.thinkMode ?? "no-think");
-  }, [agent]);
+    setModelId(agent?.modelId ?? llmModels[0]?.modelId ?? "");
+  }, [agent, llmModels]);
 
   const isEditing = !!agent;
-  const isValid = name.trim().length > 0 && systemPrompt.trim().length > 0;
+  const isValid =
+    name.trim().length > 0 && systemPrompt.trim().length > 0 && modelId;
 
   const handleSave = () => {
     if (!isValid) return;
@@ -80,12 +96,15 @@ export function AgentEditor({
       name: name.trim(),
       systemPrompt: systemPrompt.trim(),
       thinkMode,
+      modelId,
     });
   };
 
   const selectedThinkModeOption = THINK_MODE_OPTIONS.find(
     (opt) => opt.value === thinkMode,
   );
+
+  const selectedModel = modelId ? getModelById(modelId) : null;
 
   return (
     <KeyboardAvoidingView
@@ -173,6 +192,133 @@ export function AgentEditor({
           </Text>
         </View>
 
+        {/* Model Selector */}
+        <View style={styles.field}>
+          <Text
+            variant="caption"
+            style={[styles.label, { color: seasonalTheme.textSecondary }]}
+          >
+            Model *
+          </Text>
+          {llmModels.length === 0 ? (
+            <View
+              style={[
+                styles.noModelsWarning,
+                { backgroundColor: `${theme.colors.warning}15` },
+              ]}
+            >
+              <Ionicons
+                name="warning-outline"
+                size={16}
+                color={theme.colors.warning}
+              />
+              <Text
+                variant="caption"
+                style={{ color: theme.colors.warning, flex: 1 }}
+              >
+                No models downloaded. Download a model first.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.dropdown,
+                  {
+                    backgroundColor: seasonalTheme.cardBg,
+                    borderColor: `${theme.colors.border}40`,
+                  },
+                ]}
+                onPress={() => {
+                  setShowModelDropdown(!showModelDropdown);
+                  setShowThinkModeDropdown(false);
+                }}
+              >
+                <View style={styles.dropdownContent}>
+                  <Text
+                    variant="body"
+                    style={{ color: seasonalTheme.textPrimary }}
+                  >
+                    {selectedModel?.displayName ?? "Select a model"}
+                  </Text>
+                  {selectedModel && (
+                    <Text
+                      variant="caption"
+                      style={{ color: seasonalTheme.textSecondary }}
+                    >
+                      {selectedModel.size}
+                    </Text>
+                  )}
+                </View>
+                <Ionicons
+                  name={showModelDropdown ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color={seasonalTheme.textSecondary}
+                />
+              </TouchableOpacity>
+
+              {/* Model Dropdown Options */}
+              {showModelDropdown && (
+                <View
+                  style={[
+                    styles.dropdownOptions,
+                    {
+                      backgroundColor: seasonalTheme.gradient.middle,
+                      borderColor: `${theme.colors.border}40`,
+                    },
+                  ]}
+                >
+                  {llmModels.map((downloaded) => {
+                    const model = getModelById(downloaded.modelId);
+                    if (!model) return null;
+                    const isSelected = modelId === model.modelId;
+                    return (
+                      <TouchableOpacity
+                        key={model.modelId}
+                        style={[
+                          styles.dropdownOption,
+                          isSelected && {
+                            backgroundColor: `${theme.colors.accent}15`,
+                          },
+                        ]}
+                        onPress={() => {
+                          setModelId(model.modelId);
+                          setShowModelDropdown(false);
+                        }}
+                      >
+                        <View style={styles.dropdownOptionContent}>
+                          <Text
+                            variant="body"
+                            style={{
+                              color: seasonalTheme.textPrimary,
+                              fontWeight: isSelected ? "600" : "400",
+                            }}
+                          >
+                            {model.displayName}
+                          </Text>
+                          <Text
+                            variant="caption"
+                            style={{ color: seasonalTheme.textSecondary }}
+                          >
+                            {model.size}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <Ionicons
+                            name="checkmark"
+                            size={20}
+                            color={theme.colors.accent}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </>
+          )}
+        </View>
+
         {/* Think Mode Selector */}
         <View style={styles.field}>
           <Text
@@ -189,7 +335,10 @@ export function AgentEditor({
                 borderColor: `${theme.colors.border}40`,
               },
             ]}
-            onPress={() => setShowThinkModeDropdown(!showThinkModeDropdown)}
+            onPress={() => {
+              setShowThinkModeDropdown(!showThinkModeDropdown);
+              setShowModelDropdown(false);
+            }}
           >
             <View style={styles.dropdownContent}>
               <Text variant="body" style={{ color: seasonalTheme.textPrimary }}>
@@ -349,6 +498,13 @@ const styles = StyleSheet.create({
   hint: {
     marginTop: spacingPatterns.xs,
     fontSize: 11,
+  },
+  noModelsWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.sm,
+    padding: spacingPatterns.sm,
+    borderRadius: borderRadius.sm,
   },
   dropdown: {
     flexDirection: "row",

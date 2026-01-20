@@ -9,6 +9,8 @@ import * as add_countdown_type from "./2025_12_30_07_00_00_add_countdown_type";
 import * as add_parent_id from "./2026_01_10_00_00_00_add_parent_id";
 import * as add_agents from "./2026_01_16_06_09_18_add_agents";
 import * as add_attachments_table from "./2026_01_16_21_35_46_add_attachments_table";
+import * as add_modelid_to_agents from "./2026_01_19_18_18_18_add_modelid_to_agents";
+import * as repair_missing_columns from "./2026_01_19_19_21_20_repair_missing_columns";
 import * as initialSeed from "./seeds/2025_01_13_16_25_00_initial_seed";
 
 // Register all migrations
@@ -31,6 +33,14 @@ registerMigration(
 // Add new migrations here:
 // registerMigration("YYYY_MM_DD_HH:MM:SS_migration_name.ts", async () => await import("./YYYY_MM_DD_HH:MM:SS_migration_name"));
 registerMigration("2026_01_16_06_09_18_add_agents.ts", async () => add_agents);
+registerMigration(
+  "2026_01_19_18_18_18_add_modelid_to_agents.ts",
+  async () => add_modelid_to_agents,
+);
+registerMigration(
+  "2026_01_19_19_21_20_repair_missing_columns.ts",
+  async () => repair_missing_columns,
+);
 registerMigration(
   "2026_01_16_21_35_46_add_attachments_table.ts",
   async () => add_attachments_table,

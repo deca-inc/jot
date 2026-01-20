@@ -303,21 +303,26 @@ export function AIChatComposer({
   );
 
   // Agent state
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [currentAgent, setCurrentAgent] = useState<Agent | null>(null);
 
   // Model management modal state
   const [showModelManager, setShowModelManager] = useState(false);
 
-  // Load downloaded models and default agent on mount
+  // Load downloaded models and agents on mount
   useEffect(() => {
     const loadSettings = async () => {
-      const [downloaded, selected, defaultAgent] = await Promise.all([
-        modelSettings.getDownloadedModels(),
-        modelSettings.getSelectedModelId(),
-        agentsRepo.getDefault(),
-      ]);
+      const [downloaded, selected, allAgents, defaultAgent] = await Promise.all(
+        [
+          modelSettings.getDownloadedModels(),
+          modelSettings.getSelectedModelId(),
+          agentsRepo.getAll(),
+          agentsRepo.getDefault(),
+        ],
+      );
       setDownloadedModels(downloaded);
       setSelectedModelId(selected);
+      setAgents(allAgents);
       // Use default agent initially (will be overridden by entry's agent if available)
       if (defaultAgent) {
         setCurrentAgent(defaultAgent);
@@ -326,12 +331,40 @@ export function AIChatComposer({
     loadSettings();
   }, []);
 
-  // Get display name for selected model
-  const selectedModelName = useMemo(() => {
-    if (!selectedModelId) return "Select Model";
+  // Get display name for selector button
+  const selectorDisplayName = useMemo(() => {
+    if (currentAgent) {
+      return currentAgent.name;
+    }
+    if (!selectedModelId) return "Select";
     const model = getModelById(selectedModelId);
     return model?.displayName || selectedModelId;
-  }, [selectedModelId]);
+  }, [selectedModelId, currentAgent]);
+
+  // Handle agent selection
+  const handleSelectAgent = useCallback(
+    async (agent: Agent) => {
+      setCurrentAgent(agent);
+      // If agent has a specific model, switch to it
+      if (agent.modelId) {
+        setSelectedModelId(agent.modelId);
+        await modelSettings.setSelectedModelId(agent.modelId);
+      }
+      setShowModelSelector(false);
+
+      // Save to entry if we have one
+      if (currentEntryIdRef.current) {
+        await updateEntryRef.current.mutateAsync({
+          id: currentEntryIdRef.current,
+          input: {
+            agentId: agent.id,
+            generationModelId: agent.modelId || null,
+          },
+        });
+      }
+    },
+    [modelSettings],
+  );
 
   // Track current entry ID (can change when new entry is created)
   const [currentEntryId, setCurrentEntryId] = useState<number | undefined>(
@@ -349,18 +382,43 @@ export function AIChatComposer({
   const entryRef = useRef(entry);
   entryRef.current = entry;
 
-  // Load entry's agent when opening existing conversation
+  // Load entry's saved model/agent when opening existing conversation
   useEffect(() => {
-    const loadEntryAgent = async () => {
-      if (entry?.agentId) {
+    const loadEntrySettings = async () => {
+      if (!entry) return;
+
+      // Load agent if saved on entry
+      if (entry.agentId) {
         const agent = await agentsRepo.getById(entry.agentId);
         if (agent) {
           setCurrentAgent(agent);
+          // Also set the model from the agent
+          if (agent.modelId) {
+            setSelectedModelId(agent.modelId);
+          }
+          return; // Agent takes precedence
         }
       }
+
+      // Load model if saved on entry (and no agent)
+      if (entry.generationModelId) {
+        setSelectedModelId(entry.generationModelId);
+        setCurrentAgent(null); // Clear agent when using raw model
+        return;
+      }
+
+      // No saved selection on this entry - reset to defaults
+      const [defaultAgent, defaultModelId] = await Promise.all([
+        agentsRepo.getDefault(),
+        modelSettings.getSelectedModelId(),
+      ]);
+      setCurrentAgent(defaultAgent);
+      if (defaultModelId) {
+        setSelectedModelId(defaultModelId);
+      }
     };
-    loadEntryAgent();
-  }, [entry?.agentId]);
+    loadEntrySettings();
+  }, [entry?.id, entry?.agentId, entry?.generationModelId, modelSettings]);
 
   const createEntry = useCreateEntry();
   const updateEntry = useUpdateEntry();
@@ -421,6 +479,17 @@ export function AIChatComposer({
       setSelectedModelId(modelId);
       await modelSettings.setSelectedModelId(modelId);
       setShowModelSelector(false);
+
+      // Save to entry if we have one (clear agent since raw model was selected)
+      if (currentEntryIdRef.current) {
+        await updateEntryRef.current.mutateAsync({
+          id: currentEntryIdRef.current,
+          input: {
+            agentId: null,
+            generationModelId: modelId,
+          },
+        });
+      }
     },
     [modelSettings],
   );
@@ -959,7 +1028,7 @@ export function AIChatComposer({
                   }}
                   numberOfLines={1}
                 >
-                  {selectedModelName}
+                  {selectorDisplayName}
                 </Text>
                 <Ionicons
                   name="chevron-down"
@@ -1004,7 +1073,7 @@ export function AIChatComposer({
                   }}
                   numberOfLines={1}
                 >
-                  {selectedModelName}
+                  {selectorDisplayName}
                 </Text>
                 <Ionicons
                   name="chevron-down"
@@ -1034,61 +1103,173 @@ export function AIChatComposer({
               marginBottom: spacingPatterns.md,
             }}
           >
-            Select Model
+            Select Agent or Model
           </Text>
           <ScrollView
             style={styles.modelSelectorScroll}
             showsVerticalScrollIndicator={false}
           >
-            {downloadedModels.map((downloaded) => {
-              const model = ALL_MODELS.find(
-                (m) => m.modelId === downloaded.modelId,
-              );
-              if (!model) return null;
-              const isSelected = selectedModelId === model.modelId;
-              return (
-                <TouchableOpacity
-                  key={model.modelId}
-                  onPress={() => handleSelectModel(model.modelId)}
-                  style={[
-                    styles.modelOption,
-                    {
-                      backgroundColor: isSelected
-                        ? seasonalTheme.chipBg
-                        : "transparent",
-                      borderColor: isSelected
-                        ? seasonalTheme.textSecondary + "40"
-                        : "transparent",
-                    },
-                  ]}
+            {/* Agents Section */}
+            {agents.length > 0 && (
+              <>
+                <Text
+                  variant="caption"
+                  style={{
+                    color: seasonalTheme.textSecondary,
+                    marginBottom: spacingPatterns.xs,
+                    fontWeight: "600",
+                  }}
                 >
-                  <View style={styles.modelOptionContent}>
-                    <Text
-                      variant="body"
-                      style={{
-                        color: seasonalTheme.textPrimary,
-                        fontWeight: isSelected ? "600" : "400",
-                      }}
+                  AGENTS
+                </Text>
+                {agents.map((agent) => {
+                  const isSelected = currentAgent?.id === agent.id;
+                  const agentModel = agent.modelId
+                    ? getModelById(agent.modelId)
+                    : null;
+                  return (
+                    <TouchableOpacity
+                      key={`agent-${agent.id}`}
+                      onPress={() => handleSelectAgent(agent)}
+                      style={[
+                        styles.modelOption,
+                        {
+                          backgroundColor: isSelected
+                            ? seasonalTheme.chipBg
+                            : "transparent",
+                          borderColor: isSelected
+                            ? seasonalTheme.textSecondary + "40"
+                            : "transparent",
+                        },
+                      ]}
                     >
-                      {model.displayName}
-                    </Text>
-                    <Text
-                      variant="caption"
-                      style={{ color: seasonalTheme.textSecondary }}
-                    >
-                      {model.description}
-                    </Text>
-                  </View>
-                  {isSelected && (
-                    <Ionicons
-                      name="checkmark"
-                      size={20}
-                      color={seasonalTheme.textPrimary}
-                    />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
+                      <View style={styles.modelOptionContent}>
+                        <View style={styles.agentOptionRow}>
+                          <Ionicons
+                            name="person-circle-outline"
+                            size={16}
+                            color={seasonalTheme.textSecondary}
+                          />
+                          <Text
+                            variant="body"
+                            style={{
+                              color: seasonalTheme.textPrimary,
+                              fontWeight: isSelected ? "600" : "400",
+                            }}
+                          >
+                            {agent.name}
+                          </Text>
+                          {agent.isDefault && (
+                            <View
+                              style={[
+                                styles.defaultBadge,
+                                {
+                                  backgroundColor:
+                                    seasonalTheme.textSecondary + "20",
+                                },
+                              ]}
+                            >
+                              <Text
+                                variant="caption"
+                                style={{
+                                  color: seasonalTheme.textSecondary,
+                                  fontSize: 9,
+                                }}
+                              >
+                                DEFAULT
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        {agentModel && (
+                          <Text
+                            variant="caption"
+                            style={{ color: seasonalTheme.textSecondary }}
+                          >
+                            {agentModel.displayName}
+                          </Text>
+                        )}
+                      </View>
+                      {isSelected && (
+                        <Ionicons
+                          name="checkmark"
+                          size={20}
+                          color={seasonalTheme.textPrimary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            )}
+
+            {/* LLMs Section */}
+            <Text
+              variant="caption"
+              style={{
+                color: seasonalTheme.textSecondary,
+                marginTop: agents.length > 0 ? spacingPatterns.md : 0,
+                marginBottom: spacingPatterns.xs,
+                fontWeight: "600",
+              }}
+            >
+              MODELS
+            </Text>
+            {downloadedModels
+              .filter((m) => !m.modelType || m.modelType === "llm")
+              .map((downloaded) => {
+                const model = ALL_MODELS.find(
+                  (m) => m.modelId === downloaded.modelId,
+                );
+                if (!model) return null;
+                const isSelected =
+                  !currentAgent && selectedModelId === model.modelId;
+                return (
+                  <TouchableOpacity
+                    key={model.modelId}
+                    onPress={() => {
+                      setCurrentAgent(null);
+                      handleSelectModel(model.modelId);
+                    }}
+                    style={[
+                      styles.modelOption,
+                      {
+                        backgroundColor: isSelected
+                          ? seasonalTheme.chipBg
+                          : "transparent",
+                        borderColor: isSelected
+                          ? seasonalTheme.textSecondary + "40"
+                          : "transparent",
+                      },
+                    ]}
+                  >
+                    <View style={styles.modelOptionContent}>
+                      <Text
+                        variant="body"
+                        style={{
+                          color: seasonalTheme.textPrimary,
+                          fontWeight: isSelected ? "600" : "400",
+                        }}
+                      >
+                        {model.displayName}
+                      </Text>
+                      <Text
+                        variant="caption"
+                        style={{ color: seasonalTheme.textSecondary }}
+                      >
+                        {model.description}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark"
+                        size={20}
+                        color={seasonalTheme.textPrimary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
           </ScrollView>
         </View>
       </Dialog>
@@ -1417,5 +1598,15 @@ const styles = StyleSheet.create({
   modelOptionContent: {
     flex: 1,
     gap: 2,
+  },
+  agentOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  defaultBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
   },
 });

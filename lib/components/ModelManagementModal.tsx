@@ -246,7 +246,20 @@ export function ModelManagementModal({
   );
 
   const handleRemoveLLM = useCallback(
-    (model: LlmModelConfig) => {
+    async (model: LlmModelConfig) => {
+      // Check if any agents are using this model
+      const agentsUsingModel = await agentsRepo.getByModelId(model.modelId);
+
+      if (agentsUsingModel.length > 0) {
+        const agentNames = agentsUsingModel.map((a) => a.name).join(", ");
+        Alert.alert(
+          "Cannot Remove Model",
+          `This model is being used by the following agent(s): ${agentNames}.\n\nUpdate or delete these agents first.`,
+          [{ text: "OK", style: "default" }],
+        );
+        return;
+      }
+
       Alert.alert(
         "Remove Model",
         `Are you sure you want to remove ${model.displayName}?`,
@@ -269,7 +282,7 @@ export function ModelManagementModal({
         ],
       );
     },
-    [modelSettings, showToast],
+    [modelSettings, showToast, agentsRepo],
   );
 
   // STT handlers (similar to LLM)
@@ -378,6 +391,7 @@ export function ModelManagementModal({
       name: string;
       systemPrompt: string;
       thinkMode: ThinkMode;
+      modelId: string;
     }) => {
       try {
         setSavingAgent(true);
@@ -649,6 +663,14 @@ export function ModelManagementModal({
                     {showAgentEditor ? (
                       <AgentEditor
                         agent={editingAgent}
+                        downloadedModels={downloadedLLMs.map((id) => ({
+                          modelId: id,
+                          modelType: "llm" as const,
+                          downloadedAt: 0,
+                          ptePath: "",
+                          tokenizerPath: "",
+                          size: 0,
+                        }))}
                         onSave={handleSaveAgent}
                         onCancel={handleCancelAgentEditor}
                         isLoading={savingAgent}
@@ -684,127 +706,148 @@ export function ModelManagementModal({
                         </View>
 
                         <View style={styles.agentsList}>
-                          {agents.map((agent) => (
-                            <View
-                              key={agent.id}
-                              style={[
-                                styles.agentCard,
-                                {
-                                  backgroundColor: seasonalTheme.cardBg,
-                                  borderColor: agent.isDefault
-                                    ? theme.colors.accent
-                                    : `${theme.colors.border}40`,
-                                },
-                              ]}
-                            >
-                              <View style={styles.agentCardHeader}>
-                                <View style={styles.agentNameRow}>
-                                  <Text
-                                    variant="body"
-                                    style={[
-                                      styles.agentName,
-                                      { color: seasonalTheme.textPrimary },
-                                    ]}
-                                  >
-                                    {agent.name}
-                                  </Text>
-                                  {agent.isDefault && (
+                          {agents.map((agent) => {
+                            const agentModel = agent.modelId
+                              ? ALL_LLM_MODELS.find(
+                                  (m) => m.modelId === agent.modelId,
+                                )
+                              : null;
+                            return (
+                              <TouchableOpacity
+                                key={agent.id}
+                                style={[
+                                  styles.agentCard,
+                                  {
+                                    backgroundColor: seasonalTheme.cardBg,
+                                    borderColor: agent.isDefault
+                                      ? theme.colors.accent
+                                      : `${theme.colors.border}40`,
+                                  },
+                                ]}
+                                onPress={() => handleSetDefaultAgent(agent)}
+                                activeOpacity={0.7}
+                              >
+                                <View style={styles.agentCardHeader}>
+                                  <View style={styles.agentNameRow}>
+                                    <Text
+                                      variant="body"
+                                      style={[
+                                        styles.agentName,
+                                        { color: seasonalTheme.textPrimary },
+                                      ]}
+                                    >
+                                      {agent.name}
+                                    </Text>
+                                    {agent.isDefault && (
+                                      <View
+                                        style={[
+                                          styles.defaultBadge,
+                                          {
+                                            backgroundColor: `${theme.colors.accent}20`,
+                                          },
+                                        ]}
+                                      >
+                                        <Text
+                                          variant="caption"
+                                          style={{
+                                            color: theme.colors.accent,
+                                            fontSize: 10,
+                                            fontWeight: "600",
+                                          }}
+                                        >
+                                          DEFAULT
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                  <View style={styles.agentActions}>
+                                    <TouchableOpacity
+                                      style={styles.agentActionButton}
+                                      onPress={(e) => {
+                                        e.stopPropagation();
+                                        handleEditAgent(agent);
+                                      }}
+                                    >
+                                      <Ionicons
+                                        name="pencil-outline"
+                                        size={16}
+                                        color={seasonalTheme.textSecondary}
+                                      />
+                                    </TouchableOpacity>
+                                    {!agent.isDefault && (
+                                      <TouchableOpacity
+                                        style={styles.agentActionButton}
+                                        onPress={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteAgent(agent);
+                                        }}
+                                      >
+                                        <Ionicons
+                                          name="trash-outline"
+                                          size={16}
+                                          color={theme.colors.error}
+                                        />
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+                                </View>
+                                <Text
+                                  variant="caption"
+                                  style={[
+                                    styles.agentPromptPreview,
+                                    { color: seasonalTheme.textSecondary },
+                                  ]}
+                                  numberOfLines={2}
+                                >
+                                  {agent.systemPrompt}
+                                </Text>
+                                <View style={styles.agentMeta}>
+                                  {agentModel && (
                                     <View
                                       style={[
-                                        styles.defaultBadge,
+                                        styles.thinkModeBadge,
                                         {
-                                          backgroundColor: `${theme.colors.accent}20`,
+                                          backgroundColor: `${theme.colors.border}30`,
                                         },
                                       ]}
                                     >
                                       <Text
                                         variant="caption"
                                         style={{
-                                          color: theme.colors.accent,
+                                          color: seasonalTheme.textSecondary,
                                           fontSize: 10,
-                                          fontWeight: "600",
                                         }}
                                       >
-                                        DEFAULT
+                                        {agentModel.displayName}
                                       </Text>
                                     </View>
                                   )}
-                                </View>
-                                <View style={styles.agentActions}>
-                                  {!agent.isDefault && (
-                                    <TouchableOpacity
-                                      style={styles.agentActionButton}
-                                      onPress={() =>
-                                        handleSetDefaultAgent(agent)
-                                      }
-                                    >
-                                      <Ionicons
-                                        name="star-outline"
-                                        size={16}
-                                        color={seasonalTheme.textSecondary}
-                                      />
-                                    </TouchableOpacity>
-                                  )}
-                                  <TouchableOpacity
-                                    style={styles.agentActionButton}
-                                    onPress={() => handleEditAgent(agent)}
+                                  <View
+                                    style={[
+                                      styles.thinkModeBadge,
+                                      {
+                                        backgroundColor: `${theme.colors.border}30`,
+                                      },
+                                    ]}
                                   >
-                                    <Ionicons
-                                      name="pencil-outline"
-                                      size={16}
-                                      color={seasonalTheme.textSecondary}
-                                    />
-                                  </TouchableOpacity>
-                                  {!agent.isDefault && (
-                                    <TouchableOpacity
-                                      style={styles.agentActionButton}
-                                      onPress={() => handleDeleteAgent(agent)}
+                                    <Text
+                                      variant="caption"
+                                      style={{
+                                        color: seasonalTheme.textSecondary,
+                                        fontSize: 10,
+                                      }}
                                     >
-                                      <Ionicons
-                                        name="trash-outline"
-                                        size={16}
-                                        color={theme.colors.error}
-                                      />
-                                    </TouchableOpacity>
-                                  )}
+                                      {agent.thinkMode === "no-think"
+                                        ? "No Think"
+                                        : agent.thinkMode === "think"
+                                          ? "Think"
+                                          : "None"}
+                                    </Text>
+                                  </View>
                                 </View>
-                              </View>
-                              <Text
-                                variant="caption"
-                                style={[
-                                  styles.agentPromptPreview,
-                                  { color: seasonalTheme.textSecondary },
-                                ]}
-                                numberOfLines={2}
-                              >
-                                {agent.systemPrompt}
-                              </Text>
-                              <View style={styles.agentMeta}>
-                                <View
-                                  style={[
-                                    styles.thinkModeBadge,
-                                    {
-                                      backgroundColor: `${theme.colors.border}30`,
-                                    },
-                                  ]}
-                                >
-                                  <Text
-                                    variant="caption"
-                                    style={{
-                                      color: seasonalTheme.textSecondary,
-                                      fontSize: 10,
-                                    }}
-                                  >
-                                    {agent.thinkMode === "no-think"
-                                      ? "No Think"
-                                      : agent.thinkMode === "think"
-                                        ? "Think"
-                                        : "None"}
-                                  </Text>
-                                </View>
-                              </View>
-                            </View>
-                          ))}
+                              </TouchableOpacity>
+                            );
+                          })}
                         </View>
                       </>
                     )}

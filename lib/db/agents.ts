@@ -12,6 +12,7 @@ export interface Agent {
   name: string;
   systemPrompt: string;
   thinkMode: ThinkMode;
+  modelId: string | null;
   isDefault: boolean;
   createdAt: number;
   updatedAt: number;
@@ -21,12 +22,14 @@ export interface CreateAgentInput {
   name: string;
   systemPrompt: string;
   thinkMode?: ThinkMode;
+  modelId: string;
 }
 
 export interface UpdateAgentInput {
   name?: string;
   systemPrompt?: string;
   thinkMode?: ThinkMode;
+  modelId?: string;
 }
 
 // =============================================================================
@@ -44,9 +47,9 @@ export class AgentRepository {
     const thinkMode = input.thinkMode ?? "no-think";
 
     const result = await this.db.runAsync(
-      `INSERT INTO agents (name, systemPrompt, thinkMode, isDefault, createdAt, updatedAt)
-       VALUES (?, ?, ?, 0, ?, ?)`,
-      [input.name, input.systemPrompt, thinkMode, now, now],
+      `INSERT INTO agents (name, systemPrompt, thinkMode, modelId, isDefault, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, 0, ?, ?)`,
+      [input.name, input.systemPrompt, thinkMode, input.modelId, now, now],
     );
 
     const agent = await this.getById(result.lastInsertRowId);
@@ -66,6 +69,7 @@ export class AgentRepository {
       name: string;
       systemPrompt: string;
       thinkMode: string;
+      modelId: string | null;
       isDefault: number;
       createdAt: number;
       updatedAt: number;
@@ -85,6 +89,7 @@ export class AgentRepository {
       name: string;
       systemPrompt: string;
       thinkMode: string;
+      modelId: string | null;
       isDefault: number;
       createdAt: number;
       updatedAt: number;
@@ -102,6 +107,7 @@ export class AgentRepository {
       name: string;
       systemPrompt: string;
       thinkMode: string;
+      modelId: string | null;
       isDefault: number;
       createdAt: number;
       updatedAt: number;
@@ -110,6 +116,24 @@ export class AgentRepository {
     if (!row) return null;
 
     return this.rowToAgent(row);
+  }
+
+  /**
+   * Get agents that use a specific model
+   */
+  async getByModelId(modelId: string): Promise<Agent[]> {
+    const rows = await this.db.getAllAsync<{
+      id: number;
+      name: string;
+      systemPrompt: string;
+      thinkMode: string;
+      modelId: string | null;
+      isDefault: number;
+      createdAt: number;
+      updatedAt: number;
+    }>(`SELECT * FROM agents WHERE modelId = ?`, [modelId]);
+
+    return rows.map((row) => this.rowToAgent(row));
   }
 
   /**
@@ -125,10 +149,11 @@ export class AgentRepository {
     const name = input.name ?? existing.name;
     const systemPrompt = input.systemPrompt ?? existing.systemPrompt;
     const thinkMode = input.thinkMode ?? existing.thinkMode;
+    const modelId = input.modelId ?? existing.modelId;
 
     await this.db.runAsync(
-      `UPDATE agents SET name = ?, systemPrompt = ?, thinkMode = ?, updatedAt = ? WHERE id = ?`,
-      [name, systemPrompt, thinkMode, now, id],
+      `UPDATE agents SET name = ?, systemPrompt = ?, thinkMode = ?, modelId = ?, updatedAt = ? WHERE id = ?`,
+      [name, systemPrompt, thinkMode, modelId, now, id],
     );
 
     const updated = await this.getById(id);
@@ -192,6 +217,7 @@ export class AgentRepository {
     name: string;
     systemPrompt: string;
     thinkMode: string;
+    modelId: string | null;
     isDefault: number;
     createdAt: number;
     updatedAt: number;
@@ -201,6 +227,7 @@ export class AgentRepository {
       name: row.name,
       systemPrompt: row.systemPrompt,
       thinkMode: row.thinkMode as ThinkMode,
+      modelId: row.modelId,
       isDefault: row.isDefault === 1,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -221,6 +248,7 @@ export function useAgents() {
     getById: (id: number) => repo.getById(id),
     getAll: () => repo.getAll(),
     getDefault: () => repo.getDefault(),
+    getByModelId: (modelId: string) => repo.getByModelId(modelId),
     update: (id: number, input: UpdateAgentInput) => repo.update(id, input),
     delete: (id: number) => repo.delete(id),
     setDefault: (id: number) => repo.setDefault(id),
