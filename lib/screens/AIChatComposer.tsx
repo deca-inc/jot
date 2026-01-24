@@ -28,6 +28,7 @@ import RenderHtml from "react-native-render-html";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALL_MODELS, getModelById } from "../ai/modelConfig";
 import { useAIChat } from "../ai/useAIChat";
+import { usePlatformModels, isPlatformModelId } from "../ai/usePlatformModels";
 import { useTrackScreenView } from "../analytics";
 import {
   Dialog,
@@ -158,7 +159,7 @@ const MarkdownRenderer = React.memo(
         source={{ html: htmlContent }}
         tagsStyles={htmlTagsStyles}
         renderers={customRenderers}
-        ignoredDomTags={["think"]}
+        ignoredDomTags={["think", "audio", "button"]}
       />
     );
   },
@@ -287,6 +288,7 @@ export function AIChatComposer({
   const { width } = useWindowDimensions();
   const modelSettings = useModelSettings();
   const agentsRepo = useAgents();
+  const { platformLLMs } = usePlatformModels();
 
   // Track screen view
   useTrackScreenView("AI Chat Composer");
@@ -321,10 +323,20 @@ export function AIChatComposer({
         ],
       );
       setDownloadedModels(downloaded);
-      setSelectedModelId(selected);
       setAgents(allAgents);
-      // Use default agent initially (will be overridden by entry's agent if available)
-      if (defaultAgent) {
+
+      // Determine default: saved selection > persona
+      // Note: Platform models don't use personas (no system prompt support)
+      if (selected) {
+        // User has a saved selection - use it
+        setSelectedModelId(selected);
+        // Only set agent if NOT a platform model (platform models can't use personas)
+        if (defaultAgent && !isPlatformModelId(selected)) {
+          setCurrentAgent(defaultAgent);
+        }
+      } else if (defaultAgent) {
+        // No saved selection - use default persona
+        setSelectedModelId(defaultAgent.modelId || null);
         setCurrentAgent(defaultAgent);
       }
     };
@@ -333,13 +345,30 @@ export function AIChatComposer({
 
   // Get display name for selector button
   const selectorDisplayName = useMemo(() => {
+    if (!selectedModelId) return "Select";
+
+    // Platform models always show their name (they don't use agents)
+    if (isPlatformModelId(selectedModelId)) {
+      const platformModel = platformLLMs.find(
+        (m) => m.modelId === selectedModelId,
+      );
+      if (platformModel) return platformModel.displayName;
+      // Fallback for platform model not in list yet
+      if (selectedModelId === "apple-foundation") return "Apple Intelligence";
+      if (selectedModelId === "gemini-nano") return "Gemini Nano";
+    }
+
+    // For non-platform models, show agent name if set
     if (currentAgent) {
       return currentAgent.name;
     }
-    if (!selectedModelId) return "Select";
+
+    // Check downloadable models
     const model = getModelById(selectedModelId);
-    return model?.displayName || selectedModelId;
-  }, [selectedModelId, currentAgent]);
+    if (model) return model.displayName;
+
+    return selectedModelId;
+  }, [selectedModelId, currentAgent, platformLLMs]);
 
   // Handle agent selection
   const handleSelectAgent = useCallback(
@@ -412,9 +441,21 @@ export function AIChatComposer({
         agentsRepo.getDefault(),
         modelSettings.getSelectedModelId(),
       ]);
-      setCurrentAgent(defaultAgent);
       if (defaultModelId) {
         setSelectedModelId(defaultModelId);
+        // Only set agent if default model is NOT a platform model
+        // Platform models don't support agents/personas
+        if (defaultAgent && !isPlatformModelId(defaultModelId)) {
+          setCurrentAgent(defaultAgent);
+        } else {
+          setCurrentAgent(null);
+        }
+      } else if (defaultAgent) {
+        // No default model but have default agent
+        setCurrentAgent(defaultAgent);
+        if (defaultAgent.modelId) {
+          setSelectedModelId(defaultAgent.modelId);
+        }
       }
     };
     loadEntrySettings();
@@ -477,6 +518,9 @@ export function AIChatComposer({
   const handleSelectModel = useCallback(
     async (modelId: string) => {
       setSelectedModelId(modelId);
+      // Clear current agent when selecting a raw model directly
+      // This ensures the selector shows the model name, not the agent name
+      setCurrentAgent(null);
       await modelSettings.setSelectedModelId(modelId);
       setShowModelSelector(false);
 
@@ -519,8 +563,30 @@ export function AIChatComposer({
   // Refs for UI only
   const flatListRef = useRef<FlatList<Block>>(null);
   const chatInputRef = useRef<TextInput>(null);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  // Keyboard state for proper input positioning
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // Track keyboard visibility and height
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const keyboardDidShow = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+
+    const keyboardDidHide = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      keyboardDidShow.remove();
+      keyboardDidHide.remove();
+    };
+  }, []);
 
   // Derive displayed data from entry or fallback to initial props
   const displayedBlocks = entry?.blocks ?? initialBlocks;
@@ -564,29 +630,6 @@ export function AIChatComposer({
   const scrollToBottom = useCallback(() => {
     shouldStickToBottomRef.current = true;
     // The useLayoutEffect will handle the actual scrolling on next render
-  }, []);
-
-  // Track keyboard visibility and height on both platforms
-  useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-    const keyboardDidShow = Keyboard.addListener(showEvent, (e) => {
-      setIsKeyboardVisible(true);
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-
-    const keyboardDidHide = Keyboard.addListener(hideEvent, () => {
-      setIsKeyboardVisible(false);
-      setKeyboardHeight(0);
-    });
-
-    return () => {
-      keyboardDidShow.remove();
-      keyboardDidHide.remove();
-    };
   }, []);
 
   // HTML rendering styles - memoized for performance
@@ -989,8 +1032,10 @@ export function AIChatComposer({
         deleteConfirmMessage="Are you sure you want to delete this conversation? This action cannot be undone."
       />
 
-      {/* Model Selector - next to back button (only show if multiple models downloaded) */}
-      {downloadedModels.length > 1 && (
+      {/* Model Selector - next to back button (show if multiple options available) */}
+      {(downloadedModels.length > 1 ||
+        platformLLMs.length > 0 ||
+        agents.length > 0) && (
         <View
           style={[
             styles.modelSelectorContainer,
@@ -1103,7 +1148,7 @@ export function AIChatComposer({
               marginBottom: spacingPatterns.md,
             }}
           >
-            Select Agent or Model
+            Select Persona or Model
           </Text>
           <ScrollView
             style={styles.modelSelectorScroll}
@@ -1120,7 +1165,7 @@ export function AIChatComposer({
                     fontWeight: "600",
                   }}
                 >
-                  AGENTS
+                  PERSONAS
                 </Text>
                 {agents.map((agent) => {
                   const isSelected = currentAgent?.id === agent.id;
@@ -1203,17 +1248,93 @@ export function AIChatComposer({
               </>
             )}
 
-            {/* LLMs Section */}
+            {/* Built-in Platform Models Section */}
+            {platformLLMs.length > 0 && (
+              <>
+                <Text
+                  variant="caption"
+                  style={{
+                    color: seasonalTheme.textSecondary,
+                    marginTop: agents.length > 0 ? spacingPatterns.md : 0,
+                    marginBottom: spacingPatterns.xs,
+                    fontWeight: "600",
+                  }}
+                >
+                  BUILT-IN
+                </Text>
+                {platformLLMs.map((platformModel) => {
+                  const isSelected =
+                    !currentAgent && selectedModelId === platformModel.modelId;
+                  return (
+                    <TouchableOpacity
+                      key={platformModel.modelId}
+                      onPress={() => {
+                        setCurrentAgent(null);
+                        handleSelectModel(platformModel.modelId);
+                      }}
+                      style={[
+                        styles.modelOption,
+                        {
+                          backgroundColor: isSelected
+                            ? seasonalTheme.chipBg
+                            : "transparent",
+                          borderColor: isSelected
+                            ? seasonalTheme.textSecondary + "40"
+                            : "transparent",
+                        },
+                      ]}
+                    >
+                      <View style={styles.modelOptionContent}>
+                        <View style={styles.agentOptionRow}>
+                          <Ionicons
+                            name="flash-outline"
+                            size={16}
+                            color={seasonalTheme.textSecondary}
+                          />
+                          <Text
+                            variant="body"
+                            style={{
+                              color: seasonalTheme.textPrimary,
+                              fontWeight: isSelected ? "600" : "400",
+                            }}
+                          >
+                            {platformModel.displayName}
+                          </Text>
+                        </View>
+                        <Text
+                          variant="caption"
+                          style={{ color: seasonalTheme.textSecondary }}
+                        >
+                          {platformModel.description}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Ionicons
+                          name="checkmark"
+                          size={20}
+                          color={seasonalTheme.textPrimary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Downloaded LLMs Section */}
             <Text
               variant="caption"
               style={{
                 color: seasonalTheme.textSecondary,
-                marginTop: agents.length > 0 ? spacingPatterns.md : 0,
+                marginTop:
+                  agents.length > 0 || platformLLMs.length > 0
+                    ? spacingPatterns.md
+                    : 0,
                 marginBottom: spacingPatterns.xs,
                 fontWeight: "600",
               }}
             >
-              MODELS
+              DOWNLOADED
             </Text>
             {downloadedModels
               .filter((m) => !m.modelType || m.modelType === "llm")
@@ -1286,7 +1407,8 @@ export function AIChatComposer({
           styles.chatMessagesContent,
           {
             paddingTop: insets.top,
-            paddingBottom: insets.bottom + spacingPatterns.md,
+            // Add padding for the absolutely positioned input container (~70px)
+            paddingBottom: 80 + (insets.bottom || spacingPatterns.sm),
           },
         ]}
         keyboardShouldPersistTaps="handled"
@@ -1360,21 +1482,20 @@ export function AIChatComposer({
         }}
       />
 
-      {/* Input */}
+      {/* Input - positioned at the bottom, moves up with keyboard */}
       <View
         style={[
           styles.chatInputContainer,
           {
             backgroundColor: seasonalTheme.cardBg,
-            paddingBottom: isKeyboardVisible
-              ? spacingPatterns.sm
-              : insets.bottom || spacingPatterns.sm,
-            marginBottom:
+            paddingBottom:
               keyboardHeight > 0
-                ? Platform.OS === "android"
-                  ? keyboardHeight + insets.bottom // Android needs insets
-                  : keyboardHeight // iOS keyboard height already accounts for safe area
-                : 0,
+                ? spacingPatterns.sm
+                : insets.bottom || spacingPatterns.sm,
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: keyboardHeight,
           },
         ]}
       >
@@ -1391,6 +1512,7 @@ export function AIChatComposer({
             }}
           />
         )}
+
         <TextInput
           ref={chatInputRef}
           style={[
@@ -1520,6 +1642,7 @@ const styles = StyleSheet.create({
     gap: spacingPatterns.sm,
     borderTopWidth: 1,
     borderTopColor: "rgba(0, 0, 0, 0.1)",
+    // Note: position, left, right, bottom are applied dynamically
   },
   chatInput: {
     flex: 1,

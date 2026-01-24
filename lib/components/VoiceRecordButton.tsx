@@ -1,11 +1,12 @@
 /**
  * VoiceRecordButton - Tap-to-record button for voice transcription
  *
- * Uses on-device Whisper models via react-native-executorch for
- * speech-to-text transcription.
+ * Uses on-device Whisper models via react-native-executorch or
+ * platform-native speech recognition (Apple Speech / Android SpeechRecognizer).
  */
 
 import { Ionicons } from "@expo/vector-icons";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -17,8 +18,14 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { PLATFORM_STT_IDS } from "../ai/platformModels";
 import { getSTTModelById } from "../ai/sttConfig";
 import { useLLMContext } from "../ai/UnifiedModelProvider";
+import { usePlatformModels } from "../ai/usePlatformModels";
+import {
+  usePlatformSpeechToText,
+  type PlatformTranscriptionResult,
+} from "../ai/usePlatformSpeechToText";
 import {
   useSpeechToText,
   type TranscriptionResult,
@@ -27,6 +34,9 @@ import { useModelSettings } from "../db/modelSettings";
 import { borderRadius, spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { Text } from "./Text";
+
+// Check if glass effect is available (iOS 26+)
+const glassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
 
 // Number of waveform bars
 const NUM_BARS = 5;
@@ -66,10 +76,14 @@ function WaveformBars({
       // Add slight variation to each bar
       const variation = 0.8 + Math.sin(i * 1.5 + Date.now() / 200) * 0.2;
 
-      // Calculate target height (minimum 0.15, maximum 1.0)
+      // Amplify the level for more visible animation (levels are typically 0.05-0.15)
+      // Multiply by 5 to make 0.1 → 0.5, then add base of 0.2 for idle animation
+      const amplifiedLevel = Math.min(1, level * 5 + 0.2);
+
+      // Calculate target height (minimum 0.2, maximum 1.0)
       const targetHeight = Math.max(
-        0.15,
-        Math.min(1, level * centerFactor * variation),
+        0.2,
+        Math.min(1, amplifiedLevel * centerFactor * variation),
       );
 
       return Animated.timing(anim, {
@@ -128,68 +142,82 @@ export interface VoiceRecordButtonProps {
   onTranscriptionComplete: (result: VoiceRecordButtonResult) => void;
   /** Callback when no voice model is downloaded - should open model manager */
   onNoModelAvailable: () => void;
+  /** Callback when recording starts */
+  onRecordingStart?: () => void;
+  /** Callback when recording stops (before transcription completes) */
+  onRecordingStop?: () => void;
+  /** Callback when live transcript text changes */
+  onTranscriptChange?: (text: string) => void;
   /** Callback when recording is cancelled */
   onCancel?: () => void;
   /** Size of the button */
-  size?: "small" | "medium" | "large";
+  size?: "small" | "medium" | "large" | "xlarge";
   /** Whether the button is disabled */
   disabled?: boolean;
+  /** Hide the built-in chat bubble (when parent handles transcript display) */
+  hideTranscriptBubble?: boolean;
 }
 
 const BUTTON_SIZES = {
   small: 36,
   medium: 44,
   large: 52,
+  xlarge: 60,
 };
 
 const ICON_SIZES = {
   small: 18,
   medium: 22,
   large: 26,
+  xlarge: 30,
 };
+
+// Helper to check if an STT model ID is a platform model
+function isPlatformSttModelId(modelId: string): boolean {
+  return Object.values(PLATFORM_STT_IDS).includes(
+    modelId as (typeof PLATFORM_STT_IDS)[keyof typeof PLATFORM_STT_IDS],
+  );
+}
 
 export function VoiceRecordButton({
   onTranscriptionComplete,
   onNoModelAvailable,
+  onRecordingStart,
+  onRecordingStop,
+  onTranscriptChange,
   onCancel,
   size = "medium",
   disabled = false,
+  hideTranscriptBubble = false,
 }: VoiceRecordButtonProps) {
   const seasonalTheme = useSeasonalTheme();
   const modelSettings = useModelSettings();
   const llmContext = useLLMContext();
+  const { hasPlatformSTT } = usePlatformModels();
 
   // State
   const [isModelLoading, setIsModelLoading] = useState(false);
   const [hasVoiceModel, setHasVoiceModel] = useState<boolean | null>(null);
   const [hasLLMModel, setHasLLMModel] = useState(false);
   const [isCorrecting, setIsCorrecting] = useState(false);
+  const [usePlatformSTT, setUsePlatformSTT] = useState(false);
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseAnimRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Speech-to-text hook
-  const {
-    isModelLoaded,
-    isRecording,
-    isTranscribing,
-    committedText,
-    meteringLevel,
-    loadModel,
-    startRecording,
-    stopRecording,
-    cancelRecording,
-    error,
-  } = useSpeechToText({
-    onTranscriptionComplete: async (result: TranscriptionResult) => {
-      // Only process if we have actual text
-      if (!result.text.trim()) return;
+  // Ref for correctWithLLM to avoid stale closures
+  const correctWithLLMRef = useRef<(text: string) => Promise<string>>(
+    async (text) => text,
+  );
 
-      // Try to correct with LLM if available
-      const finalText = await correctWithLLM(result.text);
-
-      // Pass the result with corrected text
+  // Platform speech-to-text hook (Apple Speech / Android SpeechRecognizer)
+  const platformSTT = usePlatformSpeechToText({
+    onTranscriptionComplete: async (result: PlatformTranscriptionResult) => {
+      // Always call onTranscriptionComplete even if text is empty
+      // This ensures audio files get injected even if transcription failed
+      const rawText = result.text.trim();
+      const finalText = rawText ? await correctWithLLMRef.current(rawText) : "";
       onTranscriptionComplete({
         text: finalText,
         audioUri: result.audioUri,
@@ -197,31 +225,86 @@ export function VoiceRecordButton({
       });
     },
     onError: (err) => {
-      console.error("[VoiceRecordButton] Error:", err);
+      console.error("[VoiceRecordButton] Platform STT error:", err);
     },
   });
 
-  // Ref to track recording state for AppState handler
+  // Whisper speech-to-text hook (react-native-executorch)
+  const whisperSTT = useSpeechToText({
+    onTranscriptionComplete: async (result: TranscriptionResult) => {
+      if (!result.text.trim()) return;
+      const finalText = await correctWithLLMRef.current(result.text);
+      onTranscriptionComplete({
+        text: finalText,
+        audioUri: result.audioUri,
+        duration: result.duration,
+      });
+    },
+    onError: (err) => {
+      console.error("[VoiceRecordButton] Whisper STT error:", err);
+    },
+  });
+
+  // Select the active STT based on mode
+  const isRecording = usePlatformSTT
+    ? platformSTT.isRecording
+    : whisperSTT.isRecording;
+  const isTranscribing = usePlatformSTT
+    ? platformSTT.isProcessing
+    : whisperSTT.isTranscribing;
+  const committedText = usePlatformSTT
+    ? platformSTT.currentText
+    : whisperSTT.committedText;
+  const meteringLevel = usePlatformSTT ? 0.5 : whisperSTT.meteringLevel; // Platform STT doesn't provide metering
+
+  const stopRecording = usePlatformSTT
+    ? platformSTT.stopRecording
+    : whisperSTT.stopRecording;
+  const cancelRecording = usePlatformSTT
+    ? platformSTT.cancelRecording
+    : whisperSTT.cancelRecording;
+  const error = usePlatformSTT ? platformSTT.error : whisperSTT.error;
+
+  // Notify parent of transcript changes
+  useEffect(() => {
+    onTranscriptChange?.(committedText);
+  }, [committedText, onTranscriptChange]);
+
+  // Track recording state changes to notify parent when recording stops
+  const prevIsRecordingRef = useRef(false);
+  useEffect(() => {
+    if (prevIsRecordingRef.current && !isRecording) {
+      // Recording just stopped
+      onRecordingStop?.();
+    }
+    prevIsRecordingRef.current = isRecording;
+  }, [isRecording, onRecordingStop]);
+
+  // Ref to track recording state for AppState/cleanup handlers
   const isRecordingRef = useRef(false);
   isRecordingRef.current = isRecording;
-  const stopRecordingRef = useRef(stopRecording);
-  stopRecordingRef.current = stopRecording;
+  const cancelRecordingRef = useRef(cancelRecording);
+  cancelRecordingRef.current = cancelRecording;
 
-  // Stop recording when app goes to background or component unmounts (screen leave)
+  // Cancel recording when app goes to background or component unmounts (screen leave)
+  // We cancel (not stop) because we don't want to try processing/transcribing
+  // when the user navigates away - just clean up gracefully
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState !== "active" && isRecordingRef.current) {
-        console.log("[VoiceRecordButton] App backgrounded, stopping recording");
-        stopRecordingRef.current();
+        console.log(
+          "[VoiceRecordButton] App backgrounded, cancelling recording",
+        );
+        cancelRecordingRef.current();
       }
     });
 
     return () => {
       subscription.remove();
-      // Stop recording on unmount (e.g., navigating away from screen)
+      // Cancel recording on unmount (e.g., navigating away from screen)
       if (isRecordingRef.current) {
-        console.log("[VoiceRecordButton] Unmounting, stopping recording");
-        stopRecordingRef.current();
+        console.log("[VoiceRecordButton] Unmounting, cancelling recording");
+        cancelRecordingRef.current();
       }
     };
   }, []);
@@ -234,11 +317,12 @@ export function VoiceRecordButton({
         (m) => m.modelType === "speech-to-text",
       );
       const llmModels = downloaded.filter((m) => m.modelType === "llm");
-      setHasVoiceModel(sttModels.length > 0);
+      // Voice model available if: downloaded Whisper model OR platform STT available
+      setHasVoiceModel(sttModels.length > 0 || hasPlatformSTT);
       setHasLLMModel(llmModels.length > 0);
     };
     checkModels();
-  }, [modelSettings]);
+  }, [modelSettings, hasPlatformSTT]);
 
   /**
    * Correct transcription using LLM for better grammar and accuracy
@@ -269,6 +353,9 @@ export function VoiceRecordButton({
     },
     [hasLLMModel, llmContext],
   );
+
+  // Update the ref whenever correctWithLLM changes
+  correctWithLLMRef.current = correctWithLLM;
 
   // Start pulse animation when recording
   useEffect(() => {
@@ -302,45 +389,90 @@ export function VoiceRecordButton({
 
   /**
    * Load STT model if downloaded but not loaded
+   * Returns { success: boolean, usePlatform: boolean }
    */
-  const ensureModelLoaded = useCallback(async () => {
-    if (isModelLoaded) return true;
-
+  const ensureModelLoaded = useCallback(async (): Promise<{
+    success: boolean;
+    usePlatform: boolean;
+  }> => {
     setIsModelLoading(true);
 
     try {
       // Get selected STT model
       const selectedId = await modelSettings.getSelectedSttModelId();
-      if (!selectedId) {
-        // No model selected, use first downloaded STT model
+
+      // Helper to find and load a downloadable STT model
+      const loadDownloadableModel = async () => {
+        setUsePlatformSTT(false);
         const downloaded = await modelSettings.getDownloadedModels();
         const sttModel = downloaded.find(
           (m) => m.modelType === "speech-to-text",
         );
         if (!sttModel) {
-          throw new Error("No STT model downloaded");
+          throw new Error(
+            "No STT model downloaded. Please download a voice model in settings.",
+          );
         }
         const config = getSTTModelById(sttModel.modelId);
         if (!config) {
           throw new Error("STT model config not found");
         }
-        await loadModel(config);
-      } else {
-        const config = getSTTModelById(selectedId);
-        if (!config) {
-          throw new Error("Selected STT model config not found");
+        if (!whisperSTT.isModelLoaded) {
+          await whisperSTT.loadModel(config);
         }
-        await loadModel(config);
+      };
+
+      let shouldUsePlatform = false;
+
+      if (!selectedId) {
+        // No model selected - prefer downloaded Whisper model over platform STT
+        // This way users who downloaded a Whisper model get it used by default
+        const downloaded = await modelSettings.getDownloadedModels();
+        const hasDownloadedSTT = downloaded.some(
+          (m) => m.modelType === "speech-to-text",
+        );
+
+        if (hasDownloadedSTT) {
+          console.log(
+            "[VoiceRecordButton] No model selected, using downloaded Whisper model",
+          );
+          await loadDownloadableModel();
+        } else if (hasPlatformSTT) {
+          console.log(
+            "[VoiceRecordButton] No model selected, no Whisper downloaded, using platform STT",
+          );
+          shouldUsePlatform = true;
+          setUsePlatformSTT(true);
+        } else {
+          throw new Error(
+            "No STT model available. Please download a voice model in settings.",
+          );
+        }
+      } else if (isPlatformSttModelId(selectedId)) {
+        // Platform STT selected (apple-speech or android-speech)
+        console.log(`[VoiceRecordButton] Using platform STT (${selectedId})`);
+        shouldUsePlatform = true;
+        setUsePlatformSTT(true);
+      } else {
+        // Downloadable Whisper model selected
+        setUsePlatformSTT(false);
+        if (!whisperSTT.isModelLoaded) {
+          const config = getSTTModelById(selectedId);
+          if (!config) {
+            throw new Error("Selected STT model config not found");
+          }
+          await whisperSTT.loadModel(config);
+        }
       }
 
       setIsModelLoading(false);
-      return true;
+      return { success: true, usePlatform: shouldUsePlatform };
     } catch (err) {
       console.error("[VoiceRecordButton] Failed to load model:", err);
       setIsModelLoading(false);
-      return false;
+      return { success: false, usePlatform: false };
     }
-  }, [isModelLoaded, modelSettings, loadModel]);
+  }, [modelSettings, hasPlatformSTT, whisperSTT]);
 
   /**
    * Handle tap - toggle recording (tap to start, tap to stop)
@@ -364,24 +496,34 @@ export function VoiceRecordButton({
       return;
     }
 
-    // Ensure model is loaded first
-    const loaded = await ensureModelLoaded();
-    if (!loaded) {
+    // Ensure model is loaded first - returns which STT to use
+    const result = await ensureModelLoaded();
+    if (!result.success) {
       // Model failed to load - might be corrupted, ask user to re-download
       onNoModelAvailable();
       return;
     }
 
-    // Start recording
-    await startRecording();
+    // Notify parent that recording is starting
+    onRecordingStart?.();
+
+    // Start recording using the correct STT based on what ensureModelLoaded determined
+    // We call the hook functions directly here because the state update hasn't happened yet
+    if (result.usePlatform) {
+      await platformSTT.startRecording();
+    } else {
+      await whisperSTT.startRecording();
+    }
   }, [
+    onRecordingStart,
     disabled,
     isRecording,
     isTranscribing,
     isModelLoading,
     hasVoiceModel,
     ensureModelLoaded,
-    startRecording,
+    platformSTT,
+    whisperSTT,
     stopRecording,
     onNoModelAvailable,
   ]);
@@ -403,26 +545,26 @@ export function VoiceRecordButton({
   const isActive = isRecording || isTranscribing || isCorrecting;
   const isLoading = isModelLoading;
 
-  // Button background color
-  const bgColor = isActive
-    ? seasonalTheme.isDark
-      ? "rgba(220, 38, 38, 0.2)" // Red tint when recording
-      : "rgba(220, 38, 38, 0.1)"
-    : seasonalTheme.isDark
-      ? "rgba(255, 255, 255, 0.1)"
-      : "rgba(0, 0, 0, 0.05)";
+  // Button background color - keep consistent regardless of recording state
+  // The icon color changes to red when recording, not the background
+  const bgColor = seasonalTheme.glassFallbackBg;
 
-  // Icon color
+  // Glass tint color - keep consistent regardless of recording state
+  const glassTintColor = seasonalTheme.cardBg;
+
+  // Icon color - uses theme's subtle glow color when active
+  const activeColor = seasonalTheme.subtleGlow.shadowColor;
   const iconColor = isActive
-    ? "#DC2626" // Red when recording
+    ? activeColor
     : disabled
-      ? seasonalTheme.textSecondary + "80"
-      : seasonalTheme.textSecondary;
+      ? seasonalTheme.textPrimary + "80"
+      : seasonalTheme.textPrimary;
 
   return (
     <View style={styles.container}>
       {/* Live transcription chat bubble - coming from left */}
-      {isActive && committedText && (
+      {/* Show bubble during recording with either committed text or "Listening..." */}
+      {!hideTranscriptBubble && isActive && (
         <View
           style={[
             styles.chatBubble,
@@ -442,13 +584,16 @@ export function VoiceRecordButton({
           <Text
             variant="body"
             style={{
-              color: seasonalTheme.textPrimary,
+              color: committedText
+                ? seasonalTheme.textPrimary
+                : seasonalTheme.textSecondary,
               textAlign: "right",
+              fontStyle: committedText ? "normal" : "italic",
             }}
             numberOfLines={1}
             ellipsizeMode="head"
           >
-            {committedText}
+            {committedText || (isRecording ? "Listening..." : "Processing...")}
           </Text>
           {/* Speech bubble tail pointing right toward the mic button */}
           <View
@@ -464,27 +609,6 @@ export function VoiceRecordButton({
         </View>
       )}
 
-      {/* Loading/Correcting indicator */}
-      {(isLoading || isCorrecting) && (
-        <View
-          style={[
-            styles.loadingBadge,
-            {
-              backgroundColor: seasonalTheme.isDark
-                ? "rgba(30, 30, 30, 0.95)"
-                : "rgba(255, 255, 255, 0.95)",
-            },
-          ]}
-        >
-          <Text
-            variant="caption"
-            style={{ color: seasonalTheme.textSecondary }}
-          >
-            {isCorrecting ? "Correcting..." : "Loading..."}
-          </Text>
-        </View>
-      )}
-
       {/* Main button */}
       <Animated.View
         style={[
@@ -493,51 +617,112 @@ export function VoiceRecordButton({
           },
           Platform.select({
             ios: {
-              shadowColor: "#DC2626",
-              shadowOpacity: isActive ? 0.4 : 0,
-              shadowRadius: 10,
+              shadowColor: activeColor,
+              shadowOpacity: isActive ? 0.5 : 0,
+              shadowRadius: 12,
               shadowOffset: { width: 0, height: 0 },
             },
             android: {},
           }),
         ]}
       >
-        <Pressable
-          onPress={handlePress}
-          onLongPress={handleLongPress}
-          delayLongPress={1000}
-          disabled={disabled || isLoading || isTranscribing || isCorrecting}
-          style={[
-            styles.button,
-            {
-              width: buttonSize,
-              height: buttonSize,
-              borderRadius: buttonSize / 2,
-              backgroundColor: bgColor,
-              opacity: disabled ? 0.5 : 1,
-            },
-          ]}
-        >
-          {isRecording ? (
-            <WaveformBars
-              level={meteringLevel}
-              color={iconColor}
-              barWidth={size === "large" ? 4 : 3}
-              maxHeight={size === "large" ? 24 : size === "medium" ? 18 : 14}
-              gap={size === "large" ? 3 : 2}
-            />
-          ) : (
-            <Ionicons
-              name={
-                isTranscribing || isCorrecting
-                  ? "hourglass-outline"
-                  : "mic-outline"
-              }
-              size={iconSize}
-              color={iconColor}
-            />
-          )}
-        </Pressable>
+        {glassAvailable ? (
+          <GlassView
+            glassEffectStyle="regular"
+            tintColor={glassTintColor}
+            style={[
+              styles.glassButton,
+              {
+                width: buttonSize,
+                height: buttonSize,
+                borderRadius: buttonSize / 2,
+                opacity: disabled ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Pressable
+              onPress={handlePress}
+              onLongPress={handleLongPress}
+              delayLongPress={1000}
+              disabled={disabled || isLoading || isTranscribing || isCorrecting}
+              style={styles.buttonPressable}
+            >
+              {isRecording ? (
+                <WaveformBars
+                  level={meteringLevel}
+                  color={iconColor}
+                  barWidth={size === "xlarge" ? 5 : size === "large" ? 4 : 3}
+                  maxHeight={
+                    size === "xlarge"
+                      ? 28
+                      : size === "large"
+                        ? 24
+                        : size === "medium"
+                          ? 18
+                          : 14
+                  }
+                  gap={size === "xlarge" ? 4 : size === "large" ? 3 : 2}
+                />
+              ) : (
+                <Ionicons
+                  name={
+                    isTranscribing || isCorrecting
+                      ? "hourglass-outline"
+                      : "mic-outline"
+                  }
+                  size={iconSize}
+                  color={iconColor}
+                />
+              )}
+            </Pressable>
+          </GlassView>
+        ) : (
+          <Pressable
+            onPress={handlePress}
+            onLongPress={handleLongPress}
+            delayLongPress={1000}
+            disabled={disabled || isLoading || isTranscribing || isCorrecting}
+            style={[
+              styles.button,
+              styles.buttonFallback,
+              {
+                width: buttonSize,
+                height: buttonSize,
+                borderRadius: buttonSize / 2,
+                backgroundColor: bgColor,
+                opacity: disabled ? 0.5 : 1,
+              },
+            ]}
+          >
+            {isRecording ? (
+              <WaveformBars
+                level={meteringLevel}
+                color={iconColor}
+                barWidth={size === "xlarge" ? 5 : size === "large" ? 4 : 3}
+                maxHeight={
+                  size === "xlarge"
+                    ? 28
+                    : size === "large"
+                      ? 24
+                      : size === "medium"
+                        ? 18
+                        : 14
+                }
+                gap={size === "xlarge" ? 4 : size === "large" ? 3 : 2}
+              />
+            ) : (
+              <Ionicons
+                name={
+                  isTranscribing || isCorrecting
+                    ? "hourglass-outline"
+                    : "mic-outline"
+                }
+                size={iconSize}
+                color={iconColor}
+              />
+            )}
+          </Pressable>
+        )}
       </Animated.View>
 
       {/* Error indicator */}
@@ -554,10 +739,50 @@ const styles = StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "center",
+    // Ensure button doesn't get squeezed in flex layouts
+    flexShrink: 0,
   },
   button: {
     alignItems: "center",
     justifyContent: "center",
+  },
+  glassButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  buttonPressable: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    height: "100%",
+  },
+  buttonFallback: {
+    borderWidth: 1,
+    borderColor: "rgba(0, 0, 0, 0.1)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   waveformContainer: {
     flexDirection: "row",
@@ -596,25 +821,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 8,
     borderTopColor: "transparent",
     borderBottomColor: "transparent",
-  },
-  loadingBadge: {
-    position: "absolute",
-    bottom: "100%",
-    marginBottom: spacingPatterns.xs,
-    paddingHorizontal: spacingPatterns.sm,
-    paddingVertical: spacingPatterns.xs,
-    borderRadius: borderRadius.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
   },
   errorBadge: {
     position: "absolute",

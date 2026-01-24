@@ -24,9 +24,14 @@ import {
 } from "react-native";
 import { Text as RNText } from "react-native";
 import QuillEditor from "react-native-cn-quill";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showKeyboard } from "../../modules/keyboard-module/src";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import {
+  VoiceRecordButton,
+  type VoiceRecordButtonResult,
+} from "./VoiceRecordButton";
 
 // Check if glass effect is available (iOS 26+)
 const glassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
@@ -56,6 +61,10 @@ interface QuillRichEditorProps {
   editorPadding?: number;
   autoFocus?: boolean;
   hideToolbar?: boolean;
+  /** Callback when voice transcription completes with final text and audio file */
+  onTranscriptionComplete?: (result: VoiceRecordButtonResult) => void;
+  /** Callback when no voice model is downloaded - should open model manager */
+  onNoModelAvailable?: () => void;
 }
 
 export const QuillRichEditor = forwardRef<
@@ -71,12 +80,15 @@ export const QuillRichEditor = forwardRef<
     editorPadding = spacingPatterns.screen,
     autoFocus = false,
     hideToolbar = false,
+    onTranscriptionComplete,
+    onNoModelAvailable,
   },
   ref,
 ) {
   const seasonalTheme = useSeasonalTheme();
   const editorRef = useRef<QuillEditor>(null);
   const { width: screenWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   // Responsive sizing
   const isSmallScreen = screenWidth < 375;
@@ -99,6 +111,11 @@ export const QuillRichEditor = forwardRef<
     header: 0,
     list: null as string | null,
   });
+
+  // Track voice recording state and transcript for overlay
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [transcriptText, setTranscriptText] = useState("");
+  const transcriptSlideAnim = useRef(new Animated.Value(0)).current;
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -232,6 +249,20 @@ export const QuillRichEditor = forwardRef<
     };
   }, [toolbarAnimation, onFocus, onBlur]);
 
+  // Animate transcript overlay when recording starts/stops
+  useEffect(() => {
+    Animated.timing(transcriptSlideAnim, {
+      toValue: isVoiceRecording ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      // Clear transcript text after slide-out animation completes
+      if (!isVoiceRecording) {
+        setTranscriptText("");
+      }
+    });
+  }, [isVoiceRecording, transcriptSlideAnim]);
+
   // Format handlers
   const toggleBold = useCallback(
     () => editorRef.current?.format("bold", !formatState.bold),
@@ -353,7 +384,7 @@ export const QuillRichEditor = forwardRef<
       line-height: 1.5;
       color: ${seasonalTheme.textPrimary};
       padding: ${editorPadding}px;
-      padding-bottom: ${editorPadding}px;
+      padding-bottom: 120px;
       background-color: ${seasonalTheme.gradient.middle};
       min-height: 100%;
     }
@@ -810,15 +841,13 @@ export const QuillRichEditor = forwardRef<
 
   return (
     <View style={styles.container}>
-      {/* Editor */}
+      {/* Editor - margin adjusts for keyboard, toolbar floats on top */}
       <View
         style={[
           styles.editorContainer,
           {
-            // Add padding when keyboard is visible so content isn't behind keyboard
-            paddingBottom: isKeyboardVisible
-              ? keyboardHeight + 80
-              : editorPadding,
+            // Use margin (not padding) to avoid solid background gap
+            marginBottom: isKeyboardVisible ? keyboardHeight : 0,
           },
         ]}
       >
@@ -841,6 +870,7 @@ export const QuillRichEditor = forwardRef<
           }}
           webview={{
             dataDetectorTypes: Platform.OS === "ios" ? "none" : ["none"],
+            scrollEnabled: true,
           }}
           onSelectionChange={(data) => {
             if (data.range) {
@@ -1269,7 +1299,7 @@ export const QuillRichEditor = forwardRef<
             styles.floatingToolbar,
             {
               // Position above keyboard on both platforms
-              bottom: keyboardHeight + (Platform.OS === "android" ? 20 : 4),
+              bottom: keyboardHeight + (Platform.OS === "android" ? 24 : 4),
               opacity: toolbarAnimation,
               transform: [
                 {
@@ -1282,41 +1312,209 @@ export const QuillRichEditor = forwardRef<
             },
           ]}
         >
-          {/* Use GlassView only when glass effect is available, otherwise use View with background */}
-          {glassAvailable ? (
-            <GlassView
-              glassEffectStyle="regular"
-              tintColor={seasonalTheme.cardBg}
-              style={styles.toolbarContainer}
-            >
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.toolbarScrollView}
-                contentContainerStyle={styles.toolbarContent}
+          <View style={styles.toolbarRow}>
+            {/* Toolbar container with sliding transcript overlay */}
+            <View style={styles.toolbarWrapper}>
+              {/* Use GlassView only when glass effect is available, otherwise use View with background */}
+              {glassAvailable ? (
+                <GlassView
+                  glassEffectStyle="regular"
+                  tintColor={seasonalTheme.cardBg}
+                  style={styles.toolbarContainer}
+                >
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.toolbarScrollView}
+                    contentContainerStyle={styles.toolbarContent}
+                  >
+                    {renderToolbarButtons()}
+                  </ScrollView>
+                </GlassView>
+              ) : (
+                <View
+                  style={[
+                    styles.toolbarContainer,
+                    styles.toolbarFallback,
+                    { backgroundColor: seasonalTheme.glassFallbackBg },
+                  ]}
+                >
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.toolbarScrollView}
+                    contentContainerStyle={styles.toolbarContent}
+                  >
+                    {renderToolbarButtons()}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Sliding transcript overlay - slides in from right when recording */}
+              <Animated.View
+                style={[
+                  styles.transcriptOverlay,
+                  glassAvailable ? {} : styles.transcriptOverlayFallback,
+                  {
+                    backgroundColor: glassAvailable
+                      ? undefined
+                      : seasonalTheme.glassFallbackBg,
+                    transform: [
+                      {
+                        translateX: transcriptSlideAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [screenWidth, 0],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+                pointerEvents={isVoiceRecording ? "auto" : "none"}
               >
-                {renderToolbarButtons()}
-              </ScrollView>
-            </GlassView>
-          ) : (
-            <View
-              style={[
-                styles.toolbarContainer,
-                styles.toolbarFallback,
-                { backgroundColor: seasonalTheme.glassFallbackBg },
-              ]}
-            >
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.toolbarScrollView}
-                contentContainerStyle={styles.toolbarContent}
+                {glassAvailable ? (
+                  <GlassView
+                    glassEffectStyle="regular"
+                    tintColor={
+                      seasonalTheme.isDark
+                        ? "rgba(40, 40, 40, 0.9)"
+                        : "rgba(240, 240, 240, 0.9)"
+                    }
+                    style={styles.transcriptGlass}
+                  >
+                    <RNText
+                      style={[
+                        styles.transcriptText,
+                        { color: seasonalTheme.textPrimary },
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="head"
+                    >
+                      {transcriptText || "Listening..."}
+                    </RNText>
+                  </GlassView>
+                ) : (
+                  <View style={styles.transcriptContent}>
+                    <RNText
+                      style={[
+                        styles.transcriptText,
+                        { color: seasonalTheme.textPrimary },
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="head"
+                    >
+                      {transcriptText || "Listening..."}
+                    </RNText>
+                  </View>
+                )}
+              </Animated.View>
+            </View>
+
+            {/* Voice Record Button - positioned to the right of toolbar */}
+            {onTranscriptionComplete && onNoModelAvailable && (
+              <View style={styles.voiceButtonContainer}>
+                <VoiceRecordButton
+                  onTranscriptionComplete={(result) => {
+                    setIsVoiceRecording(false);
+                    onTranscriptionComplete(result);
+                  }}
+                  onNoModelAvailable={onNoModelAvailable}
+                  onRecordingStart={() => setIsVoiceRecording(true)}
+                  onRecordingStop={() => setIsVoiceRecording(false)}
+                  onTranscriptChange={setTranscriptText}
+                  onCancel={() => setIsVoiceRecording(false)}
+                  size="large"
+                  hideTranscriptBubble
+                />
+              </View>
+            )}
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Floating Voice Button - shows when keyboard is collapsed */}
+      {!isKeyboardVisible && onTranscriptionComplete && onNoModelAvailable && (
+        <View
+          style={[
+            styles.floatingVoiceRow,
+            {
+              bottom: Math.max(insets.bottom, spacingPatterns.md),
+            },
+          ]}
+        >
+          {/* Transcript area - same styling as toolbar version */}
+          {/* Only render when recording to avoid shadow showing on Android */}
+          {isVoiceRecording && (
+            <View style={styles.floatingTranscriptWrapper}>
+              <Animated.View
+                style={[
+                  styles.floatingTranscriptOverlay,
+                  glassAvailable ? {} : styles.transcriptOverlayFallback,
+                  {
+                    backgroundColor: glassAvailable
+                      ? undefined
+                      : seasonalTheme.glassFallbackBg,
+                    transform: [
+                      {
+                        translateX: transcriptSlideAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [screenWidth, 0],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+                pointerEvents={isVoiceRecording ? "auto" : "none"}
               >
-                {renderToolbarButtons()}
-              </ScrollView>
+                {glassAvailable ? (
+                  <GlassView
+                    glassEffectStyle="regular"
+                    tintColor={
+                      seasonalTheme.isDark
+                        ? "rgba(40, 40, 40, 0.9)"
+                        : "rgba(240, 240, 240, 0.9)"
+                    }
+                    style={styles.floatingTranscriptGlass}
+                  >
+                    <RNText
+                      style={[
+                        styles.transcriptText,
+                        { color: seasonalTheme.textPrimary },
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="head"
+                    >
+                      {transcriptText || "Listening..."}
+                    </RNText>
+                  </GlassView>
+                ) : (
+                  <View style={styles.floatingTranscriptContent}>
+                    <RNText
+                      style={[
+                        styles.transcriptText,
+                        { color: seasonalTheme.textPrimary },
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="head"
+                    >
+                      {transcriptText || "Listening..."}
+                    </RNText>
+                  </View>
+                )}
+              </Animated.View>
             </View>
           )}
-        </Animated.View>
+
+          <VoiceRecordButton
+            onTranscriptionComplete={onTranscriptionComplete}
+            onNoModelAvailable={onNoModelAvailable}
+            onRecordingStart={() => setIsVoiceRecording(true)}
+            onRecordingStop={() => setIsVoiceRecording(false)}
+            onTranscriptChange={setTranscriptText}
+            onCancel={() => setIsVoiceRecording(false)}
+            size="large"
+            hideTranscriptBubble
+          />
+        </View>
       )}
     </View>
   );
@@ -1338,11 +1536,27 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 1000,
   },
-  toolbarContainer: {
-    borderRadius: 100,
-    marginHorizontal: spacingPatterns.md + 4,
+  toolbarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: spacingPatterns.xs,
     marginBottom: spacingPatterns.xs,
+  },
+  toolbarContainer: {
+    flex: 1,
+    borderRadius: 100,
     overflow: "hidden",
+  },
+  voiceButtonContainer: {
+    marginLeft: spacingPatterns.xs,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toolbarWrapper: {
+    flex: 1,
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 100,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -1354,6 +1568,77 @@ const styles = StyleSheet.create({
         elevation: 8,
       },
     }),
+  },
+  transcriptOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 100,
+    overflow: "hidden",
+  },
+  transcriptOverlayFallback: {},
+  transcriptGlass: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: spacingPatterns.md,
+  },
+  transcriptContent: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: spacingPatterns.md,
+  },
+  transcriptText: {
+    fontSize: 14,
+    textAlign: "right",
+    fontWeight: "400",
+  },
+  floatingVoiceRow: {
+    position: "absolute",
+    left: 40,
+    right: spacingPatterns.lg,
+    zIndex: 100,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  floatingTranscriptWrapper: {
+    flex: 1,
+    height: 44,
+    marginRight: spacingPatterns.sm,
+    borderRadius: 22,
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  floatingTranscriptOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 22,
+    overflow: "hidden",
+  },
+  floatingTranscriptGlass: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: spacingPatterns.md,
+  },
+  floatingTranscriptContent: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: spacingPatterns.md,
   },
   // Fallback styling when glass effect isn't available (iOS < 26 or Android)
   toolbarFallback: {
@@ -1370,13 +1655,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexGrow: 1,
-    paddingHorizontal: spacingPatterns.sm,
+    paddingHorizontal: spacingPatterns.xs,
     paddingVertical: spacingPatterns.xs,
     minHeight: 44,
-    gap: spacingPatterns.xxs,
+    gap: 4,
   },
   toolbarButton: {
-    paddingHorizontal: spacingPatterns.xxs + 2,
+    paddingHorizontal: spacingPatterns.xxs,
     paddingVertical: spacingPatterns.xs,
     minWidth: 26,
     minHeight: 32,

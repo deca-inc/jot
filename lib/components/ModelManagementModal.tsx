@@ -25,6 +25,11 @@ import {
 } from "../ai/modelManager";
 import { ALL_STT_MODELS } from "../ai/sttConfig";
 import { useUnifiedModel } from "../ai/UnifiedModelProvider";
+import {
+  usePlatformModels,
+  type PlatformLlmConfig,
+  type PlatformSttConfig,
+} from "../ai/usePlatformModels";
 import { type Agent, type ThinkMode, useAgents } from "../db/agents";
 import { useModelSettings } from "../db/modelSettings";
 import { spacingPatterns, borderRadius } from "../theme";
@@ -69,6 +74,13 @@ export function ModelManagementModal({
   const { reloadModel } = useUnifiedModel();
   const agentsRepo = useAgents();
   const { showToast } = useToast();
+  const {
+    platformLLMs,
+    platformSTTs,
+    hasPlatformLLM,
+    hasPlatformSTT,
+    isLoading: _platformModelsLoading,
+  } = usePlatformModels();
 
   const [activeTab, setActiveTab] = useState<ModelManagementTab>(initialTab);
 
@@ -83,11 +95,19 @@ export function ModelManagementModal({
     new Map(),
   );
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
-  const [deviceTier, setDeviceTier] = useState<string>("mid");
+  const [_deviceTier, setDeviceTier] = useState<string>("mid");
 
   // STT state
   const [selectedSTTId, setSelectedSTTId] = useState<string | null>(null);
   const [downloadedSTTs, setDownloadedSTTs] = useState<string[]>([]);
+
+  // Platform model state
+  const [selectedPlatformLLMId, setSelectedPlatformLLMId] = useState<
+    string | null
+  >(null);
+  const [selectedPlatformSTTId, setSelectedPlatformSTTId] = useState<
+    string | null
+  >(null);
 
   // Agents state
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -245,6 +265,42 @@ export function ModelManagementModal({
     [reloadModel, showToast],
   );
 
+  // Platform LLM handlers
+  const handleSelectPlatformLLM = useCallback(
+    async (model: PlatformLlmConfig) => {
+      try {
+        // For platform models, we just store the selection
+        // The actual model loading happens through native APIs
+        await modelSettings.setSelectedModelId(model.modelId);
+        setSelectedPlatformLLMId(model.modelId);
+        setSelectedLLMId(null); // Deselect any downloadable model
+        showToast(`${model.displayName} is now active`, "success");
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        showToast(
+          `Failed to select: ${err?.message || "Unknown error"}`,
+          "error",
+        );
+      }
+    },
+    [modelSettings, showToast],
+  );
+
+  // Platform STT handlers
+  const handleSelectPlatformSTT = useCallback(
+    async (model: PlatformSttConfig) => {
+      try {
+        await modelSettings.setSelectedSttModelId(model.modelId);
+        setSelectedPlatformSTTId(model.modelId);
+        setSelectedSTTId(null); // Deselect any downloadable model
+        showToast(`${model.displayName} selected`, "success");
+      } catch (_error) {
+        showToast("Failed to select voice model", "error");
+      }
+    },
+    [modelSettings, showToast],
+  );
+
   const handleRemoveLLM = useCallback(
     async (model: LlmModelConfig) => {
       // Check if any agents are using this model
@@ -254,7 +310,7 @@ export function ModelManagementModal({
         const agentNames = agentsUsingModel.map((a) => a.name).join(", ");
         Alert.alert(
           "Cannot Remove Model",
-          `This model is being used by the following agent(s): ${agentNames}.\n\nUpdate or delete these agents first.`,
+          `This model is being used by the following persona(s): ${agentNames}.\n\nUpdate or delete these personas first.`,
           [{ text: "OK", style: "default" }],
         );
         return;
@@ -409,7 +465,7 @@ export function ModelManagementModal({
         setAgents(updatedAgents);
       } catch (error: unknown) {
         const err = error as { message?: string };
-        showToast(err?.message || "Failed to save agent", "error");
+        showToast(err?.message || "Failed to save persona", "error");
       } finally {
         setSavingAgent(false);
       }
@@ -420,12 +476,12 @@ export function ModelManagementModal({
   const handleDeleteAgent = useCallback(
     (agent: Agent) => {
       if (agent.isDefault) {
-        showToast("Cannot delete the default agent", "error");
+        showToast("Cannot delete the default persona", "error");
         return;
       }
 
       Alert.alert(
-        "Delete Agent",
+        "Delete Persona",
         `Are you sure you want to delete "${agent.name}"?`,
         [
           { text: "Cancel", style: "cancel" },
@@ -440,7 +496,7 @@ export function ModelManagementModal({
                 setAgents(updatedAgents);
               } catch (error: unknown) {
                 const err = error as { message?: string };
-                showToast(err?.message || "Failed to delete agent", "error");
+                showToast(err?.message || "Failed to delete persona", "error");
               }
             },
           },
@@ -473,7 +529,7 @@ export function ModelManagementModal({
   const tabs: { key: ModelManagementTab; label: string; icon: string }[] = [
     { key: "llms", label: "LLMs", icon: "chatbubble-ellipses-outline" },
     { key: "voice", label: "Voice", icon: "mic-outline" },
-    { key: "agents", label: "Agents", icon: "person-circle-outline" },
+    { key: "agents", label: "Personas", icon: "person-circle-outline" },
   ];
 
   const dialogBackground = seasonalTheme.gradient.middle;
@@ -486,9 +542,10 @@ export function ModelManagementModal({
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
+        <View
           style={[styles.container, { backgroundColor: dialogBackground }]}
-          onPress={(e) => e.stopPropagation()}
+          // Using View instead of Pressable to not block scroll events
+          onStartShouldSetResponder={() => true}
         >
           {/* Header */}
           <View style={styles.header}>
@@ -558,7 +615,9 @@ export function ModelManagementModal({
           <ScrollView
             style={styles.content}
             contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+            scrollEnabled={true}
           >
             {loading ? (
               <View style={styles.loadingContainer}>
@@ -574,34 +633,155 @@ export function ModelManagementModal({
                 {/* LLMs Tab */}
                 {activeTab === "llms" && (
                   <View style={styles.tabContent}>
-                    <Text
-                      variant="caption"
-                      style={[
-                        styles.description,
-                        { color: seasonalTheme.textSecondary },
-                      ]}
-                    >
-                      Device: {deviceTier}-end. Download models to use them.
-                    </Text>
-                    <View style={styles.modelsList}>
-                      {sortedLLMs.map((model) => (
-                        <ModelCard
-                          key={model.modelId}
-                          model={model}
-                          isDownloaded={downloadedLLMs.includes(model.modelId)}
-                          isSelected={selectedLLMId === model.modelId}
-                          isDownloading={downloadingModels.has(model.modelId)}
-                          isLoading={loadingModelId === model.modelId}
-                          isNotRecommended={
-                            !compatibleModels.includes(model.modelId)
-                          }
-                          downloadProgress={downloadProgress.get(model.modelId)}
-                          onDownload={() => handleDownloadLLM(model)}
-                          onSelect={() => handleSelectLLM(model)}
-                          onRemove={() => handleRemoveLLM(model)}
+                    {/* Platform Models Section */}
+                    {hasPlatformLLM && (
+                      <View style={styles.platformSection}>
+                        <View style={styles.platformHeader}>
+                          <Ionicons
+                            name="hardware-chip-outline"
+                            size={14}
+                            color={theme.colors.accent}
+                          />
+                          <Text
+                            variant="caption"
+                            style={{
+                              color: theme.colors.accent,
+                              fontWeight: "600",
+                            }}
+                          >
+                            Built-in Models
+                          </Text>
+                        </View>
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: seasonalTheme.textSecondary,
+                            marginBottom: spacingPatterns.sm,
+                            fontSize: 11,
+                          }}
+                        >
+                          No download required. Provided by your device.
+                        </Text>
+                        {platformLLMs.map((model) => (
+                          <TouchableOpacity
+                            key={model.modelId}
+                            style={[
+                              styles.platformModelCard,
+                              {
+                                backgroundColor: seasonalTheme.cardBg,
+                                borderColor:
+                                  selectedPlatformLLMId === model.modelId
+                                    ? theme.colors.accent
+                                    : `${theme.colors.border}40`,
+                              },
+                            ]}
+                            onPress={() => handleSelectPlatformLLM(model)}
+                          >
+                            <View style={styles.platformModelContent}>
+                              <View style={styles.platformModelHeader}>
+                                <Text
+                                  variant="body"
+                                  style={{
+                                    color: seasonalTheme.textPrimary,
+                                    fontWeight: "600",
+                                  }}
+                                >
+                                  {model.displayName}
+                                </Text>
+                                <View
+                                  style={[
+                                    styles.builtInBadge,
+                                    {
+                                      backgroundColor: `${theme.colors.success}20`,
+                                    },
+                                  ]}
+                                >
+                                  <Text
+                                    variant="caption"
+                                    style={{
+                                      color: theme.colors.success,
+                                      fontSize: 10,
+                                      fontWeight: "600",
+                                    }}
+                                  >
+                                    BUILT-IN
+                                  </Text>
+                                </View>
+                              </View>
+                              <Text
+                                variant="caption"
+                                style={{ color: seasonalTheme.textSecondary }}
+                              >
+                                {model.description}
+                              </Text>
+                              {!model.supportsSystemPrompt && (
+                                <Text
+                                  variant="caption"
+                                  style={{
+                                    color: theme.colors.warning,
+                                    fontSize: 10,
+                                    marginTop: 4,
+                                  }}
+                                >
+                                  Note: Cannot be used with custom personas
+                                </Text>
+                              )}
+                            </View>
+                            {selectedPlatformLLMId === model.modelId && (
+                              <Ionicons
+                                name="checkmark-circle"
+                                size={20}
+                                color={theme.colors.accent}
+                              />
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Downloadable Models Section */}
+                    {hasPlatformLLM && (
+                      <View style={styles.downloadableSectionHeader}>
+                        <Ionicons
+                          name="cloud-download-outline"
+                          size={14}
+                          color={seasonalTheme.textSecondary}
                         />
-                      ))}
-                    </View>
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: seasonalTheme.textSecondary,
+                            fontWeight: "600",
+                          }}
+                        >
+                          Downloadable Models
+                        </Text>
+                      </View>
+                    )}
+
+                    {sortedLLMs.map((model) => (
+                      <ModelCard
+                        key={model.modelId}
+                        model={model}
+                        isDownloaded={downloadedLLMs.includes(model.modelId)}
+                        isSelected={
+                          selectedLLMId === model.modelId &&
+                          !selectedPlatformLLMId
+                        }
+                        isDownloading={downloadingModels.has(model.modelId)}
+                        isLoading={loadingModelId === model.modelId}
+                        isNotRecommended={
+                          !compatibleModels.includes(model.modelId)
+                        }
+                        downloadProgress={downloadProgress.get(model.modelId)}
+                        onDownload={() => handleDownloadLLM(model)}
+                        onSelect={() => {
+                          setSelectedPlatformLLMId(null);
+                          handleSelectLLM(model);
+                        }}
+                        onRemove={() => handleRemoveLLM(model)}
+                      />
+                    ))}
                   </View>
                 )}
 
@@ -617,7 +797,135 @@ export function ModelManagementModal({
                     >
                       Voice models for speech-to-text transcription.
                     </Text>
-                    {downloadedSTTs.length === 0 && (
+
+                    {/* Platform STT Models Section */}
+                    {hasPlatformSTT && (
+                      <View style={styles.platformSection}>
+                        <View style={styles.platformHeader}>
+                          <Ionicons
+                            name="hardware-chip-outline"
+                            size={14}
+                            color={theme.colors.accent}
+                          />
+                          <Text
+                            variant="caption"
+                            style={{
+                              color: theme.colors.accent,
+                              fontWeight: "600",
+                            }}
+                          >
+                            Built-in Speech Recognition
+                          </Text>
+                        </View>
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: seasonalTheme.textSecondary,
+                            marginBottom: spacingPatterns.sm,
+                            fontSize: 11,
+                          }}
+                        >
+                          No download required. Provided by your device.
+                        </Text>
+                        {platformSTTs.map((model) => (
+                          <TouchableOpacity
+                            key={model.modelId}
+                            style={[
+                              styles.platformModelCard,
+                              {
+                                backgroundColor: seasonalTheme.cardBg,
+                                borderColor:
+                                  selectedPlatformSTTId === model.modelId
+                                    ? theme.colors.accent
+                                    : `${theme.colors.border}40`,
+                              },
+                            ]}
+                            onPress={() => handleSelectPlatformSTT(model)}
+                          >
+                            <View style={styles.platformModelContent}>
+                              <View style={styles.platformModelHeader}>
+                                <Text
+                                  variant="body"
+                                  style={{
+                                    color: seasonalTheme.textPrimary,
+                                    fontWeight: "600",
+                                  }}
+                                >
+                                  {model.displayName}
+                                </Text>
+                                <View
+                                  style={[
+                                    styles.builtInBadge,
+                                    {
+                                      backgroundColor: `${theme.colors.success}20`,
+                                    },
+                                  ]}
+                                >
+                                  <Text
+                                    variant="caption"
+                                    style={{
+                                      color: theme.colors.success,
+                                      fontSize: 10,
+                                      fontWeight: "600",
+                                    }}
+                                  >
+                                    BUILT-IN
+                                  </Text>
+                                </View>
+                              </View>
+                              <Text
+                                variant="caption"
+                                style={{ color: seasonalTheme.textSecondary }}
+                              >
+                                {model.description}
+                              </Text>
+                              {Platform.OS === "android" && (
+                                <Text
+                                  variant="caption"
+                                  style={{
+                                    color: theme.colors.warning,
+                                    fontSize: 10,
+                                    marginTop: 4,
+                                  }}
+                                >
+                                  Note: Transcription only. Audio files are not
+                                  saved with this option.
+                                </Text>
+                              )}
+                            </View>
+                            {selectedPlatformSTTId === model.modelId && (
+                              <Ionicons
+                                name="checkmark-circle"
+                                size={20}
+                                color={theme.colors.accent}
+                              />
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Downloadable Models Section */}
+                    {hasPlatformSTT && (
+                      <View style={styles.downloadableSectionHeader}>
+                        <Ionicons
+                          name="cloud-download-outline"
+                          size={14}
+                          color={seasonalTheme.textSecondary}
+                        />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: seasonalTheme.textSecondary,
+                            fontWeight: "600",
+                          }}
+                        >
+                          Downloadable Models
+                        </Text>
+                      </View>
+                    )}
+
+                    {downloadedSTTs.length === 0 && !hasPlatformSTT && (
                       <View
                         style={[
                           styles.noModelsBanner,
@@ -638,22 +946,26 @@ export function ModelManagementModal({
                         </Text>
                       </View>
                     )}
-                    <View style={styles.modelsList}>
-                      {sortedSTTs.map((model) => (
-                        <ModelCard
-                          key={model.modelId}
-                          model={model}
-                          isDownloaded={downloadedSTTs.includes(model.modelId)}
-                          isSelected={selectedSTTId === model.modelId}
-                          isDownloading={downloadingModels.has(model.modelId)}
-                          isLoading={false}
-                          downloadProgress={downloadProgress.get(model.modelId)}
-                          onDownload={() => handleDownloadSTT(model)}
-                          onSelect={() => handleSelectSTT(model)}
-                          onRemove={() => handleRemoveSTT(model)}
-                        />
-                      ))}
-                    </View>
+                    {sortedSTTs.map((model) => (
+                      <ModelCard
+                        key={model.modelId}
+                        model={model}
+                        isDownloaded={downloadedSTTs.includes(model.modelId)}
+                        isSelected={
+                          selectedSTTId === model.modelId &&
+                          !selectedPlatformSTTId
+                        }
+                        isDownloading={downloadingModels.has(model.modelId)}
+                        isLoading={false}
+                        downloadProgress={downloadProgress.get(model.modelId)}
+                        onDownload={() => handleDownloadSTT(model)}
+                        onSelect={() => {
+                          setSelectedPlatformSTTId(null);
+                          handleSelectSTT(model);
+                        }}
+                        onRemove={() => handleRemoveSTT(model)}
+                      />
+                    ))}
                   </View>
                 )}
 
@@ -685,8 +997,8 @@ export function ModelManagementModal({
                               { color: seasonalTheme.textSecondary, flex: 1 },
                             ]}
                           >
-                            Create custom AI personas with different system
-                            prompts.
+                            Custom AI personalities with unique instructions and
+                            model preferences.
                           </Text>
                           <TouchableOpacity
                             style={[
@@ -700,7 +1012,7 @@ export function ModelManagementModal({
                               variant="caption"
                               style={{ color: "white", fontWeight: "600" }}
                             >
-                              New Agent
+                              New Persona
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -856,7 +1168,7 @@ export function ModelManagementModal({
               </>
             )}
           </ScrollView>
-        </Pressable>
+        </View>
       </Pressable>
     </Modal>
   );
@@ -924,18 +1236,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    flexGrow: 1,
     paddingBottom: spacingPatterns.md,
   },
   tabContent: {
     padding: spacingPatterns.md,
+    gap: spacingPatterns.xs,
   },
   description: {
     marginBottom: spacingPatterns.sm,
     fontSize: 12,
-  },
-  modelsList: {
-    gap: spacingPatterns.xs,
   },
   loadingContainer: {
     padding: spacingPatterns.xl,
@@ -1011,6 +1320,46 @@ const styles = StyleSheet.create({
     gap: spacingPatterns.xs,
   },
   thinkModeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  platformSection: {
+    gap: spacingPatterns.xs,
+  },
+  platformHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.xs,
+  },
+  downloadableSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.xs,
+    marginTop: spacingPatterns.sm,
+    marginBottom: spacingPatterns.xs,
+    paddingTop: spacingPatterns.sm,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(128, 128, 128, 0.2)",
+  },
+  platformModelCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderRadius: borderRadius.sm,
+    padding: spacingPatterns.sm,
+  },
+  platformModelContent: {
+    flex: 1,
+    gap: 2,
+  },
+  platformModelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.xs,
+  },
+  builtInBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: borderRadius.sm,

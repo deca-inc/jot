@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["PlatformAIModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.platformai.PlatformAIModule"]
+  }
+}

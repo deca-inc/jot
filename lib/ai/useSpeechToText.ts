@@ -1,8 +1,8 @@
 /**
  * useSpeechToText - Hook for on-device speech-to-text transcription
  *
- * Uses expo-audio for audio recording and react-native-executorch SpeechToTextModule
- * for on-device Whisper model transcription.
+ * Uses expo-audio for audio recording on iOS and native PCM recording on Android.
+ * Uses react-native-executorch SpeechToTextModule for on-device Whisper model transcription.
  */
 
 import {
@@ -16,10 +16,19 @@ import {
 } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import { useCallback, useRef, useState } from "react";
+import { Platform } from "react-native";
 import {
   SpeechToTextModule,
   type SpeechToTextModelConfig as RNESpeechToTextModelConfig,
 } from "react-native-executorch";
+import {
+  isPCMRecordingAvailable,
+  isPCMRecording,
+  startPCMRecording,
+  stopPCMRecording,
+  cancelPCMRecording,
+  getPCMMeteringLevel,
+} from "../../modules/platform-ai/src";
 import { type SpeechToTextModelConfig } from "./modelConfig";
 
 /**
@@ -325,18 +334,31 @@ export function useSpeechToText(
   const [committedText, setCommittedText] = useState("");
   const [pendingText, setPendingText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [androidMeteringLevel, setAndroidMeteringLevel] = useState(0);
 
-  // Audio recorder from expo-audio
+  // Audio recorder from expo-audio (used on iOS)
   const audioRecorder = useAudioRecorder(WHISPER_RECORDING_OPTIONS);
 
-  // Get real-time recorder state for metering (polls every 50ms)
+  // Get real-time recorder state for metering on iOS (polls every 50ms)
   const recorderState = useAudioRecorderState(audioRecorder, 50);
 
+  // Ref for Android metering interval
+  const androidMeteringIntervalRef = useRef<ReturnType<
+    typeof setInterval
+  > | null>(null);
+
   // Convert metering dB to normalized 0-1 level
-  // Metering is in dB, typically -160 (silence) to 0 (max)
-  // We'll map -60 to 0 dB to 0-1 range for better visualization
+  // On iOS: use expo-audio metering (in dB, -160 to 0)
+  // On Android: use native PCM metering (already 0-1)
   const meteringLevel = (() => {
-    if (!isRecording || recorderState.metering === undefined) return 0;
+    if (!isRecording) return 0;
+
+    if (Platform.OS === "android") {
+      return androidMeteringLevel;
+    }
+
+    // iOS: convert dB to linear
+    if (recorderState.metering === undefined) return 0;
     const db = recorderState.metering;
     // Clamp between -60 and 0, then normalize to 0-1
     const clamped = Math.max(-60, Math.min(0, db));
@@ -351,6 +373,7 @@ export function useSpeechToText(
   const accumulatedTextRef = useRef("");
   const isRecordingRef = useRef(false); // Sync ref for callbacks
   const chunkUrisRef = useRef<string[]>([]); // Track chunk files for concatenation
+  const chunkCounterRef = useRef(0); // Counter for unique chunk filenames on Android
 
   // Callbacks refs to avoid stale closures
   const onTranscriptionCompleteRef = useRef(onTranscriptionComplete);
@@ -400,7 +423,9 @@ export function useSpeechToText(
    */
   const transcribeFile = useCallback(async (uri: string): Promise<string> => {
     const sttModule = sttModuleRef.current;
-    if (!sttModule) return "";
+    if (!sttModule) {
+      return "";
+    }
 
     try {
       const waveform = await readWavFile(uri);
@@ -419,22 +444,19 @@ export function useSpeechToText(
    * Keeps chunk files for final concatenation
    */
   const processChunk = useCallback(async () => {
-    if (isProcessingChunkRef.current || !isRecordingRef.current) return;
+    if (isProcessingChunkRef.current || !isRecordingRef.current) {
+      return;
+    }
     isProcessingChunkRef.current = true;
 
     try {
-      // Stop current recording
-      await audioRecorder.stop();
-      const uri = audioRecorder.uri;
+      if (Platform.OS === "android" && isPCMRecordingAvailable()) {
+        // Android: Use native PCM recording
+        const result = await stopPCMRecording();
+        // Convert path back to URI format for FileSystem operations
+        const chunkUri = `file://${result.path}`;
 
-      if (uri) {
-        // IMPORTANT: Copy the chunk to a unique location immediately
-        // expo-audio may reuse the same temp file when recording restarts,
-        // which would overwrite this chunk's data
-        const chunkUri = `${FileSystem.cacheDirectory}chunk_${Date.now()}_${chunkUrisRef.current.length}.wav`;
-        await FileSystem.copyAsync({ from: uri, to: chunkUri });
-
-        // Keep the copied chunk file for later concatenation
+        // Keep the chunk file for later concatenation
         chunkUrisRef.current.push(chunkUri);
 
         // Transcribe this chunk
@@ -448,13 +470,53 @@ export function useSpeechToText(
             : chunkText;
           setCommittedText(accumulatedTextRef.current);
         }
-      }
 
-      // Restart recording if still active
-      if (isRecordingRef.current) {
-        await audioRecorder.prepareToRecordAsync();
-        audioRecorder.record();
-        setPendingText("Listening...");
+        // Restart recording if still active
+        if (isRecordingRef.current) {
+          chunkCounterRef.current++;
+          // Strip file:// prefix for native code
+          const cacheDir = (FileSystem.cacheDirectory || "").replace(
+            /^file:\/\//,
+            "",
+          );
+          const newChunkPath = `${cacheDir}chunk_${Date.now()}_${chunkCounterRef.current}.wav`;
+          await startPCMRecording(newChunkPath);
+          setPendingText("Listening...");
+        }
+      } else {
+        // iOS: Use expo-audio
+        await audioRecorder.stop();
+        const uri = audioRecorder.uri;
+
+        if (uri) {
+          // IMPORTANT: Copy the chunk to a unique location immediately
+          // expo-audio may reuse the same temp file when recording restarts,
+          // which would overwrite this chunk's data
+          const chunkUri = `${FileSystem.cacheDirectory}chunk_${Date.now()}_${chunkUrisRef.current.length}.wav`;
+          await FileSystem.copyAsync({ from: uri, to: chunkUri });
+
+          // Keep the copied chunk file for later concatenation
+          chunkUrisRef.current.push(chunkUri);
+
+          // Transcribe this chunk
+          const rawText = await transcribeFile(chunkUri);
+          const chunkText = cleanTranscription(rawText);
+
+          // Append to accumulated text (preview only, don't write to canvas yet)
+          if (chunkText) {
+            accumulatedTextRef.current = accumulatedTextRef.current
+              ? accumulatedTextRef.current + " " + chunkText
+              : chunkText;
+            setCommittedText(accumulatedTextRef.current);
+          }
+        }
+
+        // Restart recording if still active
+        if (isRecordingRef.current) {
+          await audioRecorder.prepareToRecordAsync();
+          audioRecorder.record();
+          setPendingText("Listening...");
+        }
       }
     } catch (err) {
       console.error("[useSpeechToText] Chunk processing error:", err);
@@ -485,6 +547,7 @@ export function useSpeechToText(
       setPendingText("Listening...");
       accumulatedTextRef.current = "";
       chunkUrisRef.current = []; // Reset chunk tracking
+      chunkCounterRef.current = 0; // Reset chunk counter
 
       // Request permissions
       const { granted } = await requestRecordingPermissionsAsync();
@@ -498,9 +561,31 @@ export function useSpeechToText(
         playsInSilentMode: true,
       });
 
-      // Prepare and start recording
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
+      if (Platform.OS === "android" && isPCMRecordingAvailable()) {
+        // Android: Use native PCM recording for proper WAV files
+        // FileSystem.cacheDirectory returns a URI (file://...), but native code needs a path
+        const cacheDir = (FileSystem.cacheDirectory || "").replace(
+          /^file:\/\//,
+          "",
+        );
+        const chunkPath = `${cacheDir}chunk_${Date.now()}_0.wav`;
+        await startPCMRecording(chunkPath);
+
+        // Start metering polling for Android (every 50ms)
+        androidMeteringIntervalRef.current = setInterval(async () => {
+          try {
+            const level = await getPCMMeteringLevel();
+            setAndroidMeteringLevel(level);
+          } catch {
+            // Ignore metering errors
+          }
+        }, 50);
+      } else {
+        // iOS: Use expo-audio (produces proper WAV)
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
+      }
+
       setIsRecording(true);
       isRecordingRef.current = true;
 
@@ -534,16 +619,21 @@ export function useSpeechToText(
       duration: 0,
     };
 
-    // Stop the chunk interval
+    // Stop the chunk interval first (prevents new chunks from starting)
     if (chunkIntervalRef.current) {
       clearInterval(chunkIntervalRef.current);
       chunkIntervalRef.current = null;
     }
 
-    // Mark as not recording
-    isRecordingRef.current = false;
+    // Stop Android metering polling
+    if (androidMeteringIntervalRef.current) {
+      clearInterval(androidMeteringIntervalRef.current);
+      androidMeteringIntervalRef.current = null;
+      setAndroidMeteringLevel(0);
+    }
 
     if (!isRecording) {
+      isRecordingRef.current = false;
       const result: TranscriptionResult = {
         text: accumulatedTextRef.current || committedText,
         audioUri: null,
@@ -554,6 +644,7 @@ export function useSpeechToText(
 
     const sttModule = sttModuleRef.current;
     if (!sttModule) {
+      isRecordingRef.current = false;
       setIsRecording(false);
       setPendingText("");
       return { text: accumulatedTextRef.current, audioUri: null, duration: 0 };
@@ -561,25 +652,30 @@ export function useSpeechToText(
 
     try {
       // Wait for any in-progress chunk processing to complete
+      // IMPORTANT: Don't set isRecordingRef.current = false until AFTER this,
+      // otherwise the chunk processing won't restart recording
       while (isProcessingChunkRef.current) {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
 
-      // Stop recording and get the file URI
-      await audioRecorder.stop();
-      const uri = audioRecorder.uri;
+      // NOW mark as not recording (after chunk processing is done)
+      isRecordingRef.current = false;
       setIsRecording(false);
       setPendingText("Finishing...");
       setIsTranscribing(true);
 
-      // Add final chunk to the list if it exists
-      if (uri) {
-        try {
-          const fileInfo = await FileSystem.getInfoAsync(uri);
-          if (fileInfo.exists) {
-            // Copy final chunk to a unique location (same reason as in processChunk)
-            const finalChunkUri = `${FileSystem.cacheDirectory}chunk_${Date.now()}_final.wav`;
-            await FileSystem.copyAsync({ from: uri, to: finalChunkUri });
+      // Stop recording and get the final chunk
+      if (Platform.OS === "android" && isPCMRecordingAvailable()) {
+        // Android: Stop native PCM recording
+        // Check if recording is actually active (might have been stopped by chunk processing)
+        const isActive = await isPCMRecording();
+        if (isActive) {
+          try {
+            const result = await stopPCMRecording();
+            // Convert path back to URI format for FileSystem operations
+            const finalChunkUri = `file://${result.path}`;
+
+            // Add final chunk to the list
             chunkUrisRef.current.push(finalChunkUri);
 
             // Transcribe final chunk
@@ -595,9 +691,52 @@ export function useSpeechToText(
                 ? accumulatedTextRef.current + " " + finalChunkText
                 : finalChunkText;
             }
+          } catch (err) {
+            console.error(
+              "[useSpeechToText] Error processing final chunk (Android):",
+              err,
+            );
           }
-        } catch (err) {
-          console.error("[useSpeechToText] Error processing final chunk:", err);
+        } else {
+          console.log(
+            "[useSpeechToText] No active recording for final chunk (already processed by chunk interval)",
+          );
+        }
+      } else {
+        // iOS: Stop expo-audio recording
+        await audioRecorder.stop();
+        const uri = audioRecorder.uri;
+
+        // Add final chunk to the list if it exists
+        if (uri) {
+          try {
+            const fileInfo = await FileSystem.getInfoAsync(uri);
+            if (fileInfo.exists) {
+              // Copy final chunk to a unique location (same reason as in processChunk)
+              const finalChunkUri = `${FileSystem.cacheDirectory}chunk_${Date.now()}_final.wav`;
+              await FileSystem.copyAsync({ from: uri, to: finalChunkUri });
+              chunkUrisRef.current.push(finalChunkUri);
+
+              // Transcribe final chunk
+              console.log(
+                "[useSpeechToText] Transcribing final chunk:",
+                finalChunkUri,
+              );
+              const rawText = await transcribeFile(finalChunkUri);
+              const finalChunkText = cleanTranscription(rawText);
+
+              if (finalChunkText) {
+                accumulatedTextRef.current = accumulatedTextRef.current
+                  ? accumulatedTextRef.current + " " + finalChunkText
+                  : finalChunkText;
+              }
+            }
+          } catch (err) {
+            console.error(
+              "[useSpeechToText] Error processing final chunk (iOS):",
+              err,
+            );
+          }
         }
       }
 
@@ -682,6 +821,13 @@ export function useSpeechToText(
       chunkIntervalRef.current = null;
     }
 
+    // Stop Android metering polling
+    if (androidMeteringIntervalRef.current) {
+      clearInterval(androidMeteringIntervalRef.current);
+      androidMeteringIntervalRef.current = null;
+      setAndroidMeteringLevel(0);
+    }
+
     // Mark as not recording
     isRecordingRef.current = false;
 
@@ -692,10 +838,18 @@ export function useSpeechToText(
       }
 
       try {
-        await audioRecorder.stop();
-        // Clean up temp file if exists
-        if (audioRecorder.uri) {
-          await FileSystem.deleteAsync(audioRecorder.uri, { idempotent: true });
+        if (Platform.OS === "android" && isPCMRecordingAvailable()) {
+          // Android: Cancel native PCM recording
+          await cancelPCMRecording();
+        } else {
+          // iOS: Cancel expo-audio recording
+          await audioRecorder.stop();
+          // Clean up temp file if exists
+          if (audioRecorder.uri) {
+            await FileSystem.deleteAsync(audioRecorder.uri, {
+              idempotent: true,
+            });
+          }
         }
       } catch {
         // Ignore errors during cancel

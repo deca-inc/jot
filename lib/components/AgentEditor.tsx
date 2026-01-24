@@ -10,6 +10,7 @@ import {
   Platform,
 } from "react-native";
 import { getModelById } from "../ai/modelConfig";
+import { usePlatformModels } from "../ai/usePlatformModels";
 import { type Agent, type ThinkMode } from "../db/agents";
 import { type ModelDownloadInfo } from "../db/modelSettings";
 import { spacingPatterns, borderRadius } from "../theme";
@@ -61,8 +62,9 @@ export function AgentEditor({
 }: AgentEditorProps) {
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
+  const { hasPlatformLLM } = usePlatformModels();
 
-  // Filter to only LLM models
+  // Filter to only LLM models (platform models are excluded - they don't support system prompts properly)
   const llmModels = downloadedModels.filter(
     (m) => !m.modelType || m.modelType === "llm",
   );
@@ -122,7 +124,7 @@ export function AgentEditor({
             variant="h3"
             style={[styles.title, { color: seasonalTheme.textPrimary }]}
           >
-            {isEditing ? "Edit Agent" : "New Agent"}
+            {isEditing ? "Edit Persona" : "New Persona"}
           </Text>
           <TouchableOpacity onPress={onCancel} style={styles.closeButton}>
             <Ionicons
@@ -200,6 +202,32 @@ export function AgentEditor({
           >
             Model *
           </Text>
+          {/* Info about platform models */}
+          {hasPlatformLLM && (
+            <View
+              style={[
+                styles.platformModelInfo,
+                { backgroundColor: `${theme.colors.border}15` },
+              ]}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color={seasonalTheme.textSecondary}
+              />
+              <Text
+                variant="caption"
+                style={{
+                  color: seasonalTheme.textSecondary,
+                  flex: 1,
+                  fontSize: 11,
+                }}
+              >
+                Built-in models (e.g., Gemini Nano) cannot be used with personas
+                because they don&apos;t support custom system prompts.
+              </Text>
+            </View>
+          )}
           {llmModels.length === 0 ? (
             <View
               style={[
@@ -443,7 +471,7 @@ export function AgentEditor({
                 ? "Saving..."
                 : isEditing
                   ? "Save Changes"
-                  : "Create Agent"}
+                  : "Create Persona"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -505,6 +533,14 @@ const styles = StyleSheet.create({
     gap: spacingPatterns.sm,
     padding: spacingPatterns.sm,
     borderRadius: borderRadius.sm,
+  },
+  platformModelInfo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacingPatterns.xs,
+    padding: spacingPatterns.sm,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacingPatterns.sm,
   },
   dropdown: {
     flexDirection: "row",

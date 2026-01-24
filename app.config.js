@@ -74,6 +74,7 @@ module.exports = ({ config }) => {
         "expo-build-properties",
         {
           android: {
+            minSdkVersion: 26,
             packagingOptions: {
               pickFirst: ["**/libcrypto.so", "**/libssl.so"],
             },

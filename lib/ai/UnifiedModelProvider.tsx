@@ -24,6 +24,10 @@ import React, {
   useRef,
 } from "react";
 import { LLMModule, Message } from "react-native-executorch";
+import {
+  generateWithPlatformAI,
+  type ChatMessage,
+} from "../../modules/platform-ai/src";
 import { useModelSettings } from "../db/modelSettings";
 import { registerBackgroundTasks } from "./backgroundTasks";
 import { truncateContext, fitsInContext } from "./contextManager";
@@ -40,11 +44,16 @@ import { modelDownloadStatus } from "./modelDownloadStatus";
 import { ensureModelPresent } from "./modelManager";
 import { logStorageDebugInfo, verifyAllModels } from "./modelVerification";
 import { persistentDownloadManager } from "./persistentDownloadManager";
+import { isPlatformModelId, type PlatformLlmConfig } from "./platformModels";
 import {
   ALL_STT_MODELS as _ALL_STT_MODELS,
   DEFAULT_STT_MODEL,
   getSTTModelById,
 } from "./sttConfig";
+import {
+  getPlatformAvailability,
+  getAvailablePlatformLLMs,
+} from "./usePlatformModels";
 
 // =============================================================================
 // CONSTANTS
@@ -115,6 +124,22 @@ interface ModelLibrary {
 // Singleton - exists outside React lifecycle to avoid closure/ref issues
 const modelLibrarySingleton: ModelLibrary = {};
 
+// Cache for platform model configs
+let platformLLMsCache: PlatformLlmConfig[] | null = null;
+
+/**
+ * Get platform model config by ID
+ */
+async function getPlatformModelById(
+  modelId: string,
+): Promise<PlatformLlmConfig | null> {
+  if (!platformLLMsCache) {
+    const availability = await getPlatformAvailability();
+    platformLLMsCache = getAvailablePlatformLLMs(availability);
+  }
+  return platformLLMsCache.find((m) => m.modelId === modelId) || null;
+}
+
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
@@ -128,9 +153,21 @@ function addFilePrefix(path: string): string {
 }
 
 /**
- * Load an LLM model into the singleton
+ * Load an LLM model into the singleton (downloadable models only)
+ * Platform models don't need loading - they're always available via native modules
  */
 async function loadLLM(modelId: MODEL_IDS): Promise<void> {
+  // Platform models don't need loading - skip
+  if (isPlatformModelId(modelId)) {
+    // Unload any downloadable model since we're switching to platform
+    if (modelLibrarySingleton.llm) {
+      modelLibrarySingleton.llm.module.interrupt();
+      modelLibrarySingleton.llm.module.delete();
+      delete modelLibrarySingleton.llm;
+    }
+    return;
+  }
+
   // Already loaded with same model
   if (
     modelLibrarySingleton.llm &&
@@ -173,7 +210,56 @@ async function loadLLM(modelId: MODEL_IDS): Promise<void> {
 }
 
 /**
- * Send a message using the loaded LLM
+ * Send a message using a platform LLM (Apple Intelligence, Gemini Nano)
+ * Platform models are always loaded by the OS - just call native module
+ */
+async function sendPlatformLLMMessage(
+  modelId: string,
+  messages: Message[],
+  options?: {
+    responseCallback?: (responseSoFar: string) => void;
+    completeCallback?: (result: string) => void;
+    systemPrompt?: string;
+  },
+): Promise<string> {
+  const platformConfig = await getPlatformModelById(modelId);
+  if (!platformConfig) {
+    throw new Error(`Platform model ${modelId} not available on this device`);
+  }
+
+  // Convert Message[] to ChatMessage[] format for the native module
+  const chatMessages: ChatMessage[] = messages.map((m) => ({
+    role: m.role as "user" | "assistant" | "system",
+    content: m.content,
+  }));
+
+  const systemPrompt = options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+
+  try {
+    // Call the native module to generate a response
+    // The native module handles:
+    // - Apple Foundation Models on iOS 26+
+    // - Gemini Nano (AICore) on Android
+    const result = await generateWithPlatformAI(systemPrompt, chatMessages);
+
+    // Platform models don't support streaming, so we call both callbacks at once
+    options?.responseCallback?.(result);
+    options?.completeCallback?.(result);
+
+    return result;
+  } catch (error) {
+    // If the native module isn't available or fails, provide a helpful error
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : `${platformConfig.displayName} generation failed`;
+
+    throw new Error(errorMessage);
+  }
+}
+
+/**
+ * Send a message using the loaded LLM (downloadable or platform)
  */
 async function sendLLMMessage(
   currentModelId: MODEL_IDS,
@@ -186,6 +272,17 @@ async function sendLLMMessage(
     thinkMode?: "no-think" | "think" | "none";
   },
 ): Promise<string> {
+  // Check if this is a platform model
+  if (isPlatformModelId(currentModelId)) {
+    // Platform models are always available - just call native module
+    return sendPlatformLLMMessage(currentModelId, messages, {
+      responseCallback: options?.responseCallback,
+      completeCallback: options?.completeCallback,
+      systemPrompt: options?.systemPrompt,
+    });
+  }
+
+  // Downloadable model path
   await loadLLM(currentModelId);
 
   let response = "";
@@ -237,6 +334,7 @@ async function sendLLMMessage(
 
 /**
  * Unload the LLM from memory
+ * Note: Platform models don't need unloading - they're managed by the OS
  */
 function unloadLLM(): void {
   if (modelLibrarySingleton.llm) {

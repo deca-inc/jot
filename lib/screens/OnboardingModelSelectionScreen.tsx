@@ -13,6 +13,8 @@ import {
 } from "react-native-safe-area-context";
 import { ALL_MODELS } from "../ai/modelConfig";
 import { ensureModelPresent } from "../ai/modelManager";
+import { isPlatformModelId } from "../ai/platformModels";
+import { usePlatformModels } from "../ai/usePlatformModels";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
 import { Text } from "../components";
 import { useModelSettings } from "../db/modelSettings";
@@ -48,6 +50,11 @@ export function OnboardingModelSelectionScreen({
   const theme = useTheme();
   const modelSettings = useModelSettings();
   const insets = useSafeAreaInsets();
+  const {
+    platformLLMs,
+    hasPlatformLLM,
+    isLoading: platformModelsLoading,
+  } = usePlatformModels();
 
   const [compatibleModelIds, setCompatibleModelIds] = useState<string[]>([]);
   const [recommendedModelId, setRecommendedModelId] = useState<string>("");
@@ -69,16 +76,22 @@ export function OnboardingModelSelectionScreen({
           getCompatibleModels(),
           getRecommendedModel(),
         ]);
-        setCompatibleModelIds(compatible);
-        setRecommendedModelId(recommended);
-        setSelectedModelId(recommended);
+
+        // Ensure we always have at least one model
+        const finalCompatible =
+          compatible.length > 0 ? compatible : ["smollm2-135m"];
+        const finalRecommended = recommended || finalCompatible[0];
+
+        setCompatibleModelIds(finalCompatible);
+        setRecommendedModelId(finalRecommended);
+
+        // Don't set selected model yet - wait for platform models to load
       } catch (error) {
         console.error("Error loading compatible models:", error);
-        // Fallback to default
+        // Fallback to smallest model
         const fallback = "smollm2-135m";
         setCompatibleModelIds([fallback]);
         setRecommendedModelId(fallback);
-        setSelectedModelId(fallback);
       } finally {
         setIsLoading(false);
       }
@@ -87,12 +100,49 @@ export function OnboardingModelSelectionScreen({
     loadModels();
   }, []);
 
-  const handleDownload = useCallback(async () => {
+  // Set default selection once platform models are loaded
+  useEffect(() => {
+    if (platformModelsLoading || isLoading) return;
+
+    // If platform model is available, make it the default
+    if (hasPlatformLLM && platformLLMs.length > 0) {
+      setSelectedModelId(platformLLMs[0].modelId);
+    } else if (recommendedModelId) {
+      setSelectedModelId(recommendedModelId);
+    }
+  }, [
+    platformModelsLoading,
+    isLoading,
+    hasPlatformLLM,
+    platformLLMs,
+    recommendedModelId,
+  ]);
+
+  const handleContinue = useCallback(async () => {
     if (!selectedModelId || isDownloading) return;
 
     try {
       setIsDownloading(true);
 
+      // Check if this is a platform model (no download needed)
+      if (isPlatformModelId(selectedModelId)) {
+        // Just save the selection and continue
+        await modelSettings.setSelectedModelId(selectedModelId);
+
+        // Track selection
+        trackEvent("model_selected_onboarding", {
+          modelId: selectedModelId,
+          wasRecommended: true,
+          modelSize: 0,
+          autoSelected: false,
+          isPlatformModel: true,
+        });
+
+        onContinue();
+        return;
+      }
+
+      // Downloadable model - start download
       const modelConfig = ALL_MODELS.find((m) => m.modelId === selectedModelId);
       if (!modelConfig) throw new Error("Model not found");
 
@@ -105,6 +155,7 @@ export function OnboardingModelSelectionScreen({
         wasRecommended: selectedModelId === recommendedModelId,
         modelSize: MODEL_SIZES[selectedModelId] || 0,
         autoSelected: false,
+        isPlatformModel: false,
       });
 
       // Start the download in the background (don't await it)
@@ -115,9 +166,8 @@ export function OnboardingModelSelectionScreen({
       // Continue to app immediately - download will happen in background
       onContinue();
     } catch (error) {
-      console.error("Error setting up model download:", error);
+      console.error("Error setting up model:", error);
       setIsDownloading(false);
-      // Could show an alert here, but for now just let user try again
     }
   }, [
     selectedModelId,
@@ -134,7 +184,7 @@ export function OnboardingModelSelectionScreen({
     return `${gb.toFixed(1)} GB`;
   };
 
-  if (isLoading) {
+  if (isLoading || platformModelsLoading) {
     return (
       <SafeAreaView
         style={[
@@ -153,6 +203,9 @@ export function OnboardingModelSelectionScreen({
   const compatibleModels = ALL_MODELS.filter((m) =>
     compatibleModelIds.includes(m.modelId),
   );
+
+  const hasSelection = !!selectedModelId;
+  const isPlatformModelSelected = isPlatformModelId(selectedModelId);
 
   return (
     <SafeAreaView
@@ -178,8 +231,9 @@ export function OnboardingModelSelectionScreen({
             variant="body"
             style={[styles.subtitle, { color: seasonalTheme.textSecondary }]}
           >
-            These models are compatible with your device. We recommend the one
-            selected below.
+            {hasPlatformLLM
+              ? "Your device has built-in AI available. You can also download additional models."
+              : "These models are compatible with your device. We recommend the one selected below."}
           </Text>
           <Text
             variant="body"
@@ -197,15 +251,114 @@ export function OnboardingModelSelectionScreen({
 
         {/* Model list */}
         <View style={styles.modelList}>
+          {/* Platform models (built-in) */}
+          {platformLLMs.map((platformModel) => {
+            const isSelected = platformModel.modelId === selectedModelId;
+
+            return (
+              <TouchableOpacity
+                key={platformModel.modelId}
+                onPress={() => {
+                  setSelectedModelId(platformModel.modelId);
+                }}
+                disabled={isDownloading}
+                style={[
+                  styles.modelCard,
+                  {
+                    backgroundColor: seasonalTheme.cardBg,
+                    borderColor: isSelected
+                      ? theme.colors.accent
+                      : seasonalTheme.textSecondary + "30",
+                    borderWidth: isSelected ? 2 : 1,
+                    opacity: isDownloading ? 0.6 : 1,
+                  },
+                ]}
+              >
+                <View style={styles.modelCardHeader}>
+                  <View style={styles.modelCardTitle}>
+                    <Text
+                      variant="h4"
+                      style={[
+                        styles.modelName,
+                        { color: seasonalTheme.textPrimary },
+                      ]}
+                    >
+                      {platformModel.displayName}
+                    </Text>
+                    <View
+                      style={[
+                        styles.recommendedBadge,
+                        { backgroundColor: theme.colors.accentLight },
+                      ]}
+                    >
+                      <Text
+                        variant="caption"
+                        style={[
+                          styles.recommendedText,
+                          { color: theme.colors.accent },
+                        ]}
+                      >
+                        Recommended
+                      </Text>
+                    </View>
+                  </View>
+                  {isSelected && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={24}
+                      color={theme.colors.accent}
+                    />
+                  )}
+                </View>
+
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.modelSize,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  Built-in • No download required
+                </Text>
+                <Text
+                  variant="body"
+                  style={[
+                    styles.modelDescription,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  {platformModel.description}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* Section header for downloadable models if platform models exist */}
+          {hasPlatformLLM && compatibleModels.length > 0 && (
+            <Text
+              variant="caption"
+              style={[
+                styles.sectionLabel,
+                { color: seasonalTheme.textSecondary },
+              ]}
+            >
+              DOWNLOADABLE MODELS
+            </Text>
+          )}
+
+          {/* Downloadable models */}
           {compatibleModels.map((model) => {
             const isSelected = model.modelId === selectedModelId;
-            const isRecommended = model.modelId === recommendedModelId;
+            const isRecommended =
+              !hasPlatformLLM && model.modelId === recommendedModelId;
             const size = MODEL_SIZES[model.modelId] || 0;
 
             return (
               <TouchableOpacity
                 key={model.modelId}
-                onPress={() => setSelectedModelId(model.modelId)}
+                onPress={() => {
+                  setSelectedModelId(model.modelId);
+                }}
                 disabled={isDownloading}
                 style={[
                   styles.modelCard,
@@ -296,15 +449,15 @@ export function OnboardingModelSelectionScreen({
         ]}
       >
         <TouchableOpacity
-          onPress={handleDownload}
-          disabled={!selectedModelId || isDownloading}
+          onPress={handleContinue}
+          disabled={!hasSelection || isDownloading}
           style={[
             styles.downloadButton,
             {
               backgroundColor: isDownloading
                 ? seasonalTheme.textSecondary + "40"
                 : theme.colors.accent,
-              opacity: !selectedModelId || isDownloading ? 0.6 : 1,
+              opacity: !hasSelection || isDownloading ? 0.6 : 1,
             },
           ]}
           activeOpacity={0.8}
@@ -316,26 +469,30 @@ export function OnboardingModelSelectionScreen({
               variant="body"
               style={[styles.buttonText, { color: seasonalTheme.textPrimary }]}
             >
-              Start Download
+              {isPlatformModelSelected ? "Continue" : "Start Download"}
             </Text>
           )}
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={onContinue}
-          disabled={isDownloading}
-          style={styles.skipButton}
-          activeOpacity={0.7}
-        >
-          <Text
-            variant="body"
-            style={[
-              styles.skipButtonText,
-              { color: seasonalTheme.textSecondary },
-            ]}
+
+        {/* Only show skip if no platform model available */}
+        {!hasPlatformLLM && (
+          <TouchableOpacity
+            onPress={onContinue}
+            disabled={isDownloading}
+            style={styles.skipButton}
+            activeOpacity={0.7}
           >
-            Skip for now
-          </Text>
-        </TouchableOpacity>
+            <Text
+              variant="body"
+              style={[
+                styles.skipButtonText,
+                { color: seasonalTheme.textSecondary },
+              ]}
+            >
+              Skip for now
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -370,6 +527,20 @@ const styles = StyleSheet.create({
   modelList: {
     gap: spacingPatterns.md,
     marginBottom: spacingPatterns.xl,
+  },
+  sectionLabel: {
+    marginTop: spacingPatterns.sm,
+    marginBottom: -spacingPatterns.xs,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  platformModelNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacingPatterns.sm,
+    padding: spacingPatterns.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacingPatterns.sm,
   },
   modelCard: {
     padding: spacingPatterns.md,
@@ -408,7 +579,6 @@ const styles = StyleSheet.create({
   bottomContainer: {
     paddingHorizontal: spacingPatterns.screen,
     paddingTop: spacingPatterns.md,
-    // paddingBottom is set dynamically based on safe area insets
     borderTopWidth: 1,
   },
   downloadButton: {

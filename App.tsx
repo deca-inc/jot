@@ -15,7 +15,10 @@ import {
   SimpleNavigation,
   getNavigationRef,
 } from "./lib/navigation/SimpleNavigation";
-import { SeasonalThemeProvider } from "./lib/theme/SeasonalThemeProvider";
+import {
+  SeasonalThemeProvider,
+  useSeasonalThemeContext,
+} from "./lib/theme/SeasonalThemeProvider";
 import { ThemeProvider } from "./lib/theme/ThemeProvider";
 import {
   setupNotificationResponseHandler,
@@ -255,8 +258,7 @@ function OnboardingWrapper() {
 
 // Status bar controller that responds to the seasonal theme
 function StatusBarController() {
-  const { theme } =
-    require("./lib/theme/SeasonalThemeProvider").useSeasonalThemeContext();
+  const { theme } = useSeasonalThemeContext();
 
   return <StatusBar style={theme.isDark ? "light" : "dark"} />;
 }

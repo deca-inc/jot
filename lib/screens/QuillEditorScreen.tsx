@@ -168,6 +168,7 @@ export function QuillEditorScreen({ onBack }: QuillEditorScreenProps = {}) {
         ]}
       >
         <QuillEditor
+          key={`quill-test-${seasonalTheme.isDark ? "dark" : "light"}`}
           ref={editorRef}
           style={[
             styles.editor,

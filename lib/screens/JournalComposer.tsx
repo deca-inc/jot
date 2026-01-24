@@ -14,7 +14,6 @@ import {
   FloatingComposerHeader,
   ModelManagementModal,
   QuillRichEditor,
-  VoiceRecordButton,
 } from "../components";
 import { useAttachmentsRepository } from "../db/attachmentsRepository";
 import { useEntry, useUpdateEntry } from "../db/useEntries";
@@ -322,31 +321,17 @@ export function JournalComposer({
       >
         {entry && (
           <QuillRichEditor
-            key={`editor-${entryId}`}
+            key={`editor-${entryId}-${seasonalTheme.isDark ? "dark" : "light"}`}
             ref={editorRef}
             initialHtml={initialContent}
             placeholder="Start writing..."
             onChangeHtml={handleChangeHtml}
             autoFocus={isContentEmpty}
             editorPadding={spacingPatterns.screen}
+            onTranscriptionComplete={handleTranscriptionComplete}
+            onNoModelAvailable={handleNoModelAvailable}
           />
         )}
-      </View>
-
-      {/* Voice Record FAB */}
-      <View
-        style={[
-          styles.fab,
-          {
-            bottom: insets.bottom + spacingPatterns.lg,
-          },
-        ]}
-      >
-        <VoiceRecordButton
-          onTranscriptionComplete={handleTranscriptionComplete}
-          onNoModelAvailable={handleNoModelAvailable}
-          size="large"
-        />
       </View>
 
       {/* Model Management Modal */}
@@ -365,10 +350,5 @@ const styles = StyleSheet.create({
   },
   editorContainer: {
     flex: 1,
-  },
-  fab: {
-    position: "absolute",
-    right: spacingPatterns.lg,
-    zIndex: 100,
   },
 });
