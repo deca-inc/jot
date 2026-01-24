@@ -21,7 +21,7 @@ Follow the Red → Green → Blue TDD cycle for all implementations.
    - Use descriptive test names: `it("should return empty array when no entries match")`
 4. **Run tests to confirm failure**:
    ```bash
-   pnpm test:run
+   pnpm test:ts
    ```
 5. Tests MUST fail before proceeding (proves they're testing something real)
 
@@ -40,7 +40,7 @@ Follow the Red → Green → Blue TDD cycle for all implementations.
 2. **Don't over-engineer** - Only implement what tests require
 3. **Run tests to confirm they pass**:
    ```bash
-   pnpm test:run
+   pnpm test:ts
    ```
 4. All tests must be GREEN before proceeding
 
@@ -57,7 +57,7 @@ Follow the Red → Green → Blue TDD cycle for all implementations.
    - Keep blocks flat (no nesting)
 3. **Run tests after each refactor**:
    ```bash
-   pnpm test:run
+   pnpm test:ts
    ```
 
 ## Phase 4: Coverage - Fill in the Gaps
@@ -81,16 +81,17 @@ pnpm coverage     # Check coverage, fill gaps if needed
 pnpm typecheck    # TypeScript validation
 pnpm lint         # Code style check
 pnpm lint:fix     # Auto-fix lint issues
-pnpm test:run     # Final test run
+pnpm test:ts      # Final test run
 ```
 
 ## Test File Structure
 
 ```typescript
-import { describe, it, expect, beforeEach, vi } from "vitest";
+// Jest globals are available automatically (describe, it, expect, etc.)
 
 describe("ModuleName", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     // Reset mocks, setup test data
   });
 
@@ -119,10 +120,10 @@ describe("ModuleName", () => {
 
 ## Mocking Guidelines
 
-- Use `vi.mock()` for module mocks
-- Use `vi.fn()` for function mocks
-- Use `vi.spyOn()` for partial mocks
-- Always restore mocks in `afterEach` or use `vi.resetAllMocks()`
+- Use `jest.mock()` for module mocks
+- Use `jest.fn()` for function mocks
+- Use `jest.spyOn()` for partial mocks
+- Always restore mocks in `afterEach` or use `jest.clearAllMocks()`
 
 ## Key Principles
 

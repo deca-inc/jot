@@ -24,7 +24,7 @@ pnpm typecheck
 pnpm lint
 
 # Unit tests
-pnpm test:run
+pnpm test:ts
 ```
 
 ### 2. Swift/iOS Changes
@@ -87,7 +87,7 @@ All of these must pass before code can be committed:
 
 - `pnpm typecheck` - No TypeScript errors
 - `pnpm lint` - No ESLint errors (warnings OK)
-- `pnpm test:run` - All tests passing
+- `pnpm test:ts` - All tests passing
 
 ## Commands Reference
 
@@ -96,8 +96,7 @@ All of these must pass before code can be committed:
 pnpm typecheck          # Type check
 pnpm lint               # Lint check
 pnpm lint:fix           # Auto-fix lint issues
-pnpm test               # Run tests in watch mode
-pnpm test:run           # Run tests once
+pnpm test:ts            # Run tests once
 
 # iOS
 cd ios && xcodebuild test -workspace JotDev.xcworkspace -scheme JotDev -destination 'platform=macOS'

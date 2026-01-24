@@ -184,14 +184,12 @@ Background workers: indexing, embeddings, backup scheduler
 #### Test Commands
 
 ```bash
-pnpm test:hooks   # TypeScript tests (Jest) - use this for all new tests
+pnpm test:ts      # TypeScript tests (Jest)
 pnpm test:swift   # Swift (Swift Package Manager)
 pnpm test:kotlin  # Kotlin (Gradle) - requires prebuild
 pnpm test:all     # Run all tests
 pnpm typecheck    # TypeScript type checking (IMPORTANT: run after tests pass)
 ```
-
-**IMPORTANT**: Use Jest for all new TypeScript tests. Vitest does not support React Native properly (ESM compatibility issues with jsdom/happy-dom). Name new test files as `*.jest.test.ts` or `*.jest.test.tsx`.
 
 #### Coverage Commands
 
@@ -205,7 +203,7 @@ Coverage reports are generated in `./coverage/` for TypeScript (open `coverage/i
 
 #### Test Locations
 
-- **TypeScript**: `lib/**/*.jest.test.ts` or colocated with source files (use `*.jest.test.ts` naming convention)
+- **TypeScript**: `lib/**/*.test.ts` colocated with source files
 - **Swift**: `packages/widget-utils/Tests/`
 - **Kotlin**: `native/android/widget-tests/` (copied during prebuild)
 
