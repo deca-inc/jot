@@ -1,11 +1,3 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  vi,
-  type MockInstance,
-} from "vitest";
 import { CustomModelsRepository, type DatabaseAdapter } from "./customModels";
 import type {
   CreateCustomLocalModelInput,
@@ -14,16 +6,16 @@ import type {
 
 // Mock database type with access to mock methods
 interface MockedDb {
-  runAsync: MockInstance;
-  getFirstAsync: MockInstance;
-  getAllAsync: MockInstance;
+  runAsync: jest.Mock;
+  getFirstAsync: jest.Mock;
+  getAllAsync: jest.Mock;
 }
 
 // Mock the database adapter
 const createMockDb = () => ({
-  runAsync: vi.fn().mockResolvedValue({ lastInsertRowId: 1 }),
-  getFirstAsync: vi.fn(),
-  getAllAsync: vi.fn().mockResolvedValue([]),
+  runAsync: jest.fn().mockResolvedValue({ lastInsertRowId: 1 }),
+  getFirstAsync: jest.fn(),
+  getAllAsync: jest.fn().mockResolvedValue([]),
 });
 
 describe("CustomModelsRepository", () => {
@@ -33,7 +25,7 @@ describe("CustomModelsRepository", () => {
   beforeEach(() => {
     mockDb = createMockDb();
     repo = new CustomModelsRepository(mockDb as unknown as DatabaseAdapter);
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe("createCustomLocalModel", () => {

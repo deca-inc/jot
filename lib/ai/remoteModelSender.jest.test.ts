@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createRemoteApiClient } from "./remoteApiClient";
 import {
   sendRemoteMessage,
@@ -11,22 +10,28 @@ import type { RemoteModelConfig } from "./customModels";
 import type { ChatMessage } from "./remoteApiClient";
 
 // Mock the remoteApiClient module
-vi.mock("./remoteApiClient", () => ({
-  createRemoteApiClient: vi.fn(() => ({
-    sendMessage: vi.fn().mockResolvedValue("non-streaming response"),
-    sendMessageStreaming: vi.fn().mockResolvedValue("streaming response"),
-  })),
-  RemoteApiError: class RemoteApiError extends Error {
-    constructor(
-      message: string,
-      public statusCode: number,
-      public details?: unknown,
-    ) {
+jest.mock("./remoteApiClient", () => {
+  class MockRemoteApiError extends Error {
+    statusCode: number;
+    details?: unknown;
+    constructor(message: string, statusCode: number, details?: unknown) {
       super(message);
       this.name = "RemoteApiError";
+      this.statusCode = statusCode;
+      this.details = details;
     }
-  },
-}));
+  }
+  return {
+    createRemoteApiClient: jest.fn(() => ({
+      sendMessage: jest.fn().mockResolvedValue("non-streaming response"),
+      sendMessageStreaming: jest.fn().mockResolvedValue("streaming response"),
+    })),
+    RemoteApiError: MockRemoteApiError,
+  };
+});
+
+const mockedCreateRemoteApiClient =
+  createRemoteApiClient as jest.MockedFunction<typeof createRemoteApiClient>;
 
 describe("sendRemoteMessage", () => {
   const mockModelConfig: RemoteModelConfig = {
@@ -50,25 +55,25 @@ describe("sendRemoteMessage", () => {
 
   let mockDependencies: RemoteModelDependencies;
   let mockClient: {
-    sendMessage: ReturnType<typeof vi.fn>;
-    sendMessageStreaming: ReturnType<typeof vi.fn>;
+    sendMessage: jest.Mock;
+    sendMessageStreaming: jest.Mock;
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
 
     mockClient = {
-      sendMessage: vi.fn().mockResolvedValue("non-streaming response"),
-      sendMessageStreaming: vi.fn().mockResolvedValue("streaming response"),
+      sendMessage: jest.fn().mockResolvedValue("non-streaming response"),
+      sendMessageStreaming: jest.fn().mockResolvedValue("streaming response"),
     };
 
-    vi.mocked(createRemoteApiClient).mockReturnValue(
+    mockedCreateRemoteApiClient.mockReturnValue(
       mockClient as unknown as ReturnType<typeof createRemoteApiClient>,
     );
 
     mockDependencies = {
-      getModelConfig: vi.fn().mockResolvedValue(mockModelConfig),
-      getApiKey: vi.fn().mockResolvedValue("sk-test-api-key"),
+      getModelConfig: jest.fn().mockResolvedValue(mockModelConfig),
+      getApiKey: jest.fn().mockResolvedValue("sk-test-api-key"),
     };
   });
 
@@ -92,7 +97,7 @@ describe("sendRemoteMessage", () => {
     });
 
     it("sends a streaming message when responseCallback provided", async () => {
-      const responseCallback = vi.fn();
+      const responseCallback = jest.fn();
 
       const result = await sendRemoteMessage(
         "remote-openai-gpt-4",
@@ -114,7 +119,7 @@ describe("sendRemoteMessage", () => {
     });
 
     it("sends a streaming message when completeCallback provided", async () => {
-      const completeCallback = vi.fn();
+      const completeCallback = jest.fn();
 
       const result = await sendRemoteMessage(
         "remote-openai-gpt-4",
@@ -171,7 +176,7 @@ describe("sendRemoteMessage", () => {
         ...mockModelConfig,
         customHeaders: { "X-Custom-Header": "value" },
       };
-      mockDependencies.getModelConfig = vi
+      mockDependencies.getModelConfig = jest
         .fn()
         .mockResolvedValue(modelWithHeaders);
 
@@ -212,7 +217,7 @@ describe("sendRemoteMessage", () => {
 
   describe("error handling", () => {
     it("throws RemoteModelNotFoundError when model not found", async () => {
-      mockDependencies.getModelConfig = vi.fn().mockResolvedValue(null);
+      mockDependencies.getModelConfig = jest.fn().mockResolvedValue(null);
 
       await expect(
         sendRemoteMessage(
@@ -234,7 +239,7 @@ describe("sendRemoteMessage", () => {
     });
 
     it("throws RemoteModelApiKeyMissingError when API key not found", async () => {
-      mockDependencies.getApiKey = vi.fn().mockResolvedValue(null);
+      mockDependencies.getApiKey = jest.fn().mockResolvedValue(null);
 
       await expect(
         sendRemoteMessage(
@@ -262,7 +267,7 @@ describe("sendRemoteMessage", () => {
         ...mockModelConfig,
         privacyAcknowledged: false,
       };
-      mockDependencies.getModelConfig = vi
+      mockDependencies.getModelConfig = jest
         .fn()
         .mockResolvedValue(unacknowledgedModel);
 
@@ -288,7 +293,7 @@ describe("sendRemoteMessage", () => {
     });
 
     it("does not call getApiKey if model not found", async () => {
-      mockDependencies.getModelConfig = vi.fn().mockResolvedValue(null);
+      mockDependencies.getModelConfig = jest.fn().mockResolvedValue(null);
 
       try {
         await sendRemoteMessage(
@@ -309,7 +314,7 @@ describe("sendRemoteMessage", () => {
         ...mockModelConfig,
         privacyAcknowledged: false,
       };
-      mockDependencies.getModelConfig = vi
+      mockDependencies.getModelConfig = jest
         .fn()
         .mockResolvedValue(unacknowledgedModel);
 

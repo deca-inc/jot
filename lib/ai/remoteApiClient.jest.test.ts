@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   RemoteApiClient,
   type RemoteApiConfig,
@@ -7,7 +6,7 @@ import {
 } from "./remoteApiClient";
 
 // Mock fetch globally
-const mockFetch = vi.fn();
+const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 describe("RemoteApiClient", () => {
@@ -18,7 +17,7 @@ describe("RemoteApiClient", () => {
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe("OpenAI-compatible requests", () => {
@@ -334,7 +333,7 @@ describe("RemoteApiClient", () => {
         body: stream,
       });
 
-      const responseCallback = vi.fn();
+      const responseCallback = jest.fn();
 
       const result = await client.sendMessageStreaming(
         [{ role: "user", content: "Hi" }],
@@ -368,7 +367,7 @@ describe("RemoteApiClient", () => {
         body: stream,
       });
 
-      const completeCallback = vi.fn();
+      const completeCallback = jest.fn();
 
       await client.sendMessageStreaming([{ role: "user", content: "Hi" }], {
         completeCallback,
@@ -419,7 +418,7 @@ describe("RemoteApiClient", () => {
 
       try {
         await client.sendMessage([{ role: "user", content: "Hello" }]);
-        expect.fail("Should have thrown");
+        throw new Error("Should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(RemoteApiError);
         const apiError = error as RemoteApiError;
