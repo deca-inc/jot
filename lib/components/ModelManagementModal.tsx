@@ -32,14 +32,17 @@ import {
 } from "../ai/usePlatformModels";
 import { type Agent, type ThinkMode, useAgents } from "../db/agents";
 import { useModelSettings } from "../db/modelSettings";
+import { useCustomModels } from "../db/useCustomModels";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { getDeviceTier, getCompatibleModels } from "../utils/deviceInfo";
+import { AddRemoteModelModal } from "./AddRemoteModelModal";
 import { AgentEditor } from "./AgentEditor";
 import { ModelCard } from "./ModelCard";
 import { Text } from "./Text";
 import { useToast } from "./ToastProvider";
+import type { CustomModelConfig } from "../ai/customModels";
 
 export type ModelManagementTab = "llms" | "voice" | "agents";
 
@@ -81,6 +84,7 @@ export function ModelManagementModal({
     hasPlatformSTT,
     isLoading: _platformModelsLoading,
   } = usePlatformModels();
+  const customModelsRepo = useCustomModels();
 
   const [activeTab, setActiveTab] = useState<ModelManagementTab>(initialTab);
 
@@ -115,6 +119,10 @@ export function ModelManagementModal({
   const [showAgentEditor, setShowAgentEditor] = useState(false);
   const [savingAgent, setSavingAgent] = useState(false);
 
+  // Remote models state
+  const [remoteModels, setRemoteModels] = useState<CustomModelConfig[]>([]);
+  const [showAddRemoteModal, setShowAddRemoteModal] = useState(false);
+
   const [loading, setLoading] = useState(true);
 
   // Load settings when modal opens
@@ -135,6 +143,7 @@ export function ModelManagementModal({
         compatible,
         tier,
         agentsList,
+        remoteModelsList,
       ] = await Promise.all([
         modelSettings.getSelectedModelId(),
         modelSettings.getSelectedSttModelId(),
@@ -142,6 +151,7 @@ export function ModelManagementModal({
         getCompatibleModels(),
         getDeviceTier(),
         agentsRepo.getAll(),
+        customModelsRepo.getRemoteModels(),
       ]);
 
       setSelectedLLMId(selectedLlmId);
@@ -149,6 +159,7 @@ export function ModelManagementModal({
       setCompatibleModels(compatible);
       setDeviceTier(tier);
       setAgents(agentsList);
+      setRemoteModels(remoteModelsList);
 
       // Separate LLM and STT models
       const llmIds = downloaded
@@ -340,6 +351,58 @@ export function ModelManagementModal({
     },
     [modelSettings, showToast, agentsRepo],
   );
+
+  // Remote model handlers
+  const handleSelectRemoteModel = useCallback(
+    async (model: CustomModelConfig) => {
+      try {
+        setLoadingModelId(model.modelId);
+        await modelSettings.setSelectedModelId(model.modelId);
+        setSelectedLLMId(model.modelId);
+        setSelectedPlatformLLMId(null);
+        showToast(`${model.displayName} is now active`, "success");
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        showToast(
+          `Failed to select: ${err?.message || "Unknown error"}`,
+          "error",
+        );
+      } finally {
+        setLoadingModelId(null);
+      }
+    },
+    [modelSettings, showToast],
+  );
+
+  const handleRemoveRemoteModel = useCallback(
+    (model: CustomModelConfig) => {
+      Alert.alert(
+        "Remove Remote Model",
+        `Are you sure you want to remove ${model.displayName}? This will also delete the stored API key.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await customModelsRepo.delete(model.modelId);
+                showToast(`${model.displayName} removed`, "success");
+                await loadSettings();
+              } catch (_error) {
+                showToast("Failed to remove model", "error");
+              }
+            },
+          },
+        ],
+      );
+    },
+    [customModelsRepo, showToast],
+  );
+
+  const handleRemoteModelAdded = useCallback(async () => {
+    await loadSettings();
+  }, []);
 
   // STT handlers (similar to LLM)
   const handleDownloadSTT = useCallback(
@@ -782,6 +845,157 @@ export function ModelManagementModal({
                         onRemove={() => handleRemoveLLM(model)}
                       />
                     ))}
+
+                    {/* Remote API Models Section */}
+                    <View style={styles.downloadableSectionHeader}>
+                      <Ionicons
+                        name="cloud-outline"
+                        size={14}
+                        color={seasonalTheme.textSecondary}
+                      />
+                      <Text
+                        variant="caption"
+                        style={{
+                          color: seasonalTheme.textSecondary,
+                          fontWeight: "600",
+                          flex: 1,
+                        }}
+                      >
+                        Remote API Models
+                      </Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.addRemoteButton,
+                          { backgroundColor: theme.colors.accent },
+                        ]}
+                        onPress={() => setShowAddRemoteModal(true)}
+                      >
+                        <Ionicons name="add" size={14} color="white" />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: "white",
+                            fontWeight: "600",
+                            fontSize: 11,
+                          }}
+                        >
+                          Add
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {remoteModels.length === 0 ? (
+                      <View
+                        style={[
+                          styles.noModelsBanner,
+                          { backgroundColor: `${theme.colors.border}15` },
+                        ]}
+                      >
+                        <Ionicons
+                          name="cloud-outline"
+                          size={16}
+                          color={seasonalTheme.textSecondary}
+                        />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: seasonalTheme.textSecondary,
+                            flex: 1,
+                          }}
+                        >
+                          Add remote API models (OpenAI, Anthropic, Groq) for
+                          cloud-based inference.
+                        </Text>
+                      </View>
+                    ) : (
+                      remoteModels.map((model) => {
+                        const isSelected = selectedLLMId === model.modelId;
+                        return (
+                          <TouchableOpacity
+                            key={model.modelId}
+                            style={[
+                              styles.platformModelCard,
+                              {
+                                backgroundColor: seasonalTheme.cardBg,
+                                borderColor: isSelected
+                                  ? theme.colors.accent
+                                  : `${theme.colors.border}40`,
+                              },
+                            ]}
+                            onPress={() => handleSelectRemoteModel(model)}
+                          >
+                            <View style={styles.platformModelContent}>
+                              <View style={styles.platformModelHeader}>
+                                <Text
+                                  variant="body"
+                                  style={{
+                                    color: seasonalTheme.textPrimary,
+                                    fontWeight: "600",
+                                  }}
+                                >
+                                  {model.displayName}
+                                </Text>
+                                <View
+                                  style={[
+                                    styles.builtInBadge,
+                                    {
+                                      backgroundColor: `${theme.colors.accent}20`,
+                                    },
+                                  ]}
+                                >
+                                  <Ionicons
+                                    name="cloud-outline"
+                                    size={10}
+                                    color={theme.colors.accent}
+                                    style={{ marginRight: 2 }}
+                                  />
+                                  <Text
+                                    variant="caption"
+                                    style={{
+                                      color: theme.colors.accent,
+                                      fontSize: 10,
+                                      fontWeight: "600",
+                                    }}
+                                  >
+                                    REMOTE
+                                  </Text>
+                                </View>
+                              </View>
+                              {model.description && (
+                                <Text
+                                  variant="caption"
+                                  style={{ color: seasonalTheme.textSecondary }}
+                                >
+                                  {model.description}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={styles.remoteModelActions}>
+                              {isSelected && (
+                                <Ionicons
+                                  name="checkmark-circle"
+                                  size={20}
+                                  color={theme.colors.accent}
+                                />
+                              )}
+                              <TouchableOpacity
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveRemoteModel(model);
+                                }}
+                                style={{ padding: 4 }}
+                              >
+                                <Ionicons
+                                  name="trash-outline"
+                                  size={16}
+                                  color={theme.colors.error}
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
                   </View>
                 )}
 
@@ -1170,6 +1384,13 @@ export function ModelManagementModal({
           </ScrollView>
         </View>
       </Pressable>
+
+      {/* Add Remote Model Modal */}
+      <AddRemoteModelModal
+        visible={showAddRemoteModal}
+        onClose={() => setShowAddRemoteModal(false)}
+        onModelAdded={handleRemoteModelAdded}
+      />
     </Modal>
   );
 }
@@ -1363,5 +1584,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  addRemoteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingHorizontal: spacingPatterns.xs,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  remoteModelActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.xs,
   },
 });

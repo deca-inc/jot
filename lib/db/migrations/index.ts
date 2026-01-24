@@ -11,6 +11,7 @@ import * as add_agents from "./2026_01_16_06_09_18_add_agents";
 import * as add_attachments_table from "./2026_01_16_21_35_46_add_attachments_table";
 import * as add_modelid_to_agents from "./2026_01_19_18_18_18_add_modelid_to_agents";
 import * as repair_missing_columns from "./2026_01_19_19_21_20_repair_missing_columns";
+import * as add_custom_models from "./2026_01_24_21_13_05_add_custom_models";
 import * as initialSeed from "./seeds/2025_01_13_16_25_00_initial_seed";
 
 /**
@@ -44,6 +45,10 @@ export const allMigrations: Array<{ name: string; module: MigrationModule }> = [
   {
     name: "2026_01_19_19_21_20_repair_missing_columns.ts",
     module: repair_missing_columns,
+  },
+  {
+    name: "2026_01_24_21_13_05_add_custom_models.ts",
+    module: add_custom_models,
   },
   // Seeds (optional - only run when --seeds flag is enabled)
   { name: "seeds/2025_01_13_16_25_00_initial_seed.ts", module: initialSeed },

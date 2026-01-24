@@ -29,6 +29,8 @@ import {
   type ChatMessage,
 } from "../../modules/platform-ai/src";
 import { useModelSettings } from "../db/modelSettings";
+import { useCustomModels } from "../db/useCustomModels";
+import { getApiKey } from "./apiKeyStorage";
 import { registerBackgroundTasks } from "./backgroundTasks";
 import { truncateContext, fitsInContext } from "./contextManager";
 import {
@@ -42,9 +44,14 @@ import {
 } from "./modelConfig";
 import { modelDownloadStatus } from "./modelDownloadStatus";
 import { ensureModelPresent } from "./modelManager";
+import { isRemoteModelId, isCustomLocalModelId } from "./modelTypeGuards";
 import { logStorageDebugInfo, verifyAllModels } from "./modelVerification";
 import { persistentDownloadManager } from "./persistentDownloadManager";
 import { isPlatformModelId, type PlatformLlmConfig } from "./platformModels";
+import {
+  sendRemoteMessage,
+  type RemoteModelDependencies,
+} from "./remoteModelSender";
 import {
   ALL_STT_MODELS as _ALL_STT_MODELS,
   DEFAULT_STT_MODEL,
@@ -54,6 +61,7 @@ import {
   getPlatformAvailability,
   getAvailablePlatformLLMs,
 } from "./usePlatformModels";
+import type { RemoteModelConfig } from "./customModels";
 
 // =============================================================================
 // CONSTANTS
@@ -362,6 +370,7 @@ export function UnifiedModelProvider({
   children: React.ReactNode;
 }) {
   const modelSettings = useModelSettings();
+  const customModels = useCustomModels();
 
   // Initialization state
   const [isInitialized, setIsInitialized] = useState(false);
@@ -520,6 +529,23 @@ export function UnifiedModelProvider({
     console.log("[UnifiedModelProvider] All models unloaded");
   }, []);
 
+  // Create dependencies for remote model sender
+  const remoteModelDependencies: RemoteModelDependencies = useMemo(
+    () => ({
+      getModelConfig: async (modelId: string) => {
+        const config = await customModels.getByModelId(modelId);
+        if (!config || config.modelType !== "remote-api") {
+          return null;
+        }
+        return config as RemoteModelConfig;
+      },
+      getApiKey: async (keyRef: string) => {
+        return getApiKey(keyRef);
+      },
+    }),
+    [customModels],
+  );
+
   const sendMessage = useCallback(
     async (
       messages: Message[],
@@ -537,6 +563,42 @@ export function UnifiedModelProvider({
       resetIdleTimer(); // Reset idle timer on activity
 
       try {
+        // Check if this is a remote API model
+        if (isRemoteModelId(selectedModelId)) {
+          // Convert Message[] to ChatMessage[] format for remote API
+          const chatMessages = messages.map((m) => ({
+            role: m.role as "user" | "assistant" | "system",
+            content: m.content,
+          }));
+
+          const result = await sendRemoteMessage(
+            selectedModelId,
+            chatMessages,
+            {
+              responseCallback: options?.responseCallback,
+              completeCallback: options?.completeCallback,
+              systemPrompt: options?.systemPrompt,
+            },
+            remoteModelDependencies,
+          );
+          return result;
+        }
+
+        // Check if this is a custom local model
+        if (isCustomLocalModelId(selectedModelId)) {
+          // TODO: Custom local models need additional path handling
+          // For now, they use the same loading mechanism as built-in models
+          // This will be implemented when custom local model downloading is added
+          console.log(
+            "[UnifiedModelProvider] Custom local model not yet fully supported:",
+            selectedModelId,
+          );
+          throw new Error(
+            "Custom local models are not yet fully supported. Please select a built-in or remote model.",
+          );
+        }
+
+        // Default path: built-in or platform models
         const result = await sendLLMMessage(
           selectedModelId as MODEL_IDS,
           messages,
@@ -552,7 +614,7 @@ export function UnifiedModelProvider({
         setIsGenerating(false);
       }
     },
-    [isGenerating, modelSettings, resetIdleTimer],
+    [isGenerating, modelSettings, resetIdleTimer, remoteModelDependencies],
   );
 
   const interruptLLM = useCallback(() => {
