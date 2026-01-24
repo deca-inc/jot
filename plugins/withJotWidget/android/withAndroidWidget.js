@@ -375,6 +375,35 @@ const withAndroidWidget = (config) => {
         console.log(`[withAndroidWidget] Test files copied to ${testDestDir}`);
       }
 
+      // Add JUnit test dependency to build.gradle
+      const buildGradlePath = path.join(
+        projectRoot,
+        "android",
+        "app",
+        "build.gradle",
+      );
+
+      if (fs.existsSync(buildGradlePath)) {
+        let buildGradle = fs.readFileSync(buildGradlePath, "utf8");
+
+        // Check if JUnit is already added
+        if (
+          !buildGradle.includes("testImplementation") ||
+          !buildGradle.includes("junit:junit")
+        ) {
+          // Find the dependencies block and add JUnit
+          buildGradle = buildGradle.replace(
+            /dependencies\s*\{/,
+            `dependencies {
+    testImplementation("junit:junit:4.13.2")`,
+          );
+          fs.writeFileSync(buildGradlePath, buildGradle);
+          console.log(
+            "[withAndroidWidget] Added JUnit test dependency to build.gradle",
+          );
+        }
+      }
+
       return config;
     },
   ]);
