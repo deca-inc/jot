@@ -1,15 +1,14 @@
-import { describe, it, expect, vi } from "vitest";
 import { extractPreviewText, type Block } from "./entries";
 
 // Mock expo-sqlite to avoid React Native dependencies
-vi.mock("expo-sqlite", () => ({
-  SQLiteDatabase: vi.fn(),
-  useSQLiteContext: vi.fn(),
+jest.mock("expo-sqlite", () => ({
+  SQLiteDatabase: jest.fn(),
+  useSQLiteContext: jest.fn(),
 }));
 
 // Mock DatabaseProvider to avoid React imports
-vi.mock("./DatabaseProvider", () => ({
-  useDatabase: vi.fn(),
+jest.mock("./DatabaseProvider", () => ({
+  useDatabase: jest.fn(),
 }));
 
 describe("extractPreviewText", () => {

@@ -72,29 +72,29 @@ async function createMigration(name: string) {
     .replace(/[^a-zA-Z0-9]/g, "_")
     .replace(/^[0-9]/, "_$&"); // Ensure it doesn't start with a number
 
-  // Generate import and registration
+  // Generate import line
   const importLine = `import * as ${importVarName} from "./${importName}";`;
-  const registerLine = `registerMigration("${fileName}", async () => ${importVarName});`;
+
+  // Generate array entry (to be added before seeds comment or at end of array)
+  const arrayEntry = `  { name: "${fileName}", module: ${importVarName} },`;
 
   // Parse the file to find insertion points
   const lines = indexContent.split("\n");
   let lastImportLine = -1;
-  let lastRegisterEndLine = -1; // End of last registerMigration call (the closing );)
-  let commentLine = -1;
+  let seedsCommentLine = -1;
+  let arrayCloseLine = -1;
 
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].trim().startsWith("import ") && lines[i].includes(" from ")) {
       lastImportLine = i;
     }
-    // Find the closing ); of registerMigration calls
-    if (
-      lines[i].trim().endsWith(");") &&
-      lines[i].includes("registerMigration")
-    ) {
-      lastRegisterEndLine = i;
+    // Find the seeds comment inside the array
+    if (lines[i].includes("// Seeds (optional")) {
+      seedsCommentLine = i;
     }
-    if (lines[i].includes("// Add new migrations here:")) {
-      commentLine = i;
+    // Find the closing of allMigrations array ("];")
+    if (lines[i].trim() === "];") {
+      arrayCloseLine = i;
     }
   }
 
@@ -102,27 +102,25 @@ async function createMigration(name: string) {
 
   // Add import after the last import line
   if (!indexContent.includes(`from "./${importName}"`)) {
-    const insertIndex = lastImportLine >= 0 ? lastImportLine + 1 : 3; // After first comment block
+    const insertIndex = lastImportLine >= 0 ? lastImportLine + 1 : 3;
     newLines.splice(insertIndex, 0, importLine);
-    // Update indices if we inserted before them
-    if (lastRegisterEndLine >= insertIndex) {
-      lastRegisterEndLine++;
+    // Update indices since we inserted a line
+    if (seedsCommentLine >= insertIndex) {
+      seedsCommentLine++;
     }
-    if (commentLine >= insertIndex) {
-      commentLine++;
+    if (arrayCloseLine >= insertIndex) {
+      arrayCloseLine++;
     }
   }
 
-  // Add registration after the last registerMigration call
-  if (!indexContent.includes(`registerMigration("${fileName}"`)) {
-    if (lastRegisterEndLine >= 0) {
-      // Insert after the closing ); of the last registerMigration
-      newLines.splice(lastRegisterEndLine + 1, 0, registerLine);
-    } else if (commentLine >= 0) {
-      newLines.splice(commentLine + 1, 0, registerLine);
-    } else {
-      // Append before the last comment
-      newLines.splice(newLines.length - 1, 0, registerLine);
+  // Add array entry before the seeds comment, or before the closing bracket
+  if (!indexContent.includes(`name: "${fileName}"`)) {
+    if (seedsCommentLine >= 0) {
+      // Insert before the seeds comment
+      newLines.splice(seedsCommentLine, 0, arrayEntry);
+    } else if (arrayCloseLine >= 0) {
+      // Insert before the closing bracket
+      newLines.splice(arrayCloseLine, 0, arrayEntry);
     }
   }
 

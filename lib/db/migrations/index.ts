@@ -1,9 +1,9 @@
 // Migration registry
 // Import all migrations here and register them
 import { registerMigration } from "../migrations";
+import { MigrationModule } from "../migrationTypes";
 import * as initialSchema from "./2025_01_13_16_25_00_initial_schema";
 import * as add_generation_state from "./2025_11_19_05_42_50_add_generation_state";
-// Seeds (optional - enable with --seeds flag)
 import * as add_countdown_pinned_archive from "./2025_12_30_06_41_26_add_countdown_pinned_archive";
 import * as add_countdown_type from "./2025_12_30_07_00_00_add_countdown_type";
 import * as add_parent_id from "./2026_01_10_00_00_00_add_parent_id";
@@ -13,47 +13,43 @@ import * as add_modelid_to_agents from "./2026_01_19_18_18_18_add_modelid_to_age
 import * as repair_missing_columns from "./2026_01_19_19_21_20_repair_missing_columns";
 import * as initialSeed from "./seeds/2025_01_13_16_25_00_initial_seed";
 
+/**
+ * All migrations in order. Add new migrations to the end of this array.
+ * Seeds should be prefixed with "seeds/" in the name.
+ */
+export const allMigrations: Array<{ name: string; module: MigrationModule }> = [
+  { name: "2025_01_13_16_25_00_initial_schema.ts", module: initialSchema },
+  {
+    name: "2025_11_19_05_42_50_add_generation_state.ts",
+    module: add_generation_state,
+  },
+  {
+    name: "2025_12_30_06_41_26_add_countdown_pinned_archive.ts",
+    module: add_countdown_pinned_archive,
+  },
+  {
+    name: "2025_12_30_07_00_00_add_countdown_type.ts",
+    module: add_countdown_type,
+  },
+  { name: "2026_01_10_00_00_00_add_parent_id.ts", module: add_parent_id },
+  { name: "2026_01_16_06_09_18_add_agents.ts", module: add_agents },
+  {
+    name: "2026_01_16_21_35_46_add_attachments_table.ts",
+    module: add_attachments_table,
+  },
+  {
+    name: "2026_01_19_18_18_18_add_modelid_to_agents.ts",
+    module: add_modelid_to_agents,
+  },
+  {
+    name: "2026_01_19_19_21_20_repair_missing_columns.ts",
+    module: repair_missing_columns,
+  },
+  // Seeds (optional - only run when --seeds flag is enabled)
+  { name: "seeds/2025_01_13_16_25_00_initial_seed.ts", module: initialSeed },
+];
+
 // Register all migrations
-registerMigration(
-  "2025_01_13_16_25_00_initial_schema.ts",
-  async () => initialSchema,
-);
-
-registerMigration(
-  "2025_11_19_05_42_50_add_generation_state.ts",
-  async () => add_generation_state,
-);
-
-// Register seeds (optional migrations - only run when --seeds flag is enabled)
-registerMigration(
-  "seeds/2025_01_13_16_25_00_initial_seed.ts",
-  async () => initialSeed,
-);
-
-// Add new migrations here:
-// registerMigration("YYYY_MM_DD_HH:MM:SS_migration_name.ts", async () => await import("./YYYY_MM_DD_HH:MM:SS_migration_name"));
-registerMigration("2026_01_16_06_09_18_add_agents.ts", async () => add_agents);
-registerMigration(
-  "2026_01_19_18_18_18_add_modelid_to_agents.ts",
-  async () => add_modelid_to_agents,
-);
-registerMigration(
-  "2026_01_19_19_21_20_repair_missing_columns.ts",
-  async () => repair_missing_columns,
-);
-registerMigration(
-  "2026_01_16_21_35_46_add_attachments_table.ts",
-  async () => add_attachments_table,
-);
-registerMigration(
-  "2025_12_30_06_41_26_add_countdown_pinned_archive.ts",
-  async () => add_countdown_pinned_archive,
-);
-registerMigration(
-  "2025_12_30_07_00_00_add_countdown_type.ts",
-  async () => add_countdown_type,
-);
-registerMigration(
-  "2026_01_10_00_00_00_add_parent_id.ts",
-  async () => add_parent_id,
-);
+for (const { name, module } of allMigrations) {
+  registerMigration(name, async () => module);
+}

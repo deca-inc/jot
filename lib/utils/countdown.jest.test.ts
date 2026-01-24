@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   calculateTimeRemaining,
   formatCountdown,
@@ -13,12 +12,12 @@ import type { Block } from "../db/entries";
 describe("calculateTimeRemaining", () => {
   beforeEach(() => {
     // Mock Date.now to a fixed time for consistent tests
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-01-15T12:00:00Z"));
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2025-01-15T12:00:00Z"));
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    jest.useRealTimers();
   });
 
   it("calculates time remaining for future date", () => {
@@ -70,12 +69,12 @@ describe("calculateTimeRemaining", () => {
 
 describe("formatCountdown", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-01-15T12:00:00Z"));
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2025-01-15T12:00:00Z"));
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    jest.useRealTimers();
   });
 
   describe("countdown mode (isCountUp = false)", () => {
@@ -150,12 +149,12 @@ describe("formatCountdown", () => {
 
 describe("isCountdownComplete", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-01-15T12:00:00Z"));
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2025-01-15T12:00:00Z"));
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    jest.useRealTimers();
   });
 
   it("returns true when target is in the past", () => {
@@ -175,12 +174,12 @@ describe("isCountdownComplete", () => {
 
 describe("shouldTriggerConfetti", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-01-15T12:00:00Z"));
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2025-01-15T12:00:00Z"));
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    jest.useRealTimers();
   });
 
   it("returns true when countdown is complete, confetti enabled, not yet triggered", () => {
