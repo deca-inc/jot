@@ -171,6 +171,7 @@ Background workers: indexing, embeddings, backup scheduler
 3. **Implement to make tests pass**
    - Write the minimum code needed to make tests pass (Green phase)
    - Run tests to confirm they pass
+   - Run `pnpm typecheck` to ensure no TypeScript errors (tests may pass at runtime but fail type checking)
 
 4. **Refactor if needed**
    - Clean up the implementation while keeping tests green (Blue phase)
@@ -187,6 +188,7 @@ pnpm test:ts      # TypeScript (Vitest)
 pnpm test:swift   # Swift (Swift Package Manager)
 pnpm test:kotlin  # Kotlin (Gradle) - requires prebuild
 pnpm test:all     # Run all tests
+pnpm typecheck    # TypeScript type checking (IMPORTANT: run after tests pass)
 ```
 
 #### Coverage Commands
