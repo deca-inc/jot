@@ -20,6 +20,15 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:ts": "vitest run",
+    "test:swift": "cd packages/widget-utils && swift test",
+    "test:kotlin": "cd android && ./gradlew testDebugUnitTest --quiet",
+    "test:native": "pnpm test:swift && pnpm test:kotlin",
+    "test:all": "pnpm test:ts && pnpm test:native",
+    "coverage": "vitest run --coverage",
+    "coverage:ts": "vitest run --coverage",
+    "coverage:swift": "cd packages/widget-utils && swift test --enable-code-coverage && xcrun llvm-cov report .build/debug/WidgetUtilsPackageTests.xctest/Contents/MacOS/WidgetUtilsPackageTests -instr-profile=.build/debug/codecov/default.profdata -ignore-filename-regex='.build|Tests'",
+    "coverage:kotlin": "echo 'Note: Run pnpm test:kotlin for Kotlin tests. Full JaCoCo coverage requires additional setup.' && cd android && ./gradlew testDebugUnitTest 2>&1 | tail -5",
     "prepare": "husky"
   },
   "dependencies": {
@@ -71,6 +80,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/react": "~19.1.0",
     "@typescript-eslint/parser": "^8.50.1",
+    "@vitest/coverage-v8": "^4.0.18",
     "better-sqlite3": "^12.4.1",
     "eslint": "^9.39.2",
     "eslint-plugin-import": "^2.32.0",

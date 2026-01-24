@@ -11,6 +11,12 @@ expo-env.d.ts
 
 # Native
 .kotlin/
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Code coverage
+coverage/
 *.orig.*
 *.jks
 *.p8

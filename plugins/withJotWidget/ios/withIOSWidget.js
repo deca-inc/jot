@@ -224,15 +224,6 @@ const withIOSWidget = (config) => {
       console.log(
         `[withIOSWidget] Widget extension files copied to ${widgetDir}`,
       );
-      console.log(
-        `[withIOSWidget] NOTE: You must manually add the widget extension target in Xcode:`,
-      );
-      console.log(`  1. Open the project in Xcode`);
-      console.log(`  2. File > New > Target > Widget Extension`);
-      console.log(`  3. Name it "${WIDGET_TARGET_NAME}"`);
-      console.log(`  4. Bundle ID: ${widgetBundleId}`);
-      console.log(`  5. Enable App Groups capability for both targets`);
-      console.log(`  6. Replace generated files with the ones in ${widgetDir}`);
 
       return config;
     },

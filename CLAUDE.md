@@ -152,6 +152,59 @@ Background workers: indexing, embeddings, backup scheduler
 
 ## Coding Guidelines
 
+### Test-First Development (TDD)
+
+**IMPORTANT**: All new features and bug fixes MUST follow test-first development. This is mandatory, not optional.
+
+#### Workflow
+
+1. **Write failing tests first**
+   - Before writing any implementation code, write tests that describe the expected behavior
+   - Run the tests to confirm they fail (Red phase)
+   - Stop and wait for user review before proceeding
+
+2. **Get user approval**
+   - Present the failing tests to the user
+   - Explain what behavior the tests cover
+   - Wait for explicit approval before implementing
+
+3. **Implement to make tests pass**
+   - Write the minimum code needed to make tests pass (Green phase)
+   - Run tests to confirm they pass
+
+4. **Refactor if needed**
+   - Clean up the implementation while keeping tests green (Blue phase)
+
+5. **Check coverage before completing**
+   - Run `pnpm coverage` to check for missing branches/lines
+   - Review uncovered code paths and add tests for important branches
+   - Aim for >80% coverage on new/modified files
+
+#### Test Commands
+
+```bash
+pnpm test:ts      # TypeScript (Vitest)
+pnpm test:swift   # Swift (Swift Package Manager)
+pnpm test:kotlin  # Kotlin (Gradle) - requires prebuild
+pnpm test:all     # Run all tests
+```
+
+#### Coverage Commands
+
+```bash
+pnpm coverage        # TypeScript coverage (text + HTML report)
+pnpm coverage:ts     # Same as above
+pnpm coverage:swift  # Swift coverage via llvm-cov
+```
+
+Coverage reports are generated in `./coverage/` for TypeScript (open `coverage/index.html` in browser).
+
+#### Test Locations
+
+- **TypeScript**: `lib/**/*.test.ts` or colocated with source files
+- **Swift**: `packages/widget-utils/Tests/`
+- **Kotlin**: `native/android/widget-tests/` (copied during prebuild)
+
 ### Core Principles
 
 #### 1. Minimize useEffect (Aim for 0)
@@ -586,7 +639,7 @@ _Backup functionality is not yet implemented. The following describes the planne
 
 - **Trailing commas**: Always use trailing commas in multiline structures
 - **Import order**: Imports are auto-sorted alphabetically (builtin → external → internal → relative)
-- **Unused variables**: Prefix with `_` to indicate intentionally unused (e.g., `_unused`)
+- **Unused variables**: Prefer deleting unused code entirely. Only use `_` prefix when the variable is required by an API/signature but not used (e.g., `_event` in a callback)
 - **Newlines**: Files must end with a newline
 
 A pre-commit hook runs `lint-staged` to automatically lint and fix staged files before each commit.

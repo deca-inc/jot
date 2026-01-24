@@ -334,6 +334,47 @@ const withAndroidWidget = (config) => {
         fs.copyFileSync(stringsSrc, stringsDest);
       }
 
+      // Copy test files
+      const testSourceDir = path.join(
+        projectRoot,
+        "native",
+        "android",
+        "widget-tests",
+      );
+      const testDestDir = path.join(
+        projectRoot,
+        "android",
+        "app",
+        "src",
+        "test",
+        "java",
+        packagePath,
+        "widget",
+      );
+
+      if (fs.existsSync(testSourceDir)) {
+        fs.mkdirSync(testDestDir, { recursive: true });
+
+        const testFiles = fs
+          .readdirSync(testSourceDir)
+          .filter((f) => f.endsWith(".kt"));
+
+        for (const file of testFiles) {
+          const srcPath = path.join(testSourceDir, file);
+          const destPath = path.join(testDestDir, file);
+
+          let content = fs.readFileSync(srcPath, "utf8");
+          // Update package name if needed
+          content = content.replace(
+            /package com\.dotdotdot\.jot(\.dev)?\.widget/g,
+            `package ${packageName}.widget`,
+          );
+          fs.writeFileSync(destPath, content);
+        }
+
+        console.log(`[withAndroidWidget] Test files copied to ${testDestDir}`);
+      }
+
       return config;
     },
   ]);

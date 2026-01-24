@@ -2,10 +2,10 @@ import Foundation
 
 /// Formats countdown/time since for display
 /// Mirrors the logic from lib/utils/countdown.ts formatCountdown()
-struct CountdownFormatter {
+public struct CountdownFormatter {
 
     /// Calculate time remaining/elapsed from target date
-    static func calculateTimeRemaining(targetDate: Date) -> (isPast: Bool, days: Int, hours: Int, minutes: Int, totalMinutes: Int) {
+    public static func calculateTimeRemaining(targetDate: Date) -> (isPast: Bool, days: Int, hours: Int, minutes: Int, totalMinutes: Int) {
         let now = Date()
         let diff = targetDate.timeIntervalSince(now)
         let isPast = diff < 0
@@ -20,7 +20,7 @@ struct CountdownFormatter {
     }
 
     /// Format countdown/time since for display
-    static func format(targetDate: Date, isCountUp: Bool) -> String {
+    public static func format(targetDate: Date, isCountUp: Bool) -> String {
         let (isPast, days, hours, minutes, totalMinutes) = calculateTimeRemaining(targetDate: targetDate)
 
         // Handle < 1 day case
@@ -78,7 +78,7 @@ struct CountdownFormatter {
     }
 
     /// Get a short status label
-    static func statusLabel(targetDate: Date, isCountUp: Bool) -> String {
+    public static func statusLabel(targetDate: Date, isCountUp: Bool) -> String {
         let isPast = targetDate < Date()
 
         if isCountUp {
@@ -91,7 +91,7 @@ struct CountdownFormatter {
     }
 
     /// Check if a countdown is complete (not for countUp)
-    static func isComplete(targetDate: Date, isCountUp: Bool) -> Bool {
+    public static func isComplete(targetDate: Date, isCountUp: Bool) -> Bool {
         return !isCountUp && targetDate < Date()
     }
 }
