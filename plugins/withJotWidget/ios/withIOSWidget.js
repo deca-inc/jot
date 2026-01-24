@@ -9,7 +9,6 @@ const fs = require("fs");
 const path = require("path");
 
 const WIDGET_TARGET_NAME = "JotWidgetExtension";
-const WIDGET_BUNDLE_ID_SUFFIX = ".JotWidget";
 const APP_GROUP_ID = "group.com.betazeta.jot.widgets";
 
 /**
@@ -64,8 +63,6 @@ const withIOSWidget = (config) => {
     "ios",
     async (config) => {
       const projectRoot = config.modRequest.projectRoot;
-      const bundleId = config.ios?.bundleIdentifier || "com.betazeta.jot";
-      const widgetBundleId = `${bundleId}${WIDGET_BUNDLE_ID_SUFFIX}`;
 
       // Find the iOS project directory
       const iosDir = path.join(projectRoot, "ios");
