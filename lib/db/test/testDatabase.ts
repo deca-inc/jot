@@ -65,7 +65,11 @@ export async function setupTestDatabase(options?: {
     async runAsync(sql: string, params?: any[]) {
       const stmt = rawDb.prepare(sql);
       const result = params ? stmt.run(...params) : stmt.run();
-      return result;
+      // Normalize to expo-sqlite interface (lastInsertRowId with uppercase I)
+      return {
+        changes: result.changes,
+        lastInsertRowId: Number(result.lastInsertRowid),
+      };
     },
     async getAllAsync<T = any>(sql: string, params?: any[]): Promise<T[]> {
       const stmt = rawDb.prepare(sql);
