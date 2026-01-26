@@ -301,10 +301,7 @@ export function usePlatformSpeechToText(
         // Done processing
         setIsProcessing(false);
 
-        console.log(
-          "[usePlatformSpeechToText] Transcription complete:",
-          finalText,
-        );
+        console.log("[usePlatformSpeechToText] Transcription complete");
         onTranscriptionCompleteRef.current?.(result);
 
         return result;

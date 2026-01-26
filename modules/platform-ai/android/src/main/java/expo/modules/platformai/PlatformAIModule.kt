@@ -379,7 +379,7 @@ class PlatformAIModule : Module() {
                             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             if (!matches.isNullOrEmpty()) {
                                 currentTranscription = matches[0]
-                                Log.d(TAG, "Final result: $currentTranscription")
+                                Log.d(TAG, "Final result received")
                             }
                             isRecognitionActive = false
                         }
@@ -388,7 +388,7 @@ class PlatformAIModule : Module() {
                             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             if (!matches.isNullOrEmpty()) {
                                 currentTranscription = matches[0]
-                                Log.d(TAG, "Partial result: $currentTranscription")
+                                Log.d(TAG, "Partial result received")
                             }
                         }
 

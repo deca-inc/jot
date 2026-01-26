@@ -783,7 +783,7 @@ export function useSpeechToText(
         duration,
       };
 
-      console.log("[useSpeechToText] Transcription complete:", finalText);
+      console.log("[useSpeechToText] Transcription complete");
       onTranscriptionCompleteRef.current?.(result);
 
       return result;
