@@ -7,6 +7,7 @@ This document provides essential context for AI assistants (like Claude) working
 - [Product Fundamentals](#product-fundamentals)
 - [Architecture](#architecture)
 - [Coding Guidelines](#coding-guidelines)
+- [Design System](#design-system)
 - [Data Model](#data-model)
 - [Security & Privacy](#security--privacy)
 
@@ -492,6 +493,173 @@ const analytics = posthog as any;
 - **Proper types over `any`**: Use real types, then `unknown`, then line-level disables, file-level only as last resort
 
 When in doubt, ask: "Can I derive this from data?" and "Can I handle this with an event?" The answer is usually yes.
+
+---
+
+## Design System
+
+### Component Philosophy
+
+**Prefer shared components over inline styling.** When you find yourself writing the same styling pattern more than twice, extract it into a reusable component. This ensures:
+
+- Visual consistency across the app
+- Single source of truth for styling decisions
+- Easier updates when design changes
+- Less code duplication
+
+### Standard Components
+
+The following shared components are available in `lib/components/`:
+
+#### Input
+
+Standardized text input with consistent theming:
+
+```tsx
+import { Input } from "../components";
+
+<Input
+  value={value}
+  onChangeText={setValue}
+  placeholder="Enter text..."
+  multiline={false} // Set true for textarea behavior
+  minHeight={80} // For multiline inputs
+  autoCapitalize="none"
+  secureTextEntry={false}
+/>;
+```
+
+**Styling (built-in):**
+
+- `borderRadius: md`
+- `fontSize: 16`
+- `paddingHorizontal: md`, `paddingVertical: sm`
+- Background: `rgba(255,255,255,0.08)` dark / `rgba(255,255,255,0.9)` light
+- Border: `textSecondary + "40"`
+
+#### FormField
+
+Wrapper for form inputs with label and optional hint:
+
+```tsx
+import { FormField } from "../components";
+
+<FormField
+  label="Email Address"
+  hint="We'll never share your email"
+  marginBottom={true}  // Default: true
+>
+  <Input ... />
+</FormField>
+```
+
+**Styling (built-in):**
+
+- Label: `variant="caption"`, `fontWeight: "600"`, `marginBottom: sm`
+- Hint: `variant="caption"`, `marginTop: xs`, `fontSize: 12`
+- Container: `marginBottom: lg` (when marginBottom=true)
+
+#### FormModal
+
+Standardized modal for form dialogs with header, scrollable content, and sticky footer:
+
+```tsx
+import { FormModal } from "../components";
+
+<FormModal
+  visible={isOpen}
+  onClose={() => setIsOpen(false)}
+  title="Edit Profile"
+  footer={
+    <View style={styles.actions}>
+      <TouchableOpacity onPress={onCancel}>Cancel</TouchableOpacity>
+      <TouchableOpacity onPress={onSave}>Save</TouchableOpacity>
+    </View>
+  }
+  onBack={handleBack}          // Optional: shows back arrow
+  maxHeightRatio={0.85}        // Default: 0.85
+  showCloseButton={true}       // Default: true
+>
+  <FormField label="Name">
+    <Input ... />
+  </FormField>
+</FormModal>
+```
+
+**Features:**
+
+- Tap outside to close
+- Keyboard avoidance (iOS padding, Android height)
+- Centered header with optional back/close buttons
+- Scrollable content area
+- Sticky footer for action buttons
+- Consistent theming with `seasonalTheme.gradient.middle`
+
+#### Text
+
+Themed text component with variants:
+
+```tsx
+import { Text } from "../components";
+
+<Text variant="h1">Heading 1</Text>
+<Text variant="h2">Heading 2</Text>
+<Text variant="h3">Heading 3</Text>
+<Text variant="body">Body text</Text>
+<Text variant="caption">Caption text</Text>
+```
+
+### When to Create New Components
+
+Create a new shared component when:
+
+1. **Same styling appears 3+ times** - Extract into a component
+2. **Complex theming logic** - Encapsulate dark/light mode handling
+3. **Accessibility requirements** - Centralize a11y props
+4. **Platform-specific behavior** - Handle iOS/Android differences once
+
+### Theming
+
+Use the seasonal theme system for colors:
+
+```tsx
+const seasonalTheme = useSeasonalTheme();
+
+// Text colors
+seasonalTheme.textPrimary;
+seasonalTheme.textSecondary;
+
+// Backgrounds
+seasonalTheme.cardBg;
+seasonalTheme.gradient.start / middle / end;
+seasonalTheme.isDark; // boolean for dark mode
+
+// For dynamic backgrounds with guaranteed contrast, use:
+backgroundColor: seasonalTheme.isDark
+  ? "rgba(255, 255, 255, 0.08)"
+  : "rgba(255, 255, 255, 0.9)";
+```
+
+### Spacing & Layout
+
+Use spacing patterns from theme:
+
+```tsx
+import { spacingPatterns, borderRadius } from "../theme";
+
+// Spacing
+spacingPatterns.xxs; // 4
+spacingPatterns.xs; // 8
+spacingPatterns.sm; // 12
+spacingPatterns.md; // 16
+spacingPatterns.lg; // 24
+spacingPatterns.xl; // 32
+
+// Border radius
+borderRadius.sm; // 4
+borderRadius.md; // 8
+borderRadius.lg; // 12
+```
 
 ---
 

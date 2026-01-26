@@ -18,6 +18,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { getModelsDirectory, scanForWhisperFiles } from "../ai/modelManager";
 import { PLATFORM_STT_IDS } from "../ai/platformModels";
 import { getSTTModelById } from "../ai/sttConfig";
 import { useLLMContext } from "../ai/UnifiedModelProvider";
@@ -31,9 +32,11 @@ import {
   type TranscriptionResult,
 } from "../ai/useSpeechToText";
 import { useModelSettings } from "../db/modelSettings";
+import { useCustomModels } from "../db/useCustomModels";
 import { borderRadius, spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { Text } from "./Text";
+import type { CustomLocalModelConfig } from "../ai/customModels";
 
 // Check if glass effect is available (iOS 26+)
 const glassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
@@ -194,6 +197,7 @@ export function VoiceRecordButton({
   const modelSettings = useModelSettings();
   const llmContext = useLLMContext();
   const { hasPlatformSTT } = usePlatformModels();
+  const customModels = useCustomModels();
 
   // State
   const [isModelLoading, setIsModelLoading] = useState(false);
@@ -454,10 +458,83 @@ export function VoiceRecordButton({
         shouldUsePlatform = true;
         setUsePlatformSTT(true);
       } else {
-        // Downloadable Whisper model selected
+        // Downloadable Whisper model selected (built-in or custom)
         setUsePlatformSTT(false);
         if (!whisperSTT.isModelLoaded) {
-          const config = getSTTModelById(selectedId);
+          // First try built-in STT models
+          let config = getSTTModelById(selectedId);
+
+          // If not found, check if it's a custom local STT model
+          if (!config) {
+            console.log(
+              `[VoiceRecordButton] Built-in config not found for ${selectedId}, checking custom models`,
+            );
+            const customModel = await customModels.getByModelId(selectedId);
+
+            if (
+              customModel &&
+              customModel.modelType === "custom-local" &&
+              customModel.modelCategory === "stt"
+            ) {
+              const customLocalModel = customModel as CustomLocalModelConfig;
+              if (!customLocalModel.isDownloaded) {
+                throw new Error(
+                  "Custom voice model not downloaded. Please download it first in settings.",
+                );
+              }
+
+              // Scan the model folder for Whisper-style encoder/decoder files
+              const whisperFiles = await scanForWhisperFiles(
+                customLocalModel.folderName,
+              );
+
+              if (whisperFiles) {
+                // Found encoder/decoder/tokenizer - construct config for Whisper
+                const modelsDir = getModelsDirectory();
+                const modelDir = `${modelsDir}/${customLocalModel.folderName}`;
+
+                config = {
+                  modelType: "speech-to-text" as const,
+                  // Custom models don't use the enum, but loadModel doesn't validate this
+                  modelId:
+                    selectedId as unknown as import("../ai/sttConfig").STT_MODEL_IDS,
+                  displayName: customLocalModel.displayName,
+                  description:
+                    customLocalModel.description || "Custom voice model",
+                  size: customLocalModel.modelSize || "Unknown",
+                  folderName: customLocalModel.folderName,
+                  isMultilingual: false, // Assume English-only for custom models
+                  available: true,
+                  encoderFileName: whisperFiles.encoderFileName!,
+                  decoderFileName: whisperFiles.decoderFileName!,
+                  tokenizerFileName: whisperFiles.tokenizerFileName!,
+                  encoderSource: {
+                    kind: "remote" as const,
+                    url: `${modelDir}/${whisperFiles.encoderFileName}`,
+                  },
+                  decoderSource: {
+                    kind: "remote" as const,
+                    url: `${modelDir}/${whisperFiles.decoderFileName}`,
+                  },
+                  tokenizerSource: {
+                    kind: "remote" as const,
+                    url: `${modelDir}/${whisperFiles.tokenizerFileName}`,
+                  },
+                };
+                console.log(
+                  `[VoiceRecordButton] Using custom STT model: ${customLocalModel.displayName}`,
+                );
+              } else {
+                // No Whisper files found - model structure not compatible
+                throw new Error(
+                  `Custom voice model "${customLocalModel.displayName}" is missing required files. ` +
+                    "Whisper models need encoder, decoder, and tokenizer files. " +
+                    "Please ensure the model folder contains files with 'encoder' and 'decoder' in their names.",
+                );
+              }
+            }
+          }
+
           if (!config) {
             throw new Error("Selected STT model config not found");
           }
@@ -472,7 +549,7 @@ export function VoiceRecordButton({
       setIsModelLoading(false);
       return { success: false, usePlatform: false };
     }
-  }, [modelSettings, hasPlatformSTT, whisperSTT]);
+  }, [modelSettings, hasPlatformSTT, whisperSTT, customModels]);
 
   /**
    * Handle tap - toggle recording (tap to start, tap to stop)

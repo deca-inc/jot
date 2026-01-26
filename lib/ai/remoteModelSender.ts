@@ -6,7 +6,7 @@
  */
 
 import { createRemoteApiClient, RemoteApiError } from "./remoteApiClient";
-import type { RemoteModelConfig, ProviderId } from "./customModels";
+import type { RemoteModelConfig, ApiStyle } from "./customModels";
 import type { ChatMessage, StreamingOptions } from "./remoteApiClient";
 
 // =============================================================================
@@ -84,18 +84,15 @@ export async function sendRemoteMessage(
     throw new RemoteModelPrivacyNotAcknowledgedError(modelId);
   }
 
-  // 3. Get API key from secure storage
+  // 3. Get API key from secure storage (optional for self-hosted models)
   const apiKey = await dependencies.getApiKey(modelConfig.apiKeyRef);
-  if (!apiKey) {
-    throw new RemoteModelApiKeyMissingError(modelId);
-  }
 
   // 4. Create API client
   const client = createRemoteApiClient(
-    modelConfig.providerId as ProviderId,
+    modelConfig.providerId as ApiStyle,
     modelConfig.baseUrl,
     modelConfig.modelName,
-    apiKey,
+    apiKey || "", // Empty string for self-hosted models without API key
     modelConfig.customHeaders,
   );
 

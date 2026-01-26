@@ -7,7 +7,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   Switch,
   Platform,
@@ -17,7 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
-import { Text } from "../components";
+import { Text, Input, FormField } from "../components";
 import { useDatabase } from "../db/DatabaseProvider";
 import { EntryRepository } from "../db/entries";
 import { useCreateEntry, useUpdateEntry, useEntry } from "../db/useEntries";
@@ -496,24 +495,8 @@ export function CountdownComposer({
         keyboardShouldPersistTaps="handled"
       >
         {/* Title */}
-        <View style={styles.formGroup}>
-          <Text
-            variant="caption"
-            style={[styles.label, { color: seasonalTheme.textSecondary }]}
-          >
-            Title
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                color: seasonalTheme.textPrimary,
-                backgroundColor: seasonalTheme.isDark
-                  ? "rgba(255, 255, 255, 0.08)"
-                  : "rgba(255, 255, 255, 0.9)",
-                borderColor: seasonalTheme.textSecondary + "40",
-              },
-            ]}
+        <FormField label="Title">
+          <Input
             value={title}
             onChangeText={setTitle}
             placeholder={
@@ -521,10 +504,9 @@ export function CountdownComposer({
                 ? "What are you tracking?"
                 : "What are you counting down to?"
             }
-            placeholderTextColor={seasonalTheme.textSecondary}
             autoFocus
           />
-        </View>
+        </FormField>
 
         {/* Countdown / Time Since Toggle */}
         <View style={styles.formGroup}>
@@ -1169,35 +1151,16 @@ export function CountdownComposer({
         {showAdvanced && (
           <>
             {/* Rewards Note */}
-            <View style={styles.formGroup}>
-              <Text
-                variant="caption"
-                style={[styles.label, { color: seasonalTheme.textSecondary }]}
-              >
-                Rewards / Encouragement Note
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  styles.multilineInput,
-                  {
-                    color: seasonalTheme.textPrimary,
-                    backgroundColor: seasonalTheme.isDark
-                      ? "rgba(255, 255, 255, 0.08)"
-                      : "rgba(255, 255, 255, 0.9)",
-                    borderColor: seasonalTheme.textSecondary + "40",
-                  },
-                ]}
+            <FormField label="Rewards / Encouragement Note">
+              <Input
                 value={rewardsNote}
                 onChangeText={setRewardsNote}
                 placeholder="Write a note to yourself for when the countdown ends..."
-                placeholderTextColor={seasonalTheme.textSecondary}
                 multiline
                 numberOfLines={3}
-                textAlignVertical="top"
                 onFocus={handleRewardsNoteFocus}
               />
-            </View>
+            </FormField>
 
             {/* Confetti Toggle - only for countdowns, not Time Since */}
             {!isCountUp && (
@@ -1331,17 +1294,6 @@ const styles = StyleSheet.create({
   label: {
     marginBottom: spacingPatterns.sm,
     fontWeight: "600",
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacingPatterns.md,
-    paddingVertical: spacingPatterns.sm,
-    fontSize: 16,
-  },
-  multilineInput: {
-    minHeight: 80,
-    paddingTop: spacingPatterns.sm,
   },
   iosPickerRow: {
     flexDirection: "row",

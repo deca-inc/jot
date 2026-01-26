@@ -9,9 +9,13 @@
  * - Anthropic-specific header handling (x-api-key, anthropic-version)
  * - Error handling with user-friendly messages
  * - AbortController support for cancellation
+ *
+ * Note: Uses expo/fetch for streaming support in React Native.
+ * The standard fetch in React Native doesn't support ReadableStream.
  */
 
-import type { ProviderId } from "./customModels";
+import { fetch } from "expo/fetch";
+import { getApiStyleConfig, type ApiStyle } from "./customModels";
 
 // =============================================================================
 // TYPES
@@ -23,7 +27,8 @@ export interface ChatMessage {
 }
 
 export interface RemoteApiConfig {
-  providerId: ProviderId;
+  /** API style determines auth format and endpoints */
+  apiStyle: ApiStyle;
   baseUrl: string;
   modelName: string;
   apiKey: string;
@@ -75,7 +80,7 @@ export class RemoteApiClient {
     messages: ChatMessage[],
     options?: SendMessageOptions,
   ): Promise<string> {
-    const isAnthropic = this.config.providerId === "anthropic";
+    const isAnthropic = this.config.apiStyle === "anthropic";
 
     if (isAnthropic) {
       return this.sendAnthropicMessage(messages, options);
@@ -91,7 +96,7 @@ export class RemoteApiClient {
     messages: ChatMessage[],
     options?: StreamingOptions,
   ): Promise<string> {
-    const isAnthropic = this.config.providerId === "anthropic";
+    const isAnthropic = this.config.apiStyle === "anthropic";
 
     if (isAnthropic) {
       return this.streamAnthropicMessage(messages, options);
@@ -180,17 +185,7 @@ export class RemoteApiClient {
   }
 
   private buildOpenAIHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${this.config.apiKey}`,
-    };
-
-    // Add custom headers
-    if (this.config.customHeaders) {
-      Object.assign(headers, this.config.customHeaders);
-    }
-
-    return headers;
+    return this.buildHeaders("openai-compatible");
   }
 
   // ===========================================================================
@@ -278,11 +273,35 @@ export class RemoteApiClient {
   }
 
   private buildAnthropicHeaders(): Record<string, string> {
+    return this.buildHeaders("anthropic");
+  }
+
+  /**
+   * Build headers based on API style configuration.
+   */
+  private buildHeaders(apiStyle: ApiStyle): Record<string, string> {
+    const styleConfig = getApiStyleConfig(apiStyle);
+    if (!styleConfig) {
+      throw new Error(`Unknown API style: ${apiStyle}`);
+    }
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "x-api-key": this.config.apiKey,
-      "anthropic-version": "2023-06-01",
     };
+
+    // Add auth header based on style config (only if API key is provided)
+    if (this.config.apiKey) {
+      if (styleConfig.authFormat === "bearer") {
+        headers[styleConfig.authHeader] = `Bearer ${this.config.apiKey}`;
+      } else {
+        headers[styleConfig.authHeader] = this.config.apiKey;
+      }
+    }
+
+    // Add default headers from style (e.g., anthropic-version)
+    if (styleConfig.defaultHeaders) {
+      Object.assign(headers, styleConfig.defaultHeaders);
+    }
 
     // Add custom headers
     if (this.config.customHeaders) {
@@ -311,8 +330,11 @@ export class RemoteApiClient {
     options?: StreamingOptions,
   ): Promise<string> {
     const reader = response.body?.getReader();
+
+    // React Native's fetch doesn't support ReadableStream.getReader()
+    // Fall back to reading the full response as text
     if (!reader) {
-      throw new Error("Response body is not readable");
+      return this.processStreamResponseFallback(response, options);
     }
 
     const decoder = new TextDecoder();
@@ -354,13 +376,53 @@ export class RemoteApiClient {
     return fullResponse;
   }
 
+  /**
+   * Fallback for environments where ReadableStream is not available (React Native).
+   * Reads the full SSE response and parses all chunks at once.
+   */
+  private async processStreamResponseFallback(
+    response: Response,
+    options?: StreamingOptions,
+  ): Promise<string> {
+    const text = await response.text();
+    let fullResponse = "";
+
+    const lines = text.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6);
+        if (data === "[DONE]") {
+          continue;
+        }
+
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            fullResponse += content;
+          }
+        } catch {
+          // Skip malformed JSON lines
+        }
+      }
+    }
+
+    // Call callbacks with final result (no streaming in fallback mode)
+    options?.responseCallback?.(fullResponse);
+    options?.completeCallback?.(fullResponse);
+    return fullResponse;
+  }
+
   private async processAnthropicStreamResponse(
     response: Response,
     options?: StreamingOptions,
   ): Promise<string> {
     const reader = response.body?.getReader();
+
+    // React Native's fetch doesn't support ReadableStream.getReader()
+    // Fall back to reading the full response as text
     if (!reader) {
-      throw new Error("Response body is not readable");
+      return this.processAnthropicStreamResponseFallback(response, options);
     }
 
     const decoder = new TextDecoder();
@@ -402,6 +464,43 @@ export class RemoteApiClient {
     return fullResponse;
   }
 
+  /**
+   * Fallback for Anthropic streaming in environments where ReadableStream is not available.
+   * Reads the full SSE response and parses all chunks at once.
+   */
+  private async processAnthropicStreamResponseFallback(
+    response: Response,
+    options?: StreamingOptions,
+  ): Promise<string> {
+    const text = await response.text();
+    let fullResponse = "";
+
+    const lines = text.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6);
+
+        try {
+          const parsed = JSON.parse(data);
+          // Anthropic streaming format
+          if (parsed.type === "content_block_delta") {
+            const text = parsed.delta?.text;
+            if (text) {
+              fullResponse += text;
+            }
+          }
+        } catch {
+          // Skip malformed JSON lines
+        }
+      }
+    }
+
+    // Call callbacks with final result (no streaming in fallback mode)
+    options?.responseCallback?.(fullResponse);
+    options?.completeCallback?.(fullResponse);
+    return fullResponse;
+  }
+
   // ===========================================================================
   // ERROR HANDLING
   // ===========================================================================
@@ -432,14 +531,14 @@ export class RemoteApiClient {
  * Create a RemoteApiClient from model config and API key.
  */
 export function createRemoteApiClient(
-  providerId: ProviderId,
+  apiStyle: ApiStyle,
   baseUrl: string,
   modelName: string,
   apiKey: string,
   customHeaders?: Record<string, string>,
 ): RemoteApiClient {
   return new RemoteApiClient({
-    providerId,
+    apiStyle,
     baseUrl,
     modelName,
     apiKey,

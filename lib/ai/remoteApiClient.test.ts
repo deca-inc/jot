@@ -5,9 +5,11 @@ import {
   RemoteApiError,
 } from "./remoteApiClient";
 
-// Mock fetch globally
+// Mock expo/fetch
 const mockFetch = jest.fn();
-global.fetch = mockFetch;
+jest.mock("expo/fetch", () => ({
+  fetch: (...args: unknown[]) => mockFetch(...args),
+}));
 
 describe("RemoteApiClient", () => {
   let client: RemoteApiClient;
@@ -22,7 +24,7 @@ describe("RemoteApiClient", () => {
 
   describe("OpenAI-compatible requests", () => {
     const config: RemoteApiConfig = {
-      providerId: "openai",
+      apiStyle: "openai-compatible",
       baseUrl: "https://api.openai.com/v1",
       modelName: "gpt-4-turbo",
       apiKey: "sk-test-key",
@@ -133,7 +135,7 @@ describe("RemoteApiClient", () => {
 
   describe("Anthropic-specific requests", () => {
     const config: RemoteApiConfig = {
-      providerId: "anthropic",
+      apiStyle: "anthropic",
       baseUrl: "https://api.anthropic.com/v1",
       modelName: "claude-3-5-sonnet-20241022",
       apiKey: "sk-ant-test-key",
@@ -217,7 +219,7 @@ describe("RemoteApiClient", () => {
 
   describe("Groq requests", () => {
     const config: RemoteApiConfig = {
-      providerId: "groq",
+      apiStyle: "openai-compatible",
       baseUrl: "https://api.groq.com/openai/v1",
       modelName: "llama-3.3-70b-versatile",
       apiKey: "gsk-test-key",
@@ -257,7 +259,7 @@ describe("RemoteApiClient", () => {
 
   describe("Custom server requests", () => {
     const config: RemoteApiConfig = {
-      providerId: "custom",
+      apiStyle: "openai-compatible",
       baseUrl: "http://localhost:11434/v1",
       modelName: "llama2",
       apiKey: "optional-key",
@@ -300,7 +302,7 @@ describe("RemoteApiClient", () => {
 
   describe("streaming", () => {
     const config: RemoteApiConfig = {
-      providerId: "openai",
+      apiStyle: "openai-compatible",
       baseUrl: "https://api.openai.com/v1",
       modelName: "gpt-4-turbo",
       apiKey: "sk-test-key",
@@ -375,11 +377,82 @@ describe("RemoteApiClient", () => {
 
       expect(completeCallback).toHaveBeenCalledWith("Done");
     });
+
+    it("falls back to text response when body.getReader is unavailable (React Native)", async () => {
+      // Simulate React Native's fetch where body doesn't support getReader
+      const sseText = [
+        'data: {"choices":[{"delta":{"content":"Hello"}}]}',
+        'data: {"choices":[{"delta":{"content":" from"}}]}',
+        'data: {"choices":[{"delta":{"content":" RN"}}]}',
+        "data: [DONE]",
+      ].join("\n");
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        body: null, // React Native returns null for body
+        text: () => Promise.resolve(sseText),
+      });
+
+      const responseCallback = jest.fn();
+      const completeCallback = jest.fn();
+
+      const result = await client.sendMessageStreaming(
+        [{ role: "user", content: "Hi" }],
+        { responseCallback, completeCallback },
+      );
+
+      // In fallback mode, callbacks are called once with final result
+      expect(responseCallback).toHaveBeenCalledWith("Hello from RN");
+      expect(completeCallback).toHaveBeenCalledWith("Hello from RN");
+      expect(result).toBe("Hello from RN");
+    });
+  });
+
+  describe("streaming (Anthropic)", () => {
+    const config: RemoteApiConfig = {
+      apiStyle: "anthropic",
+      baseUrl: "https://api.anthropic.com/v1",
+      modelName: "claude-3-5-sonnet-20241022",
+      apiKey: "sk-ant-test-key",
+    };
+
+    beforeEach(() => {
+      client = new RemoteApiClient(config);
+    });
+
+    it("falls back to text response when body.getReader is unavailable (React Native)", async () => {
+      // Simulate React Native's fetch where body doesn't support getReader
+      const sseText = [
+        'data: {"type":"content_block_start"}',
+        'data: {"type":"content_block_delta","delta":{"text":"Hello"}}',
+        'data: {"type":"content_block_delta","delta":{"text":" Claude"}}',
+        'data: {"type":"message_stop"}',
+      ].join("\n");
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        body: null, // React Native returns null for body
+        text: () => Promise.resolve(sseText),
+      });
+
+      const responseCallback = jest.fn();
+      const completeCallback = jest.fn();
+
+      const result = await client.sendMessageStreaming(
+        [{ role: "user", content: "Hi" }],
+        { responseCallback, completeCallback },
+      );
+
+      // In fallback mode, callbacks are called once with final result
+      expect(responseCallback).toHaveBeenCalledWith("Hello Claude");
+      expect(completeCallback).toHaveBeenCalledWith("Hello Claude");
+      expect(result).toBe("Hello Claude");
+    });
   });
 
   describe("error handling", () => {
     const config: RemoteApiConfig = {
-      providerId: "openai",
+      apiStyle: "openai-compatible",
       baseUrl: "https://api.openai.com/v1",
       modelName: "gpt-4-turbo",
       apiKey: "sk-test-key",
@@ -449,7 +522,7 @@ describe("RemoteApiClient", () => {
 
   describe("abort support", () => {
     const config: RemoteApiConfig = {
-      providerId: "openai",
+      apiStyle: "openai-compatible",
       baseUrl: "https://api.openai.com/v1",
       modelName: "gpt-4-turbo",
       apiKey: "sk-test-key",

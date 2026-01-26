@@ -43,7 +43,7 @@ import {
   MODEL_IDS,
 } from "./modelConfig";
 import { modelDownloadStatus } from "./modelDownloadStatus";
-import { ensureModelPresent } from "./modelManager";
+import { ensureModelPresent, ensureCustomModelPresent } from "./modelManager";
 import { isRemoteModelId, isCustomLocalModelId } from "./modelTypeGuards";
 import { logStorageDebugInfo, verifyAllModels } from "./modelVerification";
 import { persistentDownloadManager } from "./persistentDownloadManager";
@@ -61,7 +61,7 @@ import {
   getPlatformAvailability,
   getAvailablePlatformLLMs,
 } from "./usePlatformModels";
-import type { RemoteModelConfig } from "./customModels";
+import type { RemoteModelConfig, CustomLocalModelConfig } from "./customModels";
 
 // =============================================================================
 // CONSTANTS
@@ -215,6 +215,132 @@ async function loadLLM(modelId: MODEL_IDS): Promise<void> {
     config,
     module: llm,
   };
+}
+
+/**
+ * Load a custom local LLM model into the singleton
+ * Similar to loadLLM but uses custom model config from database
+ */
+async function loadCustomLocalLLM(
+  customConfig: CustomLocalModelConfig,
+): Promise<void> {
+  // Already loaded with same model
+  if (
+    modelLibrarySingleton.llm &&
+    modelLibrarySingleton.llm.config.modelId === customConfig.modelId
+  ) {
+    return;
+  }
+
+  // Different model - unload first
+  if (modelLibrarySingleton.llm) {
+    modelLibrarySingleton.llm.module.interrupt();
+    modelLibrarySingleton.llm.module.delete();
+    delete modelLibrarySingleton.llm;
+    // Wait for GC
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  const llm = new LLMModule({});
+
+  // Ensure custom model files are present
+  const modelFiles = await ensureCustomModelPresent({
+    modelId: customConfig.modelId,
+    displayName: customConfig.displayName,
+    folderName: customConfig.folderName,
+    pteFileName: customConfig.pteFileName,
+    pteUrl: customConfig.huggingFaceUrl || "",
+    tokenizerUrl: customConfig.tokenizerUrl,
+    tokenizerFileName: customConfig.tokenizerFileName,
+    tokenizerConfigUrl: customConfig.tokenizerConfigUrl,
+    tokenizerConfigFileName: customConfig.tokenizerConfigFileName,
+  });
+
+  await llm.load({
+    modelSource: addFilePrefix(modelFiles.ptePath),
+    tokenizerSource: addFilePrefix(modelFiles.tokenizerPath || ""),
+    tokenizerConfigSource: addFilePrefix(modelFiles.tokenizerConfigPath || ""),
+  });
+
+  // Create a compatible config for the singleton
+  // Custom local models don't have all the fields of LlmModelConfig,
+  // but we only need modelId for the singleton tracking
+  modelLibrarySingleton.llm = {
+    config: {
+      modelId: customConfig.modelId,
+      modelType: "llm",
+      displayName: customConfig.displayName,
+      description: customConfig.description || "",
+      size: customConfig.modelSize || "Custom",
+      folderName: customConfig.folderName,
+      pteFileName: customConfig.pteFileName,
+      tokenizerFileName: customConfig.tokenizerFileName,
+      tokenizerConfigFileName: customConfig.tokenizerConfigFileName,
+      available: true,
+      pteSource: { kind: "remote", url: customConfig.huggingFaceUrl || "" },
+      tokenizerSource: customConfig.tokenizerUrl
+        ? { kind: "remote", url: customConfig.tokenizerUrl }
+        : { kind: "unavailable", reason: "Not provided" },
+      tokenizerConfigSource: customConfig.tokenizerConfigUrl
+        ? { kind: "remote", url: customConfig.tokenizerConfigUrl }
+        : { kind: "unavailable", reason: "Not provided" },
+    } as LlmModelConfig,
+    module: llm,
+  };
+}
+
+/**
+ * Send a message using a custom local LLM
+ */
+async function sendCustomLocalLLMMessage(
+  customConfig: CustomLocalModelConfig,
+  messages: Message[],
+  options?: {
+    responseCallback?: (responseSoFar: string) => void;
+    completeCallback?: (result: string) => void;
+    systemPrompt?: string;
+    thinkMode?: "no-think" | "think" | "none";
+  },
+): Promise<string> {
+  await loadCustomLocalLLM(customConfig);
+
+  let response = "";
+  modelLibrarySingleton.llm?.module.setTokenCallback({
+    tokenCallback: (token: string) => {
+      response += token;
+      options?.responseCallback?.(response);
+    },
+  });
+
+  if (!modelLibrarySingleton.llm) throw new Error("Model not loaded");
+
+  // Handle system prompt based on thinkMode
+  const thinkMode = options?.thinkMode ?? "no-think";
+  const baseSystemPrompt = options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+
+  let preparedMessages = messages;
+  if (thinkMode !== "none") {
+    let systemPrompt = baseSystemPrompt;
+
+    // Add /no_think prefix if needed (for Qwen models)
+    if (thinkMode === "no-think" && !systemPrompt.startsWith("/no_think")) {
+      systemPrompt = `/no_think ${systemPrompt}`;
+    }
+
+    preparedMessages = [
+      { role: "system", content: systemPrompt } as Message,
+      ...preparedMessages,
+    ];
+  }
+
+  const result =
+    await modelLibrarySingleton.llm?.module.generate(preparedMessages);
+  if (!result) {
+    throw new Error("No content from generation");
+  }
+
+  options?.completeCallback?.(result);
+  return result;
 }
 
 /**
@@ -586,16 +712,39 @@ export function UnifiedModelProvider({
 
         // Check if this is a custom local model
         if (isCustomLocalModelId(selectedModelId)) {
-          // TODO: Custom local models need additional path handling
-          // For now, they use the same loading mechanism as built-in models
-          // This will be implemented when custom local model downloading is added
+          // Get the custom model config from database
+          const customModelConfig =
+            await customModels.getByModelId(selectedModelId);
+          if (
+            !customModelConfig ||
+            customModelConfig.modelType !== "custom-local"
+          ) {
+            throw new Error(`Custom model not found: ${selectedModelId}`);
+          }
+
+          const customLocalConfig = customModelConfig as CustomLocalModelConfig;
+          if (!customLocalConfig.isDownloaded) {
+            throw new Error(
+              `Model "${customLocalConfig.displayName}" is not downloaded. Please download it first.`,
+            );
+          }
+
           console.log(
-            "[UnifiedModelProvider] Custom local model not yet fully supported:",
+            "[UnifiedModelProvider] Using custom local model:",
             selectedModelId,
           );
-          throw new Error(
-            "Custom local models are not yet fully supported. Please select a built-in or remote model.",
+
+          const result = await sendCustomLocalLLMMessage(
+            customLocalConfig,
+            messages,
+            {
+              responseCallback: options?.responseCallback,
+              completeCallback: options?.completeCallback,
+              systemPrompt: options?.systemPrompt,
+              thinkMode: options?.thinkMode,
+            },
           );
+          return result;
         }
 
         // Default path: built-in or platform models

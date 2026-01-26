@@ -13,130 +13,65 @@
 
 export type CustomModelType = "custom-local" | "remote-api";
 
+/** Model category - LLM for chat models, STT for speech-to-text */
+export type ModelCategory = "llm" | "stt";
+
 // =============================================================================
-// PROVIDER PRESETS
+// API STYLES
 // =============================================================================
 
-export type ProviderId = "openai" | "anthropic" | "groq" | "custom";
+/**
+ * API style determines authentication and request format:
+ * - "openai-compatible": Bearer auth, /chat/completions endpoint (OpenAI, Groq, Ollama, vLLM, etc.)
+ * - "anthropic": x-api-key auth, /messages endpoint, anthropic-version header
+ */
+export type ApiStyle = "openai-compatible" | "anthropic";
 
-export interface ProviderPreset {
-  providerId: ProviderId;
+// Keep ProviderId as alias for backwards compatibility with database
+export type ProviderId = ApiStyle;
+
+export interface ApiStyleConfig {
+  id: ApiStyle;
   displayName: string;
-  baseUrl: string;
   description: string;
-  models: ProviderModelPreset[];
-  /** Whether to use x-api-key header instead of Bearer auth */
-  usesApiKeyHeader?: boolean;
-  /** Custom headers required by this provider */
+  defaultBaseUrl: string;
+  /** Header name for API key */
+  authHeader: string;
+  /** Auth header format - "bearer" for "Bearer <key>", "raw" for just "<key>" */
+  authFormat: "bearer" | "raw";
+  /** Additional default headers */
   defaultHeaders?: Record<string, string>;
 }
 
-export interface ProviderModelPreset {
-  modelName: string;
-  displayName: string;
-  description: string;
-  maxTokens?: number;
-}
-
-export const PROVIDER_PRESETS: ProviderPreset[] = [
+export const API_STYLES: ApiStyleConfig[] = [
   {
-    providerId: "openai",
-    displayName: "OpenAI",
-    baseUrl: "https://api.openai.com/v1",
-    description: "GPT-4o, GPT-4 Turbo, and more",
-    models: [
-      {
-        modelName: "gpt-4o",
-        displayName: "GPT-4o",
-        description: "Most capable, multimodal",
-        maxTokens: 4096,
-      },
-      {
-        modelName: "gpt-4-turbo",
-        displayName: "GPT-4 Turbo",
-        description: "Fast and capable",
-        maxTokens: 4096,
-      },
-      {
-        modelName: "gpt-3.5-turbo",
-        displayName: "GPT-3.5 Turbo",
-        description: "Fast and affordable",
-        maxTokens: 4096,
-      },
-    ],
+    id: "openai-compatible",
+    displayName: "OpenAI-Compatible",
+    description: "Works with OpenAI, Groq, Ollama, vLLM, and most providers",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    authHeader: "Authorization",
+    authFormat: "bearer",
   },
   {
-    providerId: "anthropic",
+    id: "anthropic",
     displayName: "Anthropic",
-    baseUrl: "https://api.anthropic.com/v1",
-    description: "Claude 3.5 Sonnet, Claude 3 Opus, and more",
-    usesApiKeyHeader: true,
+    description: "For Claude models via Anthropic's API",
+    defaultBaseUrl: "https://api.anthropic.com/v1",
+    authHeader: "x-api-key",
+    authFormat: "raw",
     defaultHeaders: {
       "anthropic-version": "2023-06-01",
     },
-    models: [
-      {
-        modelName: "claude-sonnet-4-20250514",
-        displayName: "Claude Sonnet 4",
-        description: "Best balance of speed and intelligence",
-        maxTokens: 8192,
-      },
-      {
-        modelName: "claude-3-5-sonnet-20241022",
-        displayName: "Claude 3.5 Sonnet",
-        description: "Fast and highly capable",
-        maxTokens: 8192,
-      },
-      {
-        modelName: "claude-3-haiku-20240307",
-        displayName: "Claude 3 Haiku",
-        description: "Fastest, most affordable",
-        maxTokens: 4096,
-      },
-    ],
-  },
-  {
-    providerId: "groq",
-    displayName: "Groq",
-    baseUrl: "https://api.groq.com/openai/v1",
-    description: "Ultra-fast inference with Llama and Mixtral",
-    models: [
-      {
-        modelName: "llama-3.3-70b-versatile",
-        displayName: "Llama 3.3 70B",
-        description: "High quality, very fast",
-        maxTokens: 8192,
-      },
-      {
-        modelName: "llama-3.1-8b-instant",
-        displayName: "Llama 3.1 8B",
-        description: "Ultra-fast responses",
-        maxTokens: 8192,
-      },
-      {
-        modelName: "mixtral-8x7b-32768",
-        displayName: "Mixtral 8x7B",
-        description: "Large context, fast inference",
-        maxTokens: 32768,
-      },
-    ],
-  },
-  {
-    providerId: "custom",
-    displayName: "Custom Server",
-    baseUrl: "",
-    description: "Self-hosted (Ollama, vLLM, etc.)",
-    models: [],
   },
 ];
 
 /**
- * Get a provider preset by ID
+ * Get API style config by ID
  */
-export function getProviderPreset(
-  providerId: ProviderId,
-): ProviderPreset | undefined {
-  return PROVIDER_PRESETS.find((p) => p.providerId === providerId);
+export function getApiStyleConfig(
+  apiStyle: ApiStyle,
+): ApiStyleConfig | undefined {
+  return API_STYLES.find((s) => s.id === apiStyle);
 }
 
 // =============================================================================
@@ -151,10 +86,16 @@ export interface CustomLocalModelConfig {
   /** Unique identifier, e.g., 'custom-mistral-7b' */
   modelId: string;
   modelType: "custom-local";
+  /** Model category: 'llm' for chat models, 'stt' for speech-to-text */
+  modelCategory: ModelCategory;
   displayName: string;
   description?: string;
-  /** Source HuggingFace URL for reference */
+  /** Source HuggingFace URL for the .pte model file */
   huggingFaceUrl?: string;
+  /** Full URL to tokenizer.json */
+  tokenizerUrl?: string;
+  /** Full URL to tokenizer_config.json */
+  tokenizerConfigUrl?: string;
   /** Storage folder name under app's model directory */
   folderName: string;
   /** Main model file name */
@@ -168,6 +109,8 @@ export interface CustomLocalModelConfig {
   /** RAM required for inference, e.g., "8GB" */
   ramRequired?: string;
   isEnabled: boolean;
+  /** Whether the model files have been downloaded */
+  isDownloaded: boolean;
 }
 
 // =============================================================================
@@ -182,6 +125,8 @@ export interface RemoteModelConfig {
   /** Unique identifier, e.g., 'remote-openai-gpt-4' */
   modelId: string;
   modelType: "remote-api";
+  /** Model category: 'llm' for chat models, 'stt' for speech-to-text */
+  modelCategory: ModelCategory;
   displayName: string;
   description?: string;
   /** Provider identifier for fetching presets */
@@ -237,10 +182,13 @@ export interface CustomModelRow {
   id: number;
   modelId: string;
   modelType: string;
+  modelCategory: string;
   displayName: string;
   description: string | null;
   // Custom local model fields
   huggingFaceUrl: string | null;
+  tokenizerUrl: string | null;
+  tokenizerConfigUrl: string | null;
   folderName: string | null;
   pteFileName: string | null;
   tokenizerFileName: string | null;
@@ -248,6 +196,7 @@ export interface CustomModelRow {
   modelSize: string | null;
   quantization: string | null;
   ramRequired: string | null;
+  isDownloaded: number;
   // Remote API model fields
   providerId: string | null;
   baseUrl: string | null;
@@ -270,7 +219,14 @@ export interface CustomModelRow {
 export interface CreateCustomLocalModelInput {
   displayName: string;
   description?: string;
+  /** Model category: 'llm' for chat models, 'stt' for speech-to-text. Defaults to 'llm' */
+  modelCategory?: ModelCategory;
+  /** Full URL to the .pte model file */
   huggingFaceUrl?: string;
+  /** Full URL to tokenizer.json */
+  tokenizerUrl?: string;
+  /** Full URL to tokenizer_config.json */
+  tokenizerConfigUrl?: string;
   folderName: string;
   pteFileName: string;
   tokenizerFileName?: string;
@@ -283,7 +239,10 @@ export interface CreateCustomLocalModelInput {
 export interface CreateRemoteModelInput {
   displayName: string;
   description?: string;
-  providerId: ProviderId;
+  /** Model category: 'llm' for chat models, 'stt' for speech-to-text. Defaults to 'llm' */
+  modelCategory?: ModelCategory;
+  /** API style determines auth format and endpoints */
+  providerId: ApiStyle;
   baseUrl: string;
   modelName: string;
   customHeaders?: Record<string, string>;
@@ -296,6 +255,13 @@ export interface UpdateCustomModelInput {
   description?: string;
   isEnabled?: boolean;
   privacyAcknowledged?: boolean;
+  // Custom local model specific
+  huggingFaceUrl?: string;
+  tokenizerUrl?: string | null;
+  tokenizerConfigUrl?: string | null;
+  tokenizerFileName?: string | null;
+  tokenizerConfigFileName?: string | null;
+  isDownloaded?: boolean;
   // Remote model specific
   maxTokens?: number;
   temperature?: number;

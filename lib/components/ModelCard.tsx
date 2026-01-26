@@ -1,317 +1,455 @@
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  Pressable,
 } from "react-native";
-import { LlmModelConfig, SpeechToTextModelConfig } from "../ai/modelConfig";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
-import { Button } from "./Button";
 import { Text } from "./Text";
 
-// Estimated file sizes in MB
-const MODEL_SIZES: Record<string, number> = {
-  // LLM models
-  "llama-3.2-1b-instruct": 1083,
-  "llama-3.2-3b-instruct": 2435,
-  "qwen-3-0.6b": 900,
-  "qwen-3-1.7b": 2064,
-  "qwen-3-4b": 3527,
-  "smollm2-135m": 535,
-  "smollm2-360m": 1360,
-  "smollm2-1.7b": 1220,
-  // STT models
-  "whisper-tiny-en": 233,
-  "whisper-tiny-multi": 233,
-};
-
-type ModelConfig = LlmModelConfig | SpeechToTextModelConfig;
+// Badge configuration for different model types
+export interface ModelCardBadge {
+  text: string;
+  variant: "success" | "accent" | "secondary" | "warning";
+  icon?: keyof typeof Ionicons.glyphMap;
+}
 
 export interface ModelCardProps {
-  model: ModelConfig;
-  isDownloaded: boolean;
+  /** Model display name */
+  displayName: string;
+  /** Model description (optional) */
+  description?: string | null;
+  /** Badge to show (e.g., BUILT-IN, LOCAL, REMOTE) */
+  badge?: ModelCardBadge | null;
+  /** Whether this model is currently selected */
   isSelected: boolean;
-  isDownloading: boolean;
-  isLoading: boolean;
-  isNotRecommended?: boolean;
+  /** Whether this model is currently downloading */
+  isDownloading?: boolean;
+  /** Whether this model is currently loading */
+  isLoading?: boolean;
+  /** Download progress (0-100) */
   downloadProgress?: number;
-  onDownload: () => void;
-  onSelect: () => void;
-  onRemove: () => void;
+  /** Formatted size string (e.g., "1.2 GB") */
+  sizeText?: string | null;
+  /** Warning badge text (shows as inline badge) */
+  warningBadge?: string | null;
+  /** Warning text (shows as small text below description) */
+  warningText?: string | null;
+  /** Whether the model can be selected (e.g., is downloaded) */
+  canSelect?: boolean;
+  /** Whether download action is available */
+  canDownload?: boolean;
+  /** Whether edit action is available */
+  canEdit?: boolean;
+  /** Whether remove/delete action is available */
+  canRemove?: boolean;
+  /** Called when model is selected */
+  onSelect?: () => void;
+  /** Called when download is requested */
+  onDownload?: () => void;
+  /** Called when edit is requested */
+  onEdit?: () => void;
+  /** Called when remove/delete is requested */
+  onRemove?: () => void;
 }
 
 export function ModelCard({
-  model,
-  isDownloaded,
+  displayName,
+  description,
+  badge,
   isSelected,
-  isDownloading,
-  isLoading,
-  isNotRecommended = false,
+  isDownloading = false,
+  isLoading = false,
   downloadProgress,
-  onDownload,
+  sizeText,
+  warningBadge,
+  warningText,
+  canSelect = true,
+  canDownload = false,
+  canEdit = false,
+  canRemove = false,
   onSelect,
+  onDownload,
+  onEdit,
   onRemove,
 }: ModelCardProps) {
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+  const menuButtonRef = useRef<View>(null);
 
-  const formatSize = (mb: number) => {
-    if (mb < 1024) return `${mb} MB`;
-    const gb = mb / 1024;
-    return `${gb.toFixed(1)} GB`;
+  // Close menu when card state changes
+  useEffect(() => {
+    if (isDownloading || isLoading) {
+      setShowMenu(false);
+    }
+  }, [isDownloading, isLoading]);
+
+  const getBadgeColor = (variant: ModelCardBadge["variant"]) => {
+    switch (variant) {
+      case "success":
+        return theme.colors.success;
+      case "accent":
+        return theme.colors.accent;
+      case "warning":
+        return theme.colors.warning;
+      case "secondary":
+      default:
+        return seasonalTheme.textSecondary;
+    }
   };
 
-  const estimatedSize = MODEL_SIZES[model.modelId] || 0;
-
-  const renderActionButton = () => {
-    if (isDownloading) {
-      return (
-        <View style={styles.iconButtonContainer}>
-          <ActivityIndicator size="small" color={theme.colors.accent} />
-        </View>
-      );
+  const handlePress = () => {
+    if (canSelect && onSelect && !isDownloading && !isLoading) {
+      onSelect();
     }
+  };
 
-    if (!isDownloaded) {
-      return (
-        <Button
-          variant="secondary"
-          size="sm"
-          label="Download Model"
-          metadata={{ modelId: model.modelId, modelSize: model.size }}
+  const handleMenuPress = () => {
+    menuButtonRef.current?.measureInWindow((x, y, width, height) => {
+      setMenuPosition({
+        top: y + height + 4,
+        right: 20,
+      });
+      setShowMenu(true);
+    });
+  };
+
+  const handleEdit = () => {
+    setShowMenu(false);
+    onEdit?.();
+  };
+
+  const handleRemove = () => {
+    setShowMenu(false);
+    onRemove?.();
+  };
+
+  const hasMenuItems = (canEdit && onEdit) || (canRemove && onRemove);
+
+  const renderActions = () => {
+    const actions: React.ReactNode[] = [];
+
+    // Download button
+    if (canDownload && onDownload && !isDownloading) {
+      actions.push(
+        <TouchableOpacity
+          key="download"
           onPress={onDownload}
-          style={styles.iconButton}
+          style={[
+            styles.actionButton,
+            { backgroundColor: theme.colors.accent },
+          ]}
         >
-          <Ionicons
-            name="download-outline"
-            size={16}
-            color={theme.colors.accent}
-          />
-        </Button>
+          <Ionicons name="cloud-download-outline" size={14} color="white" />
+        </TouchableOpacity>,
       );
     }
 
-    return (
-      <Button
-        variant="secondary"
-        size="sm"
-        label="Remove Model"
-        metadata={{ modelId: model.modelId, modelSize: model.size }}
-        onPress={onRemove}
-        disabled={isSelected}
-        style={styles.iconButton}
-      >
-        <Ionicons
-          name="trash-outline"
-          size={16}
-          color={
-            isSelected ? theme.colors.textTertiary : seasonalTheme.textSecondary
-          }
-        />
-      </Button>
-    );
+    // Loading indicator when downloading or loading
+    if (isDownloading || isLoading) {
+      actions.push(
+        <View key="loading" style={styles.actionButtonContainer}>
+          <ActivityIndicator size="small" color={theme.colors.accent} />
+        </View>,
+      );
+    }
+
+    // Overflow menu button (for edit/delete)
+    if (hasMenuItems && !isDownloading && !isLoading) {
+      actions.push(
+        <View key="menu" ref={menuButtonRef} collapsable={false}>
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              handleMenuPress();
+            }}
+            style={styles.iconButton}
+          >
+            <Ionicons
+              name="ellipsis-horizontal"
+              size={18}
+              color={seasonalTheme.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>,
+      );
+    }
+
+    return actions;
   };
 
   return (
-    <View
-      style={[
-        styles.modelCard,
-        {
-          backgroundColor: seasonalTheme.cardBg,
-          borderColor: isSelected
-            ? theme.colors.accent
-            : `${theme.colors.border}20`,
-          borderWidth: isSelected ? 2 : 1,
-        },
-      ]}
-    >
-      {/* Main Row */}
-      <TouchableOpacity
-        style={styles.modelCardTouchable}
-        onPress={() => isDownloaded && onSelect()}
-        disabled={isDownloading || !isDownloaded}
-        activeOpacity={0.7}
+    <>
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: seasonalTheme.cardBg,
+            borderColor: isSelected
+              ? theme.colors.accent
+              : `${theme.colors.border}40`,
+            borderWidth: isSelected ? 2 : 1,
+          },
+        ]}
       >
-        <View style={styles.modelCardContent}>
-          {/* Checkbox or Spinner */}
-          {isLoading ? (
-            <View style={styles.checkboxContainer}>
-              <ActivityIndicator size="small" color={theme.colors.accent} />
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.checkbox,
-                {
-                  borderColor: `${theme.colors.border}40`,
-                  backgroundColor: isSelected
-                    ? theme.colors.accent
-                    : "transparent",
-                },
-              ]}
-            >
-              {isSelected && (
-                <Text style={[styles.checkmark, { color: "white" }]}>✓</Text>
+        <TouchableOpacity
+          style={styles.cardTouchable}
+          onPress={handlePress}
+          disabled={isDownloading || isLoading || !canSelect}
+          activeOpacity={0.7}
+          delayPressIn={50}
+        >
+          <View style={styles.cardContent}>
+            {/* Model Info */}
+            <View style={styles.modelInfo}>
+              <View style={styles.headerRow}>
+                <Text
+                  variant="body"
+                  style={[
+                    styles.modelName,
+                    { color: seasonalTheme.textPrimary, fontWeight: "600" },
+                  ]}
+                >
+                  {displayName}
+                </Text>
+                {badge && (
+                  <View
+                    style={[
+                      styles.badge,
+                      { backgroundColor: `${getBadgeColor(badge.variant)}20` },
+                    ]}
+                  >
+                    {badge.icon && (
+                      <Ionicons
+                        name={badge.icon}
+                        size={10}
+                        color={getBadgeColor(badge.variant)}
+                        style={styles.badgeIcon}
+                      />
+                    )}
+                    <Text
+                      variant="caption"
+                      style={[
+                        styles.badgeText,
+                        { color: getBadgeColor(badge.variant) },
+                      ]}
+                    >
+                      {badge.text}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {description && (
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.modelDescription,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  {description}
+                </Text>
               )}
-              {isDownloaded && !isSelected && (
+              {warningBadge && (
                 <View
                   style={[
-                    styles.downloadedDot,
-                    { backgroundColor: theme.colors.primaryLight },
+                    styles.warningBadgeContainer,
+                    { backgroundColor: `${theme.colors.warning}20` },
                   ]}
-                />
+                >
+                  <Ionicons
+                    name="warning"
+                    size={10}
+                    color={theme.colors.warning}
+                  />
+                  <Text
+                    style={[
+                      styles.warningBadgeText,
+                      { color: theme.colors.warning },
+                    ]}
+                  >
+                    {warningBadge}
+                  </Text>
+                </View>
+              )}
+              {warningText && (
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.warningTextStyle,
+                    { color: theme.colors.warning },
+                  ]}
+                >
+                  {warningText}
+                </Text>
+              )}
+              {/* Progress bar when downloading */}
+              {isDownloading && downloadProgress !== undefined && (
+                <View style={styles.progressContainer}>
+                  <View
+                    style={[
+                      styles.progressBar,
+                      { backgroundColor: `${theme.colors.border}30` },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          backgroundColor: theme.colors.accent,
+                          width: `${downloadProgress}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text
+                    variant="caption"
+                    style={[
+                      styles.progressText,
+                      { color: seasonalTheme.textSecondary },
+                    ]}
+                  >
+                    {downloadProgress}%
+                  </Text>
+                </View>
               )}
             </View>
-          )}
 
-          {/* Model Info */}
-          <View style={styles.modelInfo}>
-            <Text
-              variant="body"
-              style={[
-                styles.modelName,
-                {
-                  color:
-                    isNotRecommended && !isDownloaded
-                      ? seasonalTheme.textSecondary
-                      : seasonalTheme.textPrimary,
-                  fontWeight: isSelected ? "600" : "400",
-                },
-              ]}
-            >
-              {model.displayName}
-            </Text>
-            <Text
-              variant="caption"
-              style={[
-                styles.modelDescription,
-                { color: seasonalTheme.textSecondary },
-              ]}
-            >
-              {model.description}
-            </Text>
-            {isNotRecommended && !isDownloaded && (
-              <View
-                style={[
-                  styles.warningBadge,
-                  { backgroundColor: `${theme.colors.warning}20` },
-                ]}
-              >
-                <Ionicons
-                  name="warning"
-                  size={10}
-                  color={theme.colors.warning}
-                />
+            {/* Right section: Size + Actions */}
+            <View style={styles.rightSection}>
+              {sizeText && (
                 <Text
-                  style={[styles.warningText, { color: theme.colors.warning }]}
+                  variant="caption"
+                  style={[
+                    styles.sizeText,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
                 >
-                  May crash on this device
+                  {sizeText}
                 </Text>
-              </View>
-            )}
+              )}
+              <View style={styles.actionsRow}>{renderActions()}</View>
+            </View>
           </View>
+        </TouchableOpacity>
+      </View>
 
-          {/* Size and Action */}
-          <View style={styles.rightSection}>
-            <Text
-              variant="caption"
-              style={[styles.modelSize, { color: seasonalTheme.textSecondary }]}
-            >
-              {formatSize(estimatedSize)}
-            </Text>
-            {renderActionButton()}
-          </View>
-        </View>
-      </TouchableOpacity>
-
-      {/* Progress Bar (only shown when downloading) */}
-      {isDownloading && downloadProgress !== undefined && (
-        <View style={styles.progressContainer}>
+      {/* Overflow Menu */}
+      <Modal
+        visible={showMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMenu(false)}
+      >
+        <Pressable
+          style={styles.menuOverlay}
+          onPress={() => setShowMenu(false)}
+        >
           <View
             style={[
-              styles.progressBar,
-              { backgroundColor: `${theme.colors.accent}30` },
+              styles.menuContainer,
+              {
+                backgroundColor: seasonalTheme.isDark ? "#2a2a2a" : "#ffffff",
+                top: menuPosition.top,
+                right: menuPosition.right,
+              },
             ]}
           >
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${downloadProgress}%`,
-                  backgroundColor: theme.colors.accent,
-                },
-              ]}
-            />
+            {canEdit && onEdit && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+                <Ionicons
+                  name="pencil-outline"
+                  size={16}
+                  color={seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="body"
+                  style={[
+                    styles.menuItemText,
+                    { color: seasonalTheme.textPrimary },
+                  ]}
+                >
+                  Edit
+                </Text>
+              </TouchableOpacity>
+            )}
+            {canRemove && onRemove && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleRemove}>
+                <Ionicons
+                  name="trash-outline"
+                  size={16}
+                  color={theme.colors.error}
+                />
+                <Text
+                  variant="body"
+                  style={[styles.menuItemText, { color: theme.colors.error }]}
+                >
+                  Delete
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
-          <Text
-            variant="caption"
-            style={[
-              styles.progressText,
-              { color: seasonalTheme.textSecondary },
-            ]}
-          >
-            {downloadProgress.toFixed(0)}%
-          </Text>
-        </View>
-      )}
-    </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  modelCard: {
+  card: {
     borderRadius: borderRadius.sm,
     borderWidth: 1,
     overflow: "hidden",
   },
-  modelCardTouchable: {
+  cardTouchable: {
     paddingHorizontal: spacingPatterns.sm,
     paddingVertical: spacingPatterns.xs,
   },
-  modelCardContent: {
+  cardContent: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacingPatterns.sm,
-  },
-  checkboxContainer: {
-    width: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkmark: {
-    fontSize: 14,
-    fontWeight: "bold",
-    lineHeight: 14,
-    textAlign: "center",
-    marginTop: 2,
-  },
-  downloadedDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
   },
   modelInfo: {
     flex: 1,
     gap: 2,
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.xs,
+  },
   modelName: {
     fontSize: 14,
     lineHeight: 16,
   },
-  warningBadge: {
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeIcon: {
+    marginRight: 2,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  modelDescription: {
+    fontSize: 11,
+    lineHeight: 13,
+  },
+  warningBadgeContainer: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
@@ -321,38 +459,16 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
   },
-  warningText: {
+  warningBadgeText: {
     fontSize: 9,
     fontWeight: "600",
   },
-  modelDescription: {
-    fontSize: 11,
-    lineHeight: 13,
-  },
-  rightSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingPatterns.xs,
-  },
-  modelSize: {
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  iconButton: {
-    minWidth: 32,
-    paddingHorizontal: spacingPatterns.xs,
-    paddingVertical: 4,
-  },
-  iconButtonContainer: {
-    width: 32,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
+  warningTextStyle: {
+    fontSize: 10,
+    marginTop: 4,
   },
   progressContainer: {
-    marginHorizontal: spacingPatterns.sm,
     marginTop: spacingPatterns.xs,
-    marginBottom: spacingPatterns.xs,
     flexDirection: "row",
     alignItems: "center",
     gap: spacingPatterns.xs,
@@ -368,9 +484,62 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   progressText: {
-    minWidth: 35,
-    textAlign: "right",
     fontSize: 10,
     fontWeight: "600",
+  },
+  rightSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.xs,
+  },
+  sizeText: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  actionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.xs,
+  },
+  actionButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionButtonContainer: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconButton: {
+    padding: 4,
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+  },
+  menuContainer: {
+    position: "absolute",
+    minWidth: 120,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacingPatterns.xs,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.sm,
+    paddingHorizontal: spacingPatterns.md,
+    paddingVertical: spacingPatterns.sm,
+  },
+  menuItemText: {
+    fontSize: 14,
   },
 });

@@ -599,3 +599,315 @@ export async function getSTTModelSize(
     return 0;
   }
 }
+
+// =============================================================================
+// CUSTOM LOCAL MODEL FUNCTIONS
+// =============================================================================
+
+export interface CustomLocalModelDownloadConfig {
+  modelId: string;
+  displayName: string;
+  folderName: string;
+  pteFileName: string;
+  /** Full URL to the .pte model file */
+  pteUrl: string;
+  /** Full URL to tokenizer.json (optional) */
+  tokenizerUrl?: string;
+  /** Filename for tokenizer.json */
+  tokenizerFileName?: string;
+  /** Full URL to tokenizer_config.json (optional) */
+  tokenizerConfigUrl?: string;
+  /** Filename for tokenizer_config.json */
+  tokenizerConfigFileName?: string;
+}
+
+export interface EnsureCustomModelResult {
+  ptePath: string;
+  tokenizerPath?: string;
+  tokenizerConfigPath?: string;
+}
+
+/**
+ * Ensure custom local model files are present.
+ * Downloads from user-provided URLs if not already cached.
+ */
+export async function ensureCustomModelPresent(
+  config: CustomLocalModelDownloadConfig,
+  onProgress?: (progress: number) => void,
+): Promise<EnsureCustomModelResult> {
+  await ensureModelsDir();
+  const modelDir = await ensureModelsDir(config.folderName);
+
+  // Check if .pte file already exists
+  const ptePath = joinPaths(modelDir, config.pteFileName);
+  const pteInfo = await FileSystem.getInfoAsync(ptePath);
+
+  const hasTokenizer = config.tokenizerUrl && config.tokenizerFileName;
+  const hasTokenizerConfig =
+    config.tokenizerConfigUrl && config.tokenizerConfigFileName;
+
+  // Check what files exist
+  let tokenizerPath: string | undefined;
+  let tokenizerConfigPath: string | undefined;
+
+  if (hasTokenizer) {
+    tokenizerPath = joinPaths(modelDir, config.tokenizerFileName!);
+  }
+  if (hasTokenizerConfig) {
+    tokenizerConfigPath = joinPaths(modelDir, config.tokenizerConfigFileName!);
+  }
+
+  const [tokenizerInfo, tokenizerConfigInfo] = await Promise.all([
+    tokenizerPath ? FileSystem.getInfoAsync(tokenizerPath) : null,
+    tokenizerConfigPath ? FileSystem.getInfoAsync(tokenizerConfigPath) : null,
+  ]);
+
+  const allExist =
+    pteInfo.exists &&
+    pteInfo.size &&
+    pteInfo.size > 0 &&
+    (!hasTokenizer ||
+      (tokenizerInfo?.exists &&
+        tokenizerInfo.size &&
+        tokenizerInfo.size > 0)) &&
+    (!hasTokenizerConfig ||
+      (tokenizerConfigInfo?.exists &&
+        tokenizerConfigInfo.size &&
+        tokenizerConfigInfo.size > 0));
+
+  if (allExist) {
+    console.log(
+      `[ensureCustomModelPresent] All files cached for ${config.modelId}`,
+    );
+    onProgress?.(1.0);
+    return { ptePath, tokenizerPath, tokenizerConfigPath };
+  }
+
+  // Start download tracking
+  modelDownloadStatus.startDownload(config.modelId, config.displayName);
+
+  try {
+    // Calculate weights based on what actually needs to be downloaded
+    const needsPte = !pteInfo.exists || !pteInfo.size || pteInfo.size === 0;
+    const needsTokenizer =
+      hasTokenizer &&
+      (!tokenizerInfo?.exists ||
+        !tokenizerInfo.size ||
+        tokenizerInfo.size === 0);
+    const needsTokenizerConfig =
+      hasTokenizerConfig &&
+      (!tokenizerConfigInfo?.exists ||
+        !tokenizerConfigInfo.size ||
+        tokenizerConfigInfo.size === 0);
+
+    // Distribute weights based on what needs downloading (pte gets most weight)
+    const totalFiles =
+      (needsPte ? 8 : 0) +
+      (needsTokenizer ? 1 : 0) +
+      (needsTokenizerConfig ? 1 : 0);
+    const pteWeight = totalFiles > 0 ? (needsPte ? 8 / totalFiles : 0) : 0;
+    const tokenizerWeight =
+      totalFiles > 0 ? (needsTokenizer ? 1 / totalFiles : 0) : 0;
+    const tokenizerConfigWeight =
+      totalFiles > 0 ? (needsTokenizerConfig ? 1 / totalFiles : 0) : 0;
+
+    let currentProgress = 0;
+
+    let finalPtePath = ptePath;
+    if (needsPte) {
+      console.log(
+        `[ensureCustomModelPresent] Downloading model: ${config.pteUrl}`,
+      );
+      finalPtePath = await ensureFromRemoteToFolder(
+        config.pteUrl,
+        config.folderName,
+        config.pteFileName,
+        config.modelId,
+        config.displayName,
+        "model",
+        (progress) => {
+          const overallProgress = Math.min(
+            1.0,
+            currentProgress + progress * pteWeight,
+          );
+          onProgress?.(overallProgress);
+          modelDownloadStatus.updateProgress(
+            config.modelId,
+            Math.min(100, Math.round(overallProgress * 100)),
+          );
+        },
+      );
+      currentProgress += pteWeight;
+    }
+
+    // Download tokenizer if provided
+    let finalTokenizerPath = tokenizerPath;
+    if (needsTokenizer) {
+      console.log(
+        `[ensureCustomModelPresent] Downloading tokenizer: ${config.tokenizerUrl}`,
+      );
+      finalTokenizerPath = await ensureFromRemoteToFolder(
+        config.tokenizerUrl!,
+        config.folderName,
+        config.tokenizerFileName!,
+        config.modelId,
+        config.displayName,
+        "tokenizer",
+        (progress) => {
+          const overallProgress = Math.min(
+            1.0,
+            currentProgress + progress * tokenizerWeight,
+          );
+          onProgress?.(overallProgress);
+          modelDownloadStatus.updateProgress(
+            config.modelId,
+            Math.min(100, Math.round(overallProgress * 100)),
+          );
+        },
+      );
+      currentProgress += tokenizerWeight;
+    }
+
+    // Download tokenizer config if provided
+    let finalTokenizerConfigPath = tokenizerConfigPath;
+    if (needsTokenizerConfig) {
+      console.log(
+        `[ensureCustomModelPresent] Downloading tokenizer config: ${config.tokenizerConfigUrl}`,
+      );
+      finalTokenizerConfigPath = await ensureFromRemoteToFolder(
+        config.tokenizerConfigUrl!,
+        config.folderName,
+        config.tokenizerConfigFileName!,
+        config.modelId,
+        config.displayName,
+        "config",
+        (progress) => {
+          const overallProgress = Math.min(
+            1.0,
+            currentProgress + progress * tokenizerConfigWeight,
+          );
+          onProgress?.(overallProgress);
+          modelDownloadStatus.updateProgress(
+            config.modelId,
+            Math.min(100, Math.round(overallProgress * 100)),
+          );
+        },
+      );
+    }
+
+    // Complete
+    modelDownloadStatus.completeDownload(config.modelId);
+    onProgress?.(1.0);
+
+    console.log(
+      `[ensureCustomModelPresent] All files downloaded for ${config.modelId}`,
+    );
+    return {
+      ptePath: finalPtePath,
+      tokenizerPath: finalTokenizerPath,
+      tokenizerConfigPath: finalTokenizerConfigPath,
+    };
+  } catch (e) {
+    modelDownloadStatus.failDownload(
+      config.modelId,
+      e instanceof Error ? e.message : "Download failed",
+    );
+    throw e;
+  }
+}
+
+/**
+ * Delete a downloaded custom model from the device
+ */
+export async function deleteCustomModel(folderName: string): Promise<void> {
+  const modelDir = joinPaths(modelsDir, folderName);
+  const info = await FileSystem.getInfoAsync(modelDir);
+  if (info.exists) {
+    await FileSystem.deleteAsync(modelDir, { idempotent: true });
+    console.log(`[deleteCustomModel] Deleted model directory: ${modelDir}`);
+  }
+}
+
+/**
+ * Check if a custom model is downloaded
+ */
+export async function isCustomModelDownloaded(
+  folderName: string,
+  pteFileName: string,
+): Promise<boolean> {
+  const modelDir = joinPaths(modelsDir, folderName);
+  const ptePath = joinPaths(modelDir, pteFileName);
+  const pteInfo = await FileSystem.getInfoAsync(ptePath);
+  return pteInfo.exists && !!pteInfo.size && pteInfo.size > 0;
+}
+
+/**
+ * Get file paths for a downloaded custom model
+ */
+export function getCustomModelPaths(
+  folderName: string,
+  pteFileName: string,
+  tokenizerFileName?: string,
+  tokenizerConfigFileName?: string,
+): {
+  ptePath: string;
+  tokenizerPath?: string;
+  tokenizerConfigPath?: string;
+} {
+  const modelDir = joinPaths(modelsDir, folderName);
+  return {
+    ptePath: joinPaths(modelDir, pteFileName),
+    tokenizerPath: tokenizerFileName
+      ? joinPaths(modelDir, tokenizerFileName)
+      : undefined,
+    tokenizerConfigPath: tokenizerConfigFileName
+      ? joinPaths(modelDir, tokenizerConfigFileName)
+      : undefined,
+  };
+}
+
+/**
+ * Scan a custom model folder for Whisper-style encoder/decoder files
+ * Returns file names if found, undefined otherwise
+ */
+export async function scanForWhisperFiles(folderName: string): Promise<{
+  encoderFileName?: string;
+  decoderFileName?: string;
+  tokenizerFileName?: string;
+} | null> {
+  const modelDir = joinPaths(modelsDir, folderName);
+  const info = await FileSystem.getInfoAsync(modelDir);
+  if (!info.exists) return null;
+
+  try {
+    const files = await FileSystem.readDirectoryAsync(modelDir);
+    let encoderFileName: string | undefined;
+    let decoderFileName: string | undefined;
+    let tokenizerFileName: string | undefined;
+
+    for (const file of files) {
+      const lower = file.toLowerCase();
+      if (lower.includes("encoder") && lower.endsWith(".pte")) {
+        encoderFileName = file;
+      } else if (lower.includes("decoder") && lower.endsWith(".pte")) {
+        decoderFileName = file;
+      } else if (lower === "tokenizer.json") {
+        tokenizerFileName = file;
+      }
+    }
+
+    if (encoderFileName && decoderFileName && tokenizerFileName) {
+      return { encoderFileName, decoderFileName, tokenizerFileName };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get the models directory path (for constructing custom model paths)
+ */
+export function getModelsDirectory(): string {
+  return modelsDir;
+}
