@@ -148,10 +148,18 @@ export function ModelManagementModal({
   const [showAgentEditor, setShowAgentEditor] = useState(false);
   const [savingAgent, setSavingAgent] = useState(false);
 
-  // Remote models state
+  // Remote models state (LLM)
   const [remoteModels, setRemoteModels] = useState<CustomModelConfig[]>([]);
   const [showAddRemoteModal, setShowAddRemoteModal] = useState(false);
   const [editingRemoteModel, setEditingRemoteModel] =
+    useState<CustomModelConfig | null>(null);
+
+  // Remote STT models state
+  const [remoteSttModels, setRemoteSttModels] = useState<CustomModelConfig[]>(
+    [],
+  );
+  const [showAddRemoteSttModal, setShowAddRemoteSttModal] = useState(false);
+  const [editingRemoteSttModel, setEditingRemoteSttModel] =
     useState<CustomModelConfig | null>(null);
 
   // Custom local models state (LLM)
@@ -192,6 +200,7 @@ export function ModelManagementModal({
         tier,
         agentsList,
         remoteModelsList,
+        remoteSttModelsList,
         customLocalLlmModelsList,
         customLocalSttModelsList,
       ] = await Promise.all([
@@ -202,6 +211,7 @@ export function ModelManagementModal({
         getDeviceTier(),
         agentsRepo.getAll(),
         customModelsRepo.getRemoteModelsByCategory("llm"),
+        customModelsRepo.getRemoteModelsByCategory("stt"),
         customModelsRepo.getCustomLocalModelsByCategory("llm"),
         customModelsRepo.getCustomLocalModelsByCategory("stt"),
       ]);
@@ -212,6 +222,7 @@ export function ModelManagementModal({
       setDeviceTier(tier);
       setAgents(agentsList);
       setRemoteModels(remoteModelsList);
+      setRemoteSttModels(remoteSttModelsList);
       setCustomLocalModels(customLocalLlmModelsList);
       setCustomLocalSttModels(customLocalSttModelsList);
 
@@ -476,6 +487,71 @@ export function ModelManagementModal({
   const handleEditRemoteModel = useCallback((model: CustomModelConfig) => {
     setEditingRemoteModel(model);
     setShowAddRemoteModal(true);
+  }, []);
+
+  // Remote STT model handlers
+  const handleSelectRemoteSttModel = useCallback(
+    async (model: CustomModelConfig) => {
+      try {
+        setLoadingModelId(model.modelId);
+        await modelSettings.setSelectedSttModelId(model.modelId);
+        setSelectedSTTId(model.modelId);
+        setSelectedPlatformSTTId(null);
+        showToast(`${model.displayName} is now active for voice`, "success");
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        showToast(
+          `Failed to select: ${err?.message || "Unknown error"}`,
+          "error",
+        );
+      } finally {
+        setLoadingModelId(null);
+      }
+    },
+    [modelSettings, showToast],
+  );
+
+  const handleRemoveRemoteSttModel = useCallback(
+    (model: CustomModelConfig) => {
+      const isCurrentlySelected = selectedSTTId === model.modelId;
+
+      Alert.alert(
+        "Remove Remote Voice Model",
+        `Are you sure you want to remove ${model.displayName}? This will also delete the stored API key.${isCurrentlySelected ? "\n\nThis model is currently selected. You will need to select another model for voice input." : ""}`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                // Deselect if currently selected
+                if (isCurrentlySelected) {
+                  await modelSettings.setSelectedSttModelId("");
+                  setSelectedSTTId(null);
+                }
+                await customModelsRepo.delete(model.modelId);
+                showToast(`${model.displayName} removed`, "success");
+                await loadSettings();
+              } catch (_error) {
+                showToast("Failed to remove model", "error");
+              }
+            },
+          },
+        ],
+      );
+    },
+    [customModelsRepo, showToast, selectedSTTId, modelSettings],
+  );
+
+  const handleRemoteSttModelAdded = useCallback(async () => {
+    await loadSettings();
+    setEditingRemoteSttModel(null);
+  }, []);
+
+  const handleEditRemoteSttModel = useCallback((model: CustomModelConfig) => {
+    setEditingRemoteSttModel(model);
+    setShowAddRemoteSttModal(true);
   }, []);
 
   // Custom local model handlers
@@ -1627,7 +1703,7 @@ export function ModelManagementModal({
                       })
                     )}
 
-                    {/* Remote Voice APIs - Coming Soon */}
+                    {/* Remote Voice APIs Section */}
                     <View style={styles.downloadableSectionHeader}>
                       <Ionicons
                         name="cloud-outline"
@@ -1644,30 +1720,74 @@ export function ModelManagementModal({
                       >
                         Remote Voice APIs
                       </Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.addRemoteButton,
+                          { backgroundColor: theme.colors.accent },
+                        ]}
+                        onPress={() => setShowAddRemoteSttModal(true)}
+                      >
+                        <Ionicons name="add" size={14} color="white" />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: "white",
+                            fontWeight: "600",
+                            fontSize: 11,
+                          }}
+                        >
+                          Add
+                        </Text>
+                      </TouchableOpacity>
                     </View>
 
-                    <View
-                      style={[
-                        styles.noModelsBanner,
-                        { backgroundColor: `${theme.colors.border}15` },
-                      ]}
-                    >
-                      <Ionicons
-                        name="construct-outline"
-                        size={16}
-                        color={seasonalTheme.textSecondary}
-                      />
-                      <Text
-                        variant="caption"
-                        style={{
-                          color: seasonalTheme.textSecondary,
-                          flex: 1,
-                        }}
+                    {remoteSttModels.length === 0 ? (
+                      <View
+                        style={[
+                          styles.noModelsBanner,
+                          { backgroundColor: `${theme.colors.border}15` },
+                        ]}
                       >
-                        Remote speech-to-text APIs (OpenAI Whisper, Deepgram,
-                        etc.) coming soon.
-                      </Text>
-                    </View>
+                        <Ionicons
+                          name="cloud-outline"
+                          size={16}
+                          color={seasonalTheme.textSecondary}
+                        />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: seasonalTheme.textSecondary,
+                            flex: 1,
+                          }}
+                        >
+                          Add remote voice APIs (OpenAI Whisper, Groq) for
+                          cloud-based speech-to-text.
+                        </Text>
+                      </View>
+                    ) : (
+                      remoteSttModels.map((model) => {
+                        const isSelected = selectedSTTId === model.modelId;
+                        return (
+                          <ModelCard
+                            key={model.modelId}
+                            displayName={model.displayName}
+                            description={model.description}
+                            badge={{
+                              text: "REMOTE",
+                              variant: "accent",
+                              icon: "cloud-outline",
+                            }}
+                            isSelected={isSelected}
+                            canSelect
+                            canEdit
+                            canRemove
+                            onSelect={() => handleSelectRemoteSttModel(model)}
+                            onEdit={() => handleEditRemoteSttModel(model)}
+                            onRemove={() => handleRemoveRemoteSttModel(model)}
+                          />
+                        );
+                      })
+                    )}
                   </View>
                 )}
 
@@ -1854,7 +1974,7 @@ export function ModelManagementModal({
         </View>
       </View>
 
-      {/* Add/Edit Remote Model Modal */}
+      {/* Add/Edit Remote Model Modal (LLM) */}
       <AddRemoteModelModal
         visible={showAddRemoteModal}
         onClose={() => {
@@ -1863,6 +1983,19 @@ export function ModelManagementModal({
         }}
         onModelAdded={handleRemoteModelAdded}
         editModel={editingRemoteModel}
+        modelCategory="llm"
+      />
+
+      {/* Add/Edit Remote Voice Model Modal (STT) */}
+      <AddRemoteModelModal
+        visible={showAddRemoteSttModal}
+        onClose={() => {
+          setShowAddRemoteSttModal(false);
+          setEditingRemoteSttModel(null);
+        }}
+        onModelAdded={handleRemoteSttModelAdded}
+        editModel={editingRemoteSttModel}
+        modelCategory="stt"
       />
 
       {/* Add/Edit Custom Local Model Modal */}

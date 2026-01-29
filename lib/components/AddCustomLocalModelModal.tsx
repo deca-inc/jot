@@ -22,7 +22,7 @@ import type { CustomLocalModelConfig } from "../ai/customModels";
 export interface AddCustomLocalModelModalProps {
   visible: boolean;
   onClose: () => void;
-  onModelAdded?: (modelId: string) => void;
+  onModelAdded?: (modelId: string) => void | Promise<void>;
   /** Model category: 'llm' for chat models, 'stt' for speech-to-text. Defaults to 'llm' */
   modelCategory?: "llm" | "stt";
   /** Optional model to edit. When provided, modal operates in edit mode. */
@@ -147,7 +147,7 @@ export function AddCustomLocalModelModal({
             : `${displayName} updated successfully`,
           "success",
         );
-        onModelAdded?.(editModel.modelId);
+        await onModelAdded?.(editModel.modelId);
       } else {
         // Extract filenames from URLs
         const pteFileName = getFilenameFromUrl(pteUrl);
@@ -180,7 +180,7 @@ export function AddCustomLocalModelModal({
         });
 
         showToast(`${displayName} added successfully`, "success");
-        onModelAdded?.(createdModel.modelId);
+        await onModelAdded?.(createdModel.modelId);
       }
       handleClose();
     } catch (error) {

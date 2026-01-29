@@ -28,6 +28,14 @@ import {
   type PlatformTranscriptionResult,
 } from "../ai/usePlatformSpeechToText";
 import {
+  useRealTimeSpeechToText,
+  type RealTimeTranscriptionResult,
+} from "../ai/useRealTimeSpeechToText";
+import {
+  useRemoteSpeechToText,
+  type RemoteTranscriptionResult,
+} from "../ai/useRemoteSpeechToText";
+import {
   useSpeechToText,
   type TranscriptionResult,
 } from "../ai/useSpeechToText";
@@ -36,7 +44,10 @@ import { useCustomModels } from "../db/useCustomModels";
 import { borderRadius, spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { Text } from "./Text";
-import type { CustomLocalModelConfig } from "../ai/customModels";
+import type {
+  CustomLocalModelConfig,
+  RemoteModelConfig,
+} from "../ai/customModels";
 
 // Check if glass effect is available (iOS 26+)
 const glassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
@@ -205,6 +216,9 @@ export function VoiceRecordButton({
   const [hasLLMModel, setHasLLMModel] = useState(false);
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [usePlatformSTT, setUsePlatformSTT] = useState(false);
+  const [useRemoteSTT, setUseRemoteSTT] = useState(false);
+  const [useRealTimeSTT, setUseRealTimeSTT] = useState(false);
+  const [remoteSTTModelId, setRemoteSTTModelId] = useState<string>("");
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -249,25 +263,96 @@ export function VoiceRecordButton({
     },
   });
 
-  // Select the active STT based on mode
-  const isRecording = usePlatformSTT
-    ? platformSTT.isRecording
-    : whisperSTT.isRecording;
-  const isTranscribing = usePlatformSTT
-    ? platformSTT.isProcessing
-    : whisperSTT.isTranscribing;
-  const committedText = usePlatformSTT
-    ? platformSTT.currentText
-    : whisperSTT.committedText;
-  const meteringLevel = usePlatformSTT ? 0.5 : whisperSTT.meteringLevel; // Platform STT doesn't provide metering
+  // Remote speech-to-text hook (OpenAI, Groq, etc.) - batch mode
+  const remoteSTT = useRemoteSpeechToText({
+    modelId: remoteSTTModelId,
+    onTranscriptionComplete: async (result: RemoteTranscriptionResult) => {
+      if (!result.text.trim()) return;
+      const finalText = await correctWithLLMRef.current(result.text);
+      onTranscriptionComplete({
+        text: finalText,
+        audioUri: result.audioUri,
+        duration: result.duration,
+      });
+    },
+    onError: (err) => {
+      console.error("[VoiceRecordButton] Remote STT error:", err);
+    },
+  });
 
-  const stopRecording = usePlatformSTT
-    ? platformSTT.stopRecording
-    : whisperSTT.stopRecording;
-  const cancelRecording = usePlatformSTT
-    ? platformSTT.cancelRecording
-    : whisperSTT.cancelRecording;
-  const error = usePlatformSTT ? platformSTT.error : whisperSTT.error;
+  // Real-time speech-to-text hook (Deepgram, OpenAI Realtime) - streaming mode
+  const realTimeSTT = useRealTimeSpeechToText({
+    modelId: remoteSTTModelId,
+    onInterimTranscript: (text: string) => {
+      // Interim transcripts are handled via the hook's state
+      console.log("[VoiceRecordButton] Interim transcript:", text);
+    },
+    onTranscriptionComplete: async (result: RealTimeTranscriptionResult) => {
+      if (!result.text.trim()) return;
+      const finalText = await correctWithLLMRef.current(result.text);
+      onTranscriptionComplete({
+        text: finalText,
+        audioUri: result.audioUri,
+        duration: result.duration,
+      });
+    },
+    onError: (err) => {
+      console.error("[VoiceRecordButton] Real-time STT error:", err);
+    },
+  });
+
+  // Select the active STT based on mode
+  const isRecording = useRealTimeSTT
+    ? realTimeSTT.isRecording
+    : useRemoteSTT
+      ? remoteSTT.isRecording
+      : usePlatformSTT
+        ? platformSTT.isRecording
+        : whisperSTT.isRecording;
+  const isTranscribing = useRealTimeSTT
+    ? realTimeSTT.isConnecting || realTimeSTT.isProcessing
+    : useRemoteSTT
+      ? remoteSTT.isTranscribing
+      : usePlatformSTT
+        ? platformSTT.isProcessing
+        : whisperSTT.isTranscribing;
+  const committedText = useRealTimeSTT
+    ? realTimeSTT.finalText +
+      (realTimeSTT.interimText ? " " + realTimeSTT.interimText : "")
+    : useRemoteSTT
+      ? ""
+      : usePlatformSTT
+        ? platformSTT.currentText
+        : whisperSTT.committedText;
+  const meteringLevel = useRealTimeSTT
+    ? realTimeSTT.meteringLevel
+    : useRemoteSTT
+      ? remoteSTT.meteringLevel
+      : usePlatformSTT
+        ? 0.5
+        : whisperSTT.meteringLevel; // Platform STT doesn't provide metering
+
+  const stopRecording = useRealTimeSTT
+    ? realTimeSTT.stopRecording
+    : useRemoteSTT
+      ? remoteSTT.stopRecording
+      : usePlatformSTT
+        ? platformSTT.stopRecording
+        : whisperSTT.stopRecording;
+  const cancelRecording = useRealTimeSTT
+    ? realTimeSTT.cancelRecording
+    : useRemoteSTT
+      ? remoteSTT.cancelRecording
+      : usePlatformSTT
+        ? platformSTT.cancelRecording
+        : whisperSTT.cancelRecording;
+  const error = useRealTimeSTT
+    ? realTimeSTT.error
+    : useRemoteSTT
+      ? remoteSTT.error
+      : usePlatformSTT
+        ? platformSTT.error
+        : whisperSTT.error;
 
   // Notify parent of transcript changes
   useEffect(() => {
@@ -393,11 +478,14 @@ export function VoiceRecordButton({
 
   /**
    * Load STT model if downloaded but not loaded
-   * Returns { success: boolean, usePlatform: boolean }
+   * Returns { success: boolean, usePlatform: boolean, useRemote: boolean, useRealTime: boolean, modelId?: string }
    */
   const ensureModelLoaded = useCallback(async (): Promise<{
     success: boolean;
     usePlatform: boolean;
+    useRemote: boolean;
+    useRealTime: boolean;
+    modelId?: string;
   }> => {
     setIsModelLoading(true);
 
@@ -532,6 +620,41 @@ export function VoiceRecordButton({
                     "Please ensure the model folder contains files with 'encoder' and 'decoder' in their names.",
                 );
               }
+            } else if (
+              customModel &&
+              customModel.modelType === "remote-api" &&
+              customModel.modelCategory === "stt"
+            ) {
+              // Remote API STT model (OpenAI Whisper API, Groq, Deepgram, etc.)
+              const remoteModel = customModel as RemoteModelConfig;
+              if (!remoteModel.privacyAcknowledged) {
+                throw new Error(
+                  "Remote voice model requires privacy acknowledgment. Please enable it in settings.",
+                );
+              }
+
+              // Check if URL is a WebSocket URL (implies real-time mode)
+              const isRealTime =
+                remoteModel.baseUrl.startsWith("wss://") ||
+                remoteModel.baseUrl.startsWith("ws://");
+
+              console.log(
+                `[VoiceRecordButton] Using ${isRealTime ? "real-time" : "batch"} remote STT model: ${remoteModel.displayName}`,
+              );
+
+              // Set STT mode - no local model loading needed
+              setUseRealTimeSTT(isRealTime);
+              setUseRemoteSTT(!isRealTime);
+              setUsePlatformSTT(false);
+              setRemoteSTTModelId(selectedId);
+              setIsModelLoading(false);
+              return {
+                success: true,
+                usePlatform: false,
+                useRemote: !isRealTime,
+                useRealTime: isRealTime,
+                modelId: selectedId,
+              };
             }
           }
 
@@ -543,11 +666,23 @@ export function VoiceRecordButton({
       }
 
       setIsModelLoading(false);
-      return { success: true, usePlatform: shouldUsePlatform };
+      setUseRemoteSTT(false);
+      setUseRealTimeSTT(false);
+      return {
+        success: true,
+        usePlatform: shouldUsePlatform,
+        useRemote: false,
+        useRealTime: false,
+      };
     } catch (err) {
       console.error("[VoiceRecordButton] Failed to load model:", err);
       setIsModelLoading(false);
-      return { success: false, usePlatform: false };
+      return {
+        success: false,
+        usePlatform: false,
+        useRemote: false,
+        useRealTime: false,
+      };
     }
   }, [modelSettings, hasPlatformSTT, whisperSTT, customModels]);
 
@@ -586,7 +721,12 @@ export function VoiceRecordButton({
 
     // Start recording using the correct STT based on what ensureModelLoaded determined
     // We call the hook functions directly here because the state update hasn't happened yet
-    if (result.usePlatform) {
+    if (result.useRealTime) {
+      // Pass modelId directly since state hasn't updated yet
+      await realTimeSTT.startRecording(result.modelId);
+    } else if (result.useRemote) {
+      await remoteSTT.startRecording();
+    } else if (result.usePlatform) {
       await platformSTT.startRecording();
     } else {
       await whisperSTT.startRecording();
@@ -601,6 +741,8 @@ export function VoiceRecordButton({
     ensureModelLoaded,
     platformSTT,
     whisperSTT,
+    remoteSTT,
+    realTimeSTT,
     stopRecording,
     onNoModelAvailable,
   ]);
@@ -637,11 +779,16 @@ export function VoiceRecordButton({
       ? seasonalTheme.textPrimary + "80"
       : seasonalTheme.textPrimary;
 
+  // Only show transcript bubble for modes that support live/interim results
+  // Hide for remote batch mode (useRemoteSTT) which has no interim transcription
+  const canShowLiveTranscript = !useRemoteSTT;
+
   return (
     <View style={styles.container}>
       {/* Live transcription chat bubble - coming from left */}
       {/* Show bubble during recording with either committed text or "Listening..." */}
-      {!hideTranscriptBubble && isActive && (
+      {/* Hidden for remote batch mode since there's no interim transcription */}
+      {!hideTranscriptBubble && isActive && canShowLiveTranscript && (
         <View
           style={[
             styles.chatBubble,

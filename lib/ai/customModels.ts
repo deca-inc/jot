@@ -17,61 +17,213 @@ export type CustomModelType = "custom-local" | "remote-api";
 export type ModelCategory = "llm" | "stt";
 
 // =============================================================================
-// API STYLES
+// PROVIDER CONFIGURATION
 // =============================================================================
 
 /**
- * API style determines authentication and request format:
- * - "openai-compatible": Bearer auth, /chat/completions endpoint (OpenAI, Groq, Ollama, vLLM, etc.)
- * - "anthropic": x-api-key auth, /messages endpoint, anthropic-version header
+ * Provider ID for remote API models.
+ * Detected automatically from URL or falls back to "openai-compatible".
  */
-export type ApiStyle = "openai-compatible" | "anthropic";
+export type ProviderId =
+  | "openai"
+  | "anthropic"
+  | "groq"
+  | "deepgram"
+  | "google"
+  | "openai-compatible"; // Fallback for unknown providers
 
-// Keep ProviderId as alias for backwards compatibility with database
-export type ProviderId = ApiStyle;
+/** @deprecated Use ProviderId instead */
+export type ApiStyle = ProviderId;
 
-export interface ApiStyleConfig {
-  id: ApiStyle;
+export interface ProviderConfig {
+  id: ProviderId;
   displayName: string;
-  description: string;
-  defaultBaseUrl: string;
+  /** URL patterns to match (checked with includes()) */
+  urlPatterns: string[];
   /** Header name for API key */
   authHeader: string;
-  /** Auth header format - "bearer" for "Bearer <key>", "raw" for just "<key>" */
-  authFormat: "bearer" | "raw";
+  /** Auth header format - "bearer" for "Bearer <key>", "raw" for just "<key>", "token" for "Token <key>" */
+  authFormat: "bearer" | "raw" | "token";
   /** Additional default headers */
   defaultHeaders?: Record<string, string>;
+  /** Default base URL for this provider */
+  defaultBaseUrl?: string;
+  /** Placeholder for model name input */
+  modelPlaceholder?: string;
+  /** Placeholder for API key input */
+  apiKeyPlaceholder?: string;
 }
 
-export const API_STYLES: ApiStyleConfig[] = [
+/**
+ * Known provider configurations.
+ * Order matters - first match wins.
+ */
+export const PROVIDER_CONFIGS: ProviderConfig[] = [
   {
-    id: "openai-compatible",
-    displayName: "OpenAI-Compatible",
-    description: "Works with OpenAI, Groq, Ollama, vLLM, and most providers",
-    defaultBaseUrl: "https://api.openai.com/v1",
+    id: "openai",
+    displayName: "OpenAI",
+    urlPatterns: ["openai.com"],
     authHeader: "Authorization",
     authFormat: "bearer",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    modelPlaceholder: "gpt-4o, whisper-1",
+    apiKeyPlaceholder: "sk-...",
   },
   {
     id: "anthropic",
     displayName: "Anthropic",
-    description: "For Claude models via Anthropic's API",
-    defaultBaseUrl: "https://api.anthropic.com/v1",
+    urlPatterns: ["anthropic.com"],
     authHeader: "x-api-key",
     authFormat: "raw",
     defaultHeaders: {
       "anthropic-version": "2023-06-01",
     },
+    defaultBaseUrl: "https://api.anthropic.com/v1",
+    modelPlaceholder: "claude-sonnet-4-20250514",
+    apiKeyPlaceholder: "sk-ant-...",
+  },
+  {
+    id: "groq",
+    displayName: "Groq",
+    urlPatterns: ["groq.com"],
+    authHeader: "Authorization",
+    authFormat: "bearer",
+    defaultBaseUrl: "https://api.groq.com/openai/v1",
+    modelPlaceholder: "llama-3.3-70b-versatile, whisper-large-v3",
+    apiKeyPlaceholder: "gsk_...",
+  },
+  {
+    id: "deepgram",
+    displayName: "Deepgram",
+    urlPatterns: ["deepgram.com"],
+    authHeader: "Authorization",
+    authFormat: "token",
+    defaultBaseUrl: "https://api.deepgram.com/v1",
+    modelPlaceholder: "nova-2",
+    apiKeyPlaceholder: "your-deepgram-key",
+  },
+  {
+    id: "google",
+    displayName: "Google AI",
+    urlPatterns: ["googleapis.com", "generativelanguage.googleapis.com"],
+    authHeader: "Authorization",
+    authFormat: "bearer",
+    defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    modelPlaceholder: "gemini-1.5-pro",
+    apiKeyPlaceholder: "your-google-api-key",
+  },
+  {
+    id: "openai-compatible",
+    displayName: "OpenAI-Compatible",
+    urlPatterns: [], // Fallback - matches nothing, used when no other provider matches
+    authHeader: "Authorization",
+    authFormat: "bearer",
+    modelPlaceholder: "model-name",
+    apiKeyPlaceholder: "your-api-key",
   },
 ];
 
 /**
- * Get API style config by ID
+ * Detect provider from a base URL.
+ * Returns the matching provider config or the openai-compatible fallback.
+ *
+ * Supports both HTTP and WebSocket URLs:
+ * - https://api.deepgram.com/v1 → deepgram
+ * - wss://api.deepgram.com/v1/listen → deepgram
  */
+export function detectProviderFromUrl(baseUrl: string): ProviderConfig {
+  if (!baseUrl) {
+    return PROVIDER_CONFIGS.find((p) => p.id === "openai-compatible")!;
+  }
+
+  const lowerUrl = baseUrl.toLowerCase();
+
+  for (const provider of PROVIDER_CONFIGS) {
+    if (provider.urlPatterns.some((pattern) => lowerUrl.includes(pattern))) {
+      return provider;
+    }
+  }
+
+  // Fallback to openai-compatible
+  return PROVIDER_CONFIGS.find((p) => p.id === "openai-compatible")!;
+}
+
+/**
+ * Check if a URL is a WebSocket URL (wss:// or ws://).
+ * WebSocket URLs imply real-time streaming mode for STT.
+ */
+export function isWebSocketUrl(url: string): boolean {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase().trim();
+  return lowerUrl.startsWith("wss://") || lowerUrl.startsWith("ws://");
+}
+
+/**
+ * Get provider config by ID.
+ */
+export function getProviderConfig(providerId: ProviderId): ProviderConfig {
+  return (
+    PROVIDER_CONFIGS.find((p) => p.id === providerId) ||
+    PROVIDER_CONFIGS.find((p) => p.id === "openai-compatible")!
+  );
+}
+
+/**
+ * Format the authorization header value based on provider config.
+ */
+export function formatAuthHeader(
+  config: ProviderConfig,
+  apiKey: string,
+): string {
+  switch (config.authFormat) {
+    case "bearer":
+      return `Bearer ${apiKey}`;
+    case "token":
+      return `Token ${apiKey}`;
+    case "raw":
+      return apiKey;
+  }
+}
+
+// Legacy exports for backwards compatibility
+/** @deprecated Use PROVIDER_CONFIGS instead */
+export const API_STYLES = PROVIDER_CONFIGS.filter(
+  (p) => p.id === "openai-compatible" || p.id === "anthropic",
+).map((p) => ({
+  id: p.id as ApiStyle,
+  displayName: p.displayName,
+  description: `${p.displayName} API`,
+  defaultBaseUrl: p.defaultBaseUrl || "",
+  authHeader: p.authHeader,
+  authFormat: p.authFormat === "token" ? ("bearer" as const) : p.authFormat,
+  defaultHeaders: p.defaultHeaders,
+}));
+
+/** @deprecated Use ProviderConfig instead */
+export interface ApiStyleConfig {
+  id: ApiStyle;
+  displayName: string;
+  description: string;
+  defaultBaseUrl: string;
+  authHeader: string;
+  authFormat: "bearer" | "raw";
+  defaultHeaders?: Record<string, string>;
+}
+
+/** @deprecated Use getProviderConfig instead */
 export function getApiStyleConfig(
   apiStyle: ApiStyle,
 ): ApiStyleConfig | undefined {
-  return API_STYLES.find((s) => s.id === apiStyle);
+  const config = getProviderConfig(apiStyle as ProviderId);
+  return {
+    id: config.id as ApiStyle,
+    displayName: config.displayName,
+    description: `${config.displayName} API`,
+    defaultBaseUrl: config.defaultBaseUrl || "",
+    authHeader: config.authHeader,
+    authFormat: config.authFormat === "token" ? "bearer" : config.authFormat,
+    defaultHeaders: config.defaultHeaders,
+  };
 }
 
 // =============================================================================
@@ -263,6 +415,10 @@ export interface UpdateCustomModelInput {
   tokenizerConfigFileName?: string | null;
   isDownloaded?: boolean;
   // Remote model specific
+  /** API base URL (e.g., https://api.openai.com/v1) */
+  baseUrl?: string;
+  /** Model name sent to API (e.g., gpt-4o, whisper-1) */
+  modelName?: string;
   maxTokens?: number;
   temperature?: number;
   customHeaders?: Record<string, string>;

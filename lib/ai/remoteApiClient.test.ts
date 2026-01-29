@@ -25,7 +25,7 @@ describe("RemoteApiClient", () => {
   describe("OpenAI-compatible requests", () => {
     const config: RemoteApiConfig = {
       apiStyle: "openai-compatible",
-      baseUrl: "https://api.openai.com/v1",
+      baseUrl: "https://api.openai.com/v1/chat/completions",
       modelName: "gpt-4-turbo",
       apiKey: "sk-test-key",
     };
@@ -136,7 +136,7 @@ describe("RemoteApiClient", () => {
   describe("Anthropic-specific requests", () => {
     const config: RemoteApiConfig = {
       apiStyle: "anthropic",
-      baseUrl: "https://api.anthropic.com/v1",
+      baseUrl: "https://api.anthropic.com/v1/messages",
       modelName: "claude-3-5-sonnet-20241022",
       apiKey: "sk-ant-test-key",
     };
@@ -220,7 +220,7 @@ describe("RemoteApiClient", () => {
   describe("Groq requests", () => {
     const config: RemoteApiConfig = {
       apiStyle: "openai-compatible",
-      baseUrl: "https://api.groq.com/openai/v1",
+      baseUrl: "https://api.groq.com/openai/v1/chat/completions",
       modelName: "llama-3.3-70b-versatile",
       apiKey: "gsk-test-key",
     };
@@ -260,7 +260,7 @@ describe("RemoteApiClient", () => {
   describe("Custom server requests", () => {
     const config: RemoteApiConfig = {
       apiStyle: "openai-compatible",
-      baseUrl: "http://localhost:11434/v1",
+      baseUrl: "http://localhost:11434/v1/chat/completions",
       modelName: "llama2",
       apiKey: "optional-key",
       customHeaders: {

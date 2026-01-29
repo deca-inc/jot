@@ -1,15 +1,19 @@
 /**
  * Add Remote Model Modal
  *
- * Modal for adding remote API models using OpenAI-compatible or Anthropic APIs.
- * Simplified flow: select API style, enter connection details, acknowledge privacy.
+ * Modal for adding remote API models. Provider is auto-detected from URL.
+ * Simplified flow: enter connection details, acknowledge privacy.
  */
 
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useCallback, useMemo } from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { storeApiKey } from "../ai/apiKeyStorage";
-import { API_STYLES, type ApiStyleConfig } from "../ai/customModels";
+import {
+  detectProviderFromUrl,
+  isWebSocketUrl,
+  type ProviderConfig,
+} from "../ai/customModels";
 import {
   generateRemoteModelId,
   generateApiKeyRef,
@@ -24,23 +28,26 @@ import { Input } from "./Input";
 import { RemoteModelPrivacyBanner } from "./RemoteModelPrivacyBanner";
 import { Text } from "./Text";
 import { useToast } from "./ToastProvider";
-import type { CustomModelConfig } from "../ai/customModels";
+import type { CustomModelConfig, ModelCategory } from "../ai/customModels";
 
 export interface AddRemoteModelModalProps {
   visible: boolean;
   onClose: () => void;
-  onModelAdded?: (modelId: string) => void;
+  onModelAdded?: (modelId: string) => void | Promise<void>;
   /** Optional model to edit. When provided, modal operates in edit mode. */
   editModel?: CustomModelConfig | null;
+  /** Model category: 'llm' for chat models, 'stt' for speech-to-text. Defaults to 'llm' */
+  modelCategory?: ModelCategory;
 }
 
-type Step = "apiStyle" | "details" | "privacy";
+type Step = "details" | "privacy";
 
 export function AddRemoteModelModal({
   visible,
   onClose,
   onModelAdded,
   editModel,
+  modelCategory = "llm",
 }: AddRemoteModelModalProps) {
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
@@ -50,26 +57,26 @@ export function AddRemoteModelModal({
   const isEditMode = !!editModel;
 
   // Form state
-  const [step, setStep] = useState<Step>("apiStyle");
-  const [selectedStyle, setSelectedStyle] = useState<ApiStyleConfig | null>(
-    null,
-  );
+  const [step, setStep] = useState<Step>("details");
   const [baseUrl, setBaseUrl] = useState("");
   const [modelName, setModelName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Auto-detect provider from URL
+  const detectedProvider: ProviderConfig = useMemo(() => {
+    return detectProviderFromUrl(baseUrl);
+  }, [baseUrl]);
+
+  // Check if URL is a WebSocket URL (implies real-time)
+  const isWsUrl = isWebSocketUrl(baseUrl);
+
   // Populate form when editing
   React.useEffect(() => {
     if (editModel && visible && editModel.modelType === "remote-api") {
-      // Skip to details step when editing
       setStep("details");
-      // Find the matching API style
-      const style =
-        API_STYLES.find((s) => s.id === editModel.providerId) || API_STYLES[0];
-      setSelectedStyle(style);
-      setBaseUrl(editModel.baseUrl || style.defaultBaseUrl);
+      setBaseUrl(editModel.baseUrl || "");
       setModelName(editModel.modelName || "");
       setDisplayName(editModel.displayName);
       // API key is not shown (security) - leave empty
@@ -79,8 +86,7 @@ export function AddRemoteModelModal({
 
   // Reset form when modal closes
   const handleClose = useCallback(() => {
-    setStep("apiStyle");
-    setSelectedStyle(null);
+    setStep("details");
     setBaseUrl("");
     setModelName("");
     setApiKey("");
@@ -88,13 +94,6 @@ export function AddRemoteModelModal({
     setIsSubmitting(false);
     onClose();
   }, [onClose]);
-
-  // Handle API style selection
-  const handleSelectStyle = useCallback((style: ApiStyleConfig) => {
-    setSelectedStyle(style);
-    setBaseUrl(style.defaultBaseUrl);
-    setStep("details");
-  }, []);
 
   // Handle details submission
   const handleDetailsSubmit = useCallback(() => {
@@ -112,8 +111,6 @@ export function AddRemoteModelModal({
 
   // Handle privacy acknowledgment and final submission
   const handlePrivacyAcknowledge = useCallback(async () => {
-    if (!selectedStyle) return;
-
     setIsSubmitting(true);
 
     try {
@@ -123,6 +120,8 @@ export function AddRemoteModelModal({
         // Update existing model
         await customModels.update(editModel.modelId, {
           displayName: finalDisplayName,
+          baseUrl: baseUrl.trim(),
+          modelName: modelName.trim(),
         });
 
         // Update API key if provided
@@ -135,10 +134,10 @@ export function AddRemoteModelModal({
         }
 
         showToast(`${finalDisplayName} updated successfully`, "success");
-        onModelAdded?.(editModel.modelId);
+        await onModelAdded?.(editModel.modelId);
       } else {
         // Generate model ID and API key reference
-        const modelId = generateRemoteModelId(selectedStyle.id, modelName);
+        const modelId = generateRemoteModelId(detectedProvider.id, modelName);
         const apiKeyRef = generateApiKeyRef(modelId);
 
         // Store API key in secure storage (only if provided)
@@ -149,18 +148,19 @@ export function AddRemoteModelModal({
         // Create remote model in database
         const createdModel = await customModels.createRemoteModel({
           displayName: finalDisplayName,
-          description: `${selectedStyle.displayName} API model`,
-          providerId: selectedStyle.id,
+          description: `${detectedProvider.displayName} ${modelCategory === "stt" ? "voice" : ""} model`,
+          modelCategory,
+          providerId: detectedProvider.id,
           baseUrl: baseUrl.trim(),
           modelName: modelName.trim(),
-          temperature: 0.7,
+          temperature: modelCategory === "llm" ? 0.7 : undefined,
         });
 
         // Mark privacy as acknowledged
         await customModels.acknowledgePrivacy(createdModel.modelId);
 
         showToast(`${finalDisplayName} added successfully`, "success");
-        onModelAdded?.(createdModel.modelId);
+        await onModelAdded?.(createdModel.modelId);
       }
       handleClose();
     } catch (error) {
@@ -174,11 +174,12 @@ export function AddRemoteModelModal({
       setIsSubmitting(false);
     }
   }, [
-    selectedStyle,
+    detectedProvider,
     apiKey,
     baseUrl,
     modelName,
     displayName,
+    modelCategory,
     customModels,
     showToast,
     onModelAdded,
@@ -190,42 +191,25 @@ export function AddRemoteModelModal({
   // Get step title
   const stepTitle = useMemo(() => {
     if (isEditMode) {
-      switch (step) {
-        case "apiStyle":
-          return "Select API Style";
-        case "details":
-          return "Edit Connection Details";
-        case "privacy":
-          return "Confirm Changes";
-      }
+      return step === "details" ? "Edit Connection Details" : "Confirm Changes";
     }
-    switch (step) {
-      case "apiStyle":
-        return "Select API Style";
-      case "details":
-        return "Connection Details";
-      case "privacy":
-        return "Privacy Notice";
-    }
-  }, [step]);
+    return step === "details"
+      ? modelCategory === "stt"
+        ? "Add Remote Voice Model"
+        : "Add Remote Model"
+      : "Privacy Notice";
+  }, [step, isEditMode, modelCategory]);
 
   // Can go back?
-  const canGoBack = step !== "apiStyle";
+  const canGoBack = step === "privacy";
 
   const handleBack = useCallback(() => {
-    switch (step) {
-      case "details":
-        setStep("apiStyle");
-        setSelectedStyle(null);
-        setBaseUrl("");
-        break;
-      case "privacy":
-        setStep("details");
-        break;
+    if (step === "privacy") {
+      setStep("details");
     }
   }, [step]);
 
-  // Footer for step 2 (details)
+  // Footer for details step
   const detailsFooter =
     step === "details" ? (
       <TouchableOpacity
@@ -251,70 +235,16 @@ export function AddRemoteModelModal({
       maxHeightRatio={0.75}
       footer={detailsFooter}
     >
-      {/* Step 1: API Style Selection */}
-      {step === "apiStyle" && (
+      {/* Connection Details */}
+      {step === "details" && (
         <View style={styles.stepContent}>
-          <Text
-            variant="caption"
-            style={{
-              color: seasonalTheme.textSecondary,
-              marginBottom: spacingPatterns.sm,
-            }}
-          >
-            Choose the API format your provider uses.
-          </Text>
-          {API_STYLES.map((style) => (
-            <TouchableOpacity
-              key={style.id}
-              style={[
-                styles.optionCard,
-                {
-                  backgroundColor: seasonalTheme.cardBg,
-                  borderColor: `${theme.colors.border}40`,
-                },
-              ]}
-              onPress={() => handleSelectStyle(style)}
-            >
-              <View style={styles.optionContent}>
-                <View style={styles.optionHeader}>
-                  <Ionicons
-                    name="cloud-outline"
-                    size={20}
-                    color={theme.colors.accent}
-                  />
-                  <Text
-                    variant="body"
-                    style={{
-                      color: seasonalTheme.textPrimary,
-                      fontWeight: "600",
-                    }}
-                  >
-                    {style.displayName}
-                  </Text>
-                </View>
-                <Text
-                  variant="caption"
-                  style={{ color: seasonalTheme.textSecondary }}
-                >
-                  {style.description}
-                </Text>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={seasonalTheme.textSecondary}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* Step 2: Connection Details */}
-      {step === "details" && selectedStyle && (
-        <View style={styles.stepContent}>
-          <FormField label="Base URL">
+          <FormField label="API Endpoint URL">
             <Input
-              placeholder={selectedStyle.defaultBaseUrl}
+              placeholder={
+                modelCategory === "stt"
+                  ? "wss://api.deepgram.com/v1/listen"
+                  : "https://api.openai.com/v1/chat/completions"
+              }
               value={baseUrl}
               onChangeText={setBaseUrl}
               autoCapitalize="none"
@@ -322,13 +252,27 @@ export function AddRemoteModelModal({
             />
           </FormField>
 
+          {/* Show detected provider */}
+          {baseUrl.trim() && (
+            <View style={styles.providerBadge}>
+              <Ionicons
+                name="checkmark-circle"
+                size={14}
+                color={theme.colors.accent}
+              />
+              <Text
+                variant="caption"
+                style={{ color: seasonalTheme.textSecondary }}
+              >
+                Detected: {detectedProvider.displayName}
+                {isWsUrl && modelCategory === "stt" && " (Real-Time)"}
+              </Text>
+            </View>
+          )}
+
           <FormField label="Model Name">
             <Input
-              placeholder={
-                selectedStyle.id === "anthropic"
-                  ? "claude-3-5-sonnet-20241022"
-                  : "gpt-4o"
-              }
+              placeholder={detectedProvider.modelPlaceholder || "model-name"}
               value={modelName}
               onChangeText={setModelName}
               autoCapitalize="none"
@@ -336,10 +280,23 @@ export function AddRemoteModelModal({
             />
           </FormField>
 
-          <FormField label="API Key (optional for self-hosted)">
+          <FormField
+            label="API Key (optional for self-hosted)"
+            hint={
+              isEditMode &&
+              editModel?.modelType === "remote-api" &&
+              editModel.apiKeyRef
+                ? "Leave blank to keep existing key"
+                : undefined
+            }
+          >
             <Input
               placeholder={
-                selectedStyle.id === "anthropic" ? "sk-ant-..." : "sk-..."
+                isEditMode &&
+                editModel?.modelType === "remote-api" &&
+                editModel.apiKeyRef
+                  ? "••••••••••••••••"
+                  : detectedProvider.apiKeyPlaceholder || "your-api-key"
               }
               value={apiKey}
               onChangeText={setApiKey}
@@ -349,7 +306,7 @@ export function AddRemoteModelModal({
             />
           </FormField>
 
-          <FormField label="Display Name (optional)" marginBottom={false}>
+          <FormField label="Display Name (optional)">
             <Input
               placeholder={modelName || "My Remote Model"}
               value={displayName}
@@ -378,11 +335,11 @@ export function AddRemoteModelModal({
         </View>
       )}
 
-      {/* Step 3: Privacy Acknowledgment */}
-      {step === "privacy" && selectedStyle && (
+      {/* Privacy Acknowledgment */}
+      {step === "privacy" && (
         <View style={styles.stepContent}>
           <RemoteModelPrivacyBanner
-            providerName={selectedStyle.displayName}
+            providerName={detectedProvider.displayName}
             isAcknowledged={false}
             onAcknowledge={handlePrivacyAcknowledge}
             onCancel={handleBack}
@@ -410,23 +367,12 @@ const styles = StyleSheet.create({
   stepContent: {
     padding: spacingPatterns.md,
   },
-  optionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderRadius: borderRadius.sm,
-    padding: spacingPatterns.sm,
-    marginBottom: spacingPatterns.xs,
-  },
-  optionContent: {
-    flex: 1,
-    gap: 2,
-  },
-  optionHeader: {
+  providerBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacingPatterns.xs,
+    marginTop: -spacingPatterns.sm,
+    marginBottom: spacingPatterns.md,
   },
   securityNote: {
     flexDirection: "row",

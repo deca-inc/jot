@@ -315,6 +315,16 @@ export class CustomModelsRepository {
       values.push(JSON.stringify(input.customHeaders));
     }
 
+    if (input.baseUrl !== undefined) {
+      updates.push("baseUrl = ?");
+      values.push(input.baseUrl);
+    }
+
+    if (input.modelName !== undefined) {
+      updates.push("modelName = ?");
+      values.push(input.modelName);
+    }
+
     // Custom local model URL fields
     if (input.huggingFaceUrl !== undefined) {
       updates.push("huggingFaceUrl = ?");
