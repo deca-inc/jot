@@ -12,6 +12,7 @@ import type {
   CreateRemoteModelInput,
   UpdateCustomModelInput,
   CustomModelType,
+  ModelCategory,
 } from "../ai/customModels";
 
 /**
@@ -33,9 +34,14 @@ export function useCustomModels() {
     getAll: () => repo.getAll(),
     getByModelId: (modelId: string) => repo.getByModelId(modelId),
     getByType: (modelType: CustomModelType) => repo.getByType(modelType),
+    getByCategory: (category: ModelCategory) => repo.getByCategory(category),
     getEnabledModels: () => repo.getEnabledModels(),
     getCustomLocalModels: () => repo.getCustomLocalModels(),
     getRemoteModels: () => repo.getRemoteModels(),
+    getCustomLocalModelsByCategory: (category: ModelCategory) =>
+      repo.getCustomLocalModelsByCategory(category),
+    getRemoteModelsByCategory: (category: ModelCategory) =>
+      repo.getRemoteModelsByCategory(category),
 
     // Update
     update: (modelId: string, input: UpdateCustomModelInput) =>
@@ -43,6 +49,8 @@ export function useCustomModels() {
     acknowledgePrivacy: (modelId: string) => repo.acknowledgePrivacy(modelId),
     setEnabled: (modelId: string, enabled: boolean) =>
       repo.setEnabled(modelId, enabled),
+    setDownloaded: (modelId: string, downloaded: boolean) =>
+      repo.setDownloaded(modelId, downloaded),
 
     // Delete
     delete: (modelId: string) => repo.delete(modelId),

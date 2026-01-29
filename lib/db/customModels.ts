@@ -20,6 +20,7 @@ import type {
   UpdateCustomModelInput,
   CustomModelType,
   ProviderId,
+  ModelCategory,
 } from "../ai/customModels";
 
 // =============================================================================
@@ -61,21 +62,25 @@ export class CustomModelsRepository {
   ): Promise<CustomLocalModelConfig> {
     const now = Date.now();
     const modelId = generateCustomLocalModelId(input.folderName);
+    const modelCategory = input.modelCategory || "llm";
 
     await this.db.runAsync(
       `INSERT INTO custom_models (
-        modelId, modelType, displayName, description,
-        huggingFaceUrl, folderName, pteFileName,
-        tokenizerFileName, tokenizerConfigFileName,
-        modelSize, quantization, ramRequired,
+        modelId, modelType, modelCategory, displayName, description,
+        huggingFaceUrl, tokenizerUrl, tokenizerConfigUrl,
+        folderName, pteFileName, tokenizerFileName, tokenizerConfigFileName,
+        modelSize, quantization, ramRequired, isDownloaded,
         isEnabled, privacyAcknowledged, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         modelId,
         "custom-local",
+        modelCategory,
         input.displayName,
         input.description || null,
         input.huggingFaceUrl || null,
+        input.tokenizerUrl || null,
+        input.tokenizerConfigUrl || null,
         input.folderName,
         input.pteFileName,
         input.tokenizerFileName || null,
@@ -83,6 +88,7 @@ export class CustomModelsRepository {
         input.modelSize || null,
         input.quantization || null,
         input.ramRequired || null,
+        0, // isDownloaded - not downloaded yet
         1, // isEnabled
         0, // privacyAcknowledged (not needed for local models)
         now,
@@ -107,17 +113,19 @@ export class CustomModelsRepository {
     const now = Date.now();
     const modelId = generateRemoteModelId(input.providerId, input.modelName);
     const apiKeyRef = generateApiKeyRef(modelId);
+    const modelCategory = input.modelCategory || "llm";
 
     await this.db.runAsync(
       `INSERT INTO custom_models (
-        modelId, modelType, displayName, description,
+        modelId, modelType, modelCategory, displayName, description,
         providerId, baseUrl, modelName, apiKeyRef,
         customHeaders, maxTokens, temperature,
         isEnabled, privacyAcknowledged, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         modelId,
         "remote-api",
+        modelCategory,
         input.displayName,
         input.description || null,
         input.providerId,
@@ -212,6 +220,46 @@ export class CustomModelsRepository {
     return models as RemoteModelConfig[];
   }
 
+  /**
+   * Get models by category (LLM or STT).
+   */
+  async getByCategory(category: ModelCategory): Promise<CustomModelConfig[]> {
+    const rows = await this.db.getAllAsync<CustomModelRow>(
+      `SELECT * FROM custom_models WHERE modelCategory = ? ORDER BY createdAt DESC`,
+      [category],
+    );
+
+    return rows.map((row) => this.rowToModel(row));
+  }
+
+  /**
+   * Get custom local models by category.
+   */
+  async getCustomLocalModelsByCategory(
+    category: ModelCategory,
+  ): Promise<CustomLocalModelConfig[]> {
+    const rows = await this.db.getAllAsync<CustomModelRow>(
+      `SELECT * FROM custom_models WHERE modelType = ? AND modelCategory = ? ORDER BY createdAt DESC`,
+      ["custom-local", category],
+    );
+
+    return rows.map((row) => this.rowToModel(row)) as CustomLocalModelConfig[];
+  }
+
+  /**
+   * Get remote models by category.
+   */
+  async getRemoteModelsByCategory(
+    category: ModelCategory,
+  ): Promise<RemoteModelConfig[]> {
+    const rows = await this.db.getAllAsync<CustomModelRow>(
+      `SELECT * FROM custom_models WHERE modelType = ? AND modelCategory = ? ORDER BY createdAt DESC`,
+      ["remote-api", category],
+    );
+
+    return rows.map((row) => this.rowToModel(row)) as RemoteModelConfig[];
+  }
+
   // ===========================================================================
   // UPDATE OPERATIONS
   // ===========================================================================
@@ -267,6 +315,47 @@ export class CustomModelsRepository {
       values.push(JSON.stringify(input.customHeaders));
     }
 
+    if (input.baseUrl !== undefined) {
+      updates.push("baseUrl = ?");
+      values.push(input.baseUrl);
+    }
+
+    if (input.modelName !== undefined) {
+      updates.push("modelName = ?");
+      values.push(input.modelName);
+    }
+
+    // Custom local model URL fields
+    if (input.huggingFaceUrl !== undefined) {
+      updates.push("huggingFaceUrl = ?");
+      values.push(input.huggingFaceUrl);
+    }
+
+    if (input.tokenizerUrl !== undefined) {
+      updates.push("tokenizerUrl = ?");
+      values.push(input.tokenizerUrl);
+    }
+
+    if (input.tokenizerConfigUrl !== undefined) {
+      updates.push("tokenizerConfigUrl = ?");
+      values.push(input.tokenizerConfigUrl);
+    }
+
+    if (input.tokenizerFileName !== undefined) {
+      updates.push("tokenizerFileName = ?");
+      values.push(input.tokenizerFileName);
+    }
+
+    if (input.tokenizerConfigFileName !== undefined) {
+      updates.push("tokenizerConfigFileName = ?");
+      values.push(input.tokenizerConfigFileName);
+    }
+
+    if (input.isDownloaded !== undefined) {
+      updates.push("isDownloaded = ?");
+      values.push(input.isDownloaded ? 1 : 0);
+    }
+
     updates.push("updatedAt = ?");
     values.push(now);
     values.push(modelId);
@@ -308,6 +397,18 @@ export class CustomModelsRepository {
     );
   }
 
+  /**
+   * Mark a custom local model as downloaded.
+   */
+  async setDownloaded(modelId: string, downloaded: boolean): Promise<void> {
+    const now = Date.now();
+
+    await this.db.runAsync(
+      `UPDATE custom_models SET isDownloaded = ?, updatedAt = ? WHERE modelId = ?`,
+      [downloaded ? 1 : 0, now, modelId],
+    );
+  }
+
   // ===========================================================================
   // DELETE OPERATIONS
   // ===========================================================================
@@ -331,13 +432,18 @@ export class CustomModelsRepository {
   // ===========================================================================
 
   private rowToModel(row: CustomModelRow): CustomModelConfig {
+    const modelCategory = (row.modelCategory || "llm") as ModelCategory;
+
     if (row.modelType === "custom-local") {
       return {
         modelId: row.modelId,
         modelType: "custom-local",
+        modelCategory,
         displayName: row.displayName,
         description: row.description || undefined,
         huggingFaceUrl: row.huggingFaceUrl || undefined,
+        tokenizerUrl: row.tokenizerUrl || undefined,
+        tokenizerConfigUrl: row.tokenizerConfigUrl || undefined,
         folderName: row.folderName || "",
         pteFileName: row.pteFileName || "",
         tokenizerFileName: row.tokenizerFileName || undefined,
@@ -346,12 +452,14 @@ export class CustomModelsRepository {
         quantization: row.quantization || undefined,
         ramRequired: row.ramRequired || undefined,
         isEnabled: row.isEnabled === 1,
+        isDownloaded: row.isDownloaded === 1,
       } as CustomLocalModelConfig;
     }
 
     return {
       modelId: row.modelId,
       modelType: "remote-api",
+      modelCategory,
       displayName: row.displayName,
       description: row.description || undefined,
       providerId: row.providerId as ProviderId,

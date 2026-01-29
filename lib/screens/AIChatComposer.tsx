@@ -27,6 +27,7 @@ import { Message } from "react-native-executorch";
 import RenderHtml from "react-native-render-html";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALL_MODELS, getModelById } from "../ai/modelConfig";
+import { isRemoteModelId, isCustomLocalModelId } from "../ai/modelTypeGuards";
 import { useAIChat } from "../ai/useAIChat";
 import { usePlatformModels, isPlatformModelId } from "../ai/usePlatformModels";
 import { useTrackScreenView } from "../analytics";
@@ -39,10 +40,15 @@ import {
 import { type Agent, useAgents } from "../db/agents";
 import { Block } from "../db/entries";
 import { useModelSettings, ModelDownloadInfo } from "../db/modelSettings";
+import { useCustomModels } from "../db/useCustomModels";
 import { useEntry, useCreateEntry, useUpdateEntry } from "../db/useEntries";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useThrottle } from "../utils/debounce";
+import type {
+  RemoteModelConfig,
+  CustomLocalModelConfig,
+} from "../ai/customModels";
 
 // Configure marked for simple rendering
 marked.setOptions({
@@ -297,8 +303,13 @@ export function AIChatComposer({
   const [downloadedModels, setDownloadedModels] = useState<ModelDownloadInfo[]>(
     [],
   );
+  const [remoteModels, setRemoteModels] = useState<RemoteModelConfig[]>([]);
+  const [customLocalModels, setCustomLocalModels] = useState<
+    CustomLocalModelConfig[]
+  >([]);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const customModels = useCustomModels();
   const [currentResponse, setCurrentResponse] = useThrottle<string | null>(
     null,
     150,
@@ -311,31 +322,66 @@ export function AIChatComposer({
   // Model management modal state
   const [showModelManager, setShowModelManager] = useState(false);
 
-  // Load downloaded models and agents on mount
+  // Load downloaded models, remote models, custom local models, and agents on mount
   useEffect(() => {
     const loadSettings = async () => {
-      const [downloaded, selected, allAgents, defaultAgent] = await Promise.all(
-        [
-          modelSettings.getDownloadedModels(),
-          modelSettings.getSelectedModelId(),
-          agentsRepo.getAll(),
-          agentsRepo.getDefault(),
-        ],
-      );
+      const [
+        downloaded,
+        selected,
+        allAgents,
+        defaultAgent,
+        remotes,
+        customLocals,
+      ] = await Promise.all([
+        modelSettings.getDownloadedModels(),
+        modelSettings.getSelectedModelId(),
+        agentsRepo.getAll(),
+        agentsRepo.getDefault(),
+        customModels.getRemoteModels(),
+        customModels.getCustomLocalModels(),
+      ]);
       setDownloadedModels(downloaded);
+      setRemoteModels(remotes);
+      // Only show custom local models that are downloaded
+      setCustomLocalModels(
+        customLocals.filter((m) => m.isDownloaded && m.isEnabled),
+      );
       setAgents(allAgents);
+
+      // Helper to check if a model still exists and is available
+      const isModelAvailable = (modelId: string): boolean => {
+        // Platform models are always available
+        if (isPlatformModelId(modelId)) {
+          return platformLLMs.some((m) => m.modelId === modelId);
+        }
+        // Remote models
+        if (isRemoteModelId(modelId)) {
+          return remotes.some(
+            (m) =>
+              m.modelId === modelId && m.isEnabled && m.privacyAcknowledged,
+          );
+        }
+        // Custom local models
+        if (isCustomLocalModelId(modelId)) {
+          return customLocals.some(
+            (m) => m.modelId === modelId && m.isDownloaded && m.isEnabled,
+          );
+        }
+        // Built-in downloaded models
+        return downloaded.some((m) => m.modelId === modelId);
+      };
 
       // Determine default: saved selection > persona
       // Note: Platform models don't use personas (no system prompt support)
-      if (selected) {
-        // User has a saved selection - use it
+      if (selected && isModelAvailable(selected)) {
+        // User has a saved selection that still exists - use it
         setSelectedModelId(selected);
         // Only set agent if NOT a platform model (platform models can't use personas)
         if (defaultAgent && !isPlatformModelId(selected)) {
           setCurrentAgent(defaultAgent);
         }
       } else if (defaultAgent) {
-        // No saved selection - use default persona
+        // No saved selection or model no longer exists - use default persona
         setSelectedModelId(defaultAgent.modelId || null);
         setCurrentAgent(defaultAgent);
       }
@@ -363,12 +409,34 @@ export function AIChatComposer({
       return currentAgent.name;
     }
 
+    // Check remote models
+    if (isRemoteModelId(selectedModelId)) {
+      const remoteModel = remoteModels.find(
+        (m) => m.modelId === selectedModelId,
+      );
+      if (remoteModel) return remoteModel.displayName;
+    }
+
+    // Check custom local models
+    if (isCustomLocalModelId(selectedModelId)) {
+      const customModel = customLocalModels.find(
+        (m) => m.modelId === selectedModelId,
+      );
+      if (customModel) return customModel.displayName;
+    }
+
     // Check downloadable models
     const model = getModelById(selectedModelId);
     if (model) return model.displayName;
 
     return selectedModelId;
-  }, [selectedModelId, currentAgent, platformLLMs]);
+  }, [
+    selectedModelId,
+    currentAgent,
+    platformLLMs,
+    remoteModels,
+    customLocalModels,
+  ]);
 
   // Handle agent selection
   const handleSelectAgent = useCallback(
@@ -1391,6 +1459,156 @@ export function AIChatComposer({
                   </TouchableOpacity>
                 );
               })}
+
+            {/* Remote API Models Section */}
+            {remoteModels.length > 0 && (
+              <>
+                <Text
+                  variant="caption"
+                  style={{
+                    color: seasonalTheme.textSecondary,
+                    marginTop: spacingPatterns.md,
+                    marginBottom: spacingPatterns.xs,
+                    fontWeight: "600",
+                  }}
+                >
+                  REMOTE
+                </Text>
+                {remoteModels
+                  .filter((m) => m.isEnabled && m.privacyAcknowledged)
+                  .map((remoteModel) => {
+                    const isSelected =
+                      !currentAgent && selectedModelId === remoteModel.modelId;
+                    return (
+                      <TouchableOpacity
+                        key={remoteModel.modelId}
+                        onPress={() => {
+                          setCurrentAgent(null);
+                          handleSelectModel(remoteModel.modelId);
+                        }}
+                        style={[
+                          styles.modelOption,
+                          {
+                            backgroundColor: isSelected
+                              ? seasonalTheme.chipBg
+                              : "transparent",
+                            borderColor: isSelected
+                              ? seasonalTheme.textSecondary + "40"
+                              : "transparent",
+                          },
+                        ]}
+                      >
+                        <View style={styles.modelOptionContent}>
+                          <View style={styles.agentOptionRow}>
+                            <Ionicons
+                              name="cloud-outline"
+                              size={16}
+                              color={seasonalTheme.textSecondary}
+                            />
+                            <Text
+                              variant="body"
+                              style={{
+                                color: seasonalTheme.textPrimary,
+                                fontWeight: isSelected ? "600" : "400",
+                              }}
+                            >
+                              {remoteModel.displayName}
+                            </Text>
+                          </View>
+                          <Text
+                            variant="caption"
+                            style={{ color: seasonalTheme.textSecondary }}
+                          >
+                            {remoteModel.description ||
+                              `${remoteModel.providerId} · ${remoteModel.modelName}`}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <Ionicons
+                            name="checkmark"
+                            size={20}
+                            color={seasonalTheme.textPrimary}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+              </>
+            )}
+
+            {/* Custom Local Models Section */}
+            {customLocalModels.length > 0 && (
+              <>
+                <Text
+                  variant="caption"
+                  style={{
+                    color: seasonalTheme.textSecondary,
+                    marginTop: spacingPatterns.md,
+                    marginBottom: spacingPatterns.xs,
+                    fontWeight: "600",
+                  }}
+                >
+                  CUSTOM
+                </Text>
+                {customLocalModels.map((customModel) => {
+                  const isSelected =
+                    !currentAgent && selectedModelId === customModel.modelId;
+                  return (
+                    <TouchableOpacity
+                      key={customModel.modelId}
+                      onPress={() => {
+                        setCurrentAgent(null);
+                        handleSelectModel(customModel.modelId);
+                      }}
+                      style={[
+                        styles.modelOption,
+                        {
+                          backgroundColor: isSelected
+                            ? seasonalTheme.chipBg
+                            : "transparent",
+                          borderColor: isSelected
+                            ? seasonalTheme.textSecondary + "40"
+                            : "transparent",
+                        },
+                      ]}
+                    >
+                      <View style={styles.modelOptionContent}>
+                        <View style={styles.agentOptionRow}>
+                          <Ionicons
+                            name="hardware-chip-outline"
+                            size={16}
+                            color={seasonalTheme.textSecondary}
+                          />
+                          <Text
+                            variant="body"
+                            style={{
+                              color: seasonalTheme.textPrimary,
+                              fontWeight: isSelected ? "600" : "400",
+                            }}
+                          >
+                            {customModel.displayName}
+                          </Text>
+                        </View>
+                        <Text
+                          variant="caption"
+                          style={{ color: seasonalTheme.textSecondary }}
+                        >
+                          {customModel.description ||
+                            `${customModel.modelSize || "Custom"} · On-device`}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Ionicons
+                          name="checkmark"
+                          size={20}
+                          color={seasonalTheme.textPrimary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            )}
           </ScrollView>
         </View>
       </Dialog>

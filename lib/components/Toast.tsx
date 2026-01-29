@@ -7,6 +7,7 @@ import {
   Platform,
   TouchableOpacity,
   PanResponder,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacingPatterns, borderRadius } from "../theme";
@@ -132,8 +133,6 @@ export function Toast({
     });
   };
 
-  if (!visible) return null;
-
   const getIcon = () => {
     switch (type) {
       case "success":
@@ -162,51 +161,68 @@ export function Toast({
     return seasonalTheme.gradient.middle;
   };
 
+  // Wrap in Modal to ensure toast appears above all other modals
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          top: insets.top,
-          transform: [{ translateY }],
-        },
-      ]}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={handleHide}
     >
-      <Animated.View
-        style={[styles.toastContainer, { transform: [{ translateX }] }]}
-        {...panResponder.panHandlers}
-      >
-        <View
+      <View style={styles.modalOverlay} pointerEvents="box-none">
+        <Animated.View
           style={[
-            styles.toast,
+            styles.container,
             {
-              backgroundColor: getBackgroundColor(),
-              shadowColor: "#000",
+              top: insets.top,
+              transform: [{ translateY }],
             },
-            Platform.OS === "android" && styles.androidElevation,
           ]}
+          pointerEvents="box-none"
         >
-          <Ionicons name={getIcon()} size={20} color={getColor()} />
-          <Text
-            variant="body"
-            style={[styles.message, { color: seasonalTheme.textPrimary }]}
+          <Animated.View
+            style={[styles.toastContainer, { transform: [{ translateX }] }]}
+            {...panResponder.panHandlers}
           >
-            {message}
-          </Text>
-          <TouchableOpacity onPress={handleHide} style={styles.closeButton}>
-            <Ionicons
-              name="close"
-              size={18}
-              color={seasonalTheme.textSecondary}
-            />
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-    </Animated.View>
+            <View
+              style={[
+                styles.toast,
+                {
+                  backgroundColor: getBackgroundColor(),
+                  shadowColor: "#000",
+                },
+                Platform.OS === "android" && styles.androidElevation,
+              ]}
+            >
+              <Ionicons name={getIcon()} size={20} color={getColor()} />
+              <Text
+                variant="body"
+                style={[styles.message, { color: seasonalTheme.textPrimary }]}
+              >
+                {message}
+              </Text>
+              <TouchableOpacity onPress={handleHide} style={styles.closeButton}>
+                <Ionicons
+                  name="close"
+                  size={18}
+                  color={seasonalTheme.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    // Transparent overlay allows touches to pass through to content below
+    backgroundColor: "transparent",
+  },
   container: {
     position: "absolute",
     left: 0,

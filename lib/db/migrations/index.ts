@@ -12,6 +12,8 @@ import * as add_attachments_table from "./2026_01_16_21_35_46_add_attachments_ta
 import * as add_modelid_to_agents from "./2026_01_19_18_18_18_add_modelid_to_agents";
 import * as repair_missing_columns from "./2026_01_19_19_21_20_repair_missing_columns";
 import * as add_custom_models from "./2026_01_24_21_13_05_add_custom_models";
+import * as add_model_category from "./2026_01_25_16_42_05_add_model_category";
+import * as add_tokenizer_urls from "./2026_01_25_17_11_05_add_tokenizer_urls";
 import * as initialSeed from "./seeds/2025_01_13_16_25_00_initial_seed";
 
 /**
@@ -49,6 +51,14 @@ export const allMigrations: Array<{ name: string; module: MigrationModule }> = [
   {
     name: "2026_01_24_21_13_05_add_custom_models.ts",
     module: add_custom_models,
+  },
+  {
+    name: "2026_01_25_16_42_05_add_model_category.ts",
+    module: add_model_category,
+  },
+  {
+    name: "2026_01_25_17_11_05_add_tokenizer_urls.ts",
+    module: add_tokenizer_urls,
   },
   // Seeds (optional - only run when --seeds flag is enabled)
   { name: "seeds/2025_01_13_16_25_00_initial_seed.ts", module: initialSeed },

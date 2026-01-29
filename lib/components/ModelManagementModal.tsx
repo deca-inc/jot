@@ -22,6 +22,8 @@ import {
   ensureSTTModelPresent,
   deleteSTTModel,
   getSTTModelSize,
+  ensureCustomModelPresent,
+  deleteCustomModel,
 } from "../ai/modelManager";
 import { ALL_STT_MODELS } from "../ai/sttConfig";
 import { useUnifiedModel } from "../ai/UnifiedModelProvider";
@@ -37,12 +39,17 @@ import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { getDeviceTier, getCompatibleModels } from "../utils/deviceInfo";
+import { AddCustomLocalModelModal } from "./AddCustomLocalModelModal";
 import { AddRemoteModelModal } from "./AddRemoteModelModal";
-import { AgentEditor } from "./AgentEditor";
 import { ModelCard } from "./ModelCard";
+import { PersonaEditor } from "./PersonaEditor";
 import { Text } from "./Text";
 import { useToast } from "./ToastProvider";
-import type { CustomModelConfig } from "../ai/customModels";
+import type {
+  CustomLocalModelConfig,
+  CustomModelConfig,
+  RemoteModelConfig,
+} from "../ai/customModels";
 
 export type ModelManagementTab = "llms" | "voice" | "agents";
 
@@ -51,6 +58,28 @@ export interface ModelManagementModalProps {
   onClose: () => void;
   initialTab?: ModelManagementTab;
 }
+
+// Estimated file sizes in MB
+const MODEL_SIZES: Record<string, number> = {
+  // LLM models
+  "llama-3.2-1b-instruct": 1083,
+  "llama-3.2-3b-instruct": 2435,
+  "qwen-3-0.6b": 900,
+  "qwen-3-1.7b": 2064,
+  "qwen-3-4b": 3527,
+  "smollm2-135m": 535,
+  "smollm2-360m": 1360,
+  "smollm2-1.7b": 1220,
+  // STT models
+  "whisper-tiny-en": 233,
+  "whisper-tiny-multi": 233,
+};
+
+const formatSize = (mb: number) => {
+  if (mb < 1024) return `${mb} MB`;
+  const gb = mb / 1024;
+  return `${gb.toFixed(1)} GB`;
+};
 
 // Model order for display
 const LLM_ORDER = [
@@ -119,9 +148,36 @@ export function ModelManagementModal({
   const [showAgentEditor, setShowAgentEditor] = useState(false);
   const [savingAgent, setSavingAgent] = useState(false);
 
-  // Remote models state
+  // Remote models state (LLM)
   const [remoteModels, setRemoteModels] = useState<CustomModelConfig[]>([]);
   const [showAddRemoteModal, setShowAddRemoteModal] = useState(false);
+  const [editingRemoteModel, setEditingRemoteModel] =
+    useState<CustomModelConfig | null>(null);
+
+  // Remote STT models state
+  const [remoteSttModels, setRemoteSttModels] = useState<CustomModelConfig[]>(
+    [],
+  );
+  const [showAddRemoteSttModal, setShowAddRemoteSttModal] = useState(false);
+  const [editingRemoteSttModel, setEditingRemoteSttModel] =
+    useState<CustomModelConfig | null>(null);
+
+  // Custom local models state (LLM)
+  const [customLocalModels, setCustomLocalModels] = useState<
+    CustomModelConfig[]
+  >([]);
+  const [showAddCustomLocalModal, setShowAddCustomLocalModal] = useState(false);
+  const [editingCustomLocalModel, setEditingCustomLocalModel] =
+    useState<CustomLocalModelConfig | null>(null);
+
+  // Custom local STT models state
+  const [customLocalSttModels, setCustomLocalSttModels] = useState<
+    CustomModelConfig[]
+  >([]);
+  const [showAddCustomLocalSttModal, setShowAddCustomLocalSttModal] =
+    useState(false);
+  const [editingCustomLocalSttModel, setEditingCustomLocalSttModel] =
+    useState<CustomLocalModelConfig | null>(null);
 
   const [loading, setLoading] = useState(true);
 
@@ -144,6 +200,9 @@ export function ModelManagementModal({
         tier,
         agentsList,
         remoteModelsList,
+        remoteSttModelsList,
+        customLocalLlmModelsList,
+        customLocalSttModelsList,
       ] = await Promise.all([
         modelSettings.getSelectedModelId(),
         modelSettings.getSelectedSttModelId(),
@@ -151,7 +210,10 @@ export function ModelManagementModal({
         getCompatibleModels(),
         getDeviceTier(),
         agentsRepo.getAll(),
-        customModelsRepo.getRemoteModels(),
+        customModelsRepo.getRemoteModelsByCategory("llm"),
+        customModelsRepo.getRemoteModelsByCategory("stt"),
+        customModelsRepo.getCustomLocalModelsByCategory("llm"),
+        customModelsRepo.getCustomLocalModelsByCategory("stt"),
       ]);
 
       setSelectedLLMId(selectedLlmId);
@@ -160,6 +222,9 @@ export function ModelManagementModal({
       setDeviceTier(tier);
       setAgents(agentsList);
       setRemoteModels(remoteModelsList);
+      setRemoteSttModels(remoteSttModelsList);
+      setCustomLocalModels(customLocalLlmModelsList);
+      setCustomLocalSttModels(customLocalSttModelsList);
 
       // Separate LLM and STT models
       const llmIds = downloaded
@@ -327,9 +392,11 @@ export function ModelManagementModal({
         return;
       }
 
+      const isCurrentlySelected = selectedLLMId === model.modelId;
+
       Alert.alert(
         "Remove Model",
-        `Are you sure you want to remove ${model.displayName}?`,
+        `Are you sure you want to remove ${model.displayName}?${isCurrentlySelected ? "\n\nThis model is currently selected. You will need to select another model to use AI chat." : ""}`,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -337,6 +404,11 @@ export function ModelManagementModal({
             style: "destructive",
             onPress: async () => {
               try {
+                // Deselect if currently selected
+                if (isCurrentlySelected) {
+                  await modelSettings.setSelectedModelId("");
+                  setSelectedLLMId(null);
+                }
                 await deleteModel(model);
                 await modelSettings.removeDownloadedModel(model.modelId);
                 showToast(`${model.displayName} removed`, "success");
@@ -349,7 +421,7 @@ export function ModelManagementModal({
         ],
       );
     },
-    [modelSettings, showToast, agentsRepo],
+    [modelSettings, showToast, agentsRepo, selectedLLMId],
   );
 
   // Remote model handlers
@@ -376,9 +448,11 @@ export function ModelManagementModal({
 
   const handleRemoveRemoteModel = useCallback(
     (model: CustomModelConfig) => {
+      const isCurrentlySelected = selectedLLMId === model.modelId;
+
       Alert.alert(
         "Remove Remote Model",
-        `Are you sure you want to remove ${model.displayName}? This will also delete the stored API key.`,
+        `Are you sure you want to remove ${model.displayName}? This will also delete the stored API key.${isCurrentlySelected ? "\n\nThis model is currently selected. You will need to select another model to use AI chat." : ""}`,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -386,6 +460,11 @@ export function ModelManagementModal({
             style: "destructive",
             onPress: async () => {
               try {
+                // Deselect if currently selected
+                if (isCurrentlySelected) {
+                  await modelSettings.setSelectedModelId("");
+                  setSelectedLLMId(null);
+                }
                 await customModelsRepo.delete(model.modelId);
                 showToast(`${model.displayName} removed`, "success");
                 await loadSettings();
@@ -397,12 +476,392 @@ export function ModelManagementModal({
         ],
       );
     },
-    [customModelsRepo, showToast],
+    [customModelsRepo, showToast, selectedLLMId, modelSettings],
   );
 
   const handleRemoteModelAdded = useCallback(async () => {
     await loadSettings();
+    setEditingRemoteModel(null);
   }, []);
+
+  const handleEditRemoteModel = useCallback((model: CustomModelConfig) => {
+    setEditingRemoteModel(model);
+    setShowAddRemoteModal(true);
+  }, []);
+
+  // Remote STT model handlers
+  const handleSelectRemoteSttModel = useCallback(
+    async (model: CustomModelConfig) => {
+      try {
+        setLoadingModelId(model.modelId);
+        await modelSettings.setSelectedSttModelId(model.modelId);
+        setSelectedSTTId(model.modelId);
+        setSelectedPlatformSTTId(null);
+        showToast(`${model.displayName} is now active for voice`, "success");
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        showToast(
+          `Failed to select: ${err?.message || "Unknown error"}`,
+          "error",
+        );
+      } finally {
+        setLoadingModelId(null);
+      }
+    },
+    [modelSettings, showToast],
+  );
+
+  const handleRemoveRemoteSttModel = useCallback(
+    (model: CustomModelConfig) => {
+      const isCurrentlySelected = selectedSTTId === model.modelId;
+
+      Alert.alert(
+        "Remove Remote Voice Model",
+        `Are you sure you want to remove ${model.displayName}? This will also delete the stored API key.${isCurrentlySelected ? "\n\nThis model is currently selected. You will need to select another model for voice input." : ""}`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                // Deselect if currently selected
+                if (isCurrentlySelected) {
+                  await modelSettings.setSelectedSttModelId("");
+                  setSelectedSTTId(null);
+                }
+                await customModelsRepo.delete(model.modelId);
+                showToast(`${model.displayName} removed`, "success");
+                await loadSettings();
+              } catch (_error) {
+                showToast("Failed to remove model", "error");
+              }
+            },
+          },
+        ],
+      );
+    },
+    [customModelsRepo, showToast, selectedSTTId, modelSettings],
+  );
+
+  const handleRemoteSttModelAdded = useCallback(async () => {
+    await loadSettings();
+    setEditingRemoteSttModel(null);
+  }, []);
+
+  const handleEditRemoteSttModel = useCallback((model: CustomModelConfig) => {
+    setEditingRemoteSttModel(model);
+    setShowAddRemoteSttModal(true);
+  }, []);
+
+  // Custom local model handlers
+  const handleSelectCustomLocalModel = useCallback(
+    async (model: CustomModelConfig) => {
+      try {
+        setLoadingModelId(model.modelId);
+        await modelSettings.setSelectedModelId(model.modelId);
+        setSelectedLLMId(model.modelId);
+        setSelectedPlatformLLMId(null);
+        showToast(`${model.displayName} is now active`, "success");
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        showToast(
+          `Failed to select: ${err?.message || "Unknown error"}`,
+          "error",
+        );
+      } finally {
+        setLoadingModelId(null);
+      }
+    },
+    [modelSettings, showToast],
+  );
+
+  const handleCustomLocalModelAdded = useCallback(async () => {
+    await loadSettings();
+    setEditingCustomLocalModel(null);
+  }, []);
+
+  const handleEditCustomLocalModel = useCallback(
+    (model: CustomLocalModelConfig) => {
+      setEditingCustomLocalModel(model);
+      setShowAddCustomLocalModal(true);
+    },
+    [],
+  );
+
+  // Download handler for custom local models
+  const handleDownloadCustomLocalModel = useCallback(
+    async (model: CustomLocalModelConfig) => {
+      if (!model.huggingFaceUrl) {
+        showToast("Model URL not configured", "error");
+        return;
+      }
+
+      // Debug: log the URL being used for download
+      console.log(
+        `[handleDownloadCustomLocalModel] Downloading with URL: ${model.huggingFaceUrl}`,
+      );
+      console.log(`[handleDownloadCustomLocalModel] Model config:`, {
+        modelId: model.modelId,
+        folderName: model.folderName,
+        pteFileName: model.pteFileName,
+        tokenizerUrl: model.tokenizerUrl,
+        tokenizerFileName: model.tokenizerFileName,
+      });
+
+      setDownloadingModels((prev) => new Set(prev).add(model.modelId));
+      setDownloadProgress((prev) => new Map(prev).set(model.modelId, 0));
+
+      try {
+        await ensureCustomModelPresent(
+          {
+            modelId: model.modelId,
+            displayName: model.displayName,
+            folderName: model.folderName,
+            pteFileName: model.pteFileName,
+            pteUrl: model.huggingFaceUrl,
+            tokenizerUrl: model.tokenizerUrl,
+            tokenizerFileName: model.tokenizerFileName,
+            tokenizerConfigUrl: model.tokenizerConfigUrl,
+            tokenizerConfigFileName: model.tokenizerConfigFileName,
+          },
+          (progress) => {
+            setDownloadProgress((prev) =>
+              new Map(prev).set(
+                model.modelId,
+                Math.min(100, Math.round(progress * 100)),
+              ),
+            );
+          },
+        );
+
+        // Mark as downloaded in database
+        await customModelsRepo.setDownloaded(model.modelId, true);
+
+        showToast(`${model.displayName} downloaded successfully`, "success");
+        await loadSettings();
+      } catch (error) {
+        const err = error as { message?: string };
+        const message = err?.message || "Download failed";
+        // Make error messages more user-friendly
+        if (message.includes("404")) {
+          showToast(
+            "Download failed: File not found (404). Check the URL.",
+            "error",
+          );
+        } else if (message.includes("403")) {
+          showToast(
+            "Download failed: Access denied (403). File may be private.",
+            "error",
+          );
+        } else {
+          showToast(message, "error");
+        }
+      } finally {
+        setDownloadingModels((prev) => {
+          const next = new Set(prev);
+          next.delete(model.modelId);
+          return next;
+        });
+        setDownloadProgress((prev) => {
+          const next = new Map(prev);
+          next.delete(model.modelId);
+          return next;
+        });
+      }
+    },
+    [customModelsRepo, showToast],
+  );
+
+  // Remove handler for custom local models (now also deletes files)
+  const handleRemoveCustomLocalModelWithFiles = useCallback(
+    (model: CustomLocalModelConfig) => {
+      const isCurrentlySelected = selectedLLMId === model.modelId;
+
+      Alert.alert(
+        "Remove Custom Model",
+        `Are you sure you want to remove ${model.displayName}? This will delete the downloaded files.${isCurrentlySelected ? "\n\nThis model is currently selected. You will need to select another model to use AI chat." : ""}`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                // Deselect if currently selected
+                if (isCurrentlySelected) {
+                  await modelSettings.setSelectedModelId("");
+                  setSelectedLLMId(null);
+                }
+                // Delete downloaded files
+                if (model.isDownloaded) {
+                  await deleteCustomModel(model.folderName);
+                }
+                // Delete from database
+                await customModelsRepo.delete(model.modelId);
+                showToast(`${model.displayName} removed`, "success");
+                await loadSettings();
+              } catch (_error) {
+                showToast("Failed to remove model", "error");
+              }
+            },
+          },
+        ],
+      );
+    },
+    [customModelsRepo, showToast, selectedLLMId, modelSettings],
+  );
+
+  // Custom local STT model handlers
+  const handleSelectCustomLocalSttModel = useCallback(
+    async (model: CustomModelConfig) => {
+      try {
+        await modelSettings.setSelectedSttModelId(model.modelId);
+        setSelectedSTTId(model.modelId);
+        setSelectedPlatformSTTId(null);
+        showToast(`${model.displayName} selected`, "success");
+      } catch (_error) {
+        showToast("Failed to select voice model", "error");
+      }
+    },
+    [modelSettings, showToast],
+  );
+
+  // Remove handler for custom local STT models (with file deletion)
+  const handleRemoveCustomLocalSttModelWithFiles = useCallback(
+    (model: CustomLocalModelConfig) => {
+      const isCurrentlySelected = selectedSTTId === model.modelId;
+
+      Alert.alert(
+        "Remove Custom Voice Model",
+        `Are you sure you want to remove ${model.displayName}? This will delete the downloaded files.${isCurrentlySelected ? "\n\nThis model is currently selected. You will need to select another model to use voice input." : ""}`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                // Deselect if currently selected
+                if (isCurrentlySelected) {
+                  await modelSettings.setSelectedSttModelId("");
+                  setSelectedSTTId(null);
+                }
+                // Delete downloaded files
+                if (model.isDownloaded) {
+                  await deleteCustomModel(model.folderName);
+                }
+                // Delete from database
+                await customModelsRepo.delete(model.modelId);
+                showToast(`${model.displayName} removed`, "success");
+                await loadSettings();
+              } catch (_error) {
+                showToast("Failed to remove model", "error");
+              }
+            },
+          },
+        ],
+      );
+    },
+    [customModelsRepo, showToast, selectedSTTId, modelSettings],
+  );
+
+  // Download handler for custom local STT models (reuses same logic as LLM)
+  const handleDownloadCustomLocalSttModel = useCallback(
+    async (model: CustomLocalModelConfig) => {
+      if (!model.huggingFaceUrl) {
+        showToast("Model URL not configured", "error");
+        return;
+      }
+
+      // Debug: log the URL being used for download
+      console.log(
+        `[handleDownloadCustomLocalSttModel] Downloading with URL: ${model.huggingFaceUrl}`,
+      );
+      console.log(`[handleDownloadCustomLocalSttModel] Model config:`, {
+        modelId: model.modelId,
+        folderName: model.folderName,
+        pteFileName: model.pteFileName,
+        tokenizerUrl: model.tokenizerUrl,
+        tokenizerFileName: model.tokenizerFileName,
+      });
+
+      setDownloadingModels((prev) => new Set(prev).add(model.modelId));
+      setDownloadProgress((prev) => new Map(prev).set(model.modelId, 0));
+
+      try {
+        await ensureCustomModelPresent(
+          {
+            modelId: model.modelId,
+            displayName: model.displayName,
+            folderName: model.folderName,
+            pteFileName: model.pteFileName,
+            pteUrl: model.huggingFaceUrl,
+            tokenizerUrl: model.tokenizerUrl,
+            tokenizerFileName: model.tokenizerFileName,
+            tokenizerConfigUrl: model.tokenizerConfigUrl,
+            tokenizerConfigFileName: model.tokenizerConfigFileName,
+          },
+          (progress) => {
+            setDownloadProgress((prev) =>
+              new Map(prev).set(
+                model.modelId,
+                Math.min(100, Math.round(progress * 100)),
+              ),
+            );
+          },
+        );
+
+        // Mark as downloaded in database
+        await customModelsRepo.setDownloaded(model.modelId, true);
+
+        showToast(`${model.displayName} downloaded successfully`, "success");
+        await loadSettings();
+      } catch (error) {
+        const err = error as { message?: string };
+        const message = err?.message || "Download failed";
+        // Make error messages more user-friendly
+        if (message.includes("404")) {
+          showToast(
+            "Download failed: File not found (404). Check the URL.",
+            "error",
+          );
+        } else if (message.includes("403")) {
+          showToast(
+            "Download failed: Access denied (403). File may be private.",
+            "error",
+          );
+        } else {
+          showToast(message, "error");
+        }
+      } finally {
+        setDownloadingModels((prev) => {
+          const next = new Set(prev);
+          next.delete(model.modelId);
+          return next;
+        });
+        setDownloadProgress((prev) => {
+          const next = new Map(prev);
+          next.delete(model.modelId);
+          return next;
+        });
+      }
+    },
+    [customModelsRepo, showToast],
+  );
+
+  const handleCustomLocalSttModelAdded = useCallback(async () => {
+    await loadSettings();
+    setEditingCustomLocalSttModel(null);
+  }, []);
+
+  const handleEditCustomLocalSttModel = useCallback(
+    (model: CustomLocalModelConfig) => {
+      setEditingCustomLocalSttModel(model);
+      setShowAddCustomLocalSttModal(true);
+    },
+    [],
+  );
 
   // STT handlers (similar to LLM)
   const handleDownloadSTT = useCallback(
@@ -418,7 +877,10 @@ export function ModelManagementModal({
       try {
         const result = await ensureSTTModelPresent(model, (progress) => {
           setDownloadProgress((prev) =>
-            new Map(prev).set(model.modelId, Math.round(progress * 100)),
+            new Map(prev).set(
+              model.modelId,
+              Math.min(100, Math.round(progress * 100)),
+            ),
           );
         });
 
@@ -469,9 +931,11 @@ export function ModelManagementModal({
 
   const handleRemoveSTT = useCallback(
     (model: SpeechToTextModelConfig) => {
+      const isCurrentlySelected = selectedSTTId === model.modelId;
+
       Alert.alert(
         "Remove Model",
-        `Are you sure you want to remove ${model.displayName}?`,
+        `Are you sure you want to remove ${model.displayName}?${isCurrentlySelected ? "\n\nThis model is currently selected. You will need to select another model to use voice input." : ""}`,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -479,6 +943,11 @@ export function ModelManagementModal({
             style: "destructive",
             onPress: async () => {
               try {
+                // Deselect if currently selected
+                if (isCurrentlySelected) {
+                  await modelSettings.setSelectedSttModelId("");
+                  setSelectedSTTId(null);
+                }
                 await deleteSTTModel(model);
                 await modelSettings.removeDownloadedModel(model.modelId);
                 showToast(`${model.displayName} removed`, "success");
@@ -491,7 +960,7 @@ export function ModelManagementModal({
         ],
       );
     },
-    [modelSettings, showToast],
+    [modelSettings, showToast, selectedSTTId],
   );
 
   // Agent handlers
@@ -604,12 +1073,9 @@ export function ModelManagementModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <View
-          style={[styles.container, { backgroundColor: dialogBackground }]}
-          // Using View instead of Pressable to not block scroll events
-          onStartShouldSetResponder={() => true}
-        >
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.container, { backgroundColor: dialogBackground }]}>
           {/* Header */}
           <View style={styles.header}>
             <Text
@@ -726,78 +1192,20 @@ export function ModelManagementModal({
                           No download required. Provided by your device.
                         </Text>
                         {platformLLMs.map((model) => (
-                          <TouchableOpacity
+                          <ModelCard
                             key={model.modelId}
-                            style={[
-                              styles.platformModelCard,
-                              {
-                                backgroundColor: seasonalTheme.cardBg,
-                                borderColor:
-                                  selectedPlatformLLMId === model.modelId
-                                    ? theme.colors.accent
-                                    : `${theme.colors.border}40`,
-                              },
-                            ]}
-                            onPress={() => handleSelectPlatformLLM(model)}
-                          >
-                            <View style={styles.platformModelContent}>
-                              <View style={styles.platformModelHeader}>
-                                <Text
-                                  variant="body"
-                                  style={{
-                                    color: seasonalTheme.textPrimary,
-                                    fontWeight: "600",
-                                  }}
-                                >
-                                  {model.displayName}
-                                </Text>
-                                <View
-                                  style={[
-                                    styles.builtInBadge,
-                                    {
-                                      backgroundColor: `${theme.colors.success}20`,
-                                    },
-                                  ]}
-                                >
-                                  <Text
-                                    variant="caption"
-                                    style={{
-                                      color: theme.colors.success,
-                                      fontSize: 10,
-                                      fontWeight: "600",
-                                    }}
-                                  >
-                                    BUILT-IN
-                                  </Text>
-                                </View>
-                              </View>
-                              <Text
-                                variant="caption"
-                                style={{ color: seasonalTheme.textSecondary }}
-                              >
-                                {model.description}
-                              </Text>
-                              {!model.supportsSystemPrompt && (
-                                <Text
-                                  variant="caption"
-                                  style={{
-                                    color: theme.colors.warning,
-                                    fontSize: 10,
-                                    marginTop: 4,
-                                  }}
-                                >
-                                  Note: Cannot be used with custom personas
-                                </Text>
-                              )}
-                            </View>
-                            {selectedPlatformLLMId === model.modelId && (
-                              <Ionicons
-                                name="checkmark-circle"
-                                size={20}
-                                color={theme.colors.accent}
-                              />
-                            )}
-                          </TouchableOpacity>
+                            displayName={model.displayName}
+                            description={model.description}
+                            badge={{ text: "BUILT-IN", variant: "success" }}
+                            isSelected={selectedPlatformLLMId === model.modelId}
+                            warningText={
+                              !model.supportsSystemPrompt
+                                ? "Note: Cannot be used with custom personas"
+                                : null
+                            }
+                            canSelect
+                            onSelect={() => handleSelectPlatformLLM(model)}
+                          />
                         ))}
                       </View>
                     )}
@@ -822,29 +1230,149 @@ export function ModelManagementModal({
                       </View>
                     )}
 
-                    {sortedLLMs.map((model) => (
-                      <ModelCard
-                        key={model.modelId}
-                        model={model}
-                        isDownloaded={downloadedLLMs.includes(model.modelId)}
-                        isSelected={
-                          selectedLLMId === model.modelId &&
-                          !selectedPlatformLLMId
-                        }
-                        isDownloading={downloadingModels.has(model.modelId)}
-                        isLoading={loadingModelId === model.modelId}
-                        isNotRecommended={
-                          !compatibleModels.includes(model.modelId)
-                        }
-                        downloadProgress={downloadProgress.get(model.modelId)}
-                        onDownload={() => handleDownloadLLM(model)}
-                        onSelect={() => {
-                          setSelectedPlatformLLMId(null);
-                          handleSelectLLM(model);
-                        }}
-                        onRemove={() => handleRemoveLLM(model)}
+                    {sortedLLMs.map((model) => {
+                      const isDownloaded = downloadedLLMs.includes(
+                        model.modelId,
+                      );
+                      const isSelected =
+                        selectedLLMId === model.modelId &&
+                        !selectedPlatformLLMId;
+                      const isNotRecommended = !compatibleModels.includes(
+                        model.modelId,
+                      );
+                      const estimatedSize = MODEL_SIZES[model.modelId] || 0;
+
+                      return (
+                        <ModelCard
+                          key={model.modelId}
+                          displayName={model.displayName}
+                          description={model.description}
+                          isSelected={isSelected}
+                          isDownloading={downloadingModels.has(model.modelId)}
+                          isLoading={loadingModelId === model.modelId}
+                          downloadProgress={downloadProgress.get(model.modelId)}
+                          sizeText={formatSize(estimatedSize)}
+                          warningBadge={
+                            isNotRecommended && !isDownloaded
+                              ? "May crash on this device"
+                              : null
+                          }
+                          canSelect={isDownloaded}
+                          canDownload={!isDownloaded && model.available}
+                          canRemove={isDownloaded}
+                          onSelect={() => {
+                            setSelectedPlatformLLMId(null);
+                            handleSelectLLM(model);
+                          }}
+                          onDownload={() => handleDownloadLLM(model)}
+                          onRemove={() => handleRemoveLLM(model)}
+                        />
+                      );
+                    })}
+
+                    {/* Custom Local Models Section */}
+                    <View style={styles.downloadableSectionHeader}>
+                      <Ionicons
+                        name="hardware-chip-outline"
+                        size={14}
+                        color={seasonalTheme.textSecondary}
                       />
-                    ))}
+                      <Text
+                        variant="caption"
+                        style={{
+                          color: seasonalTheme.textSecondary,
+                          fontWeight: "600",
+                          flex: 1,
+                        }}
+                      >
+                        Custom Local Models
+                      </Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.addRemoteButton,
+                          { backgroundColor: theme.colors.accent },
+                        ]}
+                        onPress={() => setShowAddCustomLocalModal(true)}
+                      >
+                        <Ionicons name="add" size={14} color="white" />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: "white",
+                            fontWeight: "600",
+                            fontSize: 11,
+                          }}
+                        >
+                          Add
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {customLocalModels.length === 0 ? (
+                      <View
+                        style={[
+                          styles.noModelsBanner,
+                          { backgroundColor: `${theme.colors.border}15` },
+                        ]}
+                      >
+                        <Ionicons
+                          name="download-outline"
+                          size={16}
+                          color={seasonalTheme.textSecondary}
+                        />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: seasonalTheme.textSecondary,
+                            flex: 1,
+                          }}
+                        >
+                          Add custom ExecuTorch (.pte) models from HuggingFace
+                          to run on-device.
+                        </Text>
+                      </View>
+                    ) : (
+                      customLocalModels.map((model) => {
+                        const customModel = model as CustomLocalModelConfig;
+                        const isSelected = selectedLLMId === model.modelId;
+                        const isDownloading = downloadingModels.has(
+                          model.modelId,
+                        );
+                        const isDownloaded = customModel.isDownloaded;
+
+                        return (
+                          <ModelCard
+                            key={model.modelId}
+                            displayName={model.displayName}
+                            description={model.description}
+                            badge={{
+                              text: isDownloaded ? "LOCAL" : "NOT DOWNLOADED",
+                              variant: isDownloaded ? "success" : "secondary",
+                              icon: "hardware-chip-outline",
+                            }}
+                            isSelected={isSelected}
+                            isDownloading={isDownloading}
+                            downloadProgress={downloadProgress.get(
+                              model.modelId,
+                            )}
+                            canSelect={isDownloaded}
+                            canDownload={!isDownloaded}
+                            canEdit
+                            canRemove
+                            onSelect={() => handleSelectCustomLocalModel(model)}
+                            onDownload={() =>
+                              handleDownloadCustomLocalModel(customModel)
+                            }
+                            onEdit={() =>
+                              handleEditCustomLocalModel(customModel)
+                            }
+                            onRemove={() =>
+                              handleRemoveCustomLocalModelWithFiles(customModel)
+                            }
+                          />
+                        );
+                      })
+                    )}
 
                     {/* Remote API Models Section */}
                     <View style={styles.downloadableSectionHeader}>
@@ -911,88 +1439,23 @@ export function ModelManagementModal({
                       remoteModels.map((model) => {
                         const isSelected = selectedLLMId === model.modelId;
                         return (
-                          <TouchableOpacity
+                          <ModelCard
                             key={model.modelId}
-                            style={[
-                              styles.platformModelCard,
-                              {
-                                backgroundColor: seasonalTheme.cardBg,
-                                borderColor: isSelected
-                                  ? theme.colors.accent
-                                  : `${theme.colors.border}40`,
-                              },
-                            ]}
-                            onPress={() => handleSelectRemoteModel(model)}
-                          >
-                            <View style={styles.platformModelContent}>
-                              <View style={styles.platformModelHeader}>
-                                <Text
-                                  variant="body"
-                                  style={{
-                                    color: seasonalTheme.textPrimary,
-                                    fontWeight: "600",
-                                  }}
-                                >
-                                  {model.displayName}
-                                </Text>
-                                <View
-                                  style={[
-                                    styles.builtInBadge,
-                                    {
-                                      backgroundColor: `${theme.colors.accent}20`,
-                                    },
-                                  ]}
-                                >
-                                  <Ionicons
-                                    name="cloud-outline"
-                                    size={10}
-                                    color={theme.colors.accent}
-                                    style={{ marginRight: 2 }}
-                                  />
-                                  <Text
-                                    variant="caption"
-                                    style={{
-                                      color: theme.colors.accent,
-                                      fontSize: 10,
-                                      fontWeight: "600",
-                                    }}
-                                  >
-                                    REMOTE
-                                  </Text>
-                                </View>
-                              </View>
-                              {model.description && (
-                                <Text
-                                  variant="caption"
-                                  style={{ color: seasonalTheme.textSecondary }}
-                                >
-                                  {model.description}
-                                </Text>
-                              )}
-                            </View>
-                            <View style={styles.remoteModelActions}>
-                              {isSelected && (
-                                <Ionicons
-                                  name="checkmark-circle"
-                                  size={20}
-                                  color={theme.colors.accent}
-                                />
-                              )}
-                              <TouchableOpacity
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveRemoteModel(model);
-                                }}
-                                style={{ padding: 4 }}
-                              >
-                                <Ionicons
-                                  name="trash-outline"
-                                  size={16}
-                                  color={theme.colors.error}
-                                />
-                              </TouchableOpacity>
-                            </View>
-                          </TouchableOpacity>
+                            displayName={model.displayName}
+                            description={model.description}
+                            badge={{
+                              text: "REMOTE",
+                              variant: "accent",
+                              icon: "cloud-outline",
+                            }}
+                            isSelected={isSelected}
+                            canSelect
+                            canEdit
+                            canRemove
+                            onSelect={() => handleSelectRemoteModel(model)}
+                            onEdit={() => handleEditRemoteModel(model)}
+                            onRemove={() => handleRemoveRemoteModel(model)}
+                          />
                         );
                       })
                     )}
@@ -1042,79 +1505,20 @@ export function ModelManagementModal({
                           No download required. Provided by your device.
                         </Text>
                         {platformSTTs.map((model) => (
-                          <TouchableOpacity
+                          <ModelCard
                             key={model.modelId}
-                            style={[
-                              styles.platformModelCard,
-                              {
-                                backgroundColor: seasonalTheme.cardBg,
-                                borderColor:
-                                  selectedPlatformSTTId === model.modelId
-                                    ? theme.colors.accent
-                                    : `${theme.colors.border}40`,
-                              },
-                            ]}
-                            onPress={() => handleSelectPlatformSTT(model)}
-                          >
-                            <View style={styles.platformModelContent}>
-                              <View style={styles.platformModelHeader}>
-                                <Text
-                                  variant="body"
-                                  style={{
-                                    color: seasonalTheme.textPrimary,
-                                    fontWeight: "600",
-                                  }}
-                                >
-                                  {model.displayName}
-                                </Text>
-                                <View
-                                  style={[
-                                    styles.builtInBadge,
-                                    {
-                                      backgroundColor: `${theme.colors.success}20`,
-                                    },
-                                  ]}
-                                >
-                                  <Text
-                                    variant="caption"
-                                    style={{
-                                      color: theme.colors.success,
-                                      fontSize: 10,
-                                      fontWeight: "600",
-                                    }}
-                                  >
-                                    BUILT-IN
-                                  </Text>
-                                </View>
-                              </View>
-                              <Text
-                                variant="caption"
-                                style={{ color: seasonalTheme.textSecondary }}
-                              >
-                                {model.description}
-                              </Text>
-                              {Platform.OS === "android" && (
-                                <Text
-                                  variant="caption"
-                                  style={{
-                                    color: theme.colors.warning,
-                                    fontSize: 10,
-                                    marginTop: 4,
-                                  }}
-                                >
-                                  Note: Transcription only. Audio files are not
-                                  saved with this option.
-                                </Text>
-                              )}
-                            </View>
-                            {selectedPlatformSTTId === model.modelId && (
-                              <Ionicons
-                                name="checkmark-circle"
-                                size={20}
-                                color={theme.colors.accent}
-                              />
-                            )}
-                          </TouchableOpacity>
+                            displayName={model.displayName}
+                            description={model.description}
+                            badge={{ text: "BUILT-IN", variant: "success" }}
+                            isSelected={selectedPlatformSTTId === model.modelId}
+                            warningText={
+                              Platform.OS === "android"
+                                ? "Note: Transcription only. Audio files are not saved with this option."
+                                : null
+                            }
+                            canSelect
+                            onSelect={() => handleSelectPlatformSTT(model)}
+                          />
                         ))}
                       </View>
                     )}
@@ -1160,236 +1564,490 @@ export function ModelManagementModal({
                         </Text>
                       </View>
                     )}
-                    {sortedSTTs.map((model) => (
-                      <ModelCard
-                        key={model.modelId}
-                        model={model}
-                        isDownloaded={downloadedSTTs.includes(model.modelId)}
-                        isSelected={
-                          selectedSTTId === model.modelId &&
-                          !selectedPlatformSTTId
-                        }
-                        isDownloading={downloadingModels.has(model.modelId)}
-                        isLoading={false}
-                        downloadProgress={downloadProgress.get(model.modelId)}
-                        onDownload={() => handleDownloadSTT(model)}
-                        onSelect={() => {
-                          setSelectedPlatformSTTId(null);
-                          handleSelectSTT(model);
-                        }}
-                        onRemove={() => handleRemoveSTT(model)}
+                    {sortedSTTs.map((model) => {
+                      const isDownloaded = downloadedSTTs.includes(
+                        model.modelId,
+                      );
+                      const isSelected =
+                        selectedSTTId === model.modelId &&
+                        !selectedPlatformSTTId;
+                      const estimatedSize = MODEL_SIZES[model.modelId] || 0;
+
+                      return (
+                        <ModelCard
+                          key={model.modelId}
+                          displayName={model.displayName}
+                          description={model.description}
+                          isSelected={isSelected}
+                          isDownloading={downloadingModels.has(model.modelId)}
+                          downloadProgress={downloadProgress.get(model.modelId)}
+                          sizeText={formatSize(estimatedSize)}
+                          canSelect={isDownloaded}
+                          canDownload={!isDownloaded && model.available}
+                          canRemove={isDownloaded}
+                          onSelect={() => {
+                            setSelectedPlatformSTTId(null);
+                            handleSelectSTT(model);
+                          }}
+                          onDownload={() => handleDownloadSTT(model)}
+                          onRemove={() => handleRemoveSTT(model)}
+                        />
+                      );
+                    })}
+
+                    {/* Custom Local Voice Models Section */}
+                    <View style={styles.downloadableSectionHeader}>
+                      <Ionicons
+                        name="hardware-chip-outline"
+                        size={14}
+                        color={seasonalTheme.textSecondary}
                       />
-                    ))}
+                      <Text
+                        variant="caption"
+                        style={{
+                          color: seasonalTheme.textSecondary,
+                          fontWeight: "600",
+                          flex: 1,
+                        }}
+                      >
+                        Custom Local Voice Models
+                      </Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.addRemoteButton,
+                          { backgroundColor: theme.colors.accent },
+                        ]}
+                        onPress={() => setShowAddCustomLocalSttModal(true)}
+                      >
+                        <Ionicons name="add" size={14} color="white" />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: "white",
+                            fontWeight: "600",
+                            fontSize: 11,
+                          }}
+                        >
+                          Add
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {customLocalSttModels.length === 0 ? (
+                      <View
+                        style={[
+                          styles.noModelsBanner,
+                          { backgroundColor: `${theme.colors.border}15` },
+                        ]}
+                      >
+                        <Ionicons
+                          name="download-outline"
+                          size={16}
+                          color={seasonalTheme.textSecondary}
+                        />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: seasonalTheme.textSecondary,
+                            flex: 1,
+                          }}
+                        >
+                          Add custom ExecuTorch (.pte) speech-to-text models
+                          from HuggingFace to run on-device.
+                        </Text>
+                      </View>
+                    ) : (
+                      customLocalSttModels.map((model) => {
+                        const customModel = model as CustomLocalModelConfig;
+                        const isSelected = selectedSTTId === model.modelId;
+                        const isDownloading = downloadingModels.has(
+                          model.modelId,
+                        );
+                        const isDownloaded = customModel.isDownloaded;
+
+                        return (
+                          <ModelCard
+                            key={model.modelId}
+                            displayName={model.displayName}
+                            description={model.description}
+                            badge={{
+                              text: isDownloaded ? "LOCAL" : "NOT DOWNLOADED",
+                              variant: isDownloaded ? "success" : "secondary",
+                              icon: "hardware-chip-outline",
+                            }}
+                            isSelected={isSelected}
+                            isDownloading={isDownloading}
+                            downloadProgress={downloadProgress.get(
+                              model.modelId,
+                            )}
+                            canSelect={isDownloaded}
+                            canDownload={!isDownloaded}
+                            canEdit
+                            canRemove
+                            onSelect={() =>
+                              handleSelectCustomLocalSttModel(model)
+                            }
+                            onDownload={() =>
+                              handleDownloadCustomLocalSttModel(customModel)
+                            }
+                            onEdit={() =>
+                              handleEditCustomLocalSttModel(customModel)
+                            }
+                            onRemove={() =>
+                              handleRemoveCustomLocalSttModelWithFiles(
+                                customModel,
+                              )
+                            }
+                          />
+                        );
+                      })
+                    )}
+
+                    {/* Remote Voice APIs Section */}
+                    <View style={styles.downloadableSectionHeader}>
+                      <Ionicons
+                        name="cloud-outline"
+                        size={14}
+                        color={seasonalTheme.textSecondary}
+                      />
+                      <Text
+                        variant="caption"
+                        style={{
+                          color: seasonalTheme.textSecondary,
+                          fontWeight: "600",
+                          flex: 1,
+                        }}
+                      >
+                        Remote Voice APIs
+                      </Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.addRemoteButton,
+                          { backgroundColor: theme.colors.accent },
+                        ]}
+                        onPress={() => setShowAddRemoteSttModal(true)}
+                      >
+                        <Ionicons name="add" size={14} color="white" />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: "white",
+                            fontWeight: "600",
+                            fontSize: 11,
+                          }}
+                        >
+                          Add
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {remoteSttModels.length === 0 ? (
+                      <View
+                        style={[
+                          styles.noModelsBanner,
+                          { backgroundColor: `${theme.colors.border}15` },
+                        ]}
+                      >
+                        <Ionicons
+                          name="cloud-outline"
+                          size={16}
+                          color={seasonalTheme.textSecondary}
+                        />
+                        <Text
+                          variant="caption"
+                          style={{
+                            color: seasonalTheme.textSecondary,
+                            flex: 1,
+                          }}
+                        >
+                          Add remote voice APIs (OpenAI Whisper, Groq) for
+                          cloud-based speech-to-text.
+                        </Text>
+                      </View>
+                    ) : (
+                      remoteSttModels.map((model) => {
+                        const isSelected = selectedSTTId === model.modelId;
+                        return (
+                          <ModelCard
+                            key={model.modelId}
+                            displayName={model.displayName}
+                            description={model.description}
+                            badge={{
+                              text: "REMOTE",
+                              variant: "accent",
+                              icon: "cloud-outline",
+                            }}
+                            isSelected={isSelected}
+                            canSelect
+                            canEdit
+                            canRemove
+                            onSelect={() => handleSelectRemoteSttModel(model)}
+                            onEdit={() => handleEditRemoteSttModel(model)}
+                            onRemove={() => handleRemoveRemoteSttModel(model)}
+                          />
+                        );
+                      })
+                    )}
                   </View>
                 )}
 
                 {/* Agents Tab */}
                 {activeTab === "agents" && (
                   <View style={styles.tabContent}>
-                    {showAgentEditor ? (
-                      <AgentEditor
-                        agent={editingAgent}
-                        downloadedModels={downloadedLLMs.map((id) => ({
-                          modelId: id,
-                          modelType: "llm" as const,
-                          downloadedAt: 0,
-                          ptePath: "",
-                          tokenizerPath: "",
-                          size: 0,
-                        }))}
-                        onSave={handleSaveAgent}
-                        onCancel={handleCancelAgentEditor}
-                        isLoading={savingAgent}
-                      />
-                    ) : (
-                      <>
-                        <View style={styles.agentsHeader}>
-                          <Text
-                            variant="caption"
-                            style={[
-                              styles.description,
-                              { color: seasonalTheme.textSecondary, flex: 1 },
-                            ]}
-                          >
-                            Custom AI personalities with unique instructions and
-                            model preferences.
-                          </Text>
-                          <TouchableOpacity
-                            style={[
-                              styles.createAgentButton,
-                              { backgroundColor: theme.colors.accent },
-                            ]}
-                            onPress={handleCreateAgent}
-                          >
-                            <Ionicons name="add" size={16} color="white" />
-                            <Text
-                              variant="caption"
-                              style={{ color: "white", fontWeight: "600" }}
-                            >
-                              New Persona
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
+                    <View style={styles.agentsHeader}>
+                      <Text
+                        variant="caption"
+                        style={[
+                          styles.description,
+                          { color: seasonalTheme.textSecondary, flex: 1 },
+                        ]}
+                      >
+                        Custom AI personalities with unique instructions and
+                        model preferences.
+                      </Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.createAgentButton,
+                          { backgroundColor: theme.colors.accent },
+                        ]}
+                        onPress={handleCreateAgent}
+                      >
+                        <Ionicons name="add" size={16} color="white" />
+                        <Text
+                          variant="caption"
+                          style={{ color: "white", fontWeight: "600" }}
+                        >
+                          New Persona
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
 
-                        <View style={styles.agentsList}>
-                          {agents.map((agent) => {
-                            const agentModel = agent.modelId
-                              ? ALL_LLM_MODELS.find(
-                                  (m) => m.modelId === agent.modelId,
-                                )
-                              : null;
-                            return (
-                              <TouchableOpacity
-                                key={agent.id}
-                                style={[
-                                  styles.agentCard,
-                                  {
-                                    backgroundColor: seasonalTheme.cardBg,
-                                    borderColor: agent.isDefault
-                                      ? theme.colors.accent
-                                      : `${theme.colors.border}40`,
-                                  },
-                                ]}
-                                onPress={() => handleSetDefaultAgent(agent)}
-                                activeOpacity={0.7}
-                              >
-                                <View style={styles.agentCardHeader}>
-                                  <View style={styles.agentNameRow}>
-                                    <Text
-                                      variant="body"
-                                      style={[
-                                        styles.agentName,
-                                        { color: seasonalTheme.textPrimary },
-                                      ]}
-                                    >
-                                      {agent.name}
-                                    </Text>
-                                    {agent.isDefault && (
-                                      <View
-                                        style={[
-                                          styles.defaultBadge,
-                                          {
-                                            backgroundColor: `${theme.colors.accent}20`,
-                                          },
-                                        ]}
-                                      >
-                                        <Text
-                                          variant="caption"
-                                          style={{
-                                            color: theme.colors.accent,
-                                            fontSize: 10,
-                                            fontWeight: "600",
-                                          }}
-                                        >
-                                          DEFAULT
-                                        </Text>
-                                      </View>
-                                    )}
-                                  </View>
-                                  <View style={styles.agentActions}>
-                                    <TouchableOpacity
-                                      style={styles.agentActionButton}
-                                      onPress={(e) => {
-                                        e.stopPropagation();
-                                        handleEditAgent(agent);
-                                      }}
-                                    >
-                                      <Ionicons
-                                        name="pencil-outline"
-                                        size={16}
-                                        color={seasonalTheme.textSecondary}
-                                      />
-                                    </TouchableOpacity>
-                                    {!agent.isDefault && (
-                                      <TouchableOpacity
-                                        style={styles.agentActionButton}
-                                        onPress={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteAgent(agent);
-                                        }}
-                                      >
-                                        <Ionicons
-                                          name="trash-outline"
-                                          size={16}
-                                          color={theme.colors.error}
-                                        />
-                                      </TouchableOpacity>
-                                    )}
-                                  </View>
-                                </View>
+                    <View style={styles.agentsList}>
+                      {agents.map((agent) => {
+                        const agentModel = agent.modelId
+                          ? ALL_LLM_MODELS.find(
+                              (m) => m.modelId === agent.modelId,
+                            )
+                          : null;
+                        return (
+                          <TouchableOpacity
+                            key={agent.id}
+                            style={[
+                              styles.agentCard,
+                              {
+                                backgroundColor: seasonalTheme.cardBg,
+                                borderColor: agent.isDefault
+                                  ? theme.colors.accent
+                                  : `${theme.colors.border}40`,
+                              },
+                            ]}
+                            onPress={() => handleSetDefaultAgent(agent)}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.agentCardHeader}>
+                              <View style={styles.agentNameRow}>
                                 <Text
-                                  variant="caption"
+                                  variant="body"
                                   style={[
-                                    styles.agentPromptPreview,
-                                    { color: seasonalTheme.textSecondary },
+                                    styles.agentName,
+                                    { color: seasonalTheme.textPrimary },
                                   ]}
-                                  numberOfLines={2}
                                 >
-                                  {agent.systemPrompt}
+                                  {agent.name}
                                 </Text>
-                                <View style={styles.agentMeta}>
-                                  {agentModel && (
-                                    <View
-                                      style={[
-                                        styles.thinkModeBadge,
-                                        {
-                                          backgroundColor: `${theme.colors.border}30`,
-                                        },
-                                      ]}
-                                    >
-                                      <Text
-                                        variant="caption"
-                                        style={{
-                                          color: seasonalTheme.textSecondary,
-                                          fontSize: 10,
-                                        }}
-                                      >
-                                        {agentModel.displayName}
-                                      </Text>
-                                    </View>
-                                  )}
+                                {agent.isDefault && (
                                   <View
                                     style={[
-                                      styles.thinkModeBadge,
+                                      styles.defaultBadge,
                                       {
-                                        backgroundColor: `${theme.colors.border}30`,
+                                        backgroundColor: `${theme.colors.accent}20`,
                                       },
                                     ]}
                                   >
                                     <Text
                                       variant="caption"
                                       style={{
-                                        color: seasonalTheme.textSecondary,
+                                        color: theme.colors.accent,
                                         fontSize: 10,
+                                        fontWeight: "600",
                                       }}
                                     >
-                                      {agent.thinkMode === "no-think"
-                                        ? "No Think"
-                                        : agent.thinkMode === "think"
-                                          ? "Think"
-                                          : "None"}
+                                      DEFAULT
                                     </Text>
                                   </View>
+                                )}
+                              </View>
+                              <View style={styles.agentActions}>
+                                <TouchableOpacity
+                                  style={styles.agentActionButton}
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleEditAgent(agent);
+                                  }}
+                                >
+                                  <Ionicons
+                                    name="pencil-outline"
+                                    size={16}
+                                    color={seasonalTheme.textSecondary}
+                                  />
+                                </TouchableOpacity>
+                                {!agent.isDefault && (
+                                  <TouchableOpacity
+                                    style={styles.agentActionButton}
+                                    onPress={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteAgent(agent);
+                                    }}
+                                  >
+                                    <Ionicons
+                                      name="trash-outline"
+                                      size={16}
+                                      color={theme.colors.error}
+                                    />
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            </View>
+                            <Text
+                              variant="caption"
+                              style={[
+                                styles.agentPromptPreview,
+                                { color: seasonalTheme.textSecondary },
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {agent.systemPrompt}
+                            </Text>
+                            <View style={styles.agentMeta}>
+                              {agentModel && (
+                                <View
+                                  style={[
+                                    styles.thinkModeBadge,
+                                    {
+                                      backgroundColor: `${theme.colors.border}30`,
+                                    },
+                                  ]}
+                                >
+                                  <Text
+                                    variant="caption"
+                                    style={{
+                                      color: seasonalTheme.textSecondary,
+                                      fontSize: 10,
+                                    }}
+                                  >
+                                    {agentModel.displayName}
+                                  </Text>
                                 </View>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </>
-                    )}
+                              )}
+                              <View
+                                style={[
+                                  styles.thinkModeBadge,
+                                  {
+                                    backgroundColor: `${theme.colors.border}30`,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  variant="caption"
+                                  style={{
+                                    color: seasonalTheme.textSecondary,
+                                    fontSize: 10,
+                                  }}
+                                >
+                                  {agent.thinkMode === "no-think"
+                                    ? "No Think"
+                                    : agent.thinkMode === "think"
+                                      ? "Think"
+                                      : "None"}
+                                </Text>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   </View>
                 )}
               </>
             )}
           </ScrollView>
         </View>
-      </Pressable>
+      </View>
 
-      {/* Add Remote Model Modal */}
+      {/* Add/Edit Remote Model Modal (LLM) */}
       <AddRemoteModelModal
         visible={showAddRemoteModal}
-        onClose={() => setShowAddRemoteModal(false)}
+        onClose={() => {
+          setShowAddRemoteModal(false);
+          setEditingRemoteModel(null);
+        }}
         onModelAdded={handleRemoteModelAdded}
+        editModel={editingRemoteModel}
+        modelCategory="llm"
+      />
+
+      {/* Add/Edit Remote Voice Model Modal (STT) */}
+      <AddRemoteModelModal
+        visible={showAddRemoteSttModal}
+        onClose={() => {
+          setShowAddRemoteSttModal(false);
+          setEditingRemoteSttModel(null);
+        }}
+        onModelAdded={handleRemoteSttModelAdded}
+        editModel={editingRemoteSttModel}
+        modelCategory="stt"
+      />
+
+      {/* Add/Edit Custom Local Model Modal */}
+      <AddCustomLocalModelModal
+        visible={showAddCustomLocalModal}
+        onClose={() => {
+          setShowAddCustomLocalModal(false);
+          setEditingCustomLocalModel(null);
+        }}
+        onModelAdded={handleCustomLocalModelAdded}
+        editModel={editingCustomLocalModel}
+      />
+
+      {/* Add/Edit Custom Local STT Model Modal */}
+      <AddCustomLocalModelModal
+        visible={showAddCustomLocalSttModal}
+        onClose={() => {
+          setShowAddCustomLocalSttModal(false);
+          setEditingCustomLocalSttModel(null);
+        }}
+        onModelAdded={handleCustomLocalSttModelAdded}
+        modelCategory="stt"
+        editModel={editingCustomLocalSttModel}
+      />
+
+      {/* Persona Editor Modal */}
+      <PersonaEditor
+        visible={showAgentEditor}
+        onClose={handleCancelAgentEditor}
+        persona={editingAgent}
+        downloadedModels={downloadedLLMs.map((id) => ({
+          modelId: id,
+          modelType: "llm" as const,
+          downloadedAt: 0,
+          ptePath: "",
+          tokenizerPath: "",
+          size: 0,
+        }))}
+        customLocalModels={customLocalModels.filter(
+          (m): m is CustomLocalModelConfig =>
+            m.modelType === "custom-local" &&
+            (m as CustomLocalModelConfig).isDownloaded &&
+            m.isEnabled,
+        )}
+        remoteModels={remoteModels.filter(
+          (m): m is RemoteModelConfig =>
+            m.modelType === "remote-api" &&
+            m.isEnabled &&
+            (m as RemoteModelConfig).privacyAcknowledged,
+        )}
+        onSave={handleSaveAgent}
+        isLoading={savingAgent}
       />
     </Modal>
   );
@@ -1563,30 +2221,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(128, 128, 128, 0.2)",
   },
-  platformModelCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderRadius: borderRadius.sm,
-    padding: spacingPatterns.sm,
-  },
-  platformModelContent: {
-    flex: 1,
-    gap: 2,
-  },
-  platformModelHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingPatterns.xs,
-  },
-  builtInBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    flexDirection: "row",
-    alignItems: "center",
-  },
   addRemoteButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1594,10 +2228,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingPatterns.xs,
     paddingVertical: 4,
     borderRadius: borderRadius.sm,
-  },
-  remoteModelActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingPatterns.xs,
   },
 });

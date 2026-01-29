@@ -13,130 +13,217 @@
 
 export type CustomModelType = "custom-local" | "remote-api";
 
+/** Model category - LLM for chat models, STT for speech-to-text */
+export type ModelCategory = "llm" | "stt";
+
 // =============================================================================
-// PROVIDER PRESETS
+// PROVIDER CONFIGURATION
 // =============================================================================
 
-export type ProviderId = "openai" | "anthropic" | "groq" | "custom";
+/**
+ * Provider ID for remote API models.
+ * Detected automatically from URL or falls back to "openai-compatible".
+ */
+export type ProviderId =
+  | "openai"
+  | "anthropic"
+  | "groq"
+  | "deepgram"
+  | "google"
+  | "openai-compatible"; // Fallback for unknown providers
 
-export interface ProviderPreset {
-  providerId: ProviderId;
+/** @deprecated Use ProviderId instead */
+export type ApiStyle = ProviderId;
+
+export interface ProviderConfig {
+  id: ProviderId;
   displayName: string;
-  baseUrl: string;
-  description: string;
-  models: ProviderModelPreset[];
-  /** Whether to use x-api-key header instead of Bearer auth */
-  usesApiKeyHeader?: boolean;
-  /** Custom headers required by this provider */
+  /** URL patterns to match (checked with includes()) */
+  urlPatterns: string[];
+  /** Header name for API key */
+  authHeader: string;
+  /** Auth header format - "bearer" for "Bearer <key>", "raw" for just "<key>", "token" for "Token <key>" */
+  authFormat: "bearer" | "raw" | "token";
+  /** Additional default headers */
   defaultHeaders?: Record<string, string>;
+  /** Default base URL for this provider */
+  defaultBaseUrl?: string;
+  /** Placeholder for model name input */
+  modelPlaceholder?: string;
+  /** Placeholder for API key input */
+  apiKeyPlaceholder?: string;
 }
 
-export interface ProviderModelPreset {
-  modelName: string;
-  displayName: string;
-  description: string;
-  maxTokens?: number;
-}
-
-export const PROVIDER_PRESETS: ProviderPreset[] = [
+/**
+ * Known provider configurations.
+ * Order matters - first match wins.
+ */
+export const PROVIDER_CONFIGS: ProviderConfig[] = [
   {
-    providerId: "openai",
+    id: "openai",
     displayName: "OpenAI",
-    baseUrl: "https://api.openai.com/v1",
-    description: "GPT-4o, GPT-4 Turbo, and more",
-    models: [
-      {
-        modelName: "gpt-4o",
-        displayName: "GPT-4o",
-        description: "Most capable, multimodal",
-        maxTokens: 4096,
-      },
-      {
-        modelName: "gpt-4-turbo",
-        displayName: "GPT-4 Turbo",
-        description: "Fast and capable",
-        maxTokens: 4096,
-      },
-      {
-        modelName: "gpt-3.5-turbo",
-        displayName: "GPT-3.5 Turbo",
-        description: "Fast and affordable",
-        maxTokens: 4096,
-      },
-    ],
+    urlPatterns: ["openai.com"],
+    authHeader: "Authorization",
+    authFormat: "bearer",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    modelPlaceholder: "gpt-4o, whisper-1",
+    apiKeyPlaceholder: "sk-...",
   },
   {
-    providerId: "anthropic",
+    id: "anthropic",
     displayName: "Anthropic",
-    baseUrl: "https://api.anthropic.com/v1",
-    description: "Claude 3.5 Sonnet, Claude 3 Opus, and more",
-    usesApiKeyHeader: true,
+    urlPatterns: ["anthropic.com"],
+    authHeader: "x-api-key",
+    authFormat: "raw",
     defaultHeaders: {
       "anthropic-version": "2023-06-01",
     },
-    models: [
-      {
-        modelName: "claude-sonnet-4-20250514",
-        displayName: "Claude Sonnet 4",
-        description: "Best balance of speed and intelligence",
-        maxTokens: 8192,
-      },
-      {
-        modelName: "claude-3-5-sonnet-20241022",
-        displayName: "Claude 3.5 Sonnet",
-        description: "Fast and highly capable",
-        maxTokens: 8192,
-      },
-      {
-        modelName: "claude-3-haiku-20240307",
-        displayName: "Claude 3 Haiku",
-        description: "Fastest, most affordable",
-        maxTokens: 4096,
-      },
-    ],
+    defaultBaseUrl: "https://api.anthropic.com/v1",
+    modelPlaceholder: "claude-sonnet-4-20250514",
+    apiKeyPlaceholder: "sk-ant-...",
   },
   {
-    providerId: "groq",
+    id: "groq",
     displayName: "Groq",
-    baseUrl: "https://api.groq.com/openai/v1",
-    description: "Ultra-fast inference with Llama and Mixtral",
-    models: [
-      {
-        modelName: "llama-3.3-70b-versatile",
-        displayName: "Llama 3.3 70B",
-        description: "High quality, very fast",
-        maxTokens: 8192,
-      },
-      {
-        modelName: "llama-3.1-8b-instant",
-        displayName: "Llama 3.1 8B",
-        description: "Ultra-fast responses",
-        maxTokens: 8192,
-      },
-      {
-        modelName: "mixtral-8x7b-32768",
-        displayName: "Mixtral 8x7B",
-        description: "Large context, fast inference",
-        maxTokens: 32768,
-      },
-    ],
+    urlPatterns: ["groq.com"],
+    authHeader: "Authorization",
+    authFormat: "bearer",
+    defaultBaseUrl: "https://api.groq.com/openai/v1",
+    modelPlaceholder: "llama-3.3-70b-versatile, whisper-large-v3",
+    apiKeyPlaceholder: "gsk_...",
   },
   {
-    providerId: "custom",
-    displayName: "Custom Server",
-    baseUrl: "",
-    description: "Self-hosted (Ollama, vLLM, etc.)",
-    models: [],
+    id: "deepgram",
+    displayName: "Deepgram",
+    urlPatterns: ["deepgram.com"],
+    authHeader: "Authorization",
+    authFormat: "token",
+    defaultBaseUrl: "https://api.deepgram.com/v1",
+    modelPlaceholder: "nova-2",
+    apiKeyPlaceholder: "your-deepgram-key",
+  },
+  {
+    id: "google",
+    displayName: "Google AI",
+    urlPatterns: ["googleapis.com", "generativelanguage.googleapis.com"],
+    authHeader: "Authorization",
+    authFormat: "bearer",
+    defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    modelPlaceholder: "gemini-1.5-pro",
+    apiKeyPlaceholder: "your-google-api-key",
+  },
+  {
+    id: "openai-compatible",
+    displayName: "OpenAI-Compatible",
+    urlPatterns: [], // Fallback - matches nothing, used when no other provider matches
+    authHeader: "Authorization",
+    authFormat: "bearer",
+    modelPlaceholder: "model-name",
+    apiKeyPlaceholder: "your-api-key",
   },
 ];
 
 /**
- * Get a provider preset by ID
+ * Detect provider from a base URL.
+ * Returns the matching provider config or the openai-compatible fallback.
+ *
+ * Supports both HTTP and WebSocket URLs:
+ * - https://api.deepgram.com/v1 → deepgram
+ * - wss://api.deepgram.com/v1/listen → deepgram
  */
-export function getProviderPreset(
-  providerId: ProviderId,
-): ProviderPreset | undefined {
-  return PROVIDER_PRESETS.find((p) => p.providerId === providerId);
+export function detectProviderFromUrl(baseUrl: string): ProviderConfig {
+  if (!baseUrl) {
+    return PROVIDER_CONFIGS.find((p) => p.id === "openai-compatible")!;
+  }
+
+  const lowerUrl = baseUrl.toLowerCase();
+
+  for (const provider of PROVIDER_CONFIGS) {
+    if (provider.urlPatterns.some((pattern) => lowerUrl.includes(pattern))) {
+      return provider;
+    }
+  }
+
+  // Fallback to openai-compatible
+  return PROVIDER_CONFIGS.find((p) => p.id === "openai-compatible")!;
+}
+
+/**
+ * Check if a URL is a WebSocket URL (wss:// or ws://).
+ * WebSocket URLs imply real-time streaming mode for STT.
+ */
+export function isWebSocketUrl(url: string): boolean {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase().trim();
+  return lowerUrl.startsWith("wss://") || lowerUrl.startsWith("ws://");
+}
+
+/**
+ * Get provider config by ID.
+ */
+export function getProviderConfig(providerId: ProviderId): ProviderConfig {
+  return (
+    PROVIDER_CONFIGS.find((p) => p.id === providerId) ||
+    PROVIDER_CONFIGS.find((p) => p.id === "openai-compatible")!
+  );
+}
+
+/**
+ * Format the authorization header value based on provider config.
+ */
+export function formatAuthHeader(
+  config: ProviderConfig,
+  apiKey: string,
+): string {
+  switch (config.authFormat) {
+    case "bearer":
+      return `Bearer ${apiKey}`;
+    case "token":
+      return `Token ${apiKey}`;
+    case "raw":
+      return apiKey;
+  }
+}
+
+// Legacy exports for backwards compatibility
+/** @deprecated Use PROVIDER_CONFIGS instead */
+export const API_STYLES = PROVIDER_CONFIGS.filter(
+  (p) => p.id === "openai-compatible" || p.id === "anthropic",
+).map((p) => ({
+  id: p.id as ApiStyle,
+  displayName: p.displayName,
+  description: `${p.displayName} API`,
+  defaultBaseUrl: p.defaultBaseUrl || "",
+  authHeader: p.authHeader,
+  authFormat: p.authFormat === "token" ? ("bearer" as const) : p.authFormat,
+  defaultHeaders: p.defaultHeaders,
+}));
+
+/** @deprecated Use ProviderConfig instead */
+export interface ApiStyleConfig {
+  id: ApiStyle;
+  displayName: string;
+  description: string;
+  defaultBaseUrl: string;
+  authHeader: string;
+  authFormat: "bearer" | "raw";
+  defaultHeaders?: Record<string, string>;
+}
+
+/** @deprecated Use getProviderConfig instead */
+export function getApiStyleConfig(
+  apiStyle: ApiStyle,
+): ApiStyleConfig | undefined {
+  const config = getProviderConfig(apiStyle as ProviderId);
+  return {
+    id: config.id as ApiStyle,
+    displayName: config.displayName,
+    description: `${config.displayName} API`,
+    defaultBaseUrl: config.defaultBaseUrl || "",
+    authHeader: config.authHeader,
+    authFormat: config.authFormat === "token" ? "bearer" : config.authFormat,
+    defaultHeaders: config.defaultHeaders,
+  };
 }
 
 // =============================================================================
@@ -151,10 +238,16 @@ export interface CustomLocalModelConfig {
   /** Unique identifier, e.g., 'custom-mistral-7b' */
   modelId: string;
   modelType: "custom-local";
+  /** Model category: 'llm' for chat models, 'stt' for speech-to-text */
+  modelCategory: ModelCategory;
   displayName: string;
   description?: string;
-  /** Source HuggingFace URL for reference */
+  /** Source HuggingFace URL for the .pte model file */
   huggingFaceUrl?: string;
+  /** Full URL to tokenizer.json */
+  tokenizerUrl?: string;
+  /** Full URL to tokenizer_config.json */
+  tokenizerConfigUrl?: string;
   /** Storage folder name under app's model directory */
   folderName: string;
   /** Main model file name */
@@ -168,6 +261,8 @@ export interface CustomLocalModelConfig {
   /** RAM required for inference, e.g., "8GB" */
   ramRequired?: string;
   isEnabled: boolean;
+  /** Whether the model files have been downloaded */
+  isDownloaded: boolean;
 }
 
 // =============================================================================
@@ -182,6 +277,8 @@ export interface RemoteModelConfig {
   /** Unique identifier, e.g., 'remote-openai-gpt-4' */
   modelId: string;
   modelType: "remote-api";
+  /** Model category: 'llm' for chat models, 'stt' for speech-to-text */
+  modelCategory: ModelCategory;
   displayName: string;
   description?: string;
   /** Provider identifier for fetching presets */
@@ -237,10 +334,13 @@ export interface CustomModelRow {
   id: number;
   modelId: string;
   modelType: string;
+  modelCategory: string;
   displayName: string;
   description: string | null;
   // Custom local model fields
   huggingFaceUrl: string | null;
+  tokenizerUrl: string | null;
+  tokenizerConfigUrl: string | null;
   folderName: string | null;
   pteFileName: string | null;
   tokenizerFileName: string | null;
@@ -248,6 +348,7 @@ export interface CustomModelRow {
   modelSize: string | null;
   quantization: string | null;
   ramRequired: string | null;
+  isDownloaded: number;
   // Remote API model fields
   providerId: string | null;
   baseUrl: string | null;
@@ -270,7 +371,14 @@ export interface CustomModelRow {
 export interface CreateCustomLocalModelInput {
   displayName: string;
   description?: string;
+  /** Model category: 'llm' for chat models, 'stt' for speech-to-text. Defaults to 'llm' */
+  modelCategory?: ModelCategory;
+  /** Full URL to the .pte model file */
   huggingFaceUrl?: string;
+  /** Full URL to tokenizer.json */
+  tokenizerUrl?: string;
+  /** Full URL to tokenizer_config.json */
+  tokenizerConfigUrl?: string;
   folderName: string;
   pteFileName: string;
   tokenizerFileName?: string;
@@ -283,7 +391,10 @@ export interface CreateCustomLocalModelInput {
 export interface CreateRemoteModelInput {
   displayName: string;
   description?: string;
-  providerId: ProviderId;
+  /** Model category: 'llm' for chat models, 'stt' for speech-to-text. Defaults to 'llm' */
+  modelCategory?: ModelCategory;
+  /** API style determines auth format and endpoints */
+  providerId: ApiStyle;
   baseUrl: string;
   modelName: string;
   customHeaders?: Record<string, string>;
@@ -296,7 +407,18 @@ export interface UpdateCustomModelInput {
   description?: string;
   isEnabled?: boolean;
   privacyAcknowledged?: boolean;
+  // Custom local model specific
+  huggingFaceUrl?: string;
+  tokenizerUrl?: string | null;
+  tokenizerConfigUrl?: string | null;
+  tokenizerFileName?: string | null;
+  tokenizerConfigFileName?: string | null;
+  isDownloaded?: boolean;
   // Remote model specific
+  /** API base URL (e.g., https://api.openai.com/v1) */
+  baseUrl?: string;
+  /** Model name sent to API (e.g., gpt-4o, whisper-1) */
+  modelName?: string;
   maxTokens?: number;
   temperature?: number;
   customHeaders?: Record<string, string>;

@@ -2,7 +2,6 @@ import { createRemoteApiClient } from "./remoteApiClient";
 import {
   sendRemoteMessage,
   RemoteModelNotFoundError,
-  RemoteModelApiKeyMissingError,
   RemoteModelPrivacyNotAcknowledgedError,
   type RemoteModelDependencies,
 } from "./remoteModelSender";
@@ -35,14 +34,15 @@ const mockedCreateRemoteApiClient =
 
 describe("sendRemoteMessage", () => {
   const mockModelConfig: RemoteModelConfig = {
-    modelId: "remote-openai-gpt-4",
+    modelId: "remote-openai-compatible-gpt-4",
     modelType: "remote-api",
+    modelCategory: "llm",
     displayName: "GPT-4",
     description: "OpenAI GPT-4",
-    providerId: "openai",
+    providerId: "openai-compatible",
     baseUrl: "https://api.openai.com/v1",
     modelName: "gpt-4",
-    apiKeyRef: "remote-openai-gpt-4-key",
+    apiKeyRef: "remote-openai-compatible-gpt-4-key",
     maxTokens: 4096,
     temperature: 0.7,
     isEnabled: true,
@@ -80,7 +80,7 @@ describe("sendRemoteMessage", () => {
   describe("successful requests", () => {
     it("sends a non-streaming message when no callbacks provided", async () => {
       const result = await sendRemoteMessage(
-        "remote-openai-gpt-4",
+        "remote-openai-compatible-gpt-4",
         mockMessages,
         undefined,
         mockDependencies,
@@ -100,7 +100,7 @@ describe("sendRemoteMessage", () => {
       const responseCallback = jest.fn();
 
       const result = await sendRemoteMessage(
-        "remote-openai-gpt-4",
+        "remote-openai-compatible-gpt-4",
         mockMessages,
         { responseCallback },
         mockDependencies,
@@ -122,7 +122,7 @@ describe("sendRemoteMessage", () => {
       const completeCallback = jest.fn();
 
       const result = await sendRemoteMessage(
-        "remote-openai-gpt-4",
+        "remote-openai-compatible-gpt-4",
         mockMessages,
         { completeCallback },
         mockDependencies,
@@ -139,7 +139,7 @@ describe("sendRemoteMessage", () => {
 
     it("uses options for maxTokens and temperature when provided", async () => {
       await sendRemoteMessage(
-        "remote-openai-gpt-4",
+        "remote-openai-compatible-gpt-4",
         mockMessages,
         { maxTokens: 1000, temperature: 0.5 },
         mockDependencies,
@@ -156,14 +156,14 @@ describe("sendRemoteMessage", () => {
 
     it("creates client with correct config", async () => {
       await sendRemoteMessage(
-        "remote-openai-gpt-4",
+        "remote-openai-compatible-gpt-4",
         mockMessages,
         undefined,
         mockDependencies,
       );
 
       expect(createRemoteApiClient).toHaveBeenCalledWith(
-        "openai",
+        "openai-compatible",
         "https://api.openai.com/v1",
         "gpt-4",
         "sk-test-api-key",
@@ -181,14 +181,14 @@ describe("sendRemoteMessage", () => {
         .mockResolvedValue(modelWithHeaders);
 
       await sendRemoteMessage(
-        "remote-openai-gpt-4",
+        "remote-openai-compatible-gpt-4",
         mockMessages,
         undefined,
         mockDependencies,
       );
 
       expect(createRemoteApiClient).toHaveBeenCalledWith(
-        "openai",
+        "openai-compatible",
         "https://api.openai.com/v1",
         "gpt-4",
         "sk-test-api-key",
@@ -200,7 +200,7 @@ describe("sendRemoteMessage", () => {
       const abortController = new AbortController();
 
       await sendRemoteMessage(
-        "remote-openai-gpt-4",
+        "remote-openai-compatible-gpt-4",
         mockMessages,
         { abortSignal: abortController.signal },
         mockDependencies,
@@ -238,27 +238,23 @@ describe("sendRemoteMessage", () => {
       ).rejects.toThrow("Remote model not found: remote-nonexistent");
     });
 
-    it("throws RemoteModelApiKeyMissingError when API key not found", async () => {
+    it("works without API key for self-hosted models", async () => {
       mockDependencies.getApiKey = jest.fn().mockResolvedValue(null);
 
-      await expect(
-        sendRemoteMessage(
-          "remote-openai-gpt-4",
-          mockMessages,
-          undefined,
-          mockDependencies,
-        ),
-      ).rejects.toThrow(RemoteModelApiKeyMissingError);
+      const result = await sendRemoteMessage(
+        "remote-openai-compatible-gpt-4",
+        mockMessages,
+        undefined,
+        mockDependencies,
+      );
 
-      await expect(
-        sendRemoteMessage(
-          "remote-openai-gpt-4",
-          mockMessages,
-          undefined,
-          mockDependencies,
-        ),
-      ).rejects.toThrow(
-        "API key not found for remote model: remote-openai-gpt-4",
+      expect(result).toBe("non-streaming response");
+      expect(createRemoteApiClient).toHaveBeenCalledWith(
+        "openai-compatible",
+        "https://api.openai.com/v1",
+        "gpt-4",
+        "", // Empty string when no API key
+        undefined,
       );
     });
 
@@ -273,7 +269,7 @@ describe("sendRemoteMessage", () => {
 
       await expect(
         sendRemoteMessage(
-          "remote-openai-gpt-4",
+          "remote-openai-compatible-gpt-4",
           mockMessages,
           undefined,
           mockDependencies,
@@ -282,13 +278,13 @@ describe("sendRemoteMessage", () => {
 
       await expect(
         sendRemoteMessage(
-          "remote-openai-gpt-4",
+          "remote-openai-compatible-gpt-4",
           mockMessages,
           undefined,
           mockDependencies,
         ),
       ).rejects.toThrow(
-        "Privacy not acknowledged for remote model: remote-openai-gpt-4",
+        "Privacy not acknowledged for remote model: remote-openai-compatible-gpt-4",
       );
     });
 
@@ -320,7 +316,7 @@ describe("sendRemoteMessage", () => {
 
       try {
         await sendRemoteMessage(
-          "remote-openai-gpt-4",
+          "remote-openai-compatible-gpt-4",
           mockMessages,
           undefined,
           mockDependencies,
@@ -336,27 +332,27 @@ describe("sendRemoteMessage", () => {
   describe("dependency injection", () => {
     it("calls getModelConfig with the provided modelId", async () => {
       await sendRemoteMessage(
-        "remote-openai-gpt-4",
+        "remote-openai-compatible-gpt-4",
         mockMessages,
         undefined,
         mockDependencies,
       );
 
       expect(mockDependencies.getModelConfig).toHaveBeenCalledWith(
-        "remote-openai-gpt-4",
+        "remote-openai-compatible-gpt-4",
       );
     });
 
     it("calls getApiKey with the apiKeyRef from model config", async () => {
       await sendRemoteMessage(
-        "remote-openai-gpt-4",
+        "remote-openai-compatible-gpt-4",
         mockMessages,
         undefined,
         mockDependencies,
       );
 
       expect(mockDependencies.getApiKey).toHaveBeenCalledWith(
-        "remote-openai-gpt-4-key",
+        "remote-openai-compatible-gpt-4-key",
       );
     });
   });

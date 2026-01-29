@@ -589,10 +589,11 @@ export function useSpeechToText(
       setIsRecording(true);
       isRecordingRef.current = true;
 
-      // Start chunked transcription - process every 3 seconds
+      // Start chunked transcription - process every 1 second for snappier feedback
+      // Final full-file transcription will be done at the end for accuracy
       chunkIntervalRef.current = setInterval(() => {
         processChunk();
-      }, 3000);
+      }, 1000);
 
       console.log(
         "[useSpeechToText] Recording started with chunked transcription",
@@ -752,8 +753,32 @@ export function useSpeechToText(
           console.log(
             `[useSpeechToText] Concatenated ${chunkUrisRef.current.length} chunks, duration: ${duration}s`,
           );
+
+          // Final full-file transcription for maximum accuracy
+          // This replaces the accumulated chunk transcriptions with a more accurate result
+          setPendingText("Finalizing...");
+          console.log(
+            "[useSpeechToText] Running final full-file transcription for accuracy...",
+          );
+          const fullFileTranscription = await transcribeFile(outputUri);
+          const cleanedFullTranscription = cleanTranscription(
+            fullFileTranscription,
+          );
+
+          if (cleanedFullTranscription) {
+            // Use full-file transcription as it's more accurate than accumulated chunks
+            accumulatedTextRef.current = cleanedFullTranscription;
+            console.log(
+              "[useSpeechToText] Final transcription:",
+              cleanedFullTranscription,
+            );
+          }
         } catch (err) {
-          console.error("[useSpeechToText] Failed to concatenate chunks:", err);
+          console.error(
+            "[useSpeechToText] Failed to concatenate/transcribe full file:",
+            err,
+          );
+          // Fall back to accumulated chunk transcriptions
         }
 
         // Clean up chunk files
