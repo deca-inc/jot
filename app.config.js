@@ -30,6 +30,10 @@ module.exports = ({ config }) => {
         ITSAppUsesNonExemptEncryption: false,
         NSMicrophoneUsageDescription:
           "Jot uses the microphone to transcribe voice notes using on-device speech recognition.",
+        NSSpeechRecognitionUsageDescription:
+          "Jot uses on-device speech recognition to transcribe your voice notes into text.",
+        NSPhotoLibraryUsageDescription:
+          "Jot allows you to attach photos from your library to journal entries.",
       },
       entitlements: {
         "com.apple.security.application-groups": [

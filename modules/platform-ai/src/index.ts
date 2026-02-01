@@ -36,6 +36,55 @@ export async function isGeminiNanoAvailable(): Promise<boolean> {
   }
 }
 
+/**
+ * Gemini Nano status type
+ */
+export type GeminiNanoStatus =
+  | "available"
+  | "downloadable"
+  | "downloading"
+  | "unavailable"
+  | "unknown";
+
+/**
+ * Get Gemini Nano status (Android)
+ * Returns detailed status including whether it can be downloaded
+ */
+export async function getGeminiNanoStatus(): Promise<GeminiNanoStatus> {
+  if (Platform.OS !== "android") return "unavailable";
+  const module = getModule();
+  if (!module) return "unavailable";
+  try {
+    const status = await module.getGeminiNanoStatus();
+    return status as GeminiNanoStatus;
+  } catch {
+    return "unavailable";
+  }
+}
+
+/**
+ * Check if Gemini Nano is supported on this device (available or downloadable)
+ */
+export async function isGeminiNanoSupported(): Promise<boolean> {
+  const status = await getGeminiNanoStatus();
+  return status === "available" || status === "downloadable";
+}
+
+/**
+ * Download Gemini Nano model (Android)
+ * Call this when user selects Gemini Nano but it's in "downloadable" state
+ */
+export async function downloadGeminiNano(): Promise<boolean> {
+  if (Platform.OS !== "android") return false;
+  const module = getModule();
+  if (!module) return false;
+  try {
+    return await module.downloadGeminiNano();
+  } catch {
+    return false;
+  }
+}
+
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;

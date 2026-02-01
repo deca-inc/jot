@@ -207,6 +207,12 @@ export function useRealTimeSpeechToText(
         setFinalText("");
         setIsConnecting(true);
 
+        // Request microphone permission FIRST before any other setup
+        const { granted } = await requestRecordingPermissionsAsync();
+        if (!granted) {
+          throw new Error("Microphone permission not granted");
+        }
+
         // Get model config
         const config = await customModels.getByModelId(effectiveModelId);
         if (!config || config.modelType !== "remote-api") {
@@ -274,12 +280,6 @@ export function useRealTimeSpeechToText(
         await client.connect();
         clientRef.current = client;
         accumulatedTextRef.current = ""; // Reset accumulated text
-
-        // Request microphone permission
-        const { granted } = await requestRecordingPermissionsAsync();
-        if (!granted) {
-          throw new Error("Microphone permission not granted");
-        }
 
         // Configure audio session for recording
         await setAudioModeAsync({

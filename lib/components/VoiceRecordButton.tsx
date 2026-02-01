@@ -511,6 +511,13 @@ export function VoiceRecordButton({
         }
         if (!whisperSTT.isModelLoaded) {
           await whisperSTT.loadModel(config);
+          // Verify the model actually loaded (loadModel doesn't throw on failure)
+          if (!whisperSTT.isModelLoaded) {
+            throw new Error(
+              whisperSTT.error ||
+                "Failed to load voice model. Please try re-downloading it.",
+            );
+          }
         }
       };
 
@@ -662,6 +669,13 @@ export function VoiceRecordButton({
             throw new Error("Selected STT model config not found");
           }
           await whisperSTT.loadModel(config);
+          // Verify the model actually loaded (loadModel doesn't throw on failure)
+          if (!whisperSTT.isModelLoaded) {
+            throw new Error(
+              whisperSTT.error ||
+                "Failed to load voice model. Please try re-downloading it.",
+            );
+          }
         }
       }
 

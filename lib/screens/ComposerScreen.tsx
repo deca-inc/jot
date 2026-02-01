@@ -26,9 +26,9 @@ export function ComposerScreen({
 }: ComposerScreenProps) {
   const theme = useTheme();
   const entryRepository = useEntryRepository();
-  // When entryId is provided, we don't know the type yet - set to undefined initially
+  // Use initialType if provided (navigation knows the type), otherwise undefined until loaded
   const [entryType, setEntryType] = useState<EntryType | undefined>(
-    entryId ? undefined : initialType,
+    initialType,
   );
   const [actualEntryId, setActualEntryId] = useState<number | undefined>(
     entryId,

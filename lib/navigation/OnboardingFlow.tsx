@@ -10,20 +10,20 @@ interface OnboardingFlowProps {
   onComplete: () => void;
 }
 
-type OnboardingStep = "welcome" | "model-selection" | "telemetry-consent";
+type OnboardingStep = "welcome" | "telemetry-consent" | "model-selection";
 
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome");
 
   const handleWelcomeContinue = () => {
-    setCurrentStep("model-selection");
-  };
-
-  const handleModelSelectionContinue = () => {
     setCurrentStep("telemetry-consent");
   };
 
   const handleTelemetryConsentContinue = () => {
+    setCurrentStep("model-selection");
+  };
+
+  const handleModelSelectionContinue = () => {
     onComplete();
   };
 
@@ -32,13 +32,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       {currentStep === "welcome" && (
         <WelcomeScreen onContinue={handleWelcomeContinue} />
       )}
+      {currentStep === "telemetry-consent" && (
+        <TelemetryConsentScreen onContinue={handleTelemetryConsentContinue} />
+      )}
       {currentStep === "model-selection" && (
         <OnboardingModelSelectionScreen
           onContinue={handleModelSelectionContinue}
         />
-      )}
-      {currentStep === "telemetry-consent" && (
-        <TelemetryConsentScreen onContinue={handleTelemetryConsentContinue} />
       )}
     </View>
   );

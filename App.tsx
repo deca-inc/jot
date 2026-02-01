@@ -42,6 +42,7 @@ LogBox.ignoreLogs([
   "You seem to update props of the", // RenderHTML throttling warning (we handle this internally)
   "You seem to update the renderers prop", // RenderHTML throttling warning
   "expo-background-fetch: This library is deprecated", // Will migrate to expo-background-task later
+  "[React Native ExecuTorch] No content-length header", // HuggingFace CDN doesn't send content-length
 ]);
 
 // Create a query client with optimized cache settings for better performance

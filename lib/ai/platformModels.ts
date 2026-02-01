@@ -9,7 +9,9 @@ import {
   isAppleFoundationModelsAvailable,
   isAppleSpeechAvailable,
   isAndroidSpeechAvailable,
-  isGeminiNanoAvailable,
+  isGeminiNanoSupported,
+  getGeminiNanoStatus,
+  type GeminiNanoStatus,
 } from "../../modules/platform-ai/src";
 
 // =============================================================================
@@ -39,6 +41,7 @@ export interface PlatformLlmConfig {
   isPlatformModel: true;
   supportsSystemPrompt: boolean; // Agents require system prompts
   available: boolean; // Set dynamically based on device capability
+  needsDownload?: boolean; // True if model is supported but needs to be downloaded first
 }
 
 export interface PlatformSttConfig {
@@ -106,7 +109,8 @@ export const AppleSpeech: PlatformSttConfig = {
 // =============================================================================
 
 /**
- * Check if Gemini Nano (Android AICore) is available on this device
+ * Check if Gemini Nano (Android AICore) is supported on this device
+ * Returns true if available OR downloadable
  * Requires: Android 14+, Pixel 8+ or compatible Samsung device
  */
 export async function checkGeminiNanoAvailable(): Promise<boolean> {
@@ -115,10 +119,25 @@ export async function checkGeminiNanoAvailable(): Promise<boolean> {
   }
 
   try {
-    // Use the platform-ai native module to check availability
-    return await isGeminiNanoAvailable();
+    // Use the platform-ai native module to check if supported (available or downloadable)
+    return await isGeminiNanoSupported();
   } catch {
     return false;
+  }
+}
+
+/**
+ * Get detailed Gemini Nano status
+ */
+export async function getGeminiNanoDownloadStatus(): Promise<GeminiNanoStatus> {
+  if (Platform.OS !== "android") {
+    return "unavailable";
+  }
+
+  try {
+    return await getGeminiNanoStatus();
+  } catch {
+    return "unavailable";
   }
 }
 
@@ -178,6 +197,7 @@ export async function checkAppleSpeechAvailable(): Promise<boolean> {
 export interface PlatformModelAvailability {
   llm: {
     geminiNano: boolean;
+    geminiNanoStatus: GeminiNanoStatus;
     appleFoundation: boolean;
   };
   stt: {
@@ -191,17 +211,33 @@ export interface PlatformModelAvailability {
  * Call this once at app startup and cache the results
  */
 export async function checkPlatformModelsAvailability(): Promise<PlatformModelAvailability> {
-  const [geminiNano, appleFoundation, androidSpeech, appleSpeech] =
-    await Promise.all([
-      checkGeminiNanoAvailable(),
-      checkAppleFoundationAvailable(),
-      checkAndroidSpeechAvailable(),
-      checkAppleSpeechAvailable(),
-    ]);
+  const [
+    geminiNano,
+    geminiNanoStatus,
+    appleFoundation,
+    androidSpeech,
+    appleSpeech,
+  ] = await Promise.all([
+    checkGeminiNanoAvailable(),
+    getGeminiNanoDownloadStatus(),
+    checkAppleFoundationAvailable(),
+    checkAndroidSpeechAvailable(),
+    checkAppleSpeechAvailable(),
+  ]);
+
+  console.log("[PlatformModels] Availability check results:", {
+    geminiNano,
+    geminiNanoStatus,
+    appleFoundation,
+    androidSpeech,
+    appleSpeech,
+    platform: Platform.OS,
+  });
 
   return {
     llm: {
       geminiNano,
+      geminiNanoStatus,
       appleFoundation,
     },
     stt: {
@@ -220,7 +256,8 @@ export function getAvailablePlatformLLMs(
   const models: PlatformLlmConfig[] = [];
 
   if (Platform.OS === "android" && availability.llm.geminiNano) {
-    models.push({ ...GeminiNano, available: true });
+    const needsDownload = availability.llm.geminiNanoStatus === "downloadable";
+    models.push({ ...GeminiNano, available: true, needsDownload });
   }
 
   if (

@@ -424,11 +424,17 @@ export function useSpeechToText(
   const transcribeFile = useCallback(async (uri: string): Promise<string> => {
     const sttModule = sttModuleRef.current;
     if (!sttModule) {
+      console.warn(
+        "[useSpeechToText] STT module not loaded, skipping transcription",
+      );
       return "";
     }
 
     try {
       const waveform = await readWavFile(uri);
+      console.log(
+        `[useSpeechToText] Transcribing ${waveform.length} samples...`,
+      );
       const options = isMultilingualRef.current
         ? { language: "en" as const }
         : undefined;
@@ -452,7 +458,11 @@ export function useSpeechToText(
     try {
       if (Platform.OS === "android" && isPCMRecordingAvailable()) {
         // Android: Use native PCM recording
+        console.log("[useSpeechToText] Processing chunk (Android)...");
         const result = await stopPCMRecording();
+        console.log(
+          `[useSpeechToText] Chunk recorded: ${result.duration}s, ${result.size} bytes`,
+        );
         // Convert path back to URI format for FileSystem operations
         const chunkUri = `file://${result.path}`;
 
@@ -461,6 +471,7 @@ export function useSpeechToText(
 
         // Transcribe this chunk
         const rawText = await transcribeFile(chunkUri);
+        console.log(`[useSpeechToText] Raw transcription: "${rawText}"`);
         const chunkText = cleanTranscription(rawText);
 
         // Append to accumulated text (preview only, don't write to canvas yet)
@@ -469,6 +480,11 @@ export function useSpeechToText(
             ? accumulatedTextRef.current + " " + chunkText
             : chunkText;
           setCommittedText(accumulatedTextRef.current);
+          console.log(
+            `[useSpeechToText] Committed text: "${accumulatedTextRef.current}"`,
+          );
+        } else {
+          console.log("[useSpeechToText] Chunk was empty or blank audio");
         }
 
         // Restart recording if still active
@@ -589,11 +605,12 @@ export function useSpeechToText(
       setIsRecording(true);
       isRecordingRef.current = true;
 
-      // Start chunked transcription - process every 1 second for snappier feedback
+      // Start chunked transcription - process every 3 seconds
+      // Shorter chunks can result in [BLANK_AUDIO] on some devices
       // Final full-file transcription will be done at the end for accuracy
       chunkIntervalRef.current = setInterval(() => {
         processChunk();
-      }, 1000);
+      }, 3000);
 
       console.log(
         "[useSpeechToText] Recording started with chunked transcription",

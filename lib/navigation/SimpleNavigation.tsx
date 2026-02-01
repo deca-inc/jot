@@ -295,6 +295,7 @@ export function SimpleNavigation() {
         setCurrentScreen("countdownViewer");
       } else {
         setEditingEntryId(entryId);
+        setComposerEntryType(entryType); // Pass entry type to avoid flash
         setCurrentScreen("entryEditor");
       }
     },

@@ -17,6 +17,18 @@ export interface PlatformAIModuleType {
   isGeminiNanoAvailable(): Promise<boolean>;
 
   /**
+   * Get Gemini Nano status (Android)
+   * @returns "available" | "downloadable" | "downloading" | "unavailable" | "unknown"
+   */
+  getGeminiNanoStatus(): Promise<string>;
+
+  /**
+   * Download Gemini Nano model (Android)
+   * @returns true if download started/completed, false if failed
+   */
+  downloadGeminiNano(): Promise<boolean>;
+
+  /**
    * Generate a response using Apple Foundation Models
    * @param systemPrompt - System prompt for the model
    * @param messages - Array of {role: 'user'|'assistant', content: string}

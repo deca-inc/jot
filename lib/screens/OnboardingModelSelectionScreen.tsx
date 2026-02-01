@@ -11,9 +11,10 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { downloadGeminiNano } from "../../modules/platform-ai/src";
 import { ALL_MODELS } from "../ai/modelConfig";
 import { ensureModelPresent } from "../ai/modelManager";
-import { isPlatformModelId } from "../ai/platformModels";
+import { isPlatformModelId, PLATFORM_LLM_IDS } from "../ai/platformModels";
 import { usePlatformModels } from "../ai/usePlatformModels";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
 import { Text } from "../components";
@@ -24,6 +25,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import {
   getRecommendedModel,
   getCompatibleModels,
+  getDeviceTier,
   logModelCompatibilityDebug,
 } from "../utils/deviceInfo";
 
@@ -61,6 +63,8 @@ export function OnboardingModelSelectionScreen({
   const [selectedModelId, setSelectedModelId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isLowEndDevice, setIsLowEndDevice] = useState(false);
+  const [hasSetInitialSelection, setHasSetInitialSelection] = useState(false);
 
   // Track screen view
   useTrackScreenView("Model Selection");
@@ -72,9 +76,10 @@ export function OnboardingModelSelectionScreen({
         // Log detailed debug info about RAM and model compatibility
         await logModelCompatibilityDebug();
 
-        const [compatible, recommended] = await Promise.all([
+        const [compatible, recommended, tier] = await Promise.all([
           getCompatibleModels(),
           getRecommendedModel(),
+          getDeviceTier(),
         ]);
 
         // Ensure we always have at least one model
@@ -84,6 +89,7 @@ export function OnboardingModelSelectionScreen({
 
         setCompatibleModelIds(finalCompatible);
         setRecommendedModelId(finalRecommended);
+        setIsLowEndDevice(tier === "low");
 
         // Don't set selected model yet - wait for platform models to load
       } catch (error) {
@@ -92,6 +98,7 @@ export function OnboardingModelSelectionScreen({
         const fallback = "smollm2-135m";
         setCompatibleModelIds([fallback]);
         setRecommendedModelId(fallback);
+        setIsLowEndDevice(false);
       } finally {
         setIsLoading(false);
       }
@@ -100,22 +107,30 @@ export function OnboardingModelSelectionScreen({
     loadModels();
   }, []);
 
-  // Set default selection once platform models are loaded
+  // Set default selection once platform models are loaded (only once)
   useEffect(() => {
-    if (platformModelsLoading || isLoading) return;
+    if (platformModelsLoading || isLoading || hasSetInitialSelection) return;
 
-    // If platform model is available, make it the default
-    if (hasPlatformLLM && platformLLMs.length > 0) {
+    // For low-end devices, prefer platform model if available (no download needed)
+    // For mid/high-end devices, prefer the recommended downloadable model (better quality)
+    if (isLowEndDevice && hasPlatformLLM && platformLLMs.length > 0) {
       setSelectedModelId(platformLLMs[0].modelId);
     } else if (recommendedModelId) {
       setSelectedModelId(recommendedModelId);
+    } else if (hasPlatformLLM && platformLLMs.length > 0) {
+      // Fallback to platform model if no downloadable models available
+      setSelectedModelId(platformLLMs[0].modelId);
     }
+
+    setHasSetInitialSelection(true);
   }, [
     platformModelsLoading,
     isLoading,
+    isLowEndDevice,
     hasPlatformLLM,
     platformLLMs,
     recommendedModelId,
+    hasSetInitialSelection,
   ]);
 
   const handleContinue = useCallback(async () => {
@@ -124,18 +139,34 @@ export function OnboardingModelSelectionScreen({
     try {
       setIsDownloading(true);
 
-      // Check if this is a platform model (no download needed)
+      // Check if this is a platform model
       if (isPlatformModelId(selectedModelId)) {
-        // Just save the selection and continue
+        // Check if Gemini Nano needs downloading
+        const platformModel = platformLLMs.find(
+          (m) => m.modelId === selectedModelId,
+        );
+        if (
+          platformModel?.needsDownload &&
+          selectedModelId === PLATFORM_LLM_IDS["gemini-nano"]
+        ) {
+          // Trigger Gemini Nano download in background
+          console.log("[Onboarding] Triggering Gemini Nano download...");
+          downloadGeminiNano().catch((err) => {
+            console.error("[Onboarding] Gemini Nano download failed:", err);
+          });
+        }
+
+        // Save the selection and continue
         await modelSettings.setSelectedModelId(selectedModelId);
 
         // Track selection
         trackEvent("model_selected_onboarding", {
           modelId: selectedModelId,
-          wasRecommended: true,
+          wasRecommended: isLowEndDevice,
           modelSize: 0,
           autoSelected: false,
           isPlatformModel: true,
+          needsDownload: platformModel?.needsDownload || false,
         });
 
         onContinue();
@@ -176,6 +207,8 @@ export function OnboardingModelSelectionScreen({
     trackEvent,
     recommendedModelId,
     onContinue,
+    platformLLMs,
+    isLowEndDevice,
   ]);
 
   const formatSize = (mb: number) => {
@@ -232,7 +265,9 @@ export function OnboardingModelSelectionScreen({
             style={[styles.subtitle, { color: seasonalTheme.textSecondary }]}
           >
             {hasPlatformLLM
-              ? "Your device has built-in AI available. You can also download additional models."
+              ? isLowEndDevice
+                ? "Your device has built-in AI which works great without downloading anything."
+                : "Your device has built-in AI available. For best quality, we recommend downloading a model."
               : "These models are compatible with your device. We recommend the one selected below."}
           </Text>
           <Text
@@ -254,6 +289,8 @@ export function OnboardingModelSelectionScreen({
           {/* Platform models (built-in) */}
           {platformLLMs.map((platformModel) => {
             const isSelected = platformModel.modelId === selectedModelId;
+            // Only recommend platform model for low-end devices
+            const isPlatformRecommended = isLowEndDevice;
 
             return (
               <TouchableOpacity
@@ -285,22 +322,24 @@ export function OnboardingModelSelectionScreen({
                     >
                       {platformModel.displayName}
                     </Text>
-                    <View
-                      style={[
-                        styles.recommendedBadge,
-                        { backgroundColor: theme.colors.accentLight },
-                      ]}
-                    >
-                      <Text
-                        variant="caption"
+                    {isPlatformRecommended && (
+                      <View
                         style={[
-                          styles.recommendedText,
-                          { color: theme.colors.accent },
+                          styles.recommendedBadge,
+                          { backgroundColor: theme.colors.accentLight },
                         ]}
                       >
-                        Recommended
-                      </Text>
-                    </View>
+                        <Text
+                          variant="caption"
+                          style={[
+                            styles.recommendedText,
+                            { color: theme.colors.accent },
+                          ]}
+                        >
+                          Recommended
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   {isSelected && (
                     <Ionicons
@@ -318,7 +357,7 @@ export function OnboardingModelSelectionScreen({
                     { color: seasonalTheme.textSecondary },
                   ]}
                 >
-                  Built-in • No download required
+                  Built-in • May require small download
                 </Text>
                 <Text
                   variant="body"
@@ -327,7 +366,7 @@ export function OnboardingModelSelectionScreen({
                     { color: seasonalTheme.textSecondary },
                   ]}
                 >
-                  {platformModel.description}
+                  Uses your device's built-in AI. Fast and private.
                 </Text>
               </TouchableOpacity>
             );
@@ -349,8 +388,10 @@ export function OnboardingModelSelectionScreen({
           {/* Downloadable models */}
           {compatibleModels.map((model) => {
             const isSelected = model.modelId === selectedModelId;
+            // Recommend downloadable model if: no platform LLM, or device is not low-end
             const isRecommended =
-              !hasPlatformLLM && model.modelId === recommendedModelId;
+              model.modelId === recommendedModelId &&
+              (!hasPlatformLLM || !isLowEndDevice);
             const size = MODEL_SIZES[model.modelId] || 0;
 
             return (
@@ -474,25 +515,23 @@ export function OnboardingModelSelectionScreen({
           )}
         </TouchableOpacity>
 
-        {/* Only show skip if no platform model available */}
-        {!hasPlatformLLM && (
-          <TouchableOpacity
-            onPress={onContinue}
-            disabled={isDownloading}
-            style={styles.skipButton}
-            activeOpacity={0.7}
+        {/* Skip button - always available */}
+        <TouchableOpacity
+          onPress={onContinue}
+          disabled={isDownloading}
+          style={styles.skipButton}
+          activeOpacity={0.7}
+        >
+          <Text
+            variant="body"
+            style={[
+              styles.skipButtonText,
+              { color: seasonalTheme.textSecondary },
+            ]}
           >
-            <Text
-              variant="body"
-              style={[
-                styles.skipButtonText,
-                { color: seasonalTheme.textSecondary },
-              ]}
-            >
-              Skip for now
-            </Text>
-          </TouchableOpacity>
-        )}
+            Skip for now
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
