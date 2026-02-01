@@ -874,6 +874,8 @@ export function VoiceRecordButton({
                 width: buttonSize,
                 height: buttonSize,
                 borderRadius: buttonSize / 2,
+                // Fallback background in case glass effect doesn't render on some devices
+                backgroundColor: bgColor,
                 opacity: disabled ? 0.5 : 1,
               },
             ]}
@@ -915,13 +917,11 @@ export function VoiceRecordButton({
             </Pressable>
           </GlassView>
         ) : (
-          <Pressable
-            onPress={handlePress}
-            onLongPress={handleLongPress}
-            delayLongPress={1000}
-            disabled={disabled || isLoading || isTranscribing || isCorrecting}
+          // Fallback: Use View wrapper (like GlassView) with Pressable inside
+          // This matches the working pattern from FloatingComposerHeader
+          // where elevation/shadow is on outer wrapper and background on inner view
+          <View
             style={[
-              styles.button,
               styles.buttonFallback,
               {
                 width: buttonSize,
@@ -932,34 +932,42 @@ export function VoiceRecordButton({
               },
             ]}
           >
-            {isRecording ? (
-              <WaveformBars
-                level={meteringLevel}
-                color={iconColor}
-                barWidth={size === "xlarge" ? 5 : size === "large" ? 4 : 3}
-                maxHeight={
-                  size === "xlarge"
-                    ? 28
-                    : size === "large"
-                      ? 24
-                      : size === "medium"
-                        ? 18
-                        : 14
-                }
-                gap={size === "xlarge" ? 4 : size === "large" ? 3 : 2}
-              />
-            ) : (
-              <Ionicons
-                name={
-                  isTranscribing || isCorrecting
-                    ? "hourglass-outline"
-                    : "mic-outline"
-                }
-                size={iconSize}
-                color={iconColor}
-              />
-            )}
-          </Pressable>
+            <Pressable
+              onPress={handlePress}
+              onLongPress={handleLongPress}
+              delayLongPress={1000}
+              disabled={disabled || isLoading || isTranscribing || isCorrecting}
+              style={styles.buttonPressable}
+            >
+              {isRecording ? (
+                <WaveformBars
+                  level={meteringLevel}
+                  color={iconColor}
+                  barWidth={size === "xlarge" ? 5 : size === "large" ? 4 : 3}
+                  maxHeight={
+                    size === "xlarge"
+                      ? 28
+                      : size === "large"
+                        ? 24
+                        : size === "medium"
+                          ? 18
+                          : 14
+                  }
+                  gap={size === "xlarge" ? 4 : size === "large" ? 3 : 2}
+                />
+              ) : (
+                <Ionicons
+                  name={
+                    isTranscribing || isCorrecting
+                      ? "hourglass-outline"
+                      : "mic-outline"
+                  }
+                  size={iconSize}
+                  color={iconColor}
+                />
+              )}
+            </Pressable>
+          </View>
         )}
       </Animated.View>
 
@@ -1008,6 +1016,9 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   buttonFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(0, 0, 0, 0.1)",
     ...Platform.select({
@@ -1018,7 +1029,9 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
       },
       android: {
-        elevation: 8,
+        // Lower elevation to avoid transparency issues on some devices
+        // Background color is applied directly to this View
+        elevation: 4,
       },
     }),
   },
