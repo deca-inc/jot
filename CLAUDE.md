@@ -95,7 +95,37 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 
 - **Framework**: Expo + React Native for macOS via [react-native-macos](https://github.com/microsoft/react-native-macos)
 - **Package Manager**: pnpm (always use `pnpm` commands, never `npm` or `yarn`)
+- **Build System**: Turborepo for monorepo task orchestration
 - **No web app**: Desktop-only initially
+
+### Monorepo Structure
+
+```
+journal/
+├── apps/
+│   └── app/                  # Main Expo mobile app
+│       ├── App.tsx
+│       ├── index.ts
+│       ├── lib/              # Application code
+│       ├── modules/          # Native modules (platform-ai, widget-bridge, keyboard-module)
+│       ├── packages/         # Swift package (widget-utils)
+│       ├── assets/
+│       ├── plugins/
+│       ├── targets/          # @bacons/apple-targets
+│       ├── native/
+│       └── package.json
+├── packages/                 # Shared packages (empty for now)
+├── pnpm-workspace.yaml       # Workspace configuration
+├── turbo.json                # Turborepo task definitions
+└── package.json              # Workspace root
+```
+
+**Key conventions:**
+
+- Run app-specific commands from `apps/app/` (e.g., `cd apps/app && pnpm start`)
+- Run workspace-wide commands from root (e.g., `pnpm turbo lint`)
+- All app code lives in `apps/app/lib/`
+- Native modules stay with the app in `apps/app/modules/`
 
 ### Local-First Storage
 
@@ -184,6 +214,8 @@ Background workers: indexing, embeddings, backup scheduler
 
 #### Test Commands
 
+Run from `apps/app/`:
+
 ```bash
 pnpm test:ts      # TypeScript tests (Jest)
 pnpm test:swift   # Swift (Swift Package Manager)
@@ -192,7 +224,17 @@ pnpm test:all     # Run all tests
 pnpm typecheck    # TypeScript type checking (IMPORTANT: run after tests pass)
 ```
 
+Or from root with Turborepo:
+
+```bash
+pnpm turbo test       # Run tests across all packages
+pnpm turbo typecheck  # Typecheck all packages
+pnpm turbo lint       # Lint all packages
+```
+
 #### Coverage Commands
+
+Run from `apps/app/`:
 
 ```bash
 pnpm coverage        # TypeScript coverage (text + HTML report)
@@ -200,13 +242,13 @@ pnpm coverage:ts     # Same as above
 pnpm coverage:swift  # Swift coverage via llvm-cov
 ```
 
-Coverage reports are generated in `./coverage/` for TypeScript (open `coverage/index.html` in browser).
+Coverage reports are generated in `apps/app/coverage/` for TypeScript (open `coverage/index.html` in browser).
 
 #### Test Locations
 
-- **TypeScript**: `lib/**/*.test.ts` colocated with source files
-- **Swift**: `packages/widget-utils/Tests/`
-- **Kotlin**: `native/android/widget-tests/` (copied during prebuild)
+- **TypeScript**: `apps/app/lib/**/*.test.ts` colocated with source files
+- **Swift**: `apps/app/packages/widget-utils/Tests/`
+- **Kotlin**: `apps/app/native/android/widget-tests/` (copied during prebuild)
 
 ### Core Principles
 
@@ -509,7 +551,7 @@ When in doubt, ask: "Can I derive this from data?" and "Can I handle this with a
 
 ### Standard Components
 
-The following shared components are available in `lib/components/`:
+The following shared components are available in `apps/app/lib/components/`:
 
 #### Input
 
@@ -800,7 +842,15 @@ _Backup functionality is not yet implemented. The following describes the planne
 
 ### Code Quality Commands
 
-- **`pnpm lint`** - Run ESLint to check for code style issues
+From root (runs across all packages via Turborepo):
+
+- **`pnpm turbo lint`** - Run ESLint across all packages
+- **`pnpm turbo typecheck`** - Run TypeScript type checking across all packages
+- **`pnpm turbo test`** - Run tests across all packages
+
+From `apps/app/`:
+
+- **`pnpm lint`** - Run ESLint for the app
 - **`pnpm lint:fix`** - Auto-fix ESLint issues (import sorting, trailing commas, etc.)
 - **`pnpm typecheck`** - Run TypeScript type checking without emitting files
 - **`pnpm create:migration <name>`** - Create a new database migration (generates timestamp, creates file, registers it)

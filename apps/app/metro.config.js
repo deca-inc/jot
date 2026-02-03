@@ -3,8 +3,14 @@
 const { getDefaultConfig } = require("expo/metro-config");
 const path = require("path");
 
+const projectRoot = __dirname;
+const monorepoRoot = path.resolve(projectRoot, "../..");
+
 /** @type {import('metro-config').ConfigT} */
-const config = getDefaultConfig(__dirname);
+const config = getDefaultConfig(projectRoot);
+
+// Add monorepo root to watch folders
+config.watchFolders = [monorepoRoot];
 
 // Ensure ExecuTorch assets are recognized by Metro (for tokenizer files)
 config.resolver.assetExts.push("pte");
@@ -14,7 +20,7 @@ config.resolver.assetExts.push("bin");
 // This avoids memory issues during development
 // Models are downloaded via in-app UI or pnpm download:models script
 config.resolver.blockList = [
-  new RegExp(path.resolve(__dirname, "assets/models/.*\\.pte$")),
+  new RegExp(path.resolve(projectRoot, "assets/models/.*\\.pte$")),
 ];
 
 module.exports = config;

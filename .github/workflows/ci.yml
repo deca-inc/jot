@@ -28,21 +28,23 @@ jobs:
       - name: Cache Swift PM
         uses: actions/cache@v4
         with:
-          path: packages/widget-utils/.build
-          key: swift-${{ runner.os }}-${{ hashFiles('packages/widget-utils/Package.swift') }}
+          path: apps/app/packages/widget-utils/.build
+          key: swift-${{ runner.os }}-${{ hashFiles('apps/app/packages/widget-utils/Package.swift') }}
           restore-keys: swift-${{ runner.os }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: pnpm lint
+        run: pnpm turbo lint
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: pnpm turbo typecheck
 
       - name: Test TypeScript
+        working-directory: apps/app
         run: pnpm test:ts
 
       - name: Test Swift
+        working-directory: apps/app
         run: pnpm test:swift

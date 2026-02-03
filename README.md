@@ -13,6 +13,7 @@ A private, local-first journaling app with on-device AI.
 ## Tech Stack
 
 - **Framework**: Expo 54 + React Native 0.81
+- **Build System**: pnpm workspaces + Turborepo
 - **Database**: SQLite with FTS5 full-text search (encrypted via SQLCipher)
 - **State**: React Query (@tanstack/react-query)
 - **AI**: On-device LLM inference via ExecuTorch (react-native-executorch)
@@ -30,6 +31,7 @@ A private, local-first journaling app with on-device AI.
 
 ```bash
 pnpm install
+cd apps/app
 pnpm ios
 # or
 pnpm android
@@ -40,39 +42,49 @@ For detailed setup help, see the [Expo documentation](https://docs.expo.dev/).
 ## Project Structure
 
 ```
-lib/                    # Main TypeScript/React source code
-├── ai/                 # AI/LLM functionality (model management, inference)
-├── analytics/          # PostHog telemetry (optional, off by default)
-├── attachments/        # File attachment handling
-├── components/         # Reusable React components
-├── db/                 # Database layer (SQLite, migrations, queries)
-├── encryption/         # Encryption and key management
-├── navigation/         # Navigation logic
-├── screens/            # Screen components
-├── theme/              # Theming and styling
-├── utils/              # Utility functions
-└── widgets/            # Widget data bridge
-
-modules/                # Expo native modules
-├── platform-ai/        # Platform-specific AI module (Swift/Kotlin)
-├── keyboard-module/    # Custom keyboard handling
-└── widget-bridge/      # Widget communication bridge
-
-scripts/                # Development scripts
-├── createMigration.ts  # Create new database migrations
-├── downloadModels.ts   # Download AI models
-└── testMigrations.ts   # Test migration up/down/reset
-
-targets/                # iOS widget targets
-└── jot-widget/         # iOS widget implementation (Swift)
-
-packages/               # Swift packages
-└── widget-utils/       # Shared widget utilities
+jot/
+├── apps/
+│   └── app/                    # Main Expo mobile app
+│       ├── lib/                # Main TypeScript/React source code
+│       │   ├── ai/             # AI/LLM functionality
+│       │   ├── analytics/      # PostHog telemetry (optional)
+│       │   ├── attachments/    # File attachment handling
+│       │   ├── components/     # Reusable React components
+│       │   ├── db/             # Database layer (SQLite, migrations)
+│       │   ├── encryption/     # Encryption and key management
+│       │   ├── navigation/     # Navigation logic
+│       │   ├── screens/        # Screen components
+│       │   ├── theme/          # Theming and styling
+│       │   ├── utils/          # Utility functions
+│       │   └── widgets/        # Widget data bridge
+│       ├── modules/            # Expo native modules
+│       │   ├── platform-ai/    # Platform-specific AI (Swift/Kotlin)
+│       │   ├── keyboard-module/# Custom keyboard handling
+│       │   └── widget-bridge/  # Widget communication bridge
+│       ├── scripts/            # Development scripts
+│       ├── targets/            # iOS widget targets (@bacons/apple-targets)
+│       ├── packages/           # Swift packages
+│       │   └── widget-utils/   # Shared widget utilities
+│       └── native/             # Native widget source code
+├── packages/                   # Shared packages (future)
+├── pnpm-workspace.yaml         # Workspace configuration
+├── turbo.json                  # Turborepo task definitions
+└── package.json                # Workspace root
 ```
 
 ## Development
 
 ### Commands
+
+From the root directory (runs across all packages via Turborepo):
+
+```bash
+pnpm turbo lint          # Run ESLint across all packages
+pnpm turbo typecheck     # TypeScript type checking
+pnpm turbo test          # Run tests across all packages
+```
+
+From `apps/app/` directory:
 
 ```bash
 # Start development
