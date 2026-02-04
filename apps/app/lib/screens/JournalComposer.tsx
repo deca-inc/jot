@@ -188,7 +188,12 @@ export function JournalComposer({
     const currentContent = htmlContentRef.current;
     if (currentContent.trim() && !isDeletingRef.current) {
       try {
-        await saveJournalContent(entryId, currentContent, "", actionContext);
+        // Use updateCache: true since we're navigating away - this ensures
+        // the entry list shows the updated content immediately without
+        // waiting for an async refetch (fixes stale data on back navigation)
+        await saveJournalContent(entryId, currentContent, "", actionContext, {
+          updateCache: true,
+        });
 
         // Sync attachments on back press too
         await attachmentsRepoRef.current.syncForEntry(entryId, currentContent);

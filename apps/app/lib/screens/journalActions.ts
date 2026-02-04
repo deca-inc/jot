@@ -178,19 +178,34 @@ export function saveJournalContentFireAndForget(
   );
 }
 
+export interface SaveJournalContentOptions {
+  /**
+   * When true, updates the React Query cache after saving.
+   * Use this when navigating away from the editor so the entry list
+   * shows the updated content immediately without waiting for refetch.
+   *
+   * Default: false (skips cache update during editing to prevent editor issues)
+   */
+  updateCache?: boolean;
+}
+
 /**
  * Action: Save journal entry content
  *
  * Handles HTML sanitization and block conversion
  * Note: HTML should be pre-repaired before calling this function
+ *
+ * @param options.updateCache - When true, updates cache (use when navigating away from editor)
  */
 export async function saveJournalContent(
   entryId: number,
   htmlContent: string,
   title: string,
   context: JournalActionContext,
+  options?: SaveJournalContentOptions,
 ): Promise<void> {
   const { updateEntry } = context;
+  const { updateCache = false } = options ?? {};
 
   try {
     const prepared = prepareJournalContent(htmlContent, title);
@@ -206,7 +221,9 @@ export async function saveJournalContent(
             title: prepared.finalTitle,
             blocks: prepared.blocks,
           },
-          skipCacheUpdate: true, // Don't update cache to prevent HTML escaping in editor
+          // Skip cache update during editing (prevents HTML escaping in editor)
+          // But update cache when navigating away so list shows fresh data
+          skipCacheUpdate: !updateCache,
         },
         {
           onSuccess: () => {
