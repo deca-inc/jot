@@ -103,16 +103,25 @@ We are a private personal assistant and journaling app. Privacy is a core featur
 ```
 journal/
 ├── apps/
-│   └── app/                  # Main Expo mobile app
-│       ├── App.tsx
-│       ├── index.ts
-│       ├── lib/              # Application code
-│       ├── modules/          # Native modules (platform-ai, widget-bridge, keyboard-module)
-│       ├── packages/         # Swift package (widget-utils)
-│       ├── assets/
-│       ├── plugins/
-│       ├── targets/          # @bacons/apple-targets
-│       ├── native/
+│   ├── app/                  # Main Expo mobile app
+│   │   ├── App.tsx
+│   │   ├── index.ts
+│   │   ├── lib/              # Application code
+│   │   ├── modules/          # Native modules (platform-ai, widget-bridge, keyboard-module)
+│   │   ├── packages/         # Swift package (widget-utils)
+│   │   ├── assets/
+│   │   ├── plugins/
+│   │   ├── targets/          # @bacons/apple-targets
+│   │   ├── native/
+│   │   └── package.json
+│   └── server/               # Sync server (WIP - early development)
+│       ├── src/
+│       │   ├── cli.ts        # CLI entry point (jot-server command)
+│       │   ├── server.ts     # Express + Hocuspocus server
+│       │   ├── db/           # SQLite database layer
+│       │   ├── sync/         # Yjs sync via Hocuspocus
+│       │   ├── llm/          # LLM service (stub)
+│       │   └── api/          # REST API routes
 │       └── package.json
 ├── packages/                 # Shared packages (empty for now)
 ├── pnpm-workspace.yaml       # Workspace configuration
@@ -123,6 +132,7 @@ journal/
 **Key conventions:**
 
 - Run app-specific commands from `apps/app/` (e.g., `cd apps/app && pnpm start`)
+- Run server-specific commands from `apps/server/` (e.g., `cd apps/server && pnpm dev`)
 - Run workspace-wide commands from root (e.g., `pnpm turbo lint`)
 - All app code lives in `apps/app/lib/`
 - Native modules stay with the app in `apps/app/modules/`
@@ -146,6 +156,49 @@ _Backup functionality is not yet implemented. The following describes the planne
 
 - v1: Backup/restore only. No multi-device conflict resolution.
 - v2+: Consider CRDTs (e.g., Yjs) for multi-device sync.
+
+### Sync Server (WIP)
+
+> **Note**: The sync server (`apps/server`) is in early development. Core functionality is stubbed.
+
+A headless CLI server for Yjs document sync and optional LLM inference.
+
+**Architecture:**
+
+```
+Single Port (3000)
+├── HTTP  → REST API (status, devices, models)
+├── WS    → Hocuspocus (Yjs sync)
+└── Future → node-llama-cpp (LLM inference)
+
+SQLite → ./data/jot-server.db
+Models → ./data/models/*.gguf (future)
+```
+
+**CLI Commands:**
+
+```bash
+jot-server start [--port 3000]  # Run server
+jot-server status               # Show server status
+jot-server devices              # List connected sessions
+jot-server models list          # List available models (stub)
+jot-server models download      # Download a model (stub)
+```
+
+**Server Database Schema:**
+
+- `documents`: Yjs state storage (id, yjs_state BLOB, metadata JSON)
+- `sessions`: Connected devices (id, display_name, device_type, last_seen_at)
+- `settings`: Server configuration (key-value store)
+
+**Current Status:**
+
+- ✅ Express + Hocuspocus integration
+- ✅ SQLite database with migrations
+- ✅ Session tracking
+- ✅ REST API (/api/status, /api/devices)
+- ⏳ LLM inference (stubbed - node-llama-cpp not yet integrated)
+- ⏳ Client-side sync integration
 
 ### App Layers
 
@@ -854,6 +907,15 @@ From `apps/app/`:
 - **`pnpm lint:fix`** - Auto-fix ESLint issues (import sorting, trailing commas, etc.)
 - **`pnpm typecheck`** - Run TypeScript type checking without emitting files
 - **`pnpm create:migration <name>`** - Create a new database migration (generates timestamp, creates file, registers it)
+
+From `apps/server/`:
+
+- **`pnpm dev`** - Start the server in development mode
+- **`pnpm jot-server <command>`** - Run CLI commands (start, status, devices, models)
+- **`pnpm lint`** - Run ESLint for the server
+- **`pnpm typecheck`** - Run TypeScript type checking
+- **`pnpm test`** - Run server tests
+- **`pnpm create:migration <name>`** - Create a new server database migration
 
 ### Code Style (Enforced by ESLint)
 

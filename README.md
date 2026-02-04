@@ -10,6 +10,14 @@ A private, local-first journaling app with on-device AI.
 - **Rich text editing** - Write with headings, lists, checkboxes, code blocks, tables, and more.
 - **Fast search** - Full-text search across all your entries.
 
+### Sync Server (Work in Progress)
+
+An optional sync server (`apps/server`) is in early development for multi-device sync:
+
+- **Yjs sync** - Real-time collaborative document sync via Hocuspocus
+- **REST API** - Server status and session management
+- **LLM inference** - Server-side AI chat (planned, currently stubbed)
+
 ## Tech Stack
 
 - **Framework**: Expo 54 + React Native 0.81
@@ -44,28 +52,37 @@ For detailed setup help, see the [Expo documentation](https://docs.expo.dev/).
 ```
 jot/
 ├── apps/
-│   └── app/                    # Main Expo mobile app
-│       ├── lib/                # Main TypeScript/React source code
-│       │   ├── ai/             # AI/LLM functionality
-│       │   ├── analytics/      # PostHog telemetry (optional)
-│       │   ├── attachments/    # File attachment handling
-│       │   ├── components/     # Reusable React components
-│       │   ├── db/             # Database layer (SQLite, migrations)
-│       │   ├── encryption/     # Encryption and key management
-│       │   ├── navigation/     # Navigation logic
-│       │   ├── screens/        # Screen components
-│       │   ├── theme/          # Theming and styling
-│       │   ├── utils/          # Utility functions
-│       │   └── widgets/        # Widget data bridge
-│       ├── modules/            # Expo native modules
-│       │   ├── platform-ai/    # Platform-specific AI (Swift/Kotlin)
-│       │   ├── keyboard-module/# Custom keyboard handling
-│       │   └── widget-bridge/  # Widget communication bridge
-│       ├── scripts/            # Development scripts
-│       ├── targets/            # iOS widget targets (@bacons/apple-targets)
-│       ├── packages/           # Swift packages
-│       │   └── widget-utils/   # Shared widget utilities
-│       └── native/             # Native widget source code
+│   ├── app/                    # Main Expo mobile app
+│   │   ├── lib/                # Main TypeScript/React source code
+│   │   │   ├── ai/             # AI/LLM functionality
+│   │   │   ├── analytics/      # PostHog telemetry (optional)
+│   │   │   ├── attachments/    # File attachment handling
+│   │   │   ├── components/     # Reusable React components
+│   │   │   ├── db/             # Database layer (SQLite, migrations)
+│   │   │   ├── encryption/     # Encryption and key management
+│   │   │   ├── navigation/     # Navigation logic
+│   │   │   ├── screens/        # Screen components
+│   │   │   ├── theme/          # Theming and styling
+│   │   │   ├── utils/          # Utility functions
+│   │   │   └── widgets/        # Widget data bridge
+│   │   ├── modules/            # Expo native modules
+│   │   │   ├── platform-ai/    # Platform-specific AI (Swift/Kotlin)
+│   │   │   ├── keyboard-module/# Custom keyboard handling
+│   │   │   └── widget-bridge/  # Widget communication bridge
+│   │   ├── scripts/            # Development scripts
+│   │   ├── targets/            # iOS widget targets (@bacons/apple-targets)
+│   │   ├── packages/           # Swift packages
+│   │   │   └── widget-utils/   # Shared widget utilities
+│   │   └── native/             # Native widget source code
+│   └── server/                 # Sync server (WIP)
+│       ├── src/                # Server source code
+│       │   ├── cli.ts          # CLI entry point
+│       │   ├── server.ts       # Express + WebSocket server
+│       │   ├── db/             # SQLite database layer
+│       │   ├── sync/           # Yjs sync via Hocuspocus
+│       │   ├── llm/            # LLM service (stub)
+│       │   └── api/            # REST API routes
+│       └── __tests__/          # Server tests
 ├── packages/                   # Shared packages (future)
 ├── pnpm-workspace.yaml         # Workspace configuration
 ├── turbo.json                  # Turborepo task definitions
@@ -110,6 +127,24 @@ pnpm test:migrations           # Test migrations (up/down/reset)
 
 # AI Models
 pnpm download:models    # Download AI models for on-device inference
+```
+
+From `apps/server/` directory (sync server - WIP):
+
+```bash
+# Start server
+pnpm dev                # Start server in development mode (port 3000)
+pnpm jot-server start   # Same as above
+
+# Server commands
+pnpm jot-server status  # Show server status (documents, sessions)
+pnpm jot-server devices # List connected sessions
+pnpm jot-server models list    # List available AI models (stub)
+
+# Code quality
+pnpm lint               # Run ESLint
+pnpm typecheck          # TypeScript type checking
+pnpm test               # Run server tests
 ```
 
 ### Pre-commit Hooks
