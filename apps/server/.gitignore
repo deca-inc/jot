@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Data directory
+data/
+
+# Test coverage
+coverage/
+
+# IDE
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
