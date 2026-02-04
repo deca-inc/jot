@@ -212,7 +212,6 @@ export function VoiceRecordButton({
 
   // State
   const [isModelLoading, setIsModelLoading] = useState(false);
-  const [hasVoiceModel, setHasVoiceModel] = useState<boolean | null>(null);
   const [hasLLMModel, setHasLLMModel] = useState(false);
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [usePlatformSTT, setUsePlatformSTT] = useState(false);
@@ -398,20 +397,15 @@ export function VoiceRecordButton({
     };
   }, []);
 
-  // Check if voice model and LLM are downloaded on mount
+  // Check if LLM is downloaded on mount (for transcription correction)
   useEffect(() => {
     const checkModels = async () => {
       const downloaded = await modelSettings.getDownloadedModels();
-      const sttModels = downloaded.filter(
-        (m) => m.modelType === "speech-to-text",
-      );
       const llmModels = downloaded.filter((m) => m.modelType === "llm");
-      // Voice model available if: downloaded Whisper model OR platform STT available
-      setHasVoiceModel(sttModels.length > 0 || hasPlatformSTT);
       setHasLLMModel(llmModels.length > 0);
     };
     checkModels();
-  }, [modelSettings, hasPlatformSTT]);
+  }, [modelSettings]);
 
   /**
    * Correct transcription using LLM for better grammar and accuracy
@@ -505,14 +499,32 @@ export function VoiceRecordButton({
             "No STT model downloaded. Please download a voice model in settings.",
           );
         }
-        const config = getSTTModelById(sttModel.modelId);
+        let config = getSTTModelById(sttModel.modelId);
         if (!config) {
           throw new Error("STT model config not found");
         }
+        // Override remote URLs with local paths (model files are downloaded locally)
+        const modelsDir = getModelsDirectory();
+        const modelDir = `${modelsDir}/${config.folderName}`;
+        config = {
+          ...config,
+          encoderSource: {
+            kind: "remote" as const,
+            url: `${modelDir}/${config.encoderFileName}`,
+          },
+          decoderSource: {
+            kind: "remote" as const,
+            url: `${modelDir}/${config.decoderFileName}`,
+          },
+          tokenizerSource: {
+            kind: "remote" as const,
+            url: `${modelDir}/${config.tokenizerFileName}`,
+          },
+        };
         if (!whisperSTT.isModelLoaded) {
-          await whisperSTT.loadModel(config);
-          // Verify the model actually loaded (loadModel doesn't throw on failure)
-          if (!whisperSTT.isModelLoaded) {
+          // loadModel returns boolean - state updates are async so we can't rely on isModelLoaded
+          const loadSuccess = await whisperSTT.loadModel(config);
+          if (!loadSuccess) {
             throw new Error(
               whisperSTT.error ||
                 "Failed to load voice model. Please try re-downloading it.",
@@ -558,6 +570,29 @@ export function VoiceRecordButton({
         if (!whisperSTT.isModelLoaded) {
           // First try built-in STT models
           let config = getSTTModelById(selectedId);
+
+          // If found, override remote URLs with local paths (model files are downloaded locally)
+          if (config) {
+            const modelsDir = getModelsDirectory();
+            const modelDir = `${modelsDir}/${config.folderName}`;
+
+            // Override source paths to use local files
+            config = {
+              ...config,
+              encoderSource: {
+                kind: "remote" as const,
+                url: `${modelDir}/${config.encoderFileName}`,
+              },
+              decoderSource: {
+                kind: "remote" as const,
+                url: `${modelDir}/${config.decoderFileName}`,
+              },
+              tokenizerSource: {
+                kind: "remote" as const,
+                url: `${modelDir}/${config.tokenizerFileName}`,
+              },
+            };
+          }
 
           // If not found, check if it's a custom local STT model
           if (!config) {
@@ -668,9 +703,9 @@ export function VoiceRecordButton({
           if (!config) {
             throw new Error("Selected STT model config not found");
           }
-          await whisperSTT.loadModel(config);
-          // Verify the model actually loaded (loadModel doesn't throw on failure)
-          if (!whisperSTT.isModelLoaded) {
+          // loadModel returns boolean - state updates are async so we can't rely on isModelLoaded
+          const loadSuccess = await whisperSTT.loadModel(config);
+          if (!loadSuccess) {
             throw new Error(
               whisperSTT.error ||
                 "Failed to load voice model. Please try re-downloading it.",
@@ -715,14 +750,8 @@ export function VoiceRecordButton({
     // If transcribing, ignore
     if (isTranscribing) return;
 
-    // Check if voice model is downloaded
-    if (!hasVoiceModel) {
-      // Open model manager to voice tab
-      onNoModelAvailable();
-      return;
-    }
-
     // Ensure model is loaded first - returns which STT to use
+    // This does a fresh async check for available models, avoiding stale state issues
     const result = await ensureModelLoaded();
     if (!result.success) {
       // Model failed to load - might be corrupted, ask user to re-download
@@ -751,7 +780,6 @@ export function VoiceRecordButton({
     isRecording,
     isTranscribing,
     isModelLoading,
-    hasVoiceModel,
     ensureModelLoaded,
     platformSTT,
     whisperSTT,

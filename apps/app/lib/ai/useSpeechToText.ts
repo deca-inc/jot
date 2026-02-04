@@ -105,7 +105,7 @@ export interface UseSpeechToTextResult {
   /** Audio metering level (0-1) for visualization, only valid while recording */
   meteringLevel: number;
   /** Load the STT model */
-  loadModel: (config: SpeechToTextModelConfig) => Promise<void>;
+  loadModel: (config: SpeechToTextModelConfig) => Promise<boolean>;
   /** Unload the STT model */
   unloadModel: () => void;
   /** Start recording and transcribing */
@@ -383,30 +383,34 @@ export function useSpeechToText(
 
   /**
    * Load the STT model
+   * Returns true if loading succeeded, false otherwise
    */
-  const loadModel = useCallback(async (config: SpeechToTextModelConfig) => {
-    try {
-      setError(null);
+  const loadModel = useCallback(
+    async (config: SpeechToTextModelConfig): Promise<boolean> => {
+      try {
+        setError(null);
 
-      // Create new module instance
-      const sttModule = new SpeechToTextModule();
-      const rneConfig = toRNEConfig(config);
+        // Create new module instance
+        const sttModule = new SpeechToTextModule();
+        const rneConfig = toRNEConfig(config);
 
-      console.log("[useSpeechToText] Loading model...", config.modelId);
-      await sttModule.load(rneConfig);
+        await sttModule.load(rneConfig);
 
-      sttModuleRef.current = sttModule;
-      isMultilingualRef.current = config.isMultilingual;
-      setIsModelLoaded(true);
-      console.log("[useSpeechToText] Model loaded successfully");
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to load STT model";
-      console.error("[useSpeechToText] Load error:", message);
-      setError(message);
-      onErrorRef.current?.(message);
-    }
-  }, []);
+        sttModuleRef.current = sttModule;
+        isMultilingualRef.current = config.isMultilingual;
+        setIsModelLoaded(true);
+        return true;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to load STT model";
+        console.error("[useSpeechToText] Load error:", message);
+        setError(message);
+        onErrorRef.current?.(message);
+        return false;
+      }
+    },
+    [],
+  );
 
   /**
    * Unload the STT model
@@ -432,9 +436,6 @@ export function useSpeechToText(
 
     try {
       const waveform = await readWavFile(uri);
-      console.log(
-        `[useSpeechToText] Transcribing ${waveform.length} samples...`,
-      );
       const options = isMultilingualRef.current
         ? { language: "en" as const }
         : undefined;
@@ -458,11 +459,7 @@ export function useSpeechToText(
     try {
       if (Platform.OS === "android" && isPCMRecordingAvailable()) {
         // Android: Use native PCM recording
-        console.log("[useSpeechToText] Processing chunk (Android)...");
         const result = await stopPCMRecording();
-        console.log(
-          `[useSpeechToText] Chunk recorded: ${result.duration}s, ${result.size} bytes`,
-        );
         // Convert path back to URI format for FileSystem operations
         const chunkUri = `file://${result.path}`;
 
@@ -471,7 +468,6 @@ export function useSpeechToText(
 
         // Transcribe this chunk
         const rawText = await transcribeFile(chunkUri);
-        console.log(`[useSpeechToText] Raw transcription: "${rawText}"`);
         const chunkText = cleanTranscription(rawText);
 
         // Append to accumulated text (preview only, don't write to canvas yet)
@@ -480,11 +476,6 @@ export function useSpeechToText(
             ? accumulatedTextRef.current + " " + chunkText
             : chunkText;
           setCommittedText(accumulatedTextRef.current);
-          console.log(
-            `[useSpeechToText] Committed text: "${accumulatedTextRef.current}"`,
-          );
-        } else {
-          console.log("[useSpeechToText] Chunk was empty or blank audio");
         }
 
         // Restart recording if still active
@@ -605,16 +596,11 @@ export function useSpeechToText(
       setIsRecording(true);
       isRecordingRef.current = true;
 
-      // Start chunked transcription - process every 3 seconds
-      // Shorter chunks can result in [BLANK_AUDIO] on some devices
+      // Start chunked transcription - process every 2 seconds
       // Final full-file transcription will be done at the end for accuracy
       chunkIntervalRef.current = setInterval(() => {
         processChunk();
-      }, 3000);
-
-      console.log(
-        "[useSpeechToText] Recording started with chunked transcription",
-      );
+      }, 2000);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to start recording";
@@ -697,10 +683,6 @@ export function useSpeechToText(
             chunkUrisRef.current.push(finalChunkUri);
 
             // Transcribe final chunk
-            console.log(
-              "[useSpeechToText] Transcribing final chunk:",
-              finalChunkUri,
-            );
             const rawText = await transcribeFile(finalChunkUri);
             const finalChunkText = cleanTranscription(rawText);
 
@@ -715,10 +697,6 @@ export function useSpeechToText(
               err,
             );
           }
-        } else {
-          console.log(
-            "[useSpeechToText] No active recording for final chunk (already processed by chunk interval)",
-          );
         }
       } else {
         // iOS: Stop expo-audio recording
@@ -736,10 +714,6 @@ export function useSpeechToText(
               chunkUrisRef.current.push(finalChunkUri);
 
               // Transcribe final chunk
-              console.log(
-                "[useSpeechToText] Transcribing final chunk:",
-                finalChunkUri,
-              );
               const rawText = await transcribeFile(finalChunkUri);
               const finalChunkText = cleanTranscription(rawText);
 
@@ -767,16 +741,10 @@ export function useSpeechToText(
         try {
           duration = await concatenateWavFiles(chunkUrisRef.current, outputUri);
           audioUri = outputUri;
-          console.log(
-            `[useSpeechToText] Concatenated ${chunkUrisRef.current.length} chunks, duration: ${duration}s`,
-          );
 
           // Final full-file transcription for maximum accuracy
           // This replaces the accumulated chunk transcriptions with a more accurate result
           setPendingText("Finalizing...");
-          console.log(
-            "[useSpeechToText] Running final full-file transcription for accuracy...",
-          );
           const fullFileTranscription = await transcribeFile(outputUri);
           const cleanedFullTranscription = cleanTranscription(
             fullFileTranscription,
@@ -785,16 +753,8 @@ export function useSpeechToText(
           if (cleanedFullTranscription) {
             // Use full-file transcription as it's more accurate than accumulated chunks
             accumulatedTextRef.current = cleanedFullTranscription;
-            console.log(
-              "[useSpeechToText] Final transcription:",
-              cleanedFullTranscription,
-            );
           }
-        } catch (err) {
-          console.error(
-            "[useSpeechToText] Failed to concatenate/transcribe full file:",
-            err,
-          );
+        } catch {
           // Fall back to accumulated chunk transcriptions
         }
 
@@ -825,7 +785,6 @@ export function useSpeechToText(
         duration,
       };
 
-      console.log("[useSpeechToText] Transcription complete");
       onTranscriptionCompleteRef.current?.(result);
 
       return result;
@@ -923,8 +882,6 @@ export function useSpeechToText(
     } catch {
       // Ignore
     }
-
-    console.log("[useSpeechToText] Recording cancelled");
   }, [isRecording, audioRecorder]);
 
   return {
