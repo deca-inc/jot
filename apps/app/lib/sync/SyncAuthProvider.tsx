@@ -15,6 +15,12 @@ import React, {
   type ReactNode,
 } from "react";
 import { useSyncSettings, type SyncSettings } from "../db/syncSettings";
+import {
+  createUEKForRegistration,
+  unwrapUEKForLogin,
+  storeUEK,
+  deleteUEK,
+} from "./encryption/keyManager";
 import * as authService from "./syncAuthService";
 import {
   initializeTokenManager,
@@ -25,12 +31,6 @@ import {
   hasAuthTokens,
   getRefreshToken,
 } from "./syncTokenManager";
-import {
-  createUEKForRegistration,
-  unwrapUEKForLogin,
-  storeUEK,
-  deleteUEK,
-} from "./encryption/keyManager";
 
 export type SyncAuthStatus =
   | "initializing"

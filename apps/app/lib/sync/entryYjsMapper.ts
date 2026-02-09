@@ -15,11 +15,7 @@
 
 import * as Y from "yjs";
 import type { Block, Entry, EntryType } from "../db/entries";
-import type {
-  EncryptedEntry,
-  EncryptedEntryV2,
-  WrappedKey,
-} from "./encryption/crypto";
+import type { EncryptedEntryV2 } from "./encryption/crypto";
 
 /**
  * Metadata structure stored in Yjs document
@@ -233,7 +229,6 @@ export function observeYjsDoc(
 
     // Use setTimeout to batch multiple rapid changes
     setTimeout(() => {
-      console.log(`[YjsMapper] Processing unencrypted doc change`);
       callback(yjsToEntry(ydoc));
       isProcessing = false;
     }, 0);
@@ -244,20 +239,7 @@ export function observeYjsDoc(
   blocks.observe(notifyChange);
 
   // Observe ydoc updates (fires for ALL changes including remote)
-  const onUpdate = (_update: Uint8Array, origin: unknown) => {
-    const originInfo =
-      origin === null
-        ? "null"
-        : origin === ydoc
-          ? "ydoc"
-          : typeof origin === "object" && origin !== null
-            ? origin.constructor?.name || "object"
-            : typeof origin;
-    console.log(
-      `[YjsMapper] Unencrypted ydoc update received, origin:`,
-      originInfo,
-    );
-
+  const onUpdate = () => {
     // Process all updates - the timestamp check in the callback will filter duplicates
     notifyChange();
   };
@@ -278,19 +260,16 @@ export function observeYjsDoc(
 /**
  * Store encrypted entry data in a Yjs document
  *
- * Supports both V1 (RSA-based with wrappedKeys array) and V2 (UEK-based with single wrappedKey).
- *
  * The document stores:
  * - encrypted: true (marker)
- * - version: 1 or 2
+ * - version: 2
  * - ciphertext, nonce, authTag: encrypted content
- * - V1: wrappedKeys: array of wrapped DEKs for authorized devices
- * - V2: wrappedKey: single wrapped DEK for user
+ * - wrappedKey: wrapped DEK for user
  * - createdAt, updatedAt: unencrypted for conflict resolution
  * - deleted: soft delete flag
  */
 export function encryptedEntryToYjs(
-  encrypted: EncryptedEntry | EncryptedEntryV2,
+  encrypted: EncryptedEntryV2,
   createdAt: number,
   updatedAt: number,
   ydoc: Y.Doc,
@@ -303,21 +282,7 @@ export function encryptedEntryToYjs(
     metadata.set("ciphertext", encrypted.ciphertext);
     metadata.set("nonce", encrypted.nonce);
     metadata.set("authTag", encrypted.authTag);
-
-    if (encrypted.version === 2) {
-      // V2: Single wrapped key for user (UEK-based)
-      const v2 = encrypted as EncryptedEntryV2;
-      metadata.set("wrappedKey", v2.wrappedKey);
-      // Clear old V1 field if present
-      metadata.delete("wrappedKeys");
-    } else {
-      // V1: Array of wrapped keys (RSA-based, legacy)
-      const v1 = encrypted as EncryptedEntry;
-      metadata.set("wrappedKeys", v1.wrappedKeys);
-      // Clear V2 field if present
-      metadata.delete("wrappedKey");
-    }
-
+    metadata.set("wrappedKey", encrypted.wrappedKey);
     metadata.set("createdAt", createdAt);
     metadata.set("updatedAt", updatedAt);
     metadata.set("deleted", false);
@@ -326,11 +291,10 @@ export function encryptedEntryToYjs(
 
 /**
  * Extract encrypted entry data from a Yjs document
- * Supports both V1 (RSA-based) and V2 (UEK-based) formats.
  * Returns null if the document is not encrypted or is empty.
  */
 export function yjsToEncryptedEntry(ydoc: Y.Doc): {
-  encrypted: EncryptedEntry | EncryptedEntryV2;
+  encrypted: EncryptedEntryV2;
   createdAt: number;
   updatedAt: number;
   deleted: boolean;
@@ -345,9 +309,15 @@ export function yjsToEncryptedEntry(ydoc: Y.Doc): {
   const ciphertext = metadata.get("ciphertext") as string;
   const nonce = metadata.get("nonce") as string;
   const authTag = metadata.get("authTag") as string;
-  const version = (metadata.get("version") as number) ?? 1;
 
   if (!ciphertext || !nonce || !authTag) {
+    return null;
+  }
+
+  const wrappedKey = metadata.get(
+    "wrappedKey",
+  ) as EncryptedEntryV2["wrappedKey"];
+  if (!wrappedKey) {
     return null;
   }
 
@@ -355,47 +325,18 @@ export function yjsToEncryptedEntry(ydoc: Y.Doc): {
   const updatedAt = (metadata.get("updatedAt") as number) ?? Date.now();
   const deleted = (metadata.get("deleted") as boolean) ?? false;
 
-  if (version === 2) {
-    // V2: UEK-based encryption with single wrapped key
-    const wrappedKey = metadata.get(
-      "wrappedKey",
-    ) as EncryptedEntryV2["wrappedKey"];
-    if (!wrappedKey) {
-      return null;
-    }
-
-    return {
-      encrypted: {
-        ciphertext,
-        nonce,
-        authTag,
-        wrappedKey,
-        version: 2,
-      },
-      createdAt,
-      updatedAt,
-      deleted,
-    };
-  } else {
-    // V1: RSA-based encryption with array of wrapped keys
-    const wrappedKeys = metadata.get("wrappedKeys") as WrappedKey[];
-    if (!wrappedKeys) {
-      return null;
-    }
-
-    return {
-      encrypted: {
-        ciphertext,
-        nonce,
-        authTag,
-        wrappedKeys,
-        version: 1,
-      },
-      createdAt,
-      updatedAt,
-      deleted,
-    };
-  }
+  return {
+    encrypted: {
+      ciphertext,
+      nonce,
+      authTag,
+      wrappedKey,
+      version: 2,
+    },
+    createdAt,
+    updatedAt,
+    deleted,
+  };
 }
 
 /**
@@ -404,25 +345,6 @@ export function yjsToEncryptedEntry(ydoc: Y.Doc): {
 export function isYjsEncrypted(ydoc: Y.Doc): boolean {
   const metadata = ydoc.getMap<unknown>("metadata");
   return (metadata.get("encrypted") as boolean) === true;
-}
-
-/**
- * Update wrapped keys in an encrypted Yjs document (for sharing)
- */
-export function updateYjsWrappedKeys(
-  ydoc: Y.Doc,
-  wrappedKeys: WrappedKey[],
-): void {
-  const metadata = ydoc.getMap<unknown>("metadata");
-
-  if (!metadata.get("encrypted")) {
-    throw new Error("Cannot update wrapped keys on non-encrypted document");
-  }
-
-  ydoc.transact(() => {
-    metadata.set("wrappedKeys", wrappedKeys);
-    metadata.set("updatedAt", Date.now());
-  });
 }
 
 /**
@@ -439,13 +361,12 @@ export function markEncryptedYjsDeleted(ydoc: Y.Doc): void {
 /**
  * Observe changes to an encrypted Yjs document
  * Returns the encrypted payload for decryption by the caller
- * Supports both V1 and V2 encryption formats.
  */
 export function observeEncryptedYjsDoc(
   ydoc: Y.Doc,
   callback: (
     data: {
-      encrypted: EncryptedEntry | EncryptedEntryV2;
+      encrypted: EncryptedEntryV2;
       createdAt: number;
       updatedAt: number;
       deleted: boolean;
@@ -463,35 +384,20 @@ export function observeEncryptedYjsDoc(
 
     // Use setTimeout to batch multiple rapid changes
     setTimeout(() => {
-      console.log(`[YjsMapper] Processing encrypted doc change`);
       callback(yjsToEncryptedEntry(ydoc));
       isProcessing = false;
     }, 0);
   };
 
   // Observe Y.Map changes (fires for local changes)
-  const onMapChange = (event: Y.YMapEvent<unknown>) => {
-    const changedKeys = Array.from(event.keysChanged);
-    console.log(`[YjsMapper] Encrypted doc Y.Map changed, keys:`, changedKeys);
+  const onMapChange = () => {
     notifyChange();
   };
 
   // Observe ydoc updates (fires for ALL changes including remote)
   // This is the key for real-time sync - remote changes come as raw updates
-  const onUpdate = (_update: Uint8Array, origin: unknown) => {
-    // Log the origin for debugging
-    const originInfo =
-      origin === null
-        ? "null"
-        : origin === ydoc
-          ? "ydoc"
-          : typeof origin === "object" && origin !== null
-            ? origin.constructor?.name || "object"
-            : typeof origin;
-    console.log(`[YjsMapper] Ydoc update received, origin:`, originInfo);
-
+  const onUpdate = () => {
     // Process all updates - the timestamp check in the callback will filter duplicates
-    // HocuspocusProvider, local transactions, etc. all come through here
     notifyChange();
   };
 

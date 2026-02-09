@@ -119,14 +119,8 @@ export class SyncManager {
       this.db,
       (item) => this.processSyncQueueItem(item),
       {
-        onQueueEmpty: () => {
-          console.log("[SyncManager] Sync queue empty");
-        },
         onSyncFailed: (item, error) => {
-          console.error(
-            `[SyncManager] Sync failed for ${item.entryUuid}:`,
-            error,
-          );
+          console.error(`[SyncManager] Sync failed for entry:`, error);
           this.callbacks.onError?.(error);
         },
       },
@@ -148,16 +142,10 @@ export class SyncManager {
    */
   private async initializeE2EE(): Promise<void> {
     try {
-      console.log("[SyncManager] Initializing E2EE...");
-
       // Verify UEK exists (set up during login/registration)
       const hasKey = await hasUEK();
       if (!hasKey) {
-        console.warn(
-          "[SyncManager] UEK not found - E2EE may not work. Please re-login.",
-        );
-      } else {
-        console.log("[SyncManager] E2EE initialized (UEK available)");
+        console.warn("[SyncManager] UEK not found - E2EE may not work");
       }
     } catch (error) {
       console.error("[SyncManager] E2EE initialization failed:", error);
@@ -182,7 +170,6 @@ export class SyncManager {
 
     // Check if sync is disabled due to auth failures
     if (this.client.isSyncDisabled()) {
-      console.warn("[SyncManager] Sync disabled due to auth failures");
       this.updateStatus("error");
       throw new Error("Sync disabled due to authentication failures");
     }
@@ -191,11 +178,7 @@ export class SyncManager {
 
     try {
       // Fetch server manifest
-      console.log("[SyncManager] Fetching server manifest...");
       const serverManifest = await this.fetchServerManifest();
-      console.log(
-        `[SyncManager] Server has ${serverManifest.length} documents`,
-      );
 
       // Create lookup map for server documents
       const serverDocs = new Map<string, number>();
@@ -205,9 +188,6 @@ export class SyncManager {
 
       // Get local entries with UUIDs
       const localEntries = await this.getLocalEntriesWithUuids();
-      console.log(
-        `[SyncManager] Local has ${localEntries.length} entries with UUIDs`,
-      );
 
       // Determine what needs syncing
       const toPush: Entry[] = []; // Local entries to push to server
@@ -236,50 +216,24 @@ export class SyncManager {
         toPull.push(uuid);
       }
 
-      console.log(
-        `[SyncManager] Sync plan: ${toPush.length} to push, ${toPull.length} to pull`,
-      );
-
       // Push local entries
-      let synced = 0;
-      let failed = 0;
-
       for (const entry of toPush) {
         try {
-          console.log(
-            `[SyncManager] Pushing entry ${entry.id} (${synced + 1}/${toPush.length})...`,
-          );
           await this.syncEntry(entry);
-          synced++;
         } catch (error) {
-          console.error(
-            `[SyncManager] Failed to sync entry ${entry.id}:`,
-            error,
-          );
-          failed++;
+          console.error("[SyncManager] Failed to sync entry:", error);
         }
       }
 
       // Pull server-only entries (create local entries from Yjs docs)
-      let pulled = 0;
-      let pullFailed = 0;
-
       for (const uuid of toPull) {
         try {
-          console.log(
-            `[SyncManager] Pulling entry ${uuid} (${pulled + 1}/${toPull.length})...`,
-          );
           await this.pullServerEntry(uuid);
-          pulled++;
         } catch (error) {
-          console.error(`[SyncManager] Failed to pull entry ${uuid}:`, error);
-          pullFailed++;
+          console.error("[SyncManager] Failed to pull entry:", error);
         }
       }
 
-      console.log(
-        `[SyncManager] Sync complete: ${synced} pushed, ${pulled} pulled, ${failed + pullFailed} failed`,
-      );
       this.updateStatus("synced");
     } catch (error) {
       console.error("[SyncManager] Sync failed:", error);
@@ -360,17 +314,14 @@ export class SyncManager {
    */
   async syncOnOpen(entryId: number): Promise<void> {
     if (!this.client || !this.isInitialized) {
-      console.log("[SyncManager] syncOnOpen: not initialized");
       return;
     }
 
     if (this.client.isSyncDisabled()) {
-      console.log("[SyncManager] syncOnOpen: sync disabled");
       return;
     }
 
     if (!this.userId) {
-      console.log("[SyncManager] syncOnOpen: user ID not set");
       return;
     }
 
@@ -380,10 +331,6 @@ export class SyncManager {
       uuid = await this.generateAndStoreUuid(entryId);
     }
 
-    console.log(
-      `[SyncManager] syncOnOpen: connecting to entry ${entryId} (${uuid})`,
-    );
-
     try {
       // Connect to the document and wait for sync
       const ydoc = await this.client.connectDocument(uuid);
@@ -392,9 +339,6 @@ export class SyncManager {
       // Get local entry for comparison
       const entry = await this.getLocalEntry(entryId);
       if (!entry) {
-        console.log(
-          `[SyncManager] syncOnOpen: entry ${entryId} not found locally`,
-        );
         return;
       }
 
@@ -403,15 +347,9 @@ export class SyncManager {
 
       if (remoteUpdatedAt === 0 || entry.updatedAt > remoteUpdatedAt) {
         // New document or local is newer - encrypt and push
-        console.log(
-          `[SyncManager] syncOnOpen: pushing encrypted state to server`,
-        );
         await this.pushEncryptedEntry(entry, ydoc);
       } else if (remoteUpdatedAt > entry.updatedAt) {
         // Remote is newer - decrypt and apply changes
-        console.log(
-          `[SyncManager] syncOnOpen: remote is newer, decrypting and applying`,
-        );
         await this.pullAndApplyEncryptedChanges(entryId, ydoc);
       }
       // If timestamps are equal, documents are in sync
@@ -422,15 +360,8 @@ export class SyncManager {
 
       // Always notify that entry was updated to refresh UI cache
       this.callbacks.onEntryUpdated?.(entryId, uuid);
-
-      console.log(
-        `[SyncManager] syncOnOpen: entry ${entryId} synced and observing`,
-      );
     } catch (error) {
-      console.error(
-        `[SyncManager] syncOnOpen failed for entry ${entryId}:`,
-        error,
-      );
+      console.error("[SyncManager] syncOnOpen failed:", error);
       // Don't throw - sync failures shouldn't block editing
     }
   }
@@ -444,10 +375,6 @@ export class SyncManager {
     if (!uuid) {
       return;
     }
-
-    console.log(
-      `[SyncManager] disconnectOnClose: disconnecting entry ${entryId} (${uuid})`,
-    );
 
     // Remove observer
     const unobserve = this.entryObservers.get(uuid);
@@ -510,15 +437,11 @@ export class SyncManager {
       throw new Error("Cannot encrypt entry: userId not set");
     }
 
-    console.log(`[SyncManager] Encrypting entry ${entry.id}...`);
-
     // Encrypt the entry with UEK (V2 encryption)
     const encrypted = await encryptEntry(entry, this.userId);
 
     // Store encrypted data in Yjs
     encryptedEntryToYjs(encrypted, entry.createdAt, entry.updatedAt, ydoc);
-
-    console.log(`[SyncManager] Entry ${entry.id} encrypted and pushed (v2)`);
   }
 
   /**
@@ -535,7 +458,6 @@ export class SyncManager {
     // Check if document is encrypted
     if (!isYjsEncrypted(ydoc)) {
       // Fall back to unencrypted handling for legacy documents
-      console.log(`[SyncManager] Document not encrypted, using legacy sync`);
       const remoteEntry = yjsToEntry(ydoc, { id: entryId });
       await this.applyRemoteChanges(entryId, remoteEntry);
       return;
@@ -544,17 +466,14 @@ export class SyncManager {
     // Extract encrypted data
     const encryptedData = yjsToEncryptedEntry(ydoc);
     if (!encryptedData) {
-      console.warn(`[SyncManager] Could not extract encrypted data`);
+      console.warn("[SyncManager] Could not extract encrypted data");
       return;
     }
 
     if (encryptedData.deleted) {
-      console.log(`[SyncManager] Entry ${entryId} was deleted remotely`);
       await this.handleRemoteDeletion(entryId);
       return;
     }
-
-    console.log(`[SyncManager] Decrypting entry ${entryId}...`);
 
     // Decrypt the entry
     const decrypted = await decryptEntry(encryptedData.encrypted, this.userId);
@@ -565,8 +484,6 @@ export class SyncManager {
       createdAt: encryptedData.createdAt,
       updatedAt: encryptedData.updatedAt,
     });
-
-    console.log(`[SyncManager] Entry ${entryId} decrypted and applied`);
   }
 
   /**
@@ -585,9 +502,6 @@ export class SyncManager {
     }
 
     const encrypted = isYjsEncrypted(ydoc);
-    console.log(
-      `[SyncManager] Setting up observer for entry ${entryId} (${uuid}), encrypted: ${encrypted}`,
-    );
 
     // Track last seen updatedAt to avoid processing our own changes
     let lastSeenUpdatedAt = getYjsUpdatedAt(ydoc);
@@ -595,28 +509,14 @@ export class SyncManager {
     if (encrypted && this.userId) {
       // Encrypted document observer
       const unobserve = observeEncryptedYjsDoc(ydoc, async (data) => {
-        console.log(
-          `[SyncManager] Encrypted observer fired for entry ${entryId}, data:`,
-          data ? "present" : "null",
-        );
-
         if (!data || !this.userId) {
-          console.log(`[SyncManager] Observer: skipping - no data or userId`);
           return;
         }
-
-        console.log(
-          `[SyncManager] Observer: remote=${data.updatedAt} local=${lastSeenUpdatedAt} diff=${data.updatedAt - lastSeenUpdatedAt}ms`,
-        );
 
         if (data.updatedAt <= lastSeenUpdatedAt) {
-          console.log(`[SyncManager] Observer: skipping - no newer changes`);
           return;
         }
 
-        console.log(
-          `[SyncManager] Observer: processing encrypted change for entry ${entryId}`,
-        );
         lastSeenUpdatedAt = data.updatedAt;
 
         if (data.deleted) {
@@ -631,12 +531,9 @@ export class SyncManager {
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
           });
-          console.log(
-            `[SyncManager] Observer: applied encrypted changes for entry ${entryId}`,
-          );
         } catch (error) {
           console.error(
-            `[SyncManager] Failed to decrypt observed changes:`,
+            "[SyncManager] Failed to decrypt observed changes:",
             error,
           );
         }
@@ -647,17 +544,11 @@ export class SyncManager {
       // Unencrypted document observer (fallback)
       const unobserve = observeYjsDoc(ydoc, async (remoteEntry) => {
         const currentUpdatedAt = remoteEntry.updatedAt ?? 0;
-        console.log(
-          `[SyncManager] Unencrypted observer fired for entry ${entryId}`,
-        );
 
         if (currentUpdatedAt <= lastSeenUpdatedAt) {
           return;
         }
 
-        console.log(
-          `[SyncManager] Observer: processing unencrypted change for entry ${entryId}`,
-        );
         lastSeenUpdatedAt = currentUpdatedAt;
 
         if (remoteEntry.deleted) {
@@ -666,9 +557,6 @@ export class SyncManager {
         }
 
         await this.applyRemoteChanges(entryId, remoteEntry);
-        console.log(
-          `[SyncManager] Observer: applied unencrypted changes for entry ${entryId}`,
-        );
       });
 
       this.entryObservers.set(uuid, unobserve);
@@ -683,7 +571,7 @@ export class SyncManager {
       await this.db.runAsync("DELETE FROM entries WHERE id = ?", [entryId]);
       this.callbacks.onEntryDeleted?.(entryId, "");
     } catch (error) {
-      console.error(`[SyncManager] Failed to delete entry ${entryId}:`, error);
+      console.error("[SyncManager] Failed to delete entry:", error);
     }
   }
 
@@ -703,7 +591,7 @@ export class SyncManager {
     const ydoc = await this.client.connectDocument(uuid);
     const synced = await this.client.waitForSync(uuid);
     if (!synced) {
-      console.warn(`[SyncManager] pullServerEntry: sync timeout for ${uuid}`);
+      console.warn("[SyncManager] pullServerEntry: sync timeout");
       this.client.disconnectDocument(uuid);
       return;
     }
@@ -711,9 +599,6 @@ export class SyncManager {
     // Check if document has data
     const remoteUpdatedAt = getYjsUpdatedAt(ydoc);
     if (remoteUpdatedAt === 0) {
-      console.log(
-        `[SyncManager] pullServerEntry: document ${uuid} is empty, skipping`,
-      );
       this.client.disconnectDocument(uuid);
       return;
     }
@@ -727,35 +612,25 @@ export class SyncManager {
       const encryptedData = yjsToEncryptedEntry(ydoc);
       if (!encryptedData) {
         console.warn(
-          `[SyncManager] pullServerEntry: could not extract encrypted data for ${uuid}`,
+          "[SyncManager] pullServerEntry: could not extract encrypted data",
         );
         this.client.disconnectDocument(uuid);
         return;
       }
 
       if (encryptedData.deleted) {
-        console.log(
-          `[SyncManager] pullServerEntry: document ${uuid} is deleted, skipping`,
-        );
         this.client.disconnectDocument(uuid);
         return;
       }
 
-      console.log(`[SyncManager] pullServerEntry: decrypting ${uuid}...`);
       entryData = await decryptEntry(encryptedData.encrypted, this.userId);
       createdAt = encryptedData.createdAt;
       updatedAt = encryptedData.updatedAt;
     } else {
       // Legacy unencrypted document
-      console.log(
-        `[SyncManager] pullServerEntry: ${uuid} is unencrypted (legacy)`,
-      );
       const remoteEntry = yjsToEntry(ydoc);
 
       if (remoteEntry.deleted) {
-        console.log(
-          `[SyncManager] pullServerEntry: document ${uuid} is deleted, skipping`,
-        );
         this.client.disconnectDocument(uuid);
         return;
       }
@@ -792,9 +667,6 @@ export class SyncManager {
     );
 
     const entryId = result.lastInsertRowId;
-    console.log(
-      `[SyncManager] pullServerEntry: created local entry ${entryId} for ${uuid}`,
-    );
 
     // Set up observer for future changes
     this.observeDocument(uuid, entryId, ydoc);
@@ -972,10 +844,6 @@ export class SyncManager {
       throw new Error("Sync client not initialized");
     }
 
-    console.log(
-      `[SyncManager] Processing queue item: ${item.operation} for ${item.entryUuid}`,
-    );
-
     switch (item.operation) {
       case "create": {
         if (item.entryId === null) {
@@ -984,9 +852,6 @@ export class SyncManager {
         const entry = await this.getLocalEntry(item.entryId);
         if (!entry) {
           // Entry was deleted before sync completed - skip
-          console.log(
-            `[SyncManager] Entry ${item.entryId} not found, skipping create`,
-          );
           return;
         }
         const ydoc = await this.client.connectDocument(item.entryUuid);
@@ -1006,9 +871,6 @@ export class SyncManager {
         // Get current local entry state
         const currentEntry = await this.getLocalEntry(item.entryId);
         if (!currentEntry) {
-          console.log(
-            `[SyncManager] Entry ${item.entryId} not found, skipping update`,
-          );
           return;
         }
 
@@ -1018,11 +880,7 @@ export class SyncManager {
           item.entryUpdatedAtWhenQueued &&
           currentEntry.updatedAt > item.entryUpdatedAtWhenQueued
         ) {
-          console.log(
-            `[SyncManager] Entry ${item.entryId} was modified after queue (` +
-              `queued at ${item.entryUpdatedAtWhenQueued}, now ${currentEntry.updatedAt}). ` +
-              `Skipping stale update, will sync current state.`,
-          );
+          // Entry was modified after queue - skip stale update
           return;
         }
 
@@ -1047,12 +905,8 @@ export class SyncManager {
           try {
             ydoc = await this.client.connectDocument(item.entryUuid);
             await this.client.waitForSync(item.entryUuid);
-          } catch (error) {
-            // If we can't connect, the document might not exist on server yet
-            console.log(
-              `[SyncManager] Could not connect to delete ${item.entryUuid}:`,
-              error,
-            );
+          } catch {
+            // If we can't connect, the document might not exist on server yet - skip
           }
         }
         if (ydoc) {

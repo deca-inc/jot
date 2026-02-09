@@ -2,12 +2,12 @@
  * E2EE Crypto Utilities
  *
  * Provides encryption primitives for end-to-end encrypted sync:
- * - Keypair generation (RSA-OAEP for key exchange)
  * - Symmetric encryption (AES-256-GCM for content)
- * - Key wrapping (encrypt DEK with RSA public key)
+ * - UEK (User Encryption Key) management
+ * - DEK wrapping with UEK
  *
  * Each entry is encrypted with a unique DEK (Data Encryption Key).
- * The DEK is wrapped with each authorized user's public key using RSA-OAEP.
+ * The DEK is wrapped with the user's UEK using AES-GCM.
  *
  * Uses react-native-quick-crypto for native crypto operations.
  */
@@ -18,7 +18,6 @@ import * as Crypto from "expo-crypto";
 const DEK_SIZE = 32; // 256 bits for AES-256
 const NONCE_SIZE = 12; // 96 bits for GCM
 const AUTH_TAG_SIZE = 16; // 128 bits for GCM
-const RSA_KEY_SIZE = 2048; // RSA key size (2048 for performance, secure for DEK wrapping)
 const UEK_SIZE = 32; // 256 bits for UEK
 const SALT_SIZE = 32; // 256 bits for PBKDF2 salt
 const PBKDF2_ITERATIONS = 600000; // 600K iterations for PBKDF2
@@ -129,141 +128,6 @@ export async function decryptContent(
   );
 
   return new TextDecoder().decode(decryptedBuffer);
-}
-
-/**
- * Encrypted entry structure
- */
-export interface EncryptedEntry {
-  /** Encrypted content (base64) */
-  ciphertext: string;
-  /** Nonce/IV for AES-GCM (base64) */
-  nonce: string;
-  /** Authentication tag (base64) */
-  authTag: string;
-  /** Wrapped DEKs for each authorized user */
-  wrappedKeys: WrappedKey[];
-  /** Encryption version for future upgrades */
-  version: 1;
-}
-
-/**
- * A DEK wrapped for a specific device
- */
-export interface WrappedKey {
-  /** User ID who can decrypt */
-  userId: string;
-  /** Device ID for multi-device support */
-  deviceId: string;
-  /** DEK encrypted with device's RSA public key (base64) */
-  wrappedDek: string;
-}
-
-/**
- * User's encryption keypair
- */
-export interface UserKeypair {
-  /** Public key for receiving encrypted content (JWK JSON string) */
-  publicKey: string;
-  /** Private key for decryption (JWK JSON string) - stored securely */
-  privateKey: string;
-  /** Key type identifier */
-  keyType: "RSA-OAEP-JWK" | "RSA-OAEP" | "ECDH-P256";
-}
-
-/**
- * Generate a new RSA-OAEP keypair for a user
- * Uses JWK format for better cross-platform compatibility
- */
-export async function generateUserKeypair(): Promise<UserKeypair> {
-  const keyPair = await crypto.subtle.generateKey(
-    {
-      name: "RSA-OAEP",
-      modulusLength: RSA_KEY_SIZE,
-      publicExponent: new Uint8Array([1, 0, 1]), // 65537
-      hash: "SHA-256",
-    },
-    true, // extractable
-    ["encrypt", "decrypt"],
-  );
-
-  // Export as JWK for better compatibility with react-native-quick-crypto
-  const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-  const privateKeyJwk = await crypto.subtle.exportKey(
-    "jwk",
-    keyPair.privateKey,
-  );
-
-  return {
-    publicKey: JSON.stringify(publicKeyJwk),
-    privateKey: JSON.stringify(privateKeyJwk),
-    keyType: "RSA-OAEP-JWK",
-  };
-}
-
-/**
- * Wrap a DEK for a recipient using their RSA public key (RSA-OAEP)
- *
- * @param dek - The DEK to wrap
- * @param recipientPublicKey - Recipient's RSA public key (JWK JSON string)
- * @returns Wrapped DEK
- */
-export async function wrapDEK(
-  dek: Uint8Array,
-  recipientPublicKey: string,
-): Promise<{ wrappedDek: string }> {
-  // Import recipient's public key (JWK format)
-  const publicKeyJwk = JSON.parse(recipientPublicKey) as JsonWebKey;
-  const recipientKey = await crypto.subtle.importKey(
-    "jwk",
-    publicKeyJwk,
-    { name: "RSA-OAEP", hash: "SHA-256" },
-    false,
-    ["encrypt"],
-  );
-
-  // Encrypt DEK with RSA-OAEP
-  const wrappedDekBuffer = await crypto.subtle.encrypt(
-    { name: "RSA-OAEP" },
-    recipientKey,
-    dek.buffer as ArrayBuffer,
-  );
-
-  return {
-    wrappedDek: uint8ArrayToBase64(new Uint8Array(wrappedDekBuffer)),
-  };
-}
-
-/**
- * Unwrap a DEK using private key
- *
- * @param wrappedDek - The wrapped DEK (base64)
- * @param privateKey - Recipient's RSA private key (JWK JSON string)
- * @returns The unwrapped DEK
- */
-export async function unwrapDEK(
-  wrappedDek: string,
-  privateKey: string,
-): Promise<Uint8Array> {
-  // Import private key (JWK format)
-  const privateKeyJwk = JSON.parse(privateKey) as JsonWebKey;
-  const privKey = await crypto.subtle.importKey(
-    "jwk",
-    privateKeyJwk,
-    { name: "RSA-OAEP", hash: "SHA-256" },
-    false,
-    ["decrypt"],
-  );
-
-  // Decrypt DEK with RSA-OAEP
-  const wrappedDekBytes = base64ToUint8Array(wrappedDek);
-  const dekBuffer = await crypto.subtle.decrypt(
-    { name: "RSA-OAEP" },
-    privKey,
-    wrappedDekBytes.buffer as ArrayBuffer,
-  );
-
-  return new Uint8Array(dekBuffer);
 }
 
 // ============================================================================
@@ -508,7 +372,10 @@ export async function unwrapDEKSymmetric(
 }
 
 /**
- * Encrypted entry structure (version 2 - UEK-based)
+ * Encrypted entry structure (UEK-based)
+ *
+ * Each entry is encrypted with a unique DEK (Data Encryption Key).
+ * The DEK is wrapped with the user's UEK using AES-GCM.
  */
 export interface EncryptedEntryV2 {
   /** Encrypted content (base64) */

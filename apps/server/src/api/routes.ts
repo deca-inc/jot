@@ -6,7 +6,6 @@ import { createAuthRouter } from "./auth.js";
 import { createChatRouter } from "./chat.js";
 import { createDevicesRouter } from "./devices.js";
 import { createDocumentsRouter } from "./documents.js";
-import { createKeysRouter } from "./keys.js";
 import { createStatusRouter } from "./status.js";
 
 export interface ApiRoutesConfig {
@@ -25,7 +24,6 @@ export function createApiRoutes(config: ApiRoutesConfig): Router {
   router.use("/auth", createAuthRouter(authService));
   router.use("/assets", createAssetsRouter(db, authService));
   router.use("/documents", createDocumentsRouter(db, authService));
-  router.use("/keys", createKeysRouter(db, authService));
 
   return router;
 }
