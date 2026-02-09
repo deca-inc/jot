@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import express, { Express } from "express";
 import { createApiRoutes } from "../src/api/routes.js";
+import { AuthService } from "../src/auth/authService.js";
 import { migrateTo } from "../src/db/migrations.js";
 import "../src/db/migrations/index.js";
 import { DocumentRepository } from "../src/db/repositories/documents.js";
@@ -15,9 +16,10 @@ describe("API Routes", () => {
     db = new Database(":memory:");
     migrateTo(db, Number.POSITIVE_INFINITY, { verbose: false });
 
+    const authService = new AuthService(db, { jwtSecret: "test-secret" });
     app = express();
     app.use(express.json());
-    app.use("/api", createApiRoutes(db, startTime));
+    app.use("/api", createApiRoutes({ db, startTime, authService }));
   });
 
   afterEach(() => {
@@ -116,9 +118,10 @@ describe("Express App Integration", () => {
     db = new Database(":memory:");
     migrateTo(db, Number.POSITIVE_INFINITY, { verbose: false });
 
+    const authService = new AuthService(db, { jwtSecret: "test-secret" });
     app = express();
     app.use(express.json());
-    app.use("/api", createApiRoutes(db, Date.now()));
+    app.use("/api", createApiRoutes({ db, startTime: Date.now(), authService }));
 
     // Add root endpoint
     app.get("/", (_req, res) => {

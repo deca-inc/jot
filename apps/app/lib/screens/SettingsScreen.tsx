@@ -19,6 +19,7 @@ import {
   Button,
   ThemeControl,
   PendingDownloads,
+  SyncSettingsCard,
 } from "../components";
 import { ModelManagementModal } from "../components/ModelManagementModal";
 import { useModelSettings } from "../db/modelSettings";
@@ -397,6 +398,9 @@ export function SettingsScreen({
             Coming soon
           </Text>
         </Card>
+
+        {/* Sync Settings */}
+        <SyncSettingsCard />
 
         <Card
           variant="borderless"

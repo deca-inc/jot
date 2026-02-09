@@ -1,4 +1,5 @@
 import { SQLiteDatabase } from "expo-sqlite";
+import { generateUuidV7 } from "../utils/uuid";
 import { useDatabase } from "./DatabaseProvider";
 
 export type EntryType = "journal" | "ai_chat" | "countdown";
@@ -85,8 +86,11 @@ export type Block =
 
 export type GenerationStatus = "idle" | "generating" | "completed" | "failed";
 
+export type SyncStatus = "pending" | "synced" | "modified" | "conflict";
+
 export interface Entry {
   id: number;
+  uuid: string | null;
   type: EntryType;
   title: string;
   blocks: Block[];
@@ -103,6 +107,9 @@ export interface Entry {
   generationStartedAt: number | null;
   generationModelId: string | null;
   agentId: number | null;
+  syncStatus: SyncStatus | null;
+  serverUpdatedAt: number | null;
+  lastSyncedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -172,6 +179,7 @@ export class EntryRepository {
    */
   async create(input: CreateEntryInput): Promise<Entry> {
     const now = Date.now();
+    const uuid = generateUuidV7();
     // Default isPinned to true for countdown entries (but not for child entries)
     const isPinned =
       input.isPinned !== undefined
@@ -179,9 +187,10 @@ export class EntryRepository {
         : input.type === "countdown" && !input.parentId;
 
     const result = await this.db.runAsync(
-      `INSERT INTO entries (type, title, blocks, tags, attachments, isFavorite, isPinned, parentId, agentId, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO entries (uuid, type, title, blocks, tags, attachments, isFavorite, isPinned, parentId, agentId, sync_status, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        uuid,
         input.type,
         input.title,
         JSON.stringify(input.blocks),
@@ -191,6 +200,7 @@ export class EntryRepository {
         isPinned ? 1 : 0,
         input.parentId ?? null,
         input.agentId ?? null,
+        "pending",
         now,
         now,
       ],
@@ -645,33 +655,56 @@ export class EntryRepository {
   }
 
   /**
+   * Backfill UUIDs for entries that don't have one
+   * Uses UUIDv7 which embeds timestamp for ordering
+   */
+  async backfillUuids(): Promise<number> {
+    // Get all entries without UUIDs
+    const entriesWithoutUuid = await this.db.getAllAsync<{
+      id: number;
+      createdAt: number;
+    }>(
+      `SELECT id, createdAt FROM entries WHERE uuid IS NULL ORDER BY createdAt ASC`,
+    );
+
+    let count = 0;
+    for (const entry of entriesWithoutUuid) {
+      const uuid = generateUuidV7();
+      await this.db.runAsync(`UPDATE entries SET uuid = ? WHERE id = ?`, [
+        uuid,
+        entry.id,
+      ]);
+      count++;
+    }
+
+    return count;
+  }
+
+  /**
+   * Get entry by UUID
+   */
+  async getByUuid(uuid: string): Promise<Entry | null> {
+    const result = await this.db.getFirstAsync<EntryRow>(
+      `SELECT * FROM entries WHERE uuid = ?`,
+      [uuid],
+    );
+
+    if (!result) {
+      return null;
+    }
+
+    return this.mapRowToEntry(result);
+  }
+
+  /**
    * Map database row to Entry object
    */
-  private mapRowToEntry(row: {
-    id: number;
-    type: EntryType;
-    title: string;
-    blocks: string;
-    tags: string;
-    attachments: string;
-    isFavorite: number;
-    isPinned: number;
-    archivedAt: number | null;
-    parentId?: number | null;
-    embedding: Uint8Array | null;
-    embeddingModel: string | null;
-    embeddingCreatedAt: number | null;
-    generationStatus?: GenerationStatus | null;
-    generationStartedAt?: number | null;
-    generationModelId?: string | null;
-    agentId?: number | null;
-    createdAt: number;
-    updatedAt: number;
-  }): Entry {
+  private mapRowToEntry(row: EntryRow): Entry {
     const parsedBlocks = JSON.parse(row.blocks) as Block[];
 
     return {
       id: row.id,
+      uuid: row.uuid ?? null,
       type: row.type,
       title: row.title,
       blocks: parsedBlocks,
@@ -688,10 +721,42 @@ export class EntryRepository {
       generationStartedAt: row.generationStartedAt ?? null,
       generationModelId: row.generationModelId ?? null,
       agentId: row.agentId ?? null,
+      syncStatus: (row.sync_status as SyncStatus) ?? null,
+      serverUpdatedAt: row.server_updated_at ?? null,
+      lastSyncedAt: row.last_synced_at ?? null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
   }
+}
+
+/**
+ * Database row type for entries
+ */
+interface EntryRow {
+  id: number;
+  uuid?: string | null;
+  type: EntryType;
+  title: string;
+  blocks: string;
+  tags: string;
+  attachments: string;
+  isFavorite: number;
+  isPinned: number;
+  archivedAt: number | null;
+  parentId?: number | null;
+  embedding: Uint8Array | null;
+  embeddingModel: string | null;
+  embeddingCreatedAt: number | null;
+  generationStatus?: GenerationStatus | null;
+  generationStartedAt?: number | null;
+  generationModelId?: string | null;
+  agentId?: number | null;
+  sync_status?: string | null;
+  server_updated_at?: number | null;
+  last_synced_at?: number | null;
+  createdAt: number;
+  updatedAt: number;
 }
 
 /**

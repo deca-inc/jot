@@ -1,4 +1,4 @@
-import { type MigrationRunner } from "../migrationTypes";
+import { type MigrationRunner, migrationLog } from "../migrationTypes";
 
 /**
  * Repair migration that adds any missing columns that should have been
@@ -6,7 +6,7 @@ import { type MigrationRunner } from "../migrationTypes";
  * were registered after a database was already created.
  */
 export const up: MigrationRunner = async (db) => {
-  console.log("[Migration] Checking for missing columns...");
+  migrationLog("[Migration] Checking for missing columns...");
 
   // Get current columns in entries table
   const tableInfo = await db.getAllAsync<{ name: string }>(
@@ -36,11 +36,11 @@ export const up: MigrationRunner = async (db) => {
 
   for (const column of requiredColumns) {
     if (!existingColumns.has(column.name)) {
-      console.log(`[Migration] Adding missing column: ${column.name}`);
+      migrationLog(`[Migration] Adding missing column: ${column.name}`);
       try {
         await db.execAsync(column.sql);
       } catch (err) {
-        console.warn(`[Migration] Could not add column ${column.name}:`, err);
+        migrationLog(`[Migration] Could not add column ${column.name}:`, err);
       }
     }
   }
@@ -55,10 +55,10 @@ export const up: MigrationRunner = async (db) => {
     // Ignore if already exists
   }
 
-  console.log("[Migration] Missing columns check complete");
+  migrationLog("[Migration] Missing columns check complete");
 };
 
 export const down: MigrationRunner = async (_db) => {
   // No-op - this is a repair migration
-  console.log("[Migration] Repair migration down - no action needed");
+  migrationLog("[Migration] Repair migration down - no action needed");
 };

@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 
-export type DeviceType = "owner" | "guest";
+export type DeviceType = "owner" | "guest" | "authenticated";
 
 export interface Session {
   id: string;

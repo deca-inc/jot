@@ -1,9 +1,11 @@
+import { randomBytes } from "crypto";
 import { createServer } from "http";
 import { Hocuspocus } from "@hocuspocus/server";
 import Database from "better-sqlite3";
 import express from "express";
 import { WebSocketServer } from "ws";
 import { createApiRoutes } from "./api/routes.js";
+import { AuthService } from "./auth/authService.js";
 import { createHocuspocusConfig } from "./sync/hocuspocus.js";
 import { logger, setLogLevel, LogLevel } from "./utils/logger.js";
 
@@ -11,12 +13,14 @@ export interface ServerConfig {
   port: number;
   db: Database.Database;
   verbose?: boolean;
+  jwtSecret?: string;
 }
 
 export interface JotServer {
   start(): Promise<void>;
   stop(): Promise<void>;
   getPort(): number;
+  getAuthService(): AuthService;
 }
 
 export function createServer_impl(config: ServerConfig): JotServer {
@@ -28,11 +32,22 @@ export function createServer_impl(config: ServerConfig): JotServer {
     setLogLevel("debug");
   }
 
+  // Initialize JWT secret
+  const jwtSecret = config.jwtSecret || process.env.JWT_SECRET || randomBytes(32).toString("hex");
+  if (!config.jwtSecret && !process.env.JWT_SECRET) {
+    logger.warn("No JWT_SECRET configured - using randomly generated secret. Sessions will not persist across server restarts.");
+  }
+
+  // Initialize AuthService
+  const authService = new AuthService(config.db, {
+    jwtSecret,
+  });
+
   // Middleware
   app.use(express.json());
 
   // API routes
-  app.use("/api", createApiRoutes(config.db, startTime));
+  app.use("/api", createApiRoutes({ db: config.db, startTime, authService }));
 
   // Health check at root
   app.get("/", (_req, res) => {
@@ -51,7 +66,7 @@ export function createServer_impl(config: ServerConfig): JotServer {
           logger.info(`HTTP server listening on port ${config.port}`);
 
           // Create Hocuspocus with configuration
-          const hocuspocusConfig = createHocuspocusConfig(config.db);
+          const hocuspocusConfig = createHocuspocusConfig(config.db, authService);
           hocuspocus = new Hocuspocus(hocuspocusConfig);
 
           // Create WebSocket server with noServer mode
@@ -97,6 +112,10 @@ export function createServer_impl(config: ServerConfig): JotServer {
 
     getPort() {
       return config.port;
+    },
+
+    getAuthService() {
+      return authService;
     },
   };
 }

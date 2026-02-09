@@ -42,6 +42,7 @@ import { Block } from "../db/entries";
 import { useModelSettings, ModelDownloadInfo } from "../db/modelSettings";
 import { useCustomModels } from "../db/useCustomModels";
 import { useEntry, useCreateEntry, useUpdateEntry } from "../db/useEntries";
+import { useSyncEngine } from "../sync";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useThrottle } from "../utils/debounce";
@@ -478,6 +479,24 @@ export function AIChatComposer({
   // Use ref for entry data too
   const entryRef = useRef(entry);
   entryRef.current = entry;
+
+  // Sync on open - connect to server and sync entry when opened
+  const { syncOnOpen, disconnectOnClose } = useSyncEngine();
+
+  useEffect(() => {
+    if (currentEntryId) {
+      // Non-blocking sync - errors logged but don't block chat
+      syncOnOpen(currentEntryId).catch((err) =>
+        console.warn("[AIChatComposer] Sync on open failed:", err),
+      );
+
+      return () => {
+        disconnectOnClose(currentEntryId).catch((err) =>
+          console.warn("[AIChatComposer] Disconnect failed:", err),
+        );
+      };
+    }
+  }, [currentEntryId, syncOnOpen, disconnectOnClose]);
 
   // Load entry's saved model/agent when opening existing conversation
   useEffect(() => {

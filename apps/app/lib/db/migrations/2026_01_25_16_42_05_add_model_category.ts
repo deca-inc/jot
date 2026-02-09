@@ -1,7 +1,7 @@
-import { type MigrationRunner } from "../migrationTypes";
+import { type MigrationRunner, migrationLog } from "../migrationTypes";
 
 export const up: MigrationRunner = async (db) => {
-  console.log("[Migration] Adding modelCategory column to custom_models...");
+  migrationLog("[Migration] Adding modelCategory column to custom_models...");
 
   // Add modelCategory column to distinguish LLM from STT models
   // Default to 'llm' for existing models
@@ -14,11 +14,11 @@ export const up: MigrationRunner = async (db) => {
     CREATE INDEX IF NOT EXISTS idx_custom_models_category ON custom_models(modelCategory);
   `);
 
-  console.log("[Migration] modelCategory column added successfully");
+  migrationLog("[Migration] modelCategory column added successfully");
 };
 
 export const down: MigrationRunner = async (db) => {
-  console.log("[Migration] Removing modelCategory from custom_models...");
+  migrationLog("[Migration] Removing modelCategory from custom_models...");
 
   await db.execAsync(`
     DROP INDEX IF EXISTS idx_custom_models_category;
@@ -73,5 +73,5 @@ export const down: MigrationRunner = async (db) => {
 
   await db.execAsync(`DROP TABLE custom_models_backup;`);
 
-  console.log("[Migration] modelCategory column removed");
+  migrationLog("[Migration] modelCategory column removed");
 };

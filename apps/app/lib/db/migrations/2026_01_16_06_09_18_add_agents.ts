@@ -1,7 +1,7 @@
-import { type MigrationRunner } from "../migrationTypes";
+import { type MigrationRunner, migrationLog } from "../migrationTypes";
 
 export const up: MigrationRunner = async (db) => {
-  console.log("[Migration] Adding agents table...");
+  migrationLog("[Migration] Adding agents table...");
 
   // Create agents table for custom AI personas
   await db.execAsync(`
@@ -40,11 +40,11 @@ export const up: MigrationRunner = async (db) => {
     );
   `);
 
-  console.log("[Migration] Agents table created successfully");
+  migrationLog("[Migration] Agents table created successfully");
 };
 
 export const down: MigrationRunner = async (_db) => {
   // Note: SQLite doesn't support dropping columns directly
   // We would need to recreate the table without the column
-  console.warn("[Migration] Down migration for agents not fully implemented");
+  migrationLog("[Migration] Down migration for agents not fully implemented");
 };

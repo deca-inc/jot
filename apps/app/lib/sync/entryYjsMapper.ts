@@ -1,0 +1,505 @@
+/**
+ * Entry ↔ Yjs Document Mapper
+ *
+ * Converts between local Entry objects and Yjs documents for sync.
+ * Each entry becomes one Yjs document with:
+ * - metadata: Y.Map for entry metadata (title, type, tags, etc.)
+ * - blocks: Y.Array for content blocks (preserves order, handles concurrent edits)
+ *
+ * With E2EE enabled, the document stores encrypted content:
+ * - metadata.encrypted: true
+ * - metadata.ciphertext, nonce, authTag: encrypted content
+ * - metadata.wrappedKeys: wrapped DEKs for authorized users
+ * - metadata.createdAt, updatedAt: unencrypted for conflict resolution
+ */
+
+import * as Y from "yjs";
+import type { Block, Entry, EntryType } from "../db/entries";
+import type {
+  EncryptedEntry,
+  EncryptedEntryV2,
+  WrappedKey,
+} from "./encryption/crypto";
+
+/**
+ * Metadata structure stored in Yjs document
+ */
+export interface YjsEntryMetadata {
+  title: string;
+  type: EntryType;
+  tags: string[];
+  isFavorite: boolean;
+  isPinned: boolean;
+  archivedAt: number | null;
+  parentId: number | null;
+  agentId: number | null;
+  createdAt: number;
+  updatedAt: number;
+  deleted: boolean; // Soft delete flag for sync
+}
+
+/**
+ * Convert an Entry to Yjs document structure
+ */
+export function entryToYjs(entry: Entry, ydoc: Y.Doc): void {
+  const metadata = ydoc.getMap<unknown>("metadata");
+  const blocks = ydoc.getArray<Block>("blocks");
+
+  // Set metadata
+  metadata.set("title", entry.title);
+  metadata.set("type", entry.type);
+  metadata.set("tags", entry.tags);
+  metadata.set("isFavorite", entry.isFavorite);
+  metadata.set("isPinned", entry.isPinned);
+  metadata.set("archivedAt", entry.archivedAt);
+  metadata.set("parentId", entry.parentId);
+  metadata.set("agentId", entry.agentId);
+  metadata.set("createdAt", entry.createdAt);
+  metadata.set("updatedAt", entry.updatedAt);
+  metadata.set("deleted", false);
+
+  // Clear and set blocks
+  if (blocks.length > 0) {
+    blocks.delete(0, blocks.length);
+  }
+  for (const block of entry.blocks) {
+    blocks.push([block]);
+  }
+}
+
+/**
+ * Convert Yjs document to Entry partial (for updating local DB)
+ */
+export function yjsToEntry(
+  ydoc: Y.Doc,
+  existingEntry?: Partial<Entry>,
+): Partial<Entry> & { deleted?: boolean } {
+  const metadata = ydoc.getMap<unknown>("metadata");
+  const blocks = ydoc.getArray<Block>("blocks");
+
+  return {
+    ...existingEntry,
+    title: (metadata.get("title") as string) ?? existingEntry?.title ?? "",
+    type:
+      (metadata.get("type") as EntryType) ?? existingEntry?.type ?? "journal",
+    tags: (metadata.get("tags") as string[]) ?? existingEntry?.tags ?? [],
+    isFavorite:
+      (metadata.get("isFavorite") as boolean) ??
+      existingEntry?.isFavorite ??
+      false,
+    isPinned:
+      (metadata.get("isPinned") as boolean) ?? existingEntry?.isPinned ?? false,
+    archivedAt:
+      (metadata.get("archivedAt") as number | null) ??
+      existingEntry?.archivedAt ??
+      null,
+    parentId:
+      (metadata.get("parentId") as number | null) ??
+      existingEntry?.parentId ??
+      null,
+    agentId:
+      (metadata.get("agentId") as number | null) ??
+      existingEntry?.agentId ??
+      null,
+    createdAt:
+      (metadata.get("createdAt") as number) ??
+      existingEntry?.createdAt ??
+      Date.now(),
+    updatedAt:
+      (metadata.get("updatedAt") as number) ??
+      existingEntry?.updatedAt ??
+      Date.now(),
+    blocks: blocks.toArray(),
+    deleted: (metadata.get("deleted") as boolean) ?? false,
+  };
+}
+
+/**
+ * Update only the metadata in a Yjs document (not blocks)
+ * Used when metadata changes but content doesn't
+ */
+export function updateYjsMetadata(
+  ydoc: Y.Doc,
+  updates: Partial<YjsEntryMetadata>,
+): void {
+  const metadata = ydoc.getMap<unknown>("metadata");
+
+  ydoc.transact(() => {
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        metadata.set(key, value);
+      }
+    }
+    // Always update updatedAt when metadata changes
+    metadata.set("updatedAt", Date.now());
+  });
+}
+
+/**
+ * Update blocks in a Yjs document
+ * This replaces all blocks - for more granular editing, use Yjs operations directly
+ */
+export function updateYjsBlocks(ydoc: Y.Doc, newBlocks: Block[]): void {
+  const blocks = ydoc.getArray<Block>("blocks");
+  const metadata = ydoc.getMap<unknown>("metadata");
+
+  ydoc.transact(() => {
+    if (blocks.length > 0) {
+      blocks.delete(0, blocks.length);
+    }
+    for (const block of newBlocks) {
+      blocks.push([block]);
+    }
+    metadata.set("updatedAt", Date.now());
+  });
+}
+
+/**
+ * Mark an entry as deleted in the Yjs document (soft delete)
+ */
+export function markYjsDeleted(ydoc: Y.Doc): void {
+  const metadata = ydoc.getMap<unknown>("metadata");
+  ydoc.transact(() => {
+    metadata.set("deleted", true);
+    metadata.set("updatedAt", Date.now());
+  });
+}
+
+/**
+ * Check if a Yjs document is marked as deleted
+ */
+export function isYjsDeleted(ydoc: Y.Doc): boolean {
+  const metadata = ydoc.getMap<unknown>("metadata");
+  return (metadata.get("deleted") as boolean) ?? false;
+}
+
+/**
+ * Get the updatedAt timestamp from a Yjs document
+ */
+export function getYjsUpdatedAt(ydoc: Y.Doc): number {
+  const metadata = ydoc.getMap<unknown>("metadata");
+  return (metadata.get("updatedAt") as number) ?? 0;
+}
+
+/**
+ * Compare timestamps to determine which version is newer
+ * Returns:
+ * - 'local' if local entry is newer
+ * - 'remote' if Yjs document is newer
+ * - 'same' if they have the same timestamp
+ */
+export function compareTimestamps(
+  localUpdatedAt: number,
+  ydoc: Y.Doc,
+): "local" | "remote" | "same" {
+  const remoteUpdatedAt = getYjsUpdatedAt(ydoc);
+
+  if (localUpdatedAt > remoteUpdatedAt) {
+    return "local";
+  } else if (remoteUpdatedAt > localUpdatedAt) {
+    return "remote";
+  }
+  return "same";
+}
+
+/**
+ * Create an empty Yjs document with initialized structure
+ */
+export function createEmptyYjsDoc(): Y.Doc {
+  const ydoc = new Y.Doc();
+  // Initialize the map and array so they exist
+  ydoc.getMap<unknown>("metadata");
+  ydoc.getArray<Block>("blocks");
+  return ydoc;
+}
+
+/**
+ * Observe changes to a Yjs document
+ * Returns an unsubscribe function
+ */
+export function observeYjsDoc(
+  ydoc: Y.Doc,
+  callback: (entry: Partial<Entry> & { deleted?: boolean }) => void,
+): () => void {
+  const metadata = ydoc.getMap<unknown>("metadata");
+  const blocks = ydoc.getArray<Block>("blocks");
+
+  // Track if we're processing to avoid duplicate callbacks
+  let isProcessing = false;
+
+  const notifyChange = () => {
+    if (isProcessing) return;
+    isProcessing = true;
+
+    // Use setTimeout to batch multiple rapid changes
+    setTimeout(() => {
+      console.log(`[YjsMapper] Processing unencrypted doc change`);
+      callback(yjsToEntry(ydoc));
+      isProcessing = false;
+    }, 0);
+  };
+
+  // Observe Y.Map and Y.Array changes (fires for local changes)
+  metadata.observe(notifyChange);
+  blocks.observe(notifyChange);
+
+  // Observe ydoc updates (fires for ALL changes including remote)
+  const onUpdate = (_update: Uint8Array, origin: unknown) => {
+    const originInfo =
+      origin === null
+        ? "null"
+        : origin === ydoc
+          ? "ydoc"
+          : typeof origin === "object" && origin !== null
+            ? origin.constructor?.name || "object"
+            : typeof origin;
+    console.log(
+      `[YjsMapper] Unencrypted ydoc update received, origin:`,
+      originInfo,
+    );
+
+    // Process all updates - the timestamp check in the callback will filter duplicates
+    notifyChange();
+  };
+
+  ydoc.on("update", onUpdate);
+
+  return () => {
+    metadata.unobserve(notifyChange);
+    blocks.unobserve(notifyChange);
+    ydoc.off("update", onUpdate);
+  };
+}
+
+// ============================================================================
+// E2EE Encrypted Entry Functions
+// ============================================================================
+
+/**
+ * Store encrypted entry data in a Yjs document
+ *
+ * Supports both V1 (RSA-based with wrappedKeys array) and V2 (UEK-based with single wrappedKey).
+ *
+ * The document stores:
+ * - encrypted: true (marker)
+ * - version: 1 or 2
+ * - ciphertext, nonce, authTag: encrypted content
+ * - V1: wrappedKeys: array of wrapped DEKs for authorized devices
+ * - V2: wrappedKey: single wrapped DEK for user
+ * - createdAt, updatedAt: unencrypted for conflict resolution
+ * - deleted: soft delete flag
+ */
+export function encryptedEntryToYjs(
+  encrypted: EncryptedEntry | EncryptedEntryV2,
+  createdAt: number,
+  updatedAt: number,
+  ydoc: Y.Doc,
+): void {
+  const metadata = ydoc.getMap<unknown>("metadata");
+
+  ydoc.transact(() => {
+    metadata.set("encrypted", true);
+    metadata.set("version", encrypted.version);
+    metadata.set("ciphertext", encrypted.ciphertext);
+    metadata.set("nonce", encrypted.nonce);
+    metadata.set("authTag", encrypted.authTag);
+
+    if (encrypted.version === 2) {
+      // V2: Single wrapped key for user (UEK-based)
+      const v2 = encrypted as EncryptedEntryV2;
+      metadata.set("wrappedKey", v2.wrappedKey);
+      // Clear old V1 field if present
+      metadata.delete("wrappedKeys");
+    } else {
+      // V1: Array of wrapped keys (RSA-based, legacy)
+      const v1 = encrypted as EncryptedEntry;
+      metadata.set("wrappedKeys", v1.wrappedKeys);
+      // Clear V2 field if present
+      metadata.delete("wrappedKey");
+    }
+
+    metadata.set("createdAt", createdAt);
+    metadata.set("updatedAt", updatedAt);
+    metadata.set("deleted", false);
+  });
+}
+
+/**
+ * Extract encrypted entry data from a Yjs document
+ * Supports both V1 (RSA-based) and V2 (UEK-based) formats.
+ * Returns null if the document is not encrypted or is empty.
+ */
+export function yjsToEncryptedEntry(ydoc: Y.Doc): {
+  encrypted: EncryptedEntry | EncryptedEntryV2;
+  createdAt: number;
+  updatedAt: number;
+  deleted: boolean;
+} | null {
+  const metadata = ydoc.getMap<unknown>("metadata");
+
+  const isEncrypted = metadata.get("encrypted") as boolean;
+  if (!isEncrypted) {
+    return null;
+  }
+
+  const ciphertext = metadata.get("ciphertext") as string;
+  const nonce = metadata.get("nonce") as string;
+  const authTag = metadata.get("authTag") as string;
+  const version = (metadata.get("version") as number) ?? 1;
+
+  if (!ciphertext || !nonce || !authTag) {
+    return null;
+  }
+
+  const createdAt = (metadata.get("createdAt") as number) ?? Date.now();
+  const updatedAt = (metadata.get("updatedAt") as number) ?? Date.now();
+  const deleted = (metadata.get("deleted") as boolean) ?? false;
+
+  if (version === 2) {
+    // V2: UEK-based encryption with single wrapped key
+    const wrappedKey = metadata.get(
+      "wrappedKey",
+    ) as EncryptedEntryV2["wrappedKey"];
+    if (!wrappedKey) {
+      return null;
+    }
+
+    return {
+      encrypted: {
+        ciphertext,
+        nonce,
+        authTag,
+        wrappedKey,
+        version: 2,
+      },
+      createdAt,
+      updatedAt,
+      deleted,
+    };
+  } else {
+    // V1: RSA-based encryption with array of wrapped keys
+    const wrappedKeys = metadata.get("wrappedKeys") as WrappedKey[];
+    if (!wrappedKeys) {
+      return null;
+    }
+
+    return {
+      encrypted: {
+        ciphertext,
+        nonce,
+        authTag,
+        wrappedKeys,
+        version: 1,
+      },
+      createdAt,
+      updatedAt,
+      deleted,
+    };
+  }
+}
+
+/**
+ * Check if a Yjs document contains encrypted data
+ */
+export function isYjsEncrypted(ydoc: Y.Doc): boolean {
+  const metadata = ydoc.getMap<unknown>("metadata");
+  return (metadata.get("encrypted") as boolean) === true;
+}
+
+/**
+ * Update wrapped keys in an encrypted Yjs document (for sharing)
+ */
+export function updateYjsWrappedKeys(
+  ydoc: Y.Doc,
+  wrappedKeys: WrappedKey[],
+): void {
+  const metadata = ydoc.getMap<unknown>("metadata");
+
+  if (!metadata.get("encrypted")) {
+    throw new Error("Cannot update wrapped keys on non-encrypted document");
+  }
+
+  ydoc.transact(() => {
+    metadata.set("wrappedKeys", wrappedKeys);
+    metadata.set("updatedAt", Date.now());
+  });
+}
+
+/**
+ * Mark an encrypted document as deleted
+ */
+export function markEncryptedYjsDeleted(ydoc: Y.Doc): void {
+  const metadata = ydoc.getMap<unknown>("metadata");
+  ydoc.transact(() => {
+    metadata.set("deleted", true);
+    metadata.set("updatedAt", Date.now());
+  });
+}
+
+/**
+ * Observe changes to an encrypted Yjs document
+ * Returns the encrypted payload for decryption by the caller
+ * Supports both V1 and V2 encryption formats.
+ */
+export function observeEncryptedYjsDoc(
+  ydoc: Y.Doc,
+  callback: (
+    data: {
+      encrypted: EncryptedEntry | EncryptedEntryV2;
+      createdAt: number;
+      updatedAt: number;
+      deleted: boolean;
+    } | null,
+  ) => void,
+): () => void {
+  const metadata = ydoc.getMap<unknown>("metadata");
+
+  // Track if we're processing to avoid duplicate callbacks
+  let isProcessing = false;
+
+  const notifyChange = () => {
+    if (isProcessing) return;
+    isProcessing = true;
+
+    // Use setTimeout to batch multiple rapid changes
+    setTimeout(() => {
+      console.log(`[YjsMapper] Processing encrypted doc change`);
+      callback(yjsToEncryptedEntry(ydoc));
+      isProcessing = false;
+    }, 0);
+  };
+
+  // Observe Y.Map changes (fires for local changes)
+  const onMapChange = (event: Y.YMapEvent<unknown>) => {
+    const changedKeys = Array.from(event.keysChanged);
+    console.log(`[YjsMapper] Encrypted doc Y.Map changed, keys:`, changedKeys);
+    notifyChange();
+  };
+
+  // Observe ydoc updates (fires for ALL changes including remote)
+  // This is the key for real-time sync - remote changes come as raw updates
+  const onUpdate = (_update: Uint8Array, origin: unknown) => {
+    // Log the origin for debugging
+    const originInfo =
+      origin === null
+        ? "null"
+        : origin === ydoc
+          ? "ydoc"
+          : typeof origin === "object" && origin !== null
+            ? origin.constructor?.name || "object"
+            : typeof origin;
+    console.log(`[YjsMapper] Ydoc update received, origin:`, originInfo);
+
+    // Process all updates - the timestamp check in the callback will filter duplicates
+    // HocuspocusProvider, local transactions, etc. all come through here
+    notifyChange();
+  };
+
+  metadata.observe(onMapChange);
+  ydoc.on("update", onUpdate);
+
+  return () => {
+    metadata.unobserve(onMapChange);
+    ydoc.off("update", onUpdate);
+  };
+}

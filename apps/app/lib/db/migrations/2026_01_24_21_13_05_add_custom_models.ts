@@ -1,7 +1,7 @@
-import { type MigrationRunner } from "../migrationTypes";
+import { type MigrationRunner, migrationLog } from "../migrationTypes";
 
 export const up: MigrationRunner = async (db) => {
-  console.log("[Migration] Adding custom_models table...");
+  migrationLog("[Migration] Adding custom_models table...");
 
   // Create unified table for both custom local and remote API models
   await db.execAsync(`
@@ -49,11 +49,11 @@ export const up: MigrationRunner = async (db) => {
     CREATE INDEX IF NOT EXISTS idx_custom_models_enabled ON custom_models(isEnabled);
   `);
 
-  console.log("[Migration] custom_models table created successfully");
+  migrationLog("[Migration] custom_models table created successfully");
 };
 
 export const down: MigrationRunner = async (db) => {
-  console.log("[Migration] Dropping custom_models table...");
+  migrationLog("[Migration] Dropping custom_models table...");
 
   await db.execAsync(`
     DROP INDEX IF EXISTS idx_custom_models_enabled;
@@ -67,5 +67,5 @@ export const down: MigrationRunner = async (db) => {
     DROP TABLE IF EXISTS custom_models;
   `);
 
-  console.log("[Migration] custom_models table dropped");
+  migrationLog("[Migration] custom_models table dropped");
 };

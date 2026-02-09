@@ -14,6 +14,9 @@ import * as repair_missing_columns from "./2026_01_19_19_21_20_repair_missing_co
 import * as add_custom_models from "./2026_01_24_21_13_05_add_custom_models";
 import * as add_model_category from "./2026_01_25_16_42_05_add_model_category";
 import * as add_tokenizer_urls from "./2026_01_25_17_11_05_add_tokenizer_urls";
+import * as add_sync_columns from "./2026_02_07_04_15_41_add_sync_columns";
+import * as add_sync_settings_columns from "./2026_02_07_04_15_48_add_sync_settings_columns";
+import * as add_sync_queue_table from "./2026_02_08_05_23_01_add_sync_queue_table";
 import * as initialSeed from "./seeds/2025_01_13_16_25_00_initial_seed";
 
 /**
@@ -59,6 +62,15 @@ export const allMigrations: Array<{ name: string; module: MigrationModule }> = [
   {
     name: "2026_01_25_17_11_05_add_tokenizer_urls.ts",
     module: add_tokenizer_urls,
+  },
+  { name: "2026_02_07_04_15_41_add_sync_columns.ts", module: add_sync_columns },
+  {
+    name: "2026_02_07_04_15_48_add_sync_settings_columns.ts",
+    module: add_sync_settings_columns,
+  },
+  {
+    name: "2026_02_08_05_23_01_add_sync_queue_table.ts",
+    module: add_sync_queue_table,
   },
   // Seeds (optional - only run when --seeds flag is enabled)
   { name: "seeds/2025_01_13_16_25_00_initial_seed.ts", module: initialSeed },

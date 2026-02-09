@@ -5,6 +5,7 @@ import { AppState, LogBox } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { UnifiedModelProvider } from "./lib/ai/UnifiedModelProvider";
 import { ConditionalPostHogProvider } from "./lib/analytics/PostHogProvider";
+import { startAttachmentServer, stopAttachmentServer } from "./lib/attachments";
 import { ToastProvider } from "./lib/components/ToastProvider";
 import { DatabaseProvider, useDatabase } from "./lib/db/DatabaseProvider";
 import { EntryRepository } from "./lib/db/entries";
@@ -15,6 +16,8 @@ import {
   SimpleNavigation,
   getNavigationRef,
 } from "./lib/navigation/SimpleNavigation";
+import { SyncAuthProvider } from "./lib/sync/SyncAuthProvider";
+import { SyncInitializer } from "./lib/sync/SyncInitializer";
 import {
   SeasonalThemeProvider,
   useSeasonalThemeContext,
@@ -66,13 +69,21 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
-    const initializeEncryption = async () => {
+    const initializeApp = async () => {
       try {
         // Get or create the encryption key automatically
         // This provides seamless UX - no passphrase needed
         // Key is stored securely in OS keystore (Keychain)
         const key = await getOrCreateMasterKey();
         setEncryptionKey(key);
+
+        // Start the local attachment server for serving audio/images
+        try {
+          await startAttachmentServer();
+        } catch (serverError) {
+          console.warn("[App] Failed to start attachment server:", serverError);
+          // Non-fatal - app can still work with data URIs as fallback
+        }
       } catch (error) {
         console.error("Error initializing encryption:", error);
         // Still allow app to continue - will use null encryption key
@@ -82,7 +93,12 @@ export default function App() {
       }
     };
 
-    initializeEncryption();
+    initializeApp();
+
+    // Cleanup: stop server when app unmounts
+    return () => {
+      stopAttachmentServer();
+    };
   }, []);
 
   if (isInitializing) {
@@ -244,12 +260,15 @@ function OnboardingWrapper() {
       <ThemeProvider>
         <SeasonalThemeProvider>
           <ToastProvider>
-            <StatusBarController />
-            {showOnboarding ? (
-              <OnboardingFlow onComplete={handleOnboardingComplete} />
-            ) : (
-              <SimpleNavigation />
-            )}
+            <SyncAuthProvider>
+              <SyncInitializer />
+              <StatusBarController />
+              {showOnboarding ? (
+                <OnboardingFlow onComplete={handleOnboardingComplete} />
+              ) : (
+                <SimpleNavigation />
+              )}
+            </SyncAuthProvider>
           </ToastProvider>
         </SeasonalThemeProvider>
       </ThemeProvider>

@@ -1,3 +1,9 @@
+/* eslint-disable import/order */
+// Install react-native-quick-crypto polyfill before any other imports
+// This MUST be called before any other imports to properly polyfill global.crypto
+import { install } from "react-native-quick-crypto";
+install();
+
 import { registerRootComponent } from "expo";
 import App from "./App";
 

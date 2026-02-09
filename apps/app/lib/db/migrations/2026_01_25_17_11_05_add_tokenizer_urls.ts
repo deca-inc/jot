@@ -1,7 +1,7 @@
-import { type MigrationRunner } from "../migrationTypes";
+import { type MigrationRunner, migrationLog } from "../migrationTypes";
 
 export const up: MigrationRunner = async (db) => {
-  console.log("[Migration] Adding tokenizer URL fields to custom_models...");
+  migrationLog("[Migration] Adding tokenizer URL fields to custom_models...");
 
   // Add tokenizerUrl column to store full URL for tokenizer.json
   await db.execAsync(`
@@ -18,11 +18,11 @@ export const up: MigrationRunner = async (db) => {
     ALTER TABLE custom_models ADD COLUMN isDownloaded INTEGER DEFAULT 0;
   `);
 
-  console.log("[Migration] Tokenizer URL fields added successfully");
+  migrationLog("[Migration] Tokenizer URL fields added successfully");
 };
 
 export const down: MigrationRunner = async (db) => {
-  console.log(
+  migrationLog(
     "[Migration] Removing tokenizer URL fields from custom_models...",
   );
 
@@ -78,5 +78,5 @@ export const down: MigrationRunner = async (db) => {
 
   await db.execAsync(`DROP TABLE custom_models_backup;`);
 
-  console.log("[Migration] Tokenizer URL fields removed");
+  migrationLog("[Migration] Tokenizer URL fields removed");
 };

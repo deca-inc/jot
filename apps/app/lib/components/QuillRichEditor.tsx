@@ -44,6 +44,8 @@ export interface QuillRichEditorRef {
   insertText: (text: string) => Promise<void>;
   /** Insert HTML at current cursor position (or end if no cursor) */
   insertHtml: (html: string) => Promise<void>;
+  /** Replace all editor content with new HTML (for sync) */
+  setHtml: (html: string) => Promise<void>;
   /** Insert an audio attachment embed */
   insertAudioAttachment: (options: {
     id: string;
@@ -153,6 +155,18 @@ export const QuillRichEditor = forwardRef<
       // Use clipboard.dangerouslyPasteHTML to insert HTML content
       // This properly converts HTML to Quill Delta format
       editor.dangerouslyPasteHTML(index, html);
+    },
+    setHtml: async (html: string) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      // Clear all content and set new HTML
+      // This is used for sync updates when we need to replace everything
+      const length = await editor.getLength();
+      if (length > 1) {
+        editor.deleteText(0, length);
+      }
+      editor.dangerouslyPasteHTML(0, html);
     },
     insertAudioAttachment: async (options: {
       id: string;
@@ -937,7 +951,23 @@ export const QuillRichEditor = forwardRef<
                 }
 
                 static value(node) {
-                  return node.getAttribute('data-value') || '{}';
+                  // When parsing HTML, preserve the src if it's an HTTP URL (not base64)
+                  // This allows hydrated HTTP URLs to work, while still stripping base64 on save
+                  var dataValue = node.getAttribute('data-value') || '{}';
+                  try {
+                    var parsed = JSON.parse(dataValue);
+                    var result = {
+                      id: parsed.id || '',
+                      duration: parsed.duration || 0
+                    };
+                    // Preserve HTTP URLs (they're safe to keep), but strip data: URLs
+                    if (parsed.src && !parsed.src.startsWith('data:')) {
+                      result.src = parsed.src;
+                    }
+                    return JSON.stringify(result);
+                  } catch(e) {
+                    return dataValue;
+                  }
                 }
               }
 

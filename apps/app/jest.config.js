@@ -13,6 +13,7 @@ module.exports = {
     "^expo-file-system$": "<rootDir>/__mocks__/expo-file-system.js",
     "^expo-asset$": "<rootDir>/__mocks__/expo-asset.js",
     "^expo-secure-store$": "<rootDir>/__mocks__/expo-secure-store.js",
+    "^expo-crypto$": "<rootDir>/__mocks__/expo-crypto.js",
   },
   collectCoverageFrom: [
     "lib/**/*.ts",
