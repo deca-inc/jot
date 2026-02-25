@@ -1,17 +1,28 @@
 #!/usr/bin/env node
+import { spawn } from "child_process";
 import { Command } from "commander";
+import { rotateUserKeys } from "./crypto/keyRotation.js";
 import { getDatabase, closeDatabase } from "./db/client.js";
 import { DocumentRepository } from "./db/repositories/documents.js";
 import { SessionRepository } from "./db/repositories/sessions.js";
 import { getModelManager } from "./llm/models.js";
 import { createServer_impl } from "./server.js";
+import {
+  getCurrentVersion,
+  checkForUpdates,
+  isUpdateAvailable,
+  getLatestRelease,
+  getInstallCommand,
+  startUpdateChecker,
+  stopUpdateChecker,
+} from "./utils/updater.js";
 
 const program = new Command();
 
 program
   .name("jot-server")
   .description("Jot sync server - headless CLI for Yjs sync and LLM inference")
-  .version("1.0.0");
+  .version(getCurrentVersion());
 
 // Start command
 program
@@ -33,9 +44,13 @@ program
     const db = getDatabase({ dataDir, verbose });
     const server = createServer_impl({ port, db, verbose });
 
+    // Start checking for updates in background
+    startUpdateChecker();
+
     // Handle graceful shutdown
     const shutdown = async () => {
       console.log("\nShutting down...");
+      stopUpdateChecker();
       await server.stop();
       closeDatabase();
       process.exit(0);
@@ -181,6 +196,115 @@ modelsCommand
     } else {
       console.log(`Model ${modelId} not found.`);
       process.exit(1);
+    }
+  });
+
+// Key rotation command
+program
+  .command("rotate-keys")
+  .description("Rotate user encryption key (re-encrypts all data)")
+  .requiredOption("-e, --email <email>", "User email")
+  .requiredOption("-p, --password <password>", "User password")
+  .option("--dry-run", "Preview changes without making them")
+  .option("-d, --data-dir <dir>", "Data directory for database", "./data")
+  .action(async (options) => {
+    const dataDir = options.dataDir;
+    const dryRun = options.dryRun || false;
+
+    if (dryRun) {
+      console.log("\n=== DRY RUN MODE (no changes will be made) ===\n");
+    }
+
+    console.log(`Rotating keys for user: ${options.email}`);
+
+    try {
+      const db = getDatabase({ dataDir, verbose: false });
+      const result = await rotateUserKeys(db, options.email, options.password, dryRun);
+
+      console.log("\nKey Rotation Results");
+      console.log("====================");
+      console.log(`Documents processed: ${result.documentsProcessed}`);
+      console.log(`Documents failed: ${result.documentsFailed}`);
+      console.log(`Assets processed: ${result.assetsProcessed}`);
+      console.log(`Assets failed: ${result.assetsFailed}`);
+
+      if (result.errors.length > 0) {
+        console.log("\nErrors:");
+        for (const error of result.errors) {
+          console.log(`  - ${error}`);
+        }
+      }
+
+      if (result.success) {
+        if (dryRun) {
+          console.log("\n[DRY RUN] Key rotation would succeed.");
+          console.log("[DRY RUN] Run without --dry-run to apply changes.");
+        } else {
+          console.log("\nKey rotation complete successfully!");
+          console.log("All devices will need to re-login to get the new encryption key.");
+        }
+      } else {
+        console.log("\nKey rotation completed with errors.");
+        process.exit(1);
+      }
+
+      closeDatabase();
+    } catch (error) {
+      console.error("Key rotation failed:", error);
+      closeDatabase();
+      process.exit(1);
+    }
+  });
+
+// Update command
+program
+  .command("update")
+  .description("Check for updates and install the latest version")
+  .option("-c, --check", "Only check for updates, don't install")
+  .action(async (options) => {
+    console.log(`\nCurrent version: ${getCurrentVersion()}`);
+    console.log("Checking for updates...");
+
+    await checkForUpdates();
+    const release = getLatestRelease();
+
+    if (!release) {
+      console.log("Could not check for updates. Please try again later.");
+      process.exit(1);
+    }
+
+    if (!isUpdateAvailable()) {
+      console.log("You're already on the latest version!");
+      process.exit(0);
+    }
+
+    console.log(`\nNew version available: ${release.version}`);
+    console.log(`Release URL: ${release.url}`);
+
+    if (options.check) {
+      console.log(`\nTo update, run: jot-server update`);
+      process.exit(0);
+    }
+
+    console.log("\nInstalling update...\n");
+
+    const installCmd = getInstallCommand();
+    const isWindows = process.platform === "win32";
+
+    if (isWindows) {
+      // On Windows, run PowerShell
+      const child = spawn("powershell", ["-Command", installCmd], {
+        stdio: "inherit",
+        shell: true,
+      });
+      child.on("close", (code) => process.exit(code || 0));
+    } else {
+      // On Unix, run bash
+      const child = spawn("bash", ["-c", installCmd], {
+        stdio: "inherit",
+        shell: true,
+      });
+      child.on("close", (code) => process.exit(code || 0));
     }
   });
 

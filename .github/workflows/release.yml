@@ -1,0 +1,205 @@
+name: Build and Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS Intel
+          - os: macos-13
+            target: macos-x64
+            artifact: jot-server-macos-x64
+          # macOS Apple Silicon
+          - os: macos-14
+            target: macos-arm64
+            artifact: jot-server-macos-arm64
+          # Linux x64
+          - os: ubuntu-22.04
+            target: linux-x64
+            artifact: jot-server-linux-x64
+          # Linux ARM64
+          - os: ubuntu-22.04-arm
+            target: linux-arm64
+            artifact: jot-server-linux-arm64
+          # Windows x64
+          - os: windows-latest
+            target: windows-x64
+            artifact: jot-server-windows-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/server
+
+      - name: Build TypeScript
+        run: pnpm build
+        working-directory: apps/server
+
+      - name: Package executable
+        run: pnpm exec pkg . --target node22-${{ matrix.target }} --output jot-server --compress GZip
+        working-directory: apps/server
+
+      - name: Prepare release (Unix)
+        if: runner.os != 'Windows'
+        working-directory: apps/server
+        run: |
+          mkdir -p release
+          mv jot-server release/
+          chmod +x release/jot-server
+
+          # Copy native .node files
+          mkdir -p release/native
+          find node_modules -name "*.node" -type f -exec cp {} release/native/ \; 2>/dev/null || true
+
+          # Create archive
+          cd release
+          tar -czvf ../${{ matrix.artifact }}.tar.gz .
+
+      - name: Prepare release (Windows)
+        if: runner.os == 'Windows'
+        working-directory: apps/server
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release
+          Move-Item jot-server.exe release/
+
+          # Copy native .node files
+          New-Item -ItemType Directory -Force -Path release/native
+          Get-ChildItem -Path node_modules -Recurse -Filter "*.node" | Copy-Item -Destination release/native/ -ErrorAction SilentlyContinue
+
+          # Create archive
+          Compress-Archive -Path release/* -DestinationPath ${{ matrix.artifact }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            apps/server/*.tar.gz
+            apps/server/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: releases
+          merge-multiple: true
+
+      - name: List releases
+        run: ls -la releases/
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Calculate SHA256 checksums
+        id: checksums
+        working-directory: releases
+        run: |
+          echo "## SHA256 Checksums" > checksums.txt
+          echo "" >> checksums.txt
+          for file in *.tar.gz *.zip; do
+            if [ -f "$file" ]; then
+              sha256sum "$file" >> checksums.txt
+            fi
+          done
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Jot Server v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            releases/*.tar.gz
+            releases/*.zip
+            releases/checksums.txt
+          body: |
+            ## Jot Server v${{ steps.version.outputs.version }}
+
+            ### Installation
+
+            **macOS / Linux:**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/apps/server/install.sh | bash
+            ```
+
+            **Windows (PowerShell):**
+            ```powershell
+            irm https://raw.githubusercontent.com/${{ github.repository }}/main/apps/server/install.ps1 | iex
+            ```
+
+            ### Manual Download
+
+            | Platform | Architecture | Download |
+            |----------|--------------|----------|
+            | macOS | Apple Silicon | [jot-server-macos-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/jot-server-macos-arm64.tar.gz) |
+            | macOS | Intel | [jot-server-macos-x64.tar.gz](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/jot-server-macos-x64.tar.gz) |
+            | Linux | x64 | [jot-server-linux-x64.tar.gz](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/jot-server-linux-x64.tar.gz) |
+            | Linux | ARM64 | [jot-server-linux-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/jot-server-linux-arm64.tar.gz) |
+            | Windows | x64 | [jot-server-windows-x64.zip](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/jot-server-windows-x64.zip) |
+
+            ### Upgrading
+
+            Run the install script again - it will download and replace the existing version.
+            Your data in `~/.jot-server/data` (or `%LOCALAPPDATA%\jot-server\data` on Windows) is preserved.
+
+            ### Quick Start
+
+            ```bash
+            # Start the server
+            jot-server start
+
+            # With custom data directory
+            jot-server start --data-dir /path/to/data
+
+            # Set JWT secret for persistent sessions
+            export JWT_SECRET=$(openssl rand -base64 32)
+            jot-server start
+            ```
