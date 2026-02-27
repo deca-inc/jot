@@ -3,9 +3,11 @@ import { createServer } from "http";
 import { Hocuspocus } from "@hocuspocus/server";
 import Database from "better-sqlite3";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { WebSocketServer } from "ws";
 import { createApiRoutes } from "./api/routes.js";
 import { AuthService } from "./auth/authService.js";
+import { AuditLogRepository } from "./db/repositories/auditLog.js";
 import { createHocuspocusConfig } from "./sync/hocuspocus.js";
 import { logger, setLogLevel, LogLevel } from "./utils/logger.js";
 
@@ -43,11 +45,49 @@ export function createServer_impl(config: ServerConfig): JotServer {
     jwtSecret,
   });
 
+  // Initialize Audit Log Repository
+  const auditLog = new AuditLogRepository(config.db);
+
   // Middleware
   app.use(express.json());
 
+  // API Rate Limiting - 100 requests per minute per IP
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 100, // 100 requests per window
+    message: { error: "Too many requests, please try again later", code: "RATE_LIMIT_EXCEEDED" },
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+      const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+      logger.warn(`Rate limit exceeded for IP: ${ip}`);
+      // Log rate limit events for anonymous users
+      auditLog.log("anonymous", "rate_limit_exceeded", undefined, undefined, ip, { path: req.path });
+      res.status(429).json({ error: "Too many requests, please try again later", code: "RATE_LIMIT_EXCEEDED" });
+    },
+  });
+
+  // Auth endpoint rate limiting - stricter (20 per minute for login attempts)
+  const authLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 20, // 20 requests per window
+    message: { error: "Too many authentication attempts, please try again later", code: "AUTH_RATE_LIMIT_EXCEEDED" },
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+      const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+      logger.warn(`Auth rate limit exceeded for IP: ${ip}`);
+      auditLog.log("anonymous", "rate_limit_exceeded", "auth", undefined, ip, { path: req.path });
+      res.status(429).json({ error: "Too many authentication attempts, please try again later", code: "AUTH_RATE_LIMIT_EXCEEDED" });
+    },
+  });
+
+  // Apply rate limiters
+  app.use("/api/auth", authLimiter);
+  app.use("/api/", apiLimiter);
+
   // API routes
-  app.use("/api", createApiRoutes({ db: config.db, startTime, authService }));
+  app.use("/api", createApiRoutes({ db: config.db, startTime, authService, auditLog }));
 
   // Health check at root
   app.get("/", (_req, res) => {

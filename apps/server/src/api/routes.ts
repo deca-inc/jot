@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { Router } from "express";
 import { AuthService } from "../auth/authService.js";
+import { AuditLogRepository } from "../db/repositories/auditLog.js";
 import { createAssetsRouter } from "./assets.js";
 import { createAuthRouter } from "./auth.js";
 import { createChatRouter } from "./chat.js";
@@ -12,17 +13,18 @@ export interface ApiRoutesConfig {
   db: Database.Database;
   startTime: number;
   authService: AuthService;
+  auditLog?: AuditLogRepository;
 }
 
 export function createApiRoutes(config: ApiRoutesConfig): Router {
-  const { db, startTime, authService } = config;
+  const { db, startTime, authService, auditLog } = config;
   const router = Router();
 
   router.use("/status", createStatusRouter(db, startTime));
   router.use("/devices", createDevicesRouter(db));
   router.use("/chat", createChatRouter());
-  router.use("/auth", createAuthRouter(authService));
-  router.use("/assets", createAssetsRouter(db, authService));
+  router.use("/auth", createAuthRouter(authService, auditLog));
+  router.use("/assets", createAssetsRouter(db, authService, auditLog));
   router.use("/documents", createDocumentsRouter(db, authService));
 
   return router;

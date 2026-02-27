@@ -11,7 +11,7 @@
 import * as Crypto from "expo-crypto";
 import { SQLiteDatabase } from "expo-sqlite";
 import * as Y from "yjs";
-import { encryptEntry, decryptEntry, hasUEK } from "./encryption";
+import { encryptEntry, decryptEntry, hasUEK, isUEKStale } from "./encryption";
 import {
   yjsToEntry,
   markYjsDeleted,
@@ -44,6 +44,11 @@ export interface SyncManagerCallbacks {
     remoteEntry: Partial<Entry>,
   ) => void;
   onError?: (error: Error) => void;
+  /**
+   * Called when local UEK is older than server version.
+   * Client should prompt user to re-authenticate to get the new key.
+   */
+  onStaleUEK?: (serverVersion: number) => void;
 }
 
 export interface EntrySyncInfo {
@@ -177,8 +182,24 @@ export class SyncManager {
     this.updateStatus("syncing");
 
     try {
-      // Fetch server manifest
-      const serverManifest = await this.fetchServerManifest();
+      // Fetch server manifest (includes UEK version)
+      const { documents: serverManifest, uekVersion } =
+        await this.fetchServerManifest();
+
+      // Check for stale UEK before proceeding with sync
+      const stale = await isUEKStale(uekVersion);
+      if (stale) {
+        console.warn(
+          "[SyncManager] Local UEK is stale (server version:",
+          uekVersion,
+          ")",
+        );
+        this.callbacks.onStaleUEK?.(uekVersion);
+        this.updateStatus("error");
+        throw new Error(
+          "Encryption key is outdated. Please log in again to update it.",
+        );
+      }
 
       // Create lookup map for server documents
       const serverDocs = new Map<string, number>();
@@ -246,10 +267,12 @@ export class SyncManager {
 
   /**
    * Fetch document manifest from server
+   * Returns documents and UEK version for stale key detection
    */
-  private async fetchServerManifest(): Promise<
-    { uuid: string; updatedAt: number }[]
-  > {
+  private async fetchServerManifest(): Promise<{
+    documents: { uuid: string; updatedAt: number }[];
+    uekVersion: number;
+  }> {
     const token = await this.getToken();
     if (!token) {
       throw new Error("Not authenticated");
@@ -267,8 +290,12 @@ export class SyncManager {
 
     const data = (await response.json()) as {
       documents: { uuid: string; updatedAt: number }[];
+      uekVersion: number;
     };
-    return data.documents;
+    return {
+      documents: data.documents,
+      uekVersion: data.uekVersion ?? 0,
+    };
   }
 
   /**

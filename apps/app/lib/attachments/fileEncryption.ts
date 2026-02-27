@@ -2,7 +2,9 @@
  * File encryption utilities using AES-256-GCM
  *
  * Encrypts files at rest using the app's master key.
- * Each file gets a unique IV for security.
+ * Each file gets a unique nonce for security.
+ *
+ * File format: [nonce (12 bytes)][auth tag (16 bytes)][ciphertext]
  */
 
 import * as Crypto from "expo-crypto";
@@ -10,7 +12,8 @@ import * as FileSystem from "expo-file-system/legacy";
 import { getMasterKey } from "../encryption/keyDerivation";
 
 // AES-256-GCM parameters
-const IV_LENGTH = 12; // 96 bits for GCM
+const NONCE_LENGTH = 12; // 96 bits for GCM
+const AUTH_TAG_LENGTH = 16; // 128 bits
 
 /**
  * Convert hex string to Uint8Array
@@ -21,15 +24,6 @@ function hexToBytes(hex: string): Uint8Array {
     bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
   }
   return bytes;
-}
-
-/**
- * Convert Uint8Array to hex string
- */
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 /**
@@ -49,32 +43,16 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
 }
 
 /**
- * Generate a random IV for encryption
+ * Generate a random nonce for encryption
  */
-function generateIV(): Uint8Array {
-  return Crypto.getRandomBytes(IV_LENGTH);
+function generateNonce(): Uint8Array {
+  return Crypto.getRandomBytes(NONCE_LENGTH);
 }
 
 /**
- * Simple XOR-based encryption for React Native
- * Note: In production, consider using a native crypto module for AES-GCM
- * This provides basic encryption using the master key
- */
-async function xorEncrypt(
-  data: Uint8Array,
-  key: Uint8Array,
-): Promise<Uint8Array> {
-  const result = new Uint8Array(data.length);
-  for (let i = 0; i < data.length; i++) {
-    result[i] = data[i] ^ key[i % key.length];
-  }
-  return result;
-}
-
-/**
- * Encrypt a file and save to destination
+ * Encrypt a file and save to destination using AES-256-GCM
  *
- * File format: [IV (12 bytes)][Encrypted data]
+ * File format: [nonce (12 bytes)][auth tag (16 bytes)][ciphertext]
  *
  * @param sourceUri - Source file URI to encrypt
  * @param destUri - Destination URI for encrypted file
@@ -102,28 +80,42 @@ export async function encryptFile(
     data[i] = binaryString.charCodeAt(i);
   }
 
-  // Generate IV
-  const iv = generateIV();
+  // Generate nonce
+  const nonce = generateNonce();
 
-  // Create encryption key by hashing master key with IV
-  const keyMaterial = new Uint8Array(masterKey.length + iv.length);
-  keyMaterial.set(masterKey);
-  keyMaterial.set(iv, masterKey.length);
-
-  // Use SHA-256 to derive a unique key for this file
-  const hashHex = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    bytesToHex(keyMaterial),
+  // Import master key for AES-GCM
+  const key = await crypto.subtle.importKey(
+    "raw",
+    masterKey.buffer as ArrayBuffer,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"],
   );
-  const encryptionKey = hexToBytes(hashHex);
 
-  // Encrypt data
-  const encryptedData = await xorEncrypt(data, encryptionKey);
+  // Encrypt with AES-256-GCM
+  const encryptedBuffer = await crypto.subtle.encrypt(
+    {
+      name: "AES-GCM",
+      iv: nonce.buffer as ArrayBuffer,
+      tagLength: AUTH_TAG_LENGTH * 8,
+    },
+    key,
+    data.buffer as ArrayBuffer,
+  );
 
-  // Combine IV and encrypted data
-  const result = new Uint8Array(iv.length + encryptedData.length);
-  result.set(iv);
-  result.set(encryptedData, iv.length);
+  const encrypted = new Uint8Array(encryptedBuffer);
+
+  // GCM appends auth tag to ciphertext - separate them
+  const ciphertext = encrypted.slice(0, -AUTH_TAG_LENGTH);
+  const authTag = encrypted.slice(-AUTH_TAG_LENGTH);
+
+  // Combine: [nonce][authTag][ciphertext]
+  const result = new Uint8Array(
+    NONCE_LENGTH + AUTH_TAG_LENGTH + ciphertext.length,
+  );
+  result.set(nonce, 0);
+  result.set(authTag, NONCE_LENGTH);
+  result.set(ciphertext, NONCE_LENGTH + AUTH_TAG_LENGTH);
 
   // Convert to base64 and write
   const resultBase64 = uint8ArrayToBase64(result);
@@ -134,6 +126,8 @@ export async function encryptFile(
 
 /**
  * Decrypt a file and return as a temporary unencrypted file
+ *
+ * File format: [nonce (12 bytes)][auth tag (16 bytes)][ciphertext]
  *
  * @param encryptedUri - URI of encrypted file
  * @param destUri - Destination URI for decrypted file
@@ -161,23 +155,40 @@ export async function decryptFile(
     encryptedBytes[i] = binaryString.charCodeAt(i);
   }
 
-  // Extract IV and encrypted data
-  const iv = encryptedBytes.slice(0, IV_LENGTH);
-  const encryptedData = encryptedBytes.slice(IV_LENGTH);
-
-  // Recreate encryption key
-  const keyMaterial = new Uint8Array(masterKey.length + iv.length);
-  keyMaterial.set(masterKey);
-  keyMaterial.set(iv, masterKey.length);
-
-  const hashHex = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    bytesToHex(keyMaterial),
+  // Extract nonce, auth tag, and ciphertext
+  const nonce = encryptedBytes.slice(0, NONCE_LENGTH);
+  const authTag = encryptedBytes.slice(
+    NONCE_LENGTH,
+    NONCE_LENGTH + AUTH_TAG_LENGTH,
   );
-  const encryptionKey = hexToBytes(hashHex);
+  const ciphertext = encryptedBytes.slice(NONCE_LENGTH + AUTH_TAG_LENGTH);
 
-  // Decrypt data (XOR is symmetric)
-  const decryptedData = await xorEncrypt(encryptedData, encryptionKey);
+  // Combine ciphertext and auth tag (GCM expects them together)
+  const combined = new Uint8Array(ciphertext.length + authTag.length);
+  combined.set(ciphertext);
+  combined.set(authTag, ciphertext.length);
+
+  // Import master key for AES-GCM
+  const key = await crypto.subtle.importKey(
+    "raw",
+    masterKey.buffer as ArrayBuffer,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"],
+  );
+
+  // Decrypt with AES-256-GCM
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: nonce.buffer as ArrayBuffer,
+      tagLength: AUTH_TAG_LENGTH * 8,
+    },
+    key,
+    combined.buffer as ArrayBuffer,
+  );
+
+  const decryptedData = new Uint8Array(decryptedBuffer);
 
   // Convert to base64 and write
   const resultBase64 = uint8ArrayToBase64(decryptedData);
@@ -189,6 +200,8 @@ export async function decryptFile(
 /**
  * Read encrypted file and return as base64 data URI
  * Useful for playing audio or displaying images without writing temp files
+ *
+ * File format: [nonce (12 bytes)][auth tag (16 bytes)][ciphertext]
  */
 export async function readEncryptedAsDataUri(
   encryptedUri: string,
@@ -213,23 +226,40 @@ export async function readEncryptedAsDataUri(
     encryptedBytes[i] = binaryString.charCodeAt(i);
   }
 
-  // Extract IV and encrypted data
-  const iv = encryptedBytes.slice(0, IV_LENGTH);
-  const encryptedData = encryptedBytes.slice(IV_LENGTH);
-
-  // Recreate encryption key
-  const keyMaterial = new Uint8Array(masterKey.length + iv.length);
-  keyMaterial.set(masterKey);
-  keyMaterial.set(iv, masterKey.length);
-
-  const hashHex = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    bytesToHex(keyMaterial),
+  // Extract nonce, auth tag, and ciphertext
+  const nonce = encryptedBytes.slice(0, NONCE_LENGTH);
+  const authTag = encryptedBytes.slice(
+    NONCE_LENGTH,
+    NONCE_LENGTH + AUTH_TAG_LENGTH,
   );
-  const encryptionKey = hexToBytes(hashHex);
+  const ciphertext = encryptedBytes.slice(NONCE_LENGTH + AUTH_TAG_LENGTH);
 
-  // Decrypt data
-  const decryptedData = await xorEncrypt(encryptedData, encryptionKey);
+  // Combine ciphertext and auth tag (GCM expects them together)
+  const combined = new Uint8Array(ciphertext.length + authTag.length);
+  combined.set(ciphertext);
+  combined.set(authTag, ciphertext.length);
+
+  // Import master key for AES-GCM
+  const key = await crypto.subtle.importKey(
+    "raw",
+    masterKey.buffer as ArrayBuffer,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"],
+  );
+
+  // Decrypt with AES-256-GCM
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: nonce.buffer as ArrayBuffer,
+      tagLength: AUTH_TAG_LENGTH * 8,
+    },
+    key,
+    combined.buffer as ArrayBuffer,
+  );
+
+  const decryptedData = new Uint8Array(decryptedBuffer);
 
   // Convert to base64 data URI
   const decryptedBase64 = uint8ArrayToBase64(decryptedData);

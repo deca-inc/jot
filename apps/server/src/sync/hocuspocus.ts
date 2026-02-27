@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import * as Y from "yjs";
 import { AuthService, AuthError } from "../auth/authService.js";
+import { AuditLogRepository } from "../db/repositories/auditLog.js";
 import { DocumentRepository } from "../db/repositories/documents.js";
 import { SessionRepository } from "../db/repositories/sessions.js";
 import { logger } from "../utils/logger.js";
@@ -13,6 +14,47 @@ import type {
   onLoadDocumentPayload,
   onStoreDocumentPayload,
 } from "@hocuspocus/server";
+
+// UUID validation regex
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Validate document ID format (must be UUID)
+ */
+function isValidDocumentId(id: string): boolean {
+  return UUID_REGEX.test(id);
+}
+
+// Connection rate limiting
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+const connectionAttempts = new Map<string, RateLimitEntry>();
+const CONNECTION_RATE_LIMIT = 30; // Max connections per minute per user
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+
+/**
+ * Check and update connection rate limit for a user
+ * Returns true if rate limit exceeded
+ */
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const entry = connectionAttempts.get(userId);
+
+  if (!entry || now > entry.resetAt) {
+    // New window
+    connectionAttempts.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+
+  entry.count++;
+  if (entry.count > CONNECTION_RATE_LIMIT) {
+    return true;
+  }
+
+  return false;
+}
 
 /**
  * Helper to extract auth info from request parameters
@@ -39,9 +81,13 @@ function getAuthInfo(
 export function createHocuspocusConfig(
   db: Database.Database,
   authService: AuthService,
+  auditLog?: AuditLogRepository,
 ): Partial<Configuration> {
   const documentRepo = new DocumentRepository(db);
   const sessionRepo = new SessionRepository(db);
+
+  // Create audit log if not provided
+  const audit = auditLog ?? new AuditLogRepository(db);
 
   return {
     /**
@@ -57,6 +103,14 @@ export function createHocuspocusConfig(
 
       try {
         const payload = authService.verifyAccessToken(token);
+
+        // Check connection rate limit
+        if (checkRateLimit(payload.userId)) {
+          logger.warn(`Connection rate limit exceeded for user: ${payload.userId}`);
+          audit.log(payload.userId, "rate_limit_exceeded", "websocket");
+          throw new Error("Connection rate limit exceeded");
+        }
+
         logger.debug(`Authenticated connection for user: ${payload.email}`);
       } catch (error) {
         if (error instanceof AuthError) {
@@ -120,6 +174,12 @@ export function createHocuspocusConfig(
     },
 
     async onLoadDocument(data: onLoadDocumentPayload) {
+      // Validate document ID format (must be UUID)
+      if (!isValidDocumentId(data.documentName)) {
+        logger.warn(`Load rejected: Invalid document ID format: ${data.documentName}`);
+        throw new Error("Invalid document ID format");
+      }
+
       const authInfo = getAuthInfo(data.requestParameters, authService);
       if (!authInfo) {
         logger.warn(`Load rejected: No auth info for document ${data.documentName}`);
@@ -141,6 +201,12 @@ export function createHocuspocusConfig(
           `existingConnections=${docConnections} stateSize=${doc.yjsState.length}`,
         );
         Y.applyUpdate(data.document, doc.yjsState);
+
+        // Audit log
+        audit.log(userId, "document_load", "document", data.documentName, undefined, {
+          sessionId,
+          stateSize: doc.yjsState.length,
+        });
       } else {
         // Check if document exists but belongs to another user
         const existingDoc = documentRepo.getById(data.documentName);
@@ -152,12 +218,24 @@ export function createHocuspocusConfig(
           `Creating new document: ${data.documentName} session=${sessionId} ` +
           `existingConnections=${docConnections}`,
         );
+
+        // Audit log (new document)
+        audit.log(userId, "document_load", "document", data.documentName, undefined, {
+          sessionId,
+          isNew: true,
+        });
       }
 
       return data.document;
     },
 
     async onStoreDocument(data: onStoreDocumentPayload) {
+      // Validate document ID format (must be UUID)
+      if (!isValidDocumentId(data.documentName)) {
+        logger.warn(`Store rejected: Invalid document ID format: ${data.documentName}`);
+        throw new Error("Invalid document ID format");
+      }
+
       const authInfo = getAuthInfo(data.requestParameters, authService);
       if (!authInfo) {
         logger.warn(`Store rejected: No auth info for document ${data.documentName}`);
@@ -190,6 +268,12 @@ export function createHocuspocusConfig(
         },
         userId,
       );
+
+      // Audit log
+      audit.log(userId, "document_store", "document", data.documentName, undefined, {
+        sessionId,
+        stateSize: state.length,
+      });
     },
   };
 }

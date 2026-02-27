@@ -5,6 +5,7 @@ import Database from "better-sqlite3";
 import { Router, type Request, type Response } from "express";
 import { AuthService } from "../auth/authService.js";
 import { AssetRepository } from "../db/repositories/assets.js";
+import { AuditLogRepository } from "../db/repositories/auditLog.js";
 import { logger } from "../utils/logger.js";
 import { createAuthMiddleware } from "./middleware/authMiddleware.js";
 
@@ -17,10 +18,17 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024;
 /**
  * Create assets router for file upload/download
  */
-export function createAssetsRouter(db: Database.Database, authService: AuthService): Router {
+export function createAssetsRouter(
+  db: Database.Database,
+  authService: AuthService,
+  auditLog?: AuditLogRepository,
+): Router {
   const router = Router();
   const assetRepo = new AssetRepository(db);
   const authMiddleware = createAuthMiddleware(authService);
+
+  // Helper to get IP address
+  const getIp = (req: Request) => req.ip ?? req.socket.remoteAddress ?? "unknown";
 
   // Ensure assets directory exists
   if (!fs.existsSync(ASSETS_DIR)) {
@@ -87,6 +95,13 @@ export function createAssetsRouter(db: Database.Database, authService: AuthServi
         const filenamePart = parts.find((p) => p.name === "filename");
         const mimeTypePart = parts.find((p) => p.name === "mimeType");
 
+        // E2EE fields
+        const wrappedDekPart = parts.find((p) => p.name === "wrappedDek");
+        const dekNoncePart = parts.find((p) => p.name === "dekNonce");
+        const dekAuthTagPart = parts.find((p) => p.name === "dekAuthTag");
+        const contentNoncePart = parts.find((p) => p.name === "contentNonce");
+        const contentAuthTagPart = parts.find((p) => p.name === "contentAuthTag");
+
         if (!filePart || !filePart.data) {
           res.status(400).json({ error: "No file provided", code: "MISSING_FILE" });
           return;
@@ -95,6 +110,15 @@ export function createAssetsRouter(db: Database.Database, authService: AuthServi
         const entryId = entryIdPart?.value ?? "unknown";
         const filename = filenamePart?.value ?? filePart.filename ?? "attachment";
         const mimeType = mimeTypePart?.value ?? filePart.contentType ?? "application/octet-stream";
+
+        // Check if encrypted (all encryption fields must be present)
+        const isEncrypted = Boolean(
+          wrappedDekPart?.value &&
+          dekNoncePart?.value &&
+          dekAuthTagPart?.value &&
+          contentNoncePart?.value &&
+          contentAuthTagPart?.value,
+        );
 
         // Generate unique asset ID
         const assetId = randomUUID();
@@ -114,13 +138,29 @@ export function createAssetsRouter(db: Database.Database, authService: AuthServi
           size: filePart.data.length,
           storagePath,
           createdAt: Date.now(),
+          isEncrypted,
+          wrappedDek: wrappedDekPart?.value,
+          dekNonce: dekNoncePart?.value,
+          dekAuthTag: dekAuthTagPart?.value,
+          contentNonce: contentNoncePart?.value,
+          contentAuthTag: contentAuthTagPart?.value,
         });
 
-        logger.info(`Asset uploaded: ${assetId} (${filePart.data.length} bytes) by user ${userId}`);
+        const encryptionStatus = isEncrypted ? " (encrypted)" : "";
+        logger.info(`Asset uploaded: ${assetId} (${filePart.data.length} bytes)${encryptionStatus} by user ${userId}`);
+
+        // Audit log
+        auditLog?.log(userId, "asset_upload", "asset", assetId, getIp(req), {
+          filename,
+          size: filePart.data.length,
+          isEncrypted,
+          entryId,
+        });
 
         res.status(201).json({
           id: assetId,
           url: `/api/assets/${assetId}`,
+          isEncrypted,
         });
       } catch (error) {
         logger.error("Failed to process upload:", error);
@@ -164,6 +204,22 @@ export function createAssetsRouter(db: Database.Database, authService: AuthServi
     res.setHeader("Content-Disposition", `attachment; filename="${asset.filename}"`);
     res.setHeader("Content-Length", asset.size);
 
+    // Set E2EE headers if encrypted
+    if (asset.isEncrypted) {
+      res.setHeader("X-Encrypted", "true");
+      if (asset.wrappedDek) res.setHeader("X-Wrapped-DEK", asset.wrappedDek);
+      if (asset.dekNonce) res.setHeader("X-DEK-Nonce", asset.dekNonce);
+      if (asset.dekAuthTag) res.setHeader("X-DEK-AuthTag", asset.dekAuthTag);
+      if (asset.contentNonce) res.setHeader("X-Content-Nonce", asset.contentNonce);
+      if (asset.contentAuthTag) res.setHeader("X-Content-AuthTag", asset.contentAuthTag);
+    }
+
+    // Audit log
+    auditLog?.log(userId, "asset_download", "asset", assetId, getIp(req), {
+      filename: asset.filename,
+      isEncrypted: asset.isEncrypted,
+    });
+
     // Stream file
     const stream = fs.createReadStream(asset.storagePath);
     stream.pipe(res);
@@ -188,7 +244,7 @@ export function createAssetsRouter(db: Database.Database, authService: AuthServi
       return;
     }
 
-    res.json({
+    const metadata: Record<string, unknown> = {
       id: asset.id,
       entryId: asset.entryId,
       filename: asset.filename,
@@ -196,7 +252,21 @@ export function createAssetsRouter(db: Database.Database, authService: AuthServi
       size: asset.size,
       url: `/api/assets/${asset.id}`,
       createdAt: asset.createdAt,
-    });
+      isEncrypted: asset.isEncrypted,
+    };
+
+    // Include encryption details if encrypted
+    if (asset.isEncrypted) {
+      metadata.encryption = {
+        wrappedDek: asset.wrappedDek,
+        dekNonce: asset.dekNonce,
+        dekAuthTag: asset.dekAuthTag,
+        contentNonce: asset.contentNonce,
+        contentAuthTag: asset.contentAuthTag,
+      };
+    }
+
+    res.json(metadata);
   });
 
   /**

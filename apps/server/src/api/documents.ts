@@ -8,6 +8,7 @@ import Database from "better-sqlite3";
 import { Router, Request, Response } from "express";
 import { AuthService } from "../auth/authService.js";
 import { DocumentRepository } from "../db/repositories/documents.js";
+import { UserRepository } from "../db/repositories/users.js";
 import { createAuthMiddleware } from "./middleware/authMiddleware.js";
 
 export function createDocumentsRouter(
@@ -16,6 +17,7 @@ export function createDocumentsRouter(
 ): Router {
   const router = Router();
   const documentRepo = new DocumentRepository(db);
+  const userRepo = new UserRepository(db);
   const authMiddleware = createAuthMiddleware(authService);
 
   /**
@@ -36,8 +38,13 @@ export function createDocumentsRouter(
       const userId = req.user.userId;
       const manifest = documentRepo.getManifestForUser(userId);
 
+      // Get UEK version for stale key detection
+      const uekData = userRepo.getUEK(userId);
+      const uekVersion = uekData?.version ?? 0;
+
       res.json({
         documents: manifest,
+        uekVersion,
         generatedAt: Date.now(),
       });
     } catch (error) {

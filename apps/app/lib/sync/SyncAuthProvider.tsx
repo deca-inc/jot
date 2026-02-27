@@ -20,6 +20,7 @@ import {
   unwrapUEKForLogin,
   storeUEK,
   deleteUEK,
+  isUEKStale,
 } from "./encryption/keyManager";
 import * as authService from "./syncAuthService";
 import {
@@ -36,6 +37,7 @@ export type SyncAuthStatus =
   | "initializing"
   | "unauthenticated"
   | "authenticated"
+  | "stale_key" // UEK is outdated, needs re-auth
   | "error";
 
 export interface SyncAuthState {
@@ -43,6 +45,8 @@ export interface SyncAuthState {
   settings: SyncSettings | null;
   error: string | null;
   isLoading: boolean;
+  /** Set to true when local UEK version is older than server version */
+  isUEKStale: boolean;
 }
 
 export interface SyncAuthContextValue {
@@ -56,6 +60,15 @@ export interface SyncAuthContextValue {
   login: (serverUrl: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshSettings: () => Promise<void>;
+  /**
+   * Check if UEK is stale and update state if needed
+   * Called by sync manager when version mismatch is detected
+   */
+  checkUEKVersion: (serverVersion: number) => Promise<boolean>;
+  /**
+   * Clear stale state after successful re-login
+   */
+  clearStaleState: () => void;
 }
 
 const SyncAuthContext = createContext<SyncAuthContextValue | null>(null);
@@ -74,6 +87,7 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
     settings: null,
     error: null,
     isLoading: true,
+    isUEKStale: false,
   });
 
   // Use refs to access latest values in callbacks
@@ -102,6 +116,7 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
             settings,
             error: null,
             isLoading: false,
+            isUEKStale: false,
           });
           return;
         }
@@ -131,6 +146,7 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
             settings,
             error: success ? null : "Session expired. Please log in again.",
             isLoading: false,
+            isUEKStale: false,
           });
         } else {
           setState({
@@ -138,6 +154,7 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
             settings,
             error: null,
             isLoading: false,
+            isUEKStale: false,
           });
         }
       } catch (error) {
@@ -149,6 +166,7 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
           settings: null,
           error: err.message || "Failed to initialize sync",
           isLoading: false,
+          isUEKStale: false,
         });
       }
     };
@@ -222,6 +240,7 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
           settings,
           error: null,
           isLoading: false,
+          isUEKStale: false,
         });
       } catch (error) {
         const err = error as { message?: string };
@@ -271,13 +290,14 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
           lastError: null,
         });
 
-        // Update state
+        // Update state (clear stale state if it was set)
         const settings = await syncSettingsRef.current.getSettings();
         setState({
           status: "authenticated",
           settings,
           error: null,
           isLoading: false,
+          isUEKStale: false,
         });
       } catch (error) {
         const err = error as { message?: string };
@@ -332,6 +352,7 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
         settings: updatedSettings,
         error: null,
         isLoading: false,
+        isUEKStale: false,
       });
     } catch (error) {
       const err = error as { message?: string };
@@ -349,6 +370,33 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
     setState((prev) => ({ ...prev, settings }));
   }, []);
 
+  // Check if UEK is stale compared to server version
+  const checkUEKVersion = useCallback(
+    async (serverVersion: number): Promise<boolean> => {
+      const stale = await isUEKStale(serverVersion);
+      if (stale) {
+        setState((prev) => ({
+          ...prev,
+          status: "stale_key",
+          isUEKStale: true,
+          error:
+            "Your encryption key is outdated. Please log in again to update it.",
+        }));
+      }
+      return stale;
+    },
+    [],
+  );
+
+  // Clear stale state after successful re-login
+  const clearStaleState = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isUEKStale: false,
+      error: null,
+    }));
+  }, []);
+
   const contextValue = useMemo(
     () => ({
       state,
@@ -357,8 +405,19 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
       login,
       logout,
       refreshSettings,
+      checkUEKVersion,
+      clearStaleState,
     }),
-    [state, checkServerConnection, register, login, logout, refreshSettings],
+    [
+      state,
+      checkServerConnection,
+      register,
+      login,
+      logout,
+      refreshSettings,
+      checkUEKVersion,
+      clearStaleState,
+    ],
   );
 
   return (

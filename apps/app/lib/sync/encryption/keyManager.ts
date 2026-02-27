@@ -111,6 +111,21 @@ export async function getUEKVersion(): Promise<number> {
 }
 
 /**
+ * Check if local UEK is stale compared to server version
+ *
+ * This can happen when:
+ * - Keys were rotated on the server (e.g., via CLI)
+ * - User changed password on another device
+ *
+ * @param serverVersion - The UEK version reported by the server
+ * @returns true if local UEK is older than server version
+ */
+export async function isUEKStale(serverVersion: number): Promise<boolean> {
+  const localVersion = await getUEKVersion();
+  return serverVersion > localVersion;
+}
+
+/**
  * Delete UEK from secure storage (for logout/reset)
  */
 export async function deleteUEK(): Promise<void> {

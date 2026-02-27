@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { AuthService, AuthError } from "../auth/authService.js";
+import { AuditLogRepository } from "../db/repositories/auditLog.js";
 import { createAuthMiddleware } from "./middleware/authMiddleware.js";
 
 // Request validation schemas
@@ -32,9 +33,13 @@ const logoutSchema = z.object({
 /**
  * Create auth router with all authentication endpoints
  */
-export function createAuthRouter(authService: AuthService): Router {
+export function createAuthRouter(authService: AuthService, auditLog?: AuditLogRepository): Router {
   const router = Router();
   const authMiddleware = createAuthMiddleware(authService);
+
+  // Helper to get IP address
+  const getIp = (req: { ip?: string; socket: { remoteAddress?: string } }) =>
+    req.ip ?? req.socket.remoteAddress ?? "unknown";
 
   /**
    * POST /api/auth/register
@@ -53,6 +58,9 @@ export function createAuthRouter(authService: AuthService): Router {
 
       const { email, password, uek } = parsed.data;
       const result = await authService.register(email, password, uek);
+
+      // Audit log
+      auditLog?.log(result.user.id, "register", "user", result.user.id, getIp(req), { email });
 
       res.status(201).json(result);
     } catch (error) {
@@ -89,9 +97,17 @@ export function createAuthRouter(authService: AuthService): Router {
       const { email, password } = parsed.data;
       const result = await authService.login(email, password);
 
+      // Audit log
+      auditLog?.log(result.user.id, "login", "user", result.user.id, getIp(req), { email });
+
       res.json(result);
     } catch (error) {
       if (error instanceof AuthError) {
+        // Audit log failed login
+        auditLog?.log("anonymous", "login_failed", "auth", undefined, getIp(req), {
+          email: loginSchema.safeParse(req.body).data?.email,
+          errorCode: error.code,
+        });
         res.status(401).json({
           error: error.message,
           code: error.code,
@@ -122,6 +138,9 @@ export function createAuthRouter(authService: AuthService): Router {
 
       const { refreshToken } = parsed.data;
       const result = await authService.refresh(refreshToken);
+
+      // Note: We don't log token refresh since it's not security-critical
+      // and would require parsing the token to get user ID
 
       res.json(result);
     } catch (error) {
@@ -156,6 +175,9 @@ export function createAuthRouter(authService: AuthService): Router {
 
       const { refreshToken } = parsed.data;
       authService.logout(refreshToken);
+
+      // Audit log (we don't have user ID here, but could parse the refresh token if needed)
+      auditLog?.log("anonymous", "logout", undefined, undefined, getIp(req));
 
       res.json({ success: true });
     } catch {
@@ -210,6 +232,12 @@ export function createAuthRouter(authService: AuthService): Router {
     }
 
     const count = authService.logoutAll(req.user.userId);
+
+    // Audit log
+    auditLog?.log(req.user.userId, "logout_all", "user", req.user.userId, getIp(req), {
+      sessionsInvalidated: count,
+    });
+
     res.json({ success: true, sessionsInvalidated: count });
   });
 

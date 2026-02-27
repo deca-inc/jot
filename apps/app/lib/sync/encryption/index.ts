@@ -38,6 +38,7 @@ export {
   storeUEK,
   deleteUEK,
   getUEKVersion,
+  isUEKStale,
   createUEKForRegistration,
   unwrapUEKForLogin,
   // Device ID (still used for session tracking)
@@ -54,3 +55,13 @@ export {
   hasAccess,
   getAuthorizedUsers,
 } from "./entryEncryption";
+
+// Attachment encryption
+export {
+  encryptAttachmentForUpload,
+  decryptAttachmentFromDownload,
+  isAssetEncrypted,
+  getDecryptionParamsFromHeaders,
+  type EncryptedAttachmentData,
+  type DecryptionParams,
+} from "./attachmentEncryption";
