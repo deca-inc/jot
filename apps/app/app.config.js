@@ -96,6 +96,9 @@ module.exports = ({ config }) => {
       ],
       "@bacons/apple-targets",
       "./plugins/withJotWidget",
+      "@react-native-community/datetimepicker",
+      "expo-background-task",
+      "expo-localization",
     ],
     updates: {
       url: "https://u.expo.dev/0218f474-abc5-4575-ab99-0fa81a34e435",

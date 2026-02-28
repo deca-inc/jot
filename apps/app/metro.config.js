@@ -9,8 +9,8 @@ const monorepoRoot = path.resolve(projectRoot, "../..");
 /** @type {import('metro-config').ConfigT} */
 const config = getDefaultConfig(projectRoot);
 
-// Add monorepo root to watch folders
-config.watchFolders = [monorepoRoot];
+// Add monorepo root to watch folders (preserve defaults)
+config.watchFolders = [...(config.watchFolders || []), monorepoRoot];
 
 // Ensure ExecuTorch assets are recognized by Metro (for tokenizer files)
 config.resolver.assetExts.push("pte");
