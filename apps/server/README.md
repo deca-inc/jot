@@ -1,4 +1,6 @@
-# Jot Server
+# Jot Server (Beta)
+
+> **Beta:** This server is functional but may have breaking changes between versions.
 
 Sync server for Jot - local-first journaling with end-to-end encryption.
 

@@ -114,7 +114,7 @@ journal/
 │   │   ├── targets/          # @bacons/apple-targets
 │   │   ├── native/
 │   │   └── package.json
-│   └── server/               # Sync server (WIP - early development)
+│   └── server/               # Sync server (Beta)
 │       ├── src/
 │       │   ├── cli.ts        # CLI entry point (jot-server command)
 │       │   ├── server.ts     # Express + Hocuspocus server
@@ -157,9 +157,9 @@ _Backup functionality is not yet implemented. The following describes the planne
 - v1: Backup/restore only. No multi-device conflict resolution.
 - v2+: Consider CRDTs (e.g., Yjs) for multi-device sync.
 
-### Sync Server (WIP)
+### Sync Server (Beta)
 
-> **Note**: The sync server (`apps/server`) is in early development. Core functionality is stubbed.
+> **Beta**: The sync server (`apps/server`) is functional but may have breaking changes between versions.
 
 A headless CLI server for Yjs document sync and optional LLM inference.
 

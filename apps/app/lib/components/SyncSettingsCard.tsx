@@ -226,12 +226,27 @@ export function SyncSettingsCard() {
           },
         ]}
       >
-        <Text
-          variant="h3"
-          style={[styles.sectionTitle, { color: seasonalTheme.textPrimary }]}
-        >
-          Sync
-        </Text>
+        <View style={styles.titleRow}>
+          <Text
+            variant="h3"
+            style={[styles.sectionTitle, { color: seasonalTheme.textPrimary }]}
+          >
+            Sync
+          </Text>
+          <View
+            style={[
+              styles.betaBadge,
+              { backgroundColor: `${theme.colors.accent}20` },
+            ]}
+          >
+            <Text
+              variant="caption"
+              style={{ color: theme.colors.accent, fontWeight: "600" }}
+            >
+              Beta
+            </Text>
+          </View>
+        </View>
         <Text
           variant="body"
           style={[
@@ -483,7 +498,18 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: spacingPatterns.md,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.sm,
+  },
   sectionTitle: {
+    marginBottom: spacingPatterns.xs,
+  },
+  betaBadge: {
+    paddingHorizontal: spacingPatterns.xs,
+    paddingVertical: 2,
+    borderRadius: 4,
     marginBottom: spacingPatterns.xs,
   },
   sectionDescription: {

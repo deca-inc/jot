@@ -10,9 +10,11 @@ A private, local-first journaling app with on-device AI.
 - **Rich text editing** - Write with headings, lists, checkboxes, code blocks, tables, and more.
 - **Fast search** - Full-text search across all your entries.
 
-### Sync Server (Work in Progress)
+### Sync Server (Beta)
 
-An optional sync server (`apps/server`) is in early development for multi-device sync:
+> **Note:** The sync server is currently in beta. It's functional but may have breaking changes.
+
+An optional sync server (`apps/server`) for multi-device sync:
 
 - **Yjs sync** - Real-time collaborative document sync via Hocuspocus
 - **REST API** - Server status and session management
@@ -74,7 +76,7 @@ jot/
 │   │   ├── packages/           # Swift packages
 │   │   │   └── widget-utils/   # Shared widget utilities
 │   │   └── native/             # Native widget source code
-│   └── server/                 # Sync server (WIP)
+│   └── server/                 # Sync server (Beta)
 │       ├── src/                # Server source code
 │       │   ├── cli.ts          # CLI entry point
 │       │   ├── server.ts       # Express + WebSocket server
@@ -129,7 +131,7 @@ pnpm test:migrations           # Test migrations (up/down/reset)
 pnpm download:models    # Download AI models for on-device inference
 ```
 
-From `apps/server/` directory (sync server - WIP):
+From `apps/server/` directory (sync server - Beta):
 
 ```bash
 # Start server
