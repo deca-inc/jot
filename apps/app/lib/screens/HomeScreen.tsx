@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { DEFAULT_MODEL, getModelById } from "../ai/modelConfig";
 import { useModel } from "../ai/UnifiedModelProvider";
+import { usePlatformModels } from "../ai/usePlatformModels";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
 import {
   Text,
@@ -28,6 +29,7 @@ import {
 } from "../components";
 import { Entry } from "../db/entries";
 import { useModelSettings } from "../db/modelSettings";
+import { useCustomModels } from "../db/useCustomModels";
 import {
   useInfiniteEntries,
   useSearchEntries,
@@ -85,6 +87,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     useState<EntryTypeFilter>("all");
   const { currentConfig: _currentConfig } = useModel();
   const modelSettings = useModelSettings();
+  const customModels = useCustomModels();
+  const { hasPlatformLLM } = usePlatformModels();
   const [_selectedModelConfig, setSelectedModelConfig] =
     useState(DEFAULT_MODEL);
   const _queryClient = useQueryClient();
@@ -303,12 +307,33 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const handleCreateAIChat = useCallback(async () => {
     setFabMenuOpen(false);
 
-    // Check if any AI model is downloaded
-    const downloadedModels = await modelSettings.getDownloadedModels();
-    if (downloadedModels.length === 0) {
+    // Check if any AI model is available (downloaded, remote, custom local, or platform)
+    const [downloadedModels, remoteModels, customLocalModels] =
+      await Promise.all([
+        modelSettings.getDownloadedModels(),
+        customModels.getRemoteModels(),
+        customModels.getCustomLocalModels(),
+      ]);
+
+    // Filter for enabled and ready-to-use models
+    const hasDownloadedModel = downloadedModels.length > 0;
+    const hasRemoteModel = remoteModels.some(
+      (m) => m.isEnabled && m.privacyAcknowledged,
+    );
+    const hasCustomLocalModel = customLocalModels.some(
+      (m) => m.isDownloaded && m.isEnabled,
+    );
+
+    const hasAnyModel =
+      hasDownloadedModel ||
+      hasRemoteModel ||
+      hasCustomLocalModel ||
+      hasPlatformLLM;
+
+    if (!hasAnyModel) {
       Alert.alert(
-        "No AI Model Downloaded",
-        "To use AI Chat, please go to Settings and download an AI model first.",
+        "No AI Model Available",
+        "To use AI Chat, please go to Settings and download a model or configure a remote API.",
         [
           {
             text: "Cancel",
@@ -331,7 +356,13 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     if (onCreateNewAIChat) {
       onCreateNewAIChat();
     }
-  }, [modelSettings, onOpenSettings, onCreateNewAIChat]);
+  }, [
+    modelSettings,
+    customModels,
+    hasPlatformLLM,
+    onOpenSettings,
+    onCreateNewAIChat,
+  ]);
 
   const handleCreateCountdown = useCallback(() => {
     setFabMenuOpen(false);
