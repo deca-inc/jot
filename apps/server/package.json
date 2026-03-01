@@ -25,7 +25,10 @@
   },
   "pkg": {
     "scripts": "dist/**/*.js",
-    "assets": [],
+    "assets": [
+      "node_modules/lib0/**/*",
+      "node_modules/yjs/**/*"
+    ],
     "targets": [
       "node22-macos-x64",
       "node22-macos-arm64",
