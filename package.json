@@ -10,7 +10,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "dev": "turbo run dev",
-    "prepare": "husky"
+    "prepare": "husky",
+    "eas-build-pre-install": "./apps/app/eas-build-pre-install.sh"
   },
   "devDependencies": {
     "husky": "^9.1.7",
