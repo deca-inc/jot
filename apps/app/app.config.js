@@ -95,6 +95,7 @@ module.exports = ({ config }) => {
         },
       ],
       "@bacons/apple-targets",
+      "./plugins/withCmake",
       "./plugins/withJotWidget",
       "@react-native-community/datetimepicker",
       "expo-background-task",
