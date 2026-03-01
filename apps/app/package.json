@@ -29,7 +29,8 @@
     "coverage": "jest --no-watchman --coverage",
     "coverage:ts": "jest --no-watchman --coverage",
     "coverage:swift": "cd packages/widget-utils && swift test --enable-code-coverage && xcrun llvm-cov report .build/debug/WidgetUtilsPackageTests.xctest/Contents/MacOS/WidgetUtilsPackageTests -instr-profile=.build/debug/codecov/default.profdata -ignore-filename-regex='.build|Tests'",
-    "coverage:kotlin": "echo 'Note: Run pnpm test:kotlin for Kotlin tests. Full JaCoCo coverage requires additional setup.' && cd android && ./gradlew testDebugUnitTest 2>&1 | tail -5"
+    "coverage:kotlin": "echo 'Note: Run pnpm test:kotlin for Kotlin tests. Full JaCoCo coverage requires additional setup.' && cd android && ./gradlew testDebugUnitTest 2>&1 | tail -5",
+    "eas-build-pre-install": "./eas-build-pre-install.sh"
   },
   "dependencies": {
     "@bacons/apple-targets": "^3.0.6",
