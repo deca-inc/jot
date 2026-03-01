@@ -47,9 +47,9 @@ pre_install do |installer|
   cmake_path = cmake_paths.find { |p| File.exist?(p) }
 
   if cmake_path && !File.exist?('/usr/local/bin/cmake')
-    puts "[withCmake] Setting up cmake symlink: \#{cmake_path} -> /usr/local/bin/cmake"
+    puts "[withCmake] Setting up cmake symlink: #{cmake_path} -> /usr/local/bin/cmake"
     system("sudo mkdir -p /usr/local/bin")
-    system("sudo ln -sf \#{cmake_path} /usr/local/bin/cmake")
+    system("sudo ln -sf #{cmake_path} /usr/local/bin/cmake")
   elsif File.exist?('/usr/local/bin/cmake')
     puts "[withCmake] cmake already available at /usr/local/bin/cmake"
   else
@@ -65,8 +65,8 @@ pre_install do |installer|
   pkgconfig_path = pkgconfig_paths.find { |p| File.exist?(p) }
 
   if pkgconfig_path && !File.exist?('/usr/local/bin/pkg-config')
-    puts "[withCmake] Setting up pkg-config symlink: \#{pkgconfig_path} -> /usr/local/bin/pkg-config"
-    system("sudo ln -sf \#{pkgconfig_path} /usr/local/bin/pkg-config")
+    puts "[withCmake] Setting up pkg-config symlink: #{pkgconfig_path} -> /usr/local/bin/pkg-config"
+    system("sudo ln -sf #{pkgconfig_path} /usr/local/bin/pkg-config")
   end
 end
 
