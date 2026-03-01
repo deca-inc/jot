@@ -52,11 +52,44 @@ function Add-ToPath {
         $NewPath = "$CurrentPath;$InstallDir"
         [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
         $env:Path = "$env:Path;$InstallDir"
-        Write-Info "Added to PATH. Restart your terminal for changes to take effect."
+        $script:NeedRestart = $true
+    }
+}
+
+function Setup-JwtSecret {
+    # Check if already set
+    $existingSecret = [Environment]::GetEnvironmentVariable("JWT_SECRET", "User")
+    if ($existingSecret) {
+        Write-Info "JWT_SECRET is already configured"
+        return
+    }
+
+    Write-Host ""
+    Write-Host "  JWT_SECRET enables persistent sessions across server restarts."
+    Write-Host "  Without it, all clients will need to re-authenticate when the server restarts."
+    Write-Host ""
+
+    $response = Read-Host "  Would you like to generate and save a JWT_SECRET? [Y/n]"
+
+    if ($response -ne 'n' -and $response -ne 'N') {
+        # Generate a secure random secret
+        $bytes = New-Object byte[] 32
+        $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        $rng.GetBytes($bytes)
+        $secret = [Convert]::ToBase64String($bytes)
+
+        # Set as persistent user environment variable
+        [Environment]::SetEnvironmentVariable("JWT_SECRET", $secret, "User")
+        $env:JWT_SECRET = $secret
+
+        Write-Info "JWT_SECRET saved to user environment variables"
+        $script:NeedRestart = $true
     }
 }
 
 function Main {
+    $script:NeedRestart = $false
+
     Write-Host ""
     Write-Host "  +-------------------------------------+" -ForegroundColor Cyan
     Write-Host "  |      Jot Server Installer           |" -ForegroundColor Cyan
@@ -66,6 +99,7 @@ function Main {
     $Version = Get-LatestVersion
     Install-JotServer -Version $Version
     Add-ToPath
+    Setup-JwtSecret
 
     Write-Host ""
     Write-Info "Installation complete!"
@@ -74,9 +108,11 @@ function Main {
     Write-Host "    jot-server start"
     Write-Host ""
     Write-Host "  Data will be stored in: $DataDir"
-    Write-Host ""
-    Write-Host "  For persistent sessions, set JWT_SECRET:"
-    Write-Host "    `$env:JWT_SECRET = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }))"
+
+    if ($script:NeedRestart) {
+        Write-Host ""
+        Write-Warn "Restart your terminal for changes to take effect."
+    }
     Write-Host ""
 }
 

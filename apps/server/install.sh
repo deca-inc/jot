@@ -87,24 +87,33 @@ EOF
     info "Installed to: $INSTALL_DIR"
 }
 
+# Detect shell config file
+get_shell_rc() {
+    SHELL_NAME=$(basename "$SHELL")
+    case "$SHELL_NAME" in
+        zsh) echo "$HOME/.zshrc" ;;
+        bash) echo "$HOME/.bashrc" ;;
+        *) echo "" ;;
+    esac
+}
+
 # Add to PATH if needed
 setup_path() {
     if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
         warn "$BIN_DIR is not in your PATH"
 
-        SHELL_NAME=$(basename "$SHELL")
-        case "$SHELL_NAME" in
-            zsh) RC_FILE="$HOME/.zshrc" ;;
-            bash) RC_FILE="$HOME/.bashrc" ;;
-            *) RC_FILE="" ;;
-        esac
+        RC_FILE=$(get_shell_rc)
 
         if [ -n "$RC_FILE" ]; then
-            echo "" >> "$RC_FILE"
-            echo "# Jot Server" >> "$RC_FILE"
-            echo "export PATH=\"\$PATH:$BIN_DIR\"" >> "$RC_FILE"
-            info "Added $BIN_DIR to PATH in $RC_FILE"
-            info "Run 'source $RC_FILE' or restart your terminal"
+            if ! grep -q "# Jot Server" "$RC_FILE" 2>/dev/null; then
+                echo "" >> "$RC_FILE"
+                echo "# Jot Server" >> "$RC_FILE"
+            fi
+            if ! grep -q "$BIN_DIR" "$RC_FILE" 2>/dev/null; then
+                echo "export PATH=\"\$PATH:$BIN_DIR\"" >> "$RC_FILE"
+                info "Added $BIN_DIR to PATH in $RC_FILE"
+            fi
+            NEED_SOURCE=true
         else
             warn "Add this to your shell profile:"
             echo "    export PATH=\"\$PATH:$BIN_DIR\""
@@ -112,8 +121,62 @@ setup_path() {
     fi
 }
 
+# Setup JWT_SECRET for persistent sessions
+setup_jwt_secret() {
+    RC_FILE=$(get_shell_rc)
+
+    # Check if already configured
+    if [ -n "$JWT_SECRET" ]; then
+        info "JWT_SECRET is already set"
+        return
+    fi
+
+    if [ -n "$RC_FILE" ] && grep -q "JWT_SECRET" "$RC_FILE" 2>/dev/null; then
+        info "JWT_SECRET is already configured in $RC_FILE"
+        return
+    fi
+
+    echo ""
+    echo "  JWT_SECRET enables persistent sessions across server restarts."
+    echo "  Without it, all clients will need to re-authenticate when the server restarts."
+    echo ""
+
+    # Check if running interactively
+    if [ -t 0 ]; then
+        read -p "  Would you like to generate and save a JWT_SECRET? [Y/n] " -n 1 -r
+        echo ""
+
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            if [ -z "$RC_FILE" ]; then
+                warn "Could not detect shell config file"
+                echo "  Add this to your shell profile manually:"
+                echo "    export JWT_SECRET=$(openssl rand -base64 32)"
+                return
+            fi
+
+            # Generate secret
+            SECRET=$(openssl rand -base64 32)
+
+            # Add to shell config
+            if ! grep -q "# Jot Server" "$RC_FILE" 2>/dev/null; then
+                echo "" >> "$RC_FILE"
+                echo "# Jot Server" >> "$RC_FILE"
+            fi
+            echo "export JWT_SECRET=\"$SECRET\"" >> "$RC_FILE"
+
+            info "JWT_SECRET saved to $RC_FILE"
+            NEED_SOURCE=true
+        fi
+    else
+        info "Run interactively to set up JWT_SECRET, or add manually:"
+        echo "    export JWT_SECRET=\$(openssl rand -base64 32)"
+    fi
+}
+
 # Main
 main() {
+    NEED_SOURCE=false
+
     echo ""
     echo "  ╭─────────────────────────────────────╮"
     echo "  │      Jot Server Installer           │"
@@ -124,6 +187,7 @@ main() {
     get_latest_version
     install
     setup_path
+    setup_jwt_secret
 
     echo ""
     info "Installation complete!"
@@ -132,9 +196,12 @@ main() {
     echo "    jot-server start"
     echo ""
     echo "  Data will be stored in: $DATA_DIR"
-    echo ""
-    echo "  For persistent sessions, set JWT_SECRET:"
-    echo "    export JWT_SECRET=\$(openssl rand -base64 32)"
+
+    if [ "$NEED_SOURCE" = true ]; then
+        RC_FILE=$(get_shell_rc)
+        echo ""
+        warn "Run 'source $RC_FILE' or restart your terminal to apply changes"
+    fi
     echo ""
 }
 
