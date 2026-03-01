@@ -63,7 +63,7 @@ jobs:
         working-directory: apps/server
 
       - name: Package executable
-        run: pnpm exec pkg . --target node22-${{ matrix.target }} --output jot-server --compress GZip
+        run: pnpm exec pkg . --target node22-${{ matrix.target }} --output jot-server --compress GZip --public-packages 'lib0,yjs'
         working-directory: apps/server
 
       - name: Prepare release (Unix)
@@ -77,6 +77,11 @@ jobs:
           # Copy native .node files
           mkdir -p release/native
           find node_modules -name "*.node" -type f -exec cp {} release/native/ \; 2>/dev/null || true
+
+          # Copy lib0 and yjs modules (resolving pnpm symlinks)
+          mkdir -p release/node_modules
+          cp -rL node_modules/lib0 release/node_modules/ 2>/dev/null || cp -r node_modules/.pnpm/lib0*/node_modules/lib0 release/node_modules/
+          cp -rL node_modules/yjs release/node_modules/ 2>/dev/null || cp -r node_modules/.pnpm/yjs*/node_modules/yjs release/node_modules/
 
           # Create archive
           cd release
@@ -93,6 +98,11 @@ jobs:
           # Copy native .node files
           New-Item -ItemType Directory -Force -Path release/native
           Get-ChildItem -Path node_modules -Recurse -Filter "*.node" | Copy-Item -Destination release/native/ -ErrorAction SilentlyContinue
+
+          # Copy lib0 and yjs modules (resolving pnpm symlinks)
+          New-Item -ItemType Directory -Force -Path release/node_modules
+          Copy-Item -Recurse -Force (Resolve-Path node_modules/lib0).Path release/node_modules/
+          Copy-Item -Recurse -Force (Resolve-Path node_modules/yjs).Path release/node_modules/
 
           # Create archive
           Compress-Archive -Path release/* -DestinationPath ${{ matrix.artifact }}.zip

@@ -76,7 +76,7 @@ install() {
     # Create wrapper script in bin directory
     cat > "$BIN_DIR/jot-server" << EOF
 #!/bin/bash
-export NODE_PATH="$INSTALL_DIR/native"
+export NODE_PATH="$INSTALL_DIR/native:$INSTALL_DIR/node_modules"
 exec "$INSTALL_DIR/jot-server" "\$@"
 EOF
     chmod +x "$BIN_DIR/jot-server"
