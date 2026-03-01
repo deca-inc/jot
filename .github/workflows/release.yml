@@ -19,20 +19,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS Intel
-          - os: macos-13
-            target: macos-x64
-            artifact: jot-server-macos-x64
-          # macOS Apple Silicon
-          - os: macos-14
+          # macOS (builds both x64 and arm64 on same runner)
+          - os: macos-latest
             target: macos-arm64
             artifact: jot-server-macos-arm64
+          - os: macos-latest
+            target: macos-x64
+            artifact: jot-server-macos-x64
           # Linux x64
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: linux-x64
             artifact: jot-server-linux-x64
           # Linux ARM64
-          - os: ubuntu-22.04-arm
+          - os: ubuntu-latest
             target: linux-arm64
             artifact: jot-server-linux-arm64
           # Windows x64
