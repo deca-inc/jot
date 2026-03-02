@@ -17,7 +17,17 @@
     "test": "bun test",
     "test:run": "bun test",
     "coverage": "bun test --coverage",
-    "build:exe": "bun build --compile src/cli.ts --outfile jot-server"
+    "build": "bun build --compile src/cli.ts --outfile dist/jot-server",
+    "build:all": "bun run scripts/build-all.ts",
+    "build:current": "bun run scripts/build-all.ts --current",
+    "build:archive": "bun run scripts/build-all.ts --archive",
+    "build:macos-arm64": "bun build --compile src/cli.ts --outfile dist/jot-server-macos-arm64 --target=bun-darwin-arm64",
+    "build:macos-x64": "bun build --compile src/cli.ts --outfile dist/jot-server-macos-x64 --target=bun-darwin-x64",
+    "build:linux-x64": "bun build --compile src/cli.ts --outfile dist/jot-server-linux-x64 --target=bun-linux-x64",
+    "build:linux-arm64": "bun build --compile src/cli.ts --outfile dist/jot-server-linux-arm64 --target=bun-linux-arm64",
+    "build:windows": "bun build --compile src/cli.ts --outfile dist/jot-server-windows-x64 --target=bun-windows-x64",
+    "release": "./scripts/release.sh",
+    "release:dry": "./scripts/release.sh --dry"
   },
   "dependencies": {
     "@hocuspocus/server": "^2.15.0",
