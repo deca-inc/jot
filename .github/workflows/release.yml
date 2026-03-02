@@ -19,12 +19,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS (builds both x64 and arm64 on same runner)
+          # macOS Apple Silicon
           - os: macos-latest
-            target: macos-arm64
+            target: darwin-arm64
             artifact: jot-server-macos-arm64
+          # macOS Intel
           - os: macos-latest
-            target: macos-x64
+            target: darwin-x64
             artifact: jot-server-macos-x64
           # Linux x64
           - os: ubuntu-latest
@@ -45,26 +46,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'pnpm'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install
         working-directory: apps/server
 
-      - name: Build TypeScript
-        run: pnpm build
+      - name: Build executable
         working-directory: apps/server
-
-      - name: Package executable
-        run: pnpm exec pkg . --target node22-${{ matrix.target }} --output jot-server --compress GZip --public-packages 'lib0,yjs'
-        working-directory: apps/server
+        run: bun build --compile src/cli.ts --outfile jot-server --target=bun-${{ matrix.target }}
 
       - name: Prepare release (Unix)
         if: runner.os != 'Windows'
@@ -73,17 +64,6 @@ jobs:
           mkdir -p release
           mv jot-server release/
           chmod +x release/jot-server
-
-          # Copy native .node files
-          mkdir -p release/native
-          find node_modules -name "*.node" -type f -exec cp {} release/native/ \; 2>/dev/null || true
-
-          # Copy lib0 and yjs modules (resolving pnpm symlinks)
-          mkdir -p release/node_modules
-          cp -rL node_modules/lib0 release/node_modules/ 2>/dev/null || cp -r node_modules/.pnpm/lib0*/node_modules/lib0 release/node_modules/
-          cp -rL node_modules/yjs release/node_modules/ 2>/dev/null || cp -r node_modules/.pnpm/yjs*/node_modules/yjs release/node_modules/
-
-          # Create archive
           cd release
           tar -czvf ../${{ matrix.artifact }}.tar.gz .
 
@@ -94,17 +74,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path release
           Move-Item jot-server.exe release/
-
-          # Copy native .node files
-          New-Item -ItemType Directory -Force -Path release/native
-          Get-ChildItem -Path node_modules -Recurse -Filter "*.node" | Copy-Item -Destination release/native/ -ErrorAction SilentlyContinue
-
-          # Copy lib0 and yjs modules (resolving pnpm symlinks)
-          New-Item -ItemType Directory -Force -Path release/node_modules
-          Copy-Item -Recurse -Force (Resolve-Path node_modules/lib0).Path release/node_modules/
-          Copy-Item -Recurse -Force (Resolve-Path node_modules/yjs).Path release/node_modules/
-
-          # Create archive
           Compress-Archive -Path release/* -DestinationPath ${{ matrix.artifact }}.zip
 
       - name: Upload artifact

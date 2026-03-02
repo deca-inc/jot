@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import Database from "better-sqlite3";
+import Database from "../sqlite.js";
 
 /**
  * Audit action types for security logging

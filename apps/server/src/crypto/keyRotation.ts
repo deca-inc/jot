@@ -11,12 +11,12 @@
  */
 
 import * as argon2 from "argon2";
-import Database from "better-sqlite3";
 import * as Y from "yjs";
 import { AssetRepository } from "../db/repositories/assets.js";
 import { DocumentRepository } from "../db/repositories/documents.js";
 import { RefreshTokenRepository } from "../db/repositories/refreshTokens.js";
 import { UserRepository } from "../db/repositories/users.js";
+import Database from "../db/sqlite.js";
 import {
   createNewUEK,
   deriveKEKAsync,

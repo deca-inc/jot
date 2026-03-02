@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import express, { Express } from "express";
 import { createApiRoutes } from "../src/api/routes.js";
 import { AuthService } from "../src/auth/authService.js";
@@ -6,9 +6,10 @@ import { migrateTo } from "../src/db/migrations.js";
 import "../src/db/migrations/index.js";
 import { DocumentRepository } from "../src/db/repositories/documents.js";
 import { SessionRepository } from "../src/db/repositories/sessions.js";
+import Database from "../src/db/sqlite.js";
 
 describe("API Routes", () => {
-  let db: Database.Database;
+  let db: InstanceType<typeof Database>;
   let app: Express;
   const startTime = Date.now();
 
@@ -111,7 +112,7 @@ describe("API Routes", () => {
 });
 
 describe("Express App Integration", () => {
-  let db: Database.Database;
+  let db: InstanceType<typeof Database>;
   let app: Express;
 
   beforeEach(() => {

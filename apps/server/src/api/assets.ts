@@ -1,11 +1,11 @@
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
-import Database from "better-sqlite3";
 import { Router, type Request, type Response } from "express";
 import { AuthService } from "../auth/authService.js";
 import { AssetRepository } from "../db/repositories/assets.js";
 import { AuditLogRepository } from "../db/repositories/auditLog.js";
+import Database from "../db/sqlite.js";
 import { logger } from "../utils/logger.js";
 import { createAuthMiddleware } from "./middleware/authMiddleware.js";
 

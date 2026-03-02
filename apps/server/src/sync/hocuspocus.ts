@@ -1,9 +1,9 @@
-import Database from "better-sqlite3";
 import * as Y from "yjs";
 import { AuthService, AuthError } from "../auth/authService.js";
 import { AuditLogRepository } from "../db/repositories/auditLog.js";
 import { DocumentRepository } from "../db/repositories/documents.js";
 import { SessionRepository } from "../db/repositories/sessions.js";
+import Database from "../db/sqlite.js";
 import { logger } from "../utils/logger.js";
 import type {
   Configuration,

@@ -1,8 +1,8 @@
 import * as argon2 from "argon2";
-import Database from "better-sqlite3";
 import jwt from "jsonwebtoken";
 import { RefreshTokenRepository } from "../db/repositories/refreshTokens.js";
 import { UserRepository, type User, type UEKData } from "../db/repositories/users.js";
+import Database from "../db/sqlite.js";
 import type { StringValue } from "ms";
 
 export interface TokenPayload {

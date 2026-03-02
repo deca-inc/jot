@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import Database from "../sqlite.js";
 
 export interface Setting<T = unknown> {
   key: string;
@@ -105,6 +105,6 @@ export class SettingsRepository {
     const result = this.db
       .prepare("SELECT 1 FROM settings WHERE key = ? LIMIT 1")
       .get(key);
-    return result !== undefined;
+    return result != null;
   }
 }

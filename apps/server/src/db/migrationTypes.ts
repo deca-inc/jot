@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import Database from "./sqlite.js";
 
 export type MigrationRunner = (db: Database.Database) => void;
 

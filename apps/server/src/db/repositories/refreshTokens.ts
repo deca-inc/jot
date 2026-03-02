@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from "crypto";
-import Database from "better-sqlite3";
+import Database from "../sqlite.js";
 
 export interface RefreshToken {
   id: string;

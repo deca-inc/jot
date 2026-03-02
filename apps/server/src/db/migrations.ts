@@ -1,5 +1,5 @@
-import Database from "better-sqlite3";
 import { MigrationModule } from "./migrationTypes.js";
+import Database from "./sqlite.js";
 
 interface MigrationOptions {
   verbose: boolean;

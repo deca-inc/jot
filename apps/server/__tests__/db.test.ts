@@ -1,12 +1,13 @@
-import Database from "better-sqlite3";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { migrateTo } from "../src/db/migrations.js";
 import "../src/db/migrations/index.js";
 import { DocumentRepository } from "../src/db/repositories/documents.js";
 import { SessionRepository } from "../src/db/repositories/sessions.js";
 import { SettingsRepository } from "../src/db/repositories/settings.js";
+import Database from "../src/db/sqlite.js";
 
 describe("Database", () => {
-  let db: Database.Database;
+  let db: InstanceType<typeof Database>;
 
   beforeEach(() => {
     db = new Database(":memory:");
@@ -46,14 +47,15 @@ describe("Database", () => {
 
       expect(doc.id).toBe("doc-1");
       expect(doc.metadata?.title).toBe("Test Doc");
-      expect(doc.yjsState?.toString()).toBe("test");
+      // Compare as Buffer to handle Uint8Array from bun:sqlite
+      expect(Buffer.from(doc.yjsState!).toString()).toBe("test");
     });
 
     it("should update an existing document", () => {
       repo.upsert("doc-1", Buffer.from("v1"), { title: "V1" });
       const updated = repo.upsert("doc-1", Buffer.from("v2"), { title: "V2" });
 
-      expect(updated.yjsState?.toString()).toBe("v2");
+      expect(Buffer.from(updated.yjsState!).toString()).toBe("v2");
       expect(updated.metadata?.title).toBe("V2");
     });
 
@@ -104,7 +106,8 @@ describe("Database", () => {
       const doc = repo.getById("doc-1");
 
       expect(doc?.metadata?.title).toBe("Updated");
-      expect(doc?.yjsState?.toString()).toBe("state");
+      expect(doc?.yjsState).toBeDefined();
+      expect(Buffer.from(doc!.yjsState!).toString()).toBe("state");
     });
   });
 
@@ -224,7 +227,7 @@ describe("Database", () => {
       repo.set("count", 1);
       repo.set("count", 2);
 
-      expect(repo.get("count")).toBe(2);
+      expect(repo.get<number>("count")).toBe(2);
     });
 
     it("should get setting with metadata", () => {

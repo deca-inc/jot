@@ -64,22 +64,12 @@ install() {
     TEMP_DIR=$(mktemp -d)
     curl -fsSL "$DOWNLOAD_URL" | tar -xz -C "$TEMP_DIR"
 
-    # Install files
+    # Install executable
     cp "$TEMP_DIR/jot-server" "$INSTALL_DIR/"
     chmod +x "$INSTALL_DIR/jot-server"
 
-    # Copy native modules if present
-    if [ -d "$TEMP_DIR/native" ]; then
-        cp -r "$TEMP_DIR/native" "$INSTALL_DIR/"
-    fi
-
-    # Create wrapper script in bin directory
-    cat > "$BIN_DIR/jot-server" << EOF
-#!/bin/bash
-export NODE_PATH="$INSTALL_DIR/native:$INSTALL_DIR/node_modules"
-exec "$INSTALL_DIR/jot-server" "\$@"
-EOF
-    chmod +x "$BIN_DIR/jot-server"
+    # Symlink to bin directory
+    ln -sf "$INSTALL_DIR/jot-server" "$BIN_DIR/jot-server"
 
     # Cleanup
     rm -rf "$TEMP_DIR"

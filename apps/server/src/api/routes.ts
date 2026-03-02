@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
 import { Router } from "express";
 import { AuthService } from "../auth/authService.js";
 import { AuditLogRepository } from "../db/repositories/auditLog.js";
+import Database from "../db/sqlite.js";
 import { createAssetsRouter } from "./assets.js";
 import { createAuthRouter } from "./auth.js";
 import { createChatRouter } from "./chat.js";

@@ -42,14 +42,6 @@ function Install-JotServer {
     # Cleanup
     Remove-Item $TempFile -Force
 
-    # Create wrapper script that sets NODE_PATH
-    $WrapperContent = @"
-@echo off
-set NODE_PATH=$InstallDir\native;$InstallDir\node_modules
-"$InstallDir\jot-server.exe" %*
-"@
-    $WrapperContent | Out-File -FilePath "$InstallDir\jot-server.cmd" -Encoding ascii
-
     Write-Info "Installed to: $InstallDir"
 }
 

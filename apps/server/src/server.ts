@@ -1,13 +1,13 @@
 import { randomBytes } from "crypto";
 import { createServer } from "http";
 import { Hocuspocus } from "@hocuspocus/server";
-import Database from "better-sqlite3";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import { WebSocketServer } from "ws";
 import { createApiRoutes } from "./api/routes.js";
 import { AuthService } from "./auth/authService.js";
 import { AuditLogRepository } from "./db/repositories/auditLog.js";
+import Database from "./db/sqlite.js";
 import { createHocuspocusConfig } from "./sync/hocuspocus.js";
 import { logger, setLogLevel, LogLevel } from "./utils/logger.js";
 

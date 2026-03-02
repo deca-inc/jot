@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
 import { Router } from "express";
 import { DocumentRepository } from "../db/repositories/documents.js";
 import { SessionRepository } from "../db/repositories/sessions.js";
+import Database from "../db/sqlite.js";
 
 export interface StatusResponse {
   ok: boolean;

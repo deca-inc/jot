@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
-import Database from "better-sqlite3";
 import { migrateTo } from "./migrations.js";
+import Database from "./sqlite.js";
 // Import migrations to register them
 import "./migrations/index.js";
 

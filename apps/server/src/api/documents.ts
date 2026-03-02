@@ -4,11 +4,11 @@
  * Provides endpoints for document sync management.
  */
 
-import Database from "better-sqlite3";
 import { Router, Request, Response } from "express";
 import { AuthService } from "../auth/authService.js";
 import { DocumentRepository } from "../db/repositories/documents.js";
 import { UserRepository } from "../db/repositories/users.js";
+import Database from "../db/sqlite.js";
 import { createAuthMiddleware } from "./middleware/authMiddleware.js";
 
 export function createDocumentsRouter(
