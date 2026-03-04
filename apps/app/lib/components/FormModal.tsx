@@ -14,7 +14,6 @@ import {
   Pressable,
   ScrollView,
   TouchableOpacity,
-  Platform,
   KeyboardAvoidingView,
   useWindowDimensions,
 } from "react-native";
@@ -65,10 +64,7 @@ export function FormModal({
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.keyboardView}
-        >
+        <KeyboardAvoidingView behavior="padding" style={styles.keyboardView}>
           <View
             style={[
               styles.container,
@@ -133,11 +129,11 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
   },
   keyboardView: {
+    flex: 1,
     width: "100%",
+    justifyContent: "center",
     alignItems: "center",
   },
   container: {
