@@ -10,7 +10,6 @@
  * - Password changes (future)
  */
 
-import * as argon2 from "argon2";
 import * as Y from "yjs";
 import { AssetRepository } from "../db/repositories/assets.js";
 import { DocumentRepository } from "../db/repositories/documents.js";
@@ -89,7 +88,7 @@ export async function rotateUserKeys(
     return result;
   }
 
-  const isValidPassword = await argon2.verify(user.passwordHash, password);
+  const isValidPassword = await Bun.password.verify(password, user.passwordHash);
   if (!isValidPassword) {
     result.errors.push("Invalid password");
     return result;

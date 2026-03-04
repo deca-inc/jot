@@ -1,4 +1,3 @@
-import * as argon2 from "argon2";
 import jwt from "jsonwebtoken";
 import { RefreshTokenRepository } from "../db/repositories/refreshTokens.js";
 import { UserRepository, type User, type UEKData } from "../db/repositories/users.js";
@@ -82,11 +81,10 @@ export class AuthService {
     }
 
     // Hash password
-    const passwordHash = await argon2.hash(password, {
-      type: argon2.argon2id,
+    const passwordHash = await Bun.password.hash(password, {
+      algorithm: "argon2id",
       memoryCost: 65536, // 64 MiB
       timeCost: 3,
-      parallelism: 4,
     });
 
     // Create user
@@ -130,7 +128,7 @@ export class AuthService {
     }
 
     // Verify password
-    const isValid = await argon2.verify(user.passwordHash, password);
+    const isValid = await Bun.password.verify(password, user.passwordHash);
     if (!isValid) {
       throw new AuthError("Invalid email or password", "INVALID_CREDENTIALS");
     }
