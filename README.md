@@ -14,11 +14,35 @@ A private, local-first journaling app with on-device AI.
 
 > **Note:** The sync server is currently in beta. It's functional but may have breaking changes.
 
-An optional sync server (`apps/server`) for multi-device sync:
+An optional self-hosted sync server for multi-device sync. Run it on a home server, VPS, or any machine on your network.
+
+**Features:**
 
 - **Yjs sync** - Real-time collaborative document sync via Hocuspocus
+- **TLS support** - HTTPS is required for Android clients (Tailscale certs, Let's Encrypt, or bring your own)
 - **REST API** - Server status and session management
 - **LLM inference** - Server-side AI chat (planned, currently stubbed)
+
+**Quick Install:**
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/deca-inc/jot/main/apps/server/install.sh | bash
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/deca-inc/jot/main/apps/server/install.ps1 | iex
+
+# Start the server
+jot-server start
+```
+
+**Setup Guides:**
+
+- [Linux Setup](apps/server/docs/linux-setup.md) - Ubuntu/Debian with systemd and Tailscale
+- [macOS Setup](apps/server/docs/macos-setup.md) - launchd service with Tailscale
+- [Windows Setup](apps/server/docs/windows-setup.md) - Windows Service with Tailscale
+
+See the [server README](apps/server/README.md) for full documentation.
 
 ## Tech Stack
 

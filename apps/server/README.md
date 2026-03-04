@@ -4,6 +4,14 @@
 
 Sync server for Jot - local-first journaling with end-to-end encryption.
 
+## Platform Setup Guides
+
+For detailed setup instructions including running as a system service and Tailscale integration:
+
+- **[Linux Setup](docs/linux-setup.md)** - Ubuntu/Debian with systemd, Tailscale TLS, firewall config
+- **[macOS Setup](docs/macos-setup.md)** - launchd service, Tailscale integration
+- **[Windows Setup](docs/windows-setup.md)** - Windows Service with NSSM, Tailscale integration
+
 ## Installation
 
 **macOS / Linux:**
@@ -80,6 +88,78 @@ On Windows:
 ```powershell
 $env:JWT_SECRET = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }))
 jot-server start
+```
+
+### TLS / HTTPS
+
+> **Important:** Android requires HTTPS connections - the app will not connect to an HTTP-only server. You must configure TLS certificates for Android clients to sync.
+
+Enable HTTPS by providing certificate and key files:
+
+```bash
+jot-server start --tls-cert /path/to/cert.pem --tls-key /path/to/key.pem
+```
+
+**Certificate options:**
+- **Tailscale** (recommended) - Automatic certs via `tailscale cert`, easy setup, no port forwarding needed
+- **Let's Encrypt** - Free certs via certbot, requires public DNS and port 80/443
+- **Self-signed** - For testing only, requires manual trust on each device
+- **Bring your own** - Any valid certificate chain works
+
+For Tailscale-managed certificates, see the [platform setup guides](#platform-setup-guides).
+
+## Testing & Debugging
+
+### Test Connectivity
+
+```bash
+# Test HTTP endpoint
+curl http://localhost:3000/
+# Expected: {"ok":true,"service":"jot-server"}
+
+# Test API status
+curl http://localhost:3000/api/status
+
+# Test HTTPS (with TLS enabled)
+curl https://your-hostname:3000/
+```
+
+### Verbose Logging
+
+Enable detailed logging with the `--verbose` flag:
+
+```bash
+jot-server start --verbose
+```
+
+### View Logs
+
+**Linux (systemd):**
+```bash
+sudo journalctl -u jot-server -f
+```
+
+**macOS (launchd):**
+```bash
+tail -f ~/.jot-server/logs/stdout.log
+```
+
+**Windows:**
+```powershell
+Get-Content "$env:LOCALAPPDATA\jot-server\logs\stdout.log" -Wait -Tail 50
+```
+
+### Server Commands
+
+```bash
+# Check server status (documents, sessions)
+jot-server status
+
+# List all connected devices/sessions
+jot-server devices
+
+# List only active sessions
+jot-server devices --active-only
 ```
 
 ## Data Storage
