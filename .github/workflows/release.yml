@@ -23,10 +23,11 @@ jobs:
           - os: macos-14
             artifact: jot-server-macos-arm64
             cross_compile: false
-          # macOS Intel - native build on x64 runner
-          - os: macos-13
+          # macOS Intel - cross-compile on ARM64 runner (macos-13 not available)
+          - os: macos-14
             artifact: jot-server-macos-x64
-            cross_compile: false
+            cross_compile: true
+            target: bun-darwin-x64
           # Linux x64 - native build
           - os: ubuntu-latest
             artifact: jot-server-linux-x64
