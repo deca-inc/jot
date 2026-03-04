@@ -19,26 +19,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS Apple Silicon
-          - os: macos-latest
-            target: darwin-arm64
+          # macOS Apple Silicon - native build on ARM64 runner
+          - os: macos-14
             artifact: jot-server-macos-arm64
-          # macOS Intel
-          - os: macos-latest
-            target: darwin-x64
+            cross_compile: false
+          # macOS Intel - native build on x64 runner
+          - os: macos-13
             artifact: jot-server-macos-x64
-          # Linux x64
+            cross_compile: false
+          # Linux x64 - native build
           - os: ubuntu-latest
-            target: linux-x64
             artifact: jot-server-linux-x64
-          # Linux ARM64
+            cross_compile: false
+          # Linux ARM64 - cross-compile (no native GitHub runner available)
           - os: ubuntu-latest
-            target: linux-arm64
             artifact: jot-server-linux-arm64
-          # Windows x64
+            cross_compile: true
+            target: bun-linux-arm64
+          # Windows x64 - native build
           - os: windows-latest
-            target: windows-x64
             artifact: jot-server-windows-x64
+            cross_compile: false
 
     runs-on: ${{ matrix.os }}
 
@@ -61,9 +62,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build executable
+      - name: Build executable (native)
+        if: ${{ !matrix.cross_compile }}
         working-directory: apps/server
-        run: bun build --compile src/cli.ts --outfile jot-server --target=bun-${{ matrix.target }}
+        run: bun build --compile src/cli.ts --outfile jot-server
+
+      - name: Build executable (cross-compile)
+        if: ${{ matrix.cross_compile }}
+        working-directory: apps/server
+        run: bun build --compile src/cli.ts --outfile jot-server --target=${{ matrix.target }}
 
       - name: Prepare release (Unix)
         if: runner.os != 'Windows'
