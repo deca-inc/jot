@@ -72,6 +72,23 @@ jobs:
         working-directory: apps/server
         run: bun build --compile src/cli.ts --outfile jot-server --target=${{ matrix.target }}
 
+      # Smoke test - verify the binary starts (skip for cross-compiled builds)
+      - name: Smoke test (Unix)
+        if: runner.os != 'Windows' && !matrix.cross_compile
+        working-directory: apps/server
+        run: |
+          chmod +x jot-server
+          ./jot-server --help
+          echo "Binary starts successfully"
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        working-directory: apps/server
+        shell: pwsh
+        run: |
+          .\jot-server.exe --help
+          Write-Host "Binary starts successfully"
+
       - name: Prepare release (Unix)
         if: runner.os != 'Windows'
         working-directory: apps/server
