@@ -1,6 +1,5 @@
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pkg = require("../../package.json");
+// Version is hardcoded to avoid runtime package.json lookup in compiled binary
+const VERSION = "1.0.0";
 
 const GITHUB_REPO = "deca-inc/jot";
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
@@ -15,7 +14,7 @@ let latestRelease: ReleaseInfo | null = null;
 let checkInterval: NodeJS.Timeout | null = null;
 
 export function getCurrentVersion(): string {
-  return pkg.version;
+  return VERSION;
 }
 
 export async function checkForUpdates(): Promise<ReleaseInfo | null> {

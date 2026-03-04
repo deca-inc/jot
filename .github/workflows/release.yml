@@ -79,16 +79,35 @@ jobs:
         working-directory: apps/server
         run: |
           chmod +x jot-server
-          ./jot-server --help
-          echo "Binary starts successfully"
+          # Start server in background, wait for it to initialize, then stop it
+          ./jot-server start &
+          SERVER_PID=$!
+          sleep 3
+          # Check if server is still running (didn't crash on startup)
+          if kill -0 $SERVER_PID 2>/dev/null; then
+            echo "Server started successfully"
+            kill $SERVER_PID
+          else
+            echo "Server failed to start"
+            exit 1
+          fi
 
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
         working-directory: apps/server
         shell: pwsh
         run: |
-          .\jot-server.exe --help
-          Write-Host "Binary starts successfully"
+          # Start server in background
+          $process = Start-Process -FilePath ".\jot-server.exe" -ArgumentList "start" -PassThru -NoNewWindow
+          Start-Sleep -Seconds 3
+          # Check if server is still running
+          if (!$process.HasExited) {
+            Write-Host "Server started successfully"
+            Stop-Process -Id $process.Id -Force
+          } else {
+            Write-Host "Server failed to start"
+            exit 1
+          }
 
       - name: Prepare release (Unix)
         if: runner.os != 'Windows'
