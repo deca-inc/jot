@@ -1,5 +1,7 @@
 import { randomBytes } from "crypto";
+import { readFileSync } from "fs";
 import { createServer } from "http";
+import { createServer as createHttpsServer } from "https";
 import { Hocuspocus } from "@hocuspocus/server";
 import express from "express";
 import rateLimit from "express-rate-limit";
@@ -16,6 +18,8 @@ export interface ServerConfig {
   db: Database.Database;
   verbose?: boolean;
   jwtSecret?: string;
+  tlsCert?: string;
+  tlsKey?: string;
 }
 
 export interface JotServer {
@@ -28,7 +32,18 @@ export interface JotServer {
 export function createServer_impl(config: ServerConfig): JotServer {
   const startTime = Date.now();
   const app = express();
-  const httpServer = createServer(app);
+
+  // Create HTTP or HTTPS server based on TLS config
+  const useTls = config.tlsCert && config.tlsKey;
+  const httpServer = useTls
+    ? createHttpsServer(
+        {
+          cert: readFileSync(config.tlsCert!),
+          key: readFileSync(config.tlsKey!),
+        },
+        app,
+      )
+    : createServer(app);
 
   if (config.verbose) {
     setLogLevel("debug");
@@ -120,7 +135,8 @@ export function createServer_impl(config: ServerConfig): JotServer {
           });
 
           logger.info(`WebSocket server ready for Yjs sync`);
-          logger.info(`Server started at http://localhost:${config.port}`);
+          const protocol = useTls ? "https" : "http";
+          logger.info(`Server started at ${protocol}://localhost:${config.port}`);
 
           resolve();
         });

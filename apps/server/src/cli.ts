@@ -31,18 +31,31 @@ program
   .option("-p, --port <port>", "Port to listen on", "3000")
   .option("-d, --data-dir <dir>", "Data directory for database and models", "./data")
   .option("-v, --verbose", "Enable verbose logging")
+  .option("--tls-cert <path>", "Path to TLS certificate file")
+  .option("--tls-key <path>", "Path to TLS private key file")
   .action(async (options) => {
     const port = parseInt(process.env.PORT || options.port, 10);
     const dataDir = options.dataDir;
     const verbose = options.verbose || false;
+    const tlsCert = options.tlsCert;
+    const tlsKey = options.tlsKey;
+
+    // Validate TLS options
+    if ((tlsCert && !tlsKey) || (!tlsCert && tlsKey)) {
+      console.error("Error: Both --tls-cert and --tls-key must be provided for HTTPS");
+      process.exit(1);
+    }
+
+    const useTls = tlsCert && tlsKey;
 
     console.log(`Starting Jot server...`);
     console.log(`  Port: ${port}`);
     console.log(`  Data directory: ${dataDir}`);
+    console.log(`  TLS: ${useTls ? "enabled" : "disabled"}`);
     console.log(`  Verbose: ${verbose}`);
 
     const db = getDatabase({ dataDir, verbose });
-    const server = createServer_impl({ port, db, verbose });
+    const server = createServer_impl({ port, db, verbose, tlsCert, tlsKey });
 
     // Start checking for updates in background
     startUpdateChecker();
