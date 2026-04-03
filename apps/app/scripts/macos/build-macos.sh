@@ -69,6 +69,7 @@ xcodebuild \
     -archivePath "$BUILD_DIR/$SCHEME.xcarchive" \
     -sdk macosx \
     -arch arm64 \
+    -allowProvisioningUpdates \
     archive
 
 # Check if archive was created
