@@ -1643,7 +1643,11 @@ export function AIChatComposer({
         contentContainerStyle={[
           styles.chatMessagesContent,
           {
-            paddingTop: insets.top,
+            // Ensure content clears the floating header (4px offset + 44px button + 8px gap)
+            paddingTop: Math.max(
+              insets.top,
+              spacingPatterns.xxs + 44 + spacingPatterns.xs,
+            ),
             // Add padding for the absolutely positioned input container (~70px)
             paddingBottom: 80 + (insets.bottom || spacingPatterns.sm),
           },

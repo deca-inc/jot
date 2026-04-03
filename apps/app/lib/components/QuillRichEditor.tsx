@@ -93,6 +93,7 @@ export const QuillRichEditor = forwardRef<
   const insets = useSafeAreaInsets();
 
   // Responsive sizing
+  const isDesktopLayout = screenWidth > 768;
   const isSmallScreen = screenWidth < 375;
   const iconSize = isSmallScreen ? 17 : 19;
   const fontSize = isSmallScreen ? 14 : 15;
@@ -637,6 +638,69 @@ export const QuillRichEditor = forwardRef<
       min-width: 40px;
       text-align: right;
       font-variant-numeric: tabular-nums;
+    }
+    ${
+      isDesktopLayout
+        ? `
+    /* Bubble toolbar for desktop/tablet */
+    .bubble-toolbar {
+      position: absolute;
+      display: none;
+      flex-direction: row;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 6px;
+      border-radius: 8px;
+      background: ${seasonalTheme.isDark ? "rgba(50, 50, 50, 0.95)" : "rgba(255, 255, 255, 0.97)"};
+      box-shadow: 0 2px 12px rgba(0, 0, 0, ${seasonalTheme.isDark ? "0.4" : "0.15"}), 0 0 0 1px rgba(${seasonalTheme.isDark ? "255,255,255,0.1" : "0,0,0,0.06"});
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .bubble-toolbar.visible {
+      display: flex;
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .bubble-toolbar .bubble-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border: none;
+      border-radius: 5px;
+      background: transparent;
+      color: ${seasonalTheme.textPrimary};
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s ease;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .bubble-toolbar .bubble-btn:hover {
+      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.07)"};
+    }
+    .bubble-toolbar .bubble-btn.active {
+      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)"};
+      color: ${seasonalTheme.isDark ? "#fff" : "#000"};
+    }
+    .bubble-toolbar .bubble-sep {
+      width: 1px;
+      height: 18px;
+      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)"};
+      margin: 0 3px;
+    }
+    .bubble-toolbar .bubble-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+    `
+        : ""
     }
   `;
 
@@ -1317,12 +1381,167 @@ export const QuillRichEditor = forwardRef<
                 }
               }, true);
             })();
+
+            ${
+              isDesktopLayout
+                ? `
+            // Bubble toolbar for desktop/tablet
+            (function() {
+              var toolbar = document.createElement('div');
+              toolbar.className = 'bubble-toolbar';
+              toolbar.innerHTML =
+                '<button class="bubble-btn" data-format="bold" title="Bold"><strong>B</strong></button>' +
+                '<button class="bubble-btn" data-format="italic" title="Italic"><em>I</em></button>' +
+                '<button class="bubble-btn" data-format="underline" title="Underline"><u>U</u></button>' +
+                '<button class="bubble-btn" data-format="strike" title="Strikethrough"><s>S</s></button>' +
+                '<div class="bubble-sep"></div>' +
+                '<button class="bubble-btn" data-format="header" data-value="1" title="Heading 1" style="font-size:16px">H1</button>' +
+                '<button class="bubble-btn" data-format="header" data-value="2" title="Heading 2" style="font-size:14px">H2</button>' +
+                '<button class="bubble-btn" data-format="header" data-value="3" title="Heading 3" style="font-size:13px">H3</button>' +
+                '<div class="bubble-sep"></div>' +
+                '<button class="bubble-btn" data-format="list" data-value="bullet" title="Bullet List"><svg viewBox="0 0 24 24"><circle cx="4" cy="7" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="4" cy="17" r="2"/><rect x="9" y="6" width="12" height="2" rx="1"/><rect x="9" y="11" width="12" height="2" rx="1"/><rect x="9" y="16" width="12" height="2" rx="1"/></svg></button>' +
+                '<button class="bubble-btn" data-format="list" data-value="ordered" title="Numbered List"><svg viewBox="0 0 24 24"><text x="2" y="9" font-size="7" font-weight="bold" fill="currentColor">1</text><text x="2" y="14.5" font-size="7" font-weight="bold" fill="currentColor">2</text><text x="2" y="20" font-size="7" font-weight="bold" fill="currentColor">3</text><rect x="10" y="6" width="11" height="2" rx="1"/><rect x="10" y="11" width="11" height="2" rx="1"/><rect x="10" y="16" width="11" height="2" rx="1"/></svg></button>' +
+                '<button class="bubble-btn" data-format="list" data-value="unchecked" title="Checklist"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="7 12 10 15 17 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+
+              document.body.appendChild(toolbar);
+
+              // Prevent toolbar clicks from stealing selection
+              toolbar.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+              });
+
+              // Handle format button clicks
+              toolbar.addEventListener('click', function(e) {
+                var btn = e.target.closest('.bubble-btn');
+                if (!btn) return;
+
+                var format = btn.getAttribute('data-format');
+                var value = btn.getAttribute('data-value');
+                if (!format) return;
+
+                if (format === 'header') {
+                  var headerVal = parseInt(value);
+                  var currentFormat = quill.getFormat();
+                  // Toggle: if already this header, remove it
+                  quill.format('header', currentFormat.header === headerVal ? false : headerVal);
+                } else if (format === 'list') {
+                  var currentFormat = quill.getFormat();
+                  // Toggle: if already this list type, remove it
+                  quill.format('list', currentFormat.list === value ? false : value);
+                } else {
+                  // Toggle inline format (bold, italic, etc)
+                  var currentFormat = quill.getFormat();
+                  quill.format(format, !currentFormat[format]);
+                }
+
+                // Update active states after formatting
+                updateBubbleToolbar();
+              });
+
+              function updateBubbleToolbar() {
+                var range = quill.getSelection();
+                if (!range || range.length === 0) return;
+
+                var formats = quill.getFormat(range);
+                var buttons = toolbar.querySelectorAll('.bubble-btn');
+                for (var i = 0; i < buttons.length; i++) {
+                  var btn = buttons[i];
+                  var fmt = btn.getAttribute('data-format');
+                  var val = btn.getAttribute('data-value');
+                  var isActive = false;
+
+                  if (fmt === 'header') {
+                    isActive = formats.header === parseInt(val);
+                  } else if (fmt === 'list') {
+                    isActive = formats.list === val;
+                  } else {
+                    isActive = !!formats[fmt];
+                  }
+
+                  if (isActive) {
+                    btn.classList.add('active');
+                  } else {
+                    btn.classList.remove('active');
+                  }
+                }
+              }
+
+              function positionToolbar(range) {
+                var bounds = quill.getBounds(range.index, range.length);
+                if (!bounds) { toolbar.classList.remove('visible'); return; }
+
+                var toolbarHeight = 38;
+                var gap = 6;
+                var editorEl = document.querySelector('.ql-editor');
+                var containerEl = document.querySelector('.ql-container');
+                if (!editorEl || !containerEl) return;
+
+                var containerRect = containerEl.getBoundingClientRect();
+                var toolbarWidth = toolbar.offsetWidth || 320;
+
+                // Calculate top position (above selection by default)
+                var top = bounds.top - toolbarHeight - gap;
+                // If too close to top, position below selection
+                if (top < 8) {
+                  top = bounds.top + bounds.height + gap;
+                }
+
+                // Calculate left position (centered on selection)
+                var selCenter = bounds.left + (bounds.width / 2);
+                var left = selCenter - (toolbarWidth / 2);
+
+                // Clamp horizontal position
+                if (left < 8) left = 8;
+                if (left + toolbarWidth > containerRect.width - 8) {
+                  left = containerRect.width - toolbarWidth - 8;
+                }
+
+                toolbar.style.top = top + 'px';
+                toolbar.style.left = left + 'px';
+                toolbar.classList.add('visible');
+              }
+
+              setTimeout(function() {
+                if (typeof quill === 'undefined') return;
+
+                quill.on('selection-change', function(range) {
+                  if (range && range.length > 0) {
+                    updateBubbleToolbar();
+                    positionToolbar(range);
+                  } else {
+                    toolbar.classList.remove('visible');
+                  }
+                });
+
+                // Reposition on scroll
+                var editorEl = document.querySelector('.ql-editor');
+                if (editorEl) {
+                  editorEl.addEventListener('scroll', function() {
+                    var range = quill.getSelection();
+                    if (range && range.length > 0) {
+                      positionToolbar(range);
+                    }
+                  });
+                }
+
+                // Also update on text change (formatting may change)
+                quill.on('text-change', function() {
+                  var range = quill.getSelection();
+                  if (range && range.length > 0) {
+                    updateBubbleToolbar();
+                  }
+                });
+              }, 300);
+            })();
+            `
+                : ""
+            }
           `}
         />
       </View>
 
-      {/* Floating Toolbar - swipe down to dismiss keyboard */}
-      {isKeyboardVisible && !hideToolbar && (
+      {/* Floating Toolbar - swipe down to dismiss keyboard (mobile only) */}
+      {isKeyboardVisible && !hideToolbar && !isDesktopLayout && (
         <Animated.View
           {...toolbarPanResponder.panHandlers}
           style={[

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App Sandbox (required for notarization) -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+
+    <!-- Network access for Sparkle updates and sync server -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- File access for user documents and backups -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+
+    <!-- Microphone access for voice transcription -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+
+    <!-- Photos library access for attachments -->
+    <key>com.apple.security.personal-information.photos-library</key>
+    <true/>
+
+    <!-- Application groups for widgets -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.betazeta.jot.widgets</string>
+    </array>
+
+    <!-- Hardened runtime exceptions for Sparkle -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <false/>
+
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <false/>
+</dict>
+</plist>

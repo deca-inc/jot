@@ -8,6 +8,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "macos": "expo run:macos",
+    "expo": "expo",
     "prebuild": "expo prebuild",
     "create:migration": "tsx scripts/createMigration.ts",
     "test:migrations": "tsx scripts/testMigrations.ts",

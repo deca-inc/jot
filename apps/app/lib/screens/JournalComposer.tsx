@@ -477,7 +477,11 @@ export function JournalComposer({
         style={[
           styles.editorContainer,
           {
-            paddingTop: insets.top,
+            // Ensure content clears the floating header (4px offset + 44px button + 8px gap)
+            paddingTop: Math.max(
+              insets.top,
+              spacingPatterns.xxs + 44 + spacingPatterns.xs,
+            ),
           },
         ]}
       >

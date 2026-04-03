@@ -66,6 +66,11 @@ module.exports = ({ config }) => {
     web: {
       favicon: "./assets/favicon.png",
     },
+    macos: {
+      bundleIdentifier: isDev ? "com.betazeta.jot.dev" : "com.betazeta.jot",
+      minimumSystemVersion: "12.0",
+      category: "public.app-category.productivity",
+    },
     plugins: [
       [
         "expo-sqlite",
@@ -97,6 +102,14 @@ module.exports = ({ config }) => {
       "@bacons/apple-targets",
       "./plugins/withCmake",
       "./plugins/withJotWidget",
+      [
+        "./plugins/withSparkle",
+        {
+          feedURL:
+            "https://github.com/deca-inc/jot/releases/latest/download/appcast.xml",
+          publicEDKey: "KhtdMowTo6v2E4BFcrg6EzqNDl2/+bmjCooYZWMPC8A=",
+        },
+      ],
       "@react-native-community/datetimepicker",
       "expo-background-task",
       "expo-localization",

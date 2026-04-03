@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Use Developer ID for distribution outside App Store -->
+    <key>method</key>
+    <string>developer-id</string>
+
+    <!-- Export destination -->
+    <key>destination</key>
+    <string>export</string>
+
+    <!-- Team ID - same as in app.config.js -->
+    <key>teamID</key>
+    <string>RQ4KTR2333</string>
+
+    <!-- Sign for distribution -->
+    <key>signingStyle</key>
+    <string>automatic</string>
+
+    <!-- Include bitcode -->
+    <key>compileBitcode</key>
+    <false/>
+
+    <!-- Strip Swift symbols -->
+    <key>stripSwiftSymbols</key>
+    <true/>
+
+    <!-- Upload symbols for crash reporting -->
+    <key>uploadSymbols</key>
+    <true/>
+</dict>
+</plist>
