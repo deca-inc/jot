@@ -67,9 +67,8 @@ xcodebuild \
     -configuration "$CONFIGURATION" \
     -derivedDataPath "$BUILD_DIR/DerivedData" \
     -archivePath "$BUILD_DIR/$SCHEME.xcarchive" \
-    -destination "generic/platform=macOS" \
-    archive \
-    | xcpretty || true
+    -destination "generic/platform=macOS,variant=Designed for [iPad,iPhone]" \
+    archive
 
 # Check if archive was created
 if [ ! -d "$BUILD_DIR/$SCHEME.xcarchive" ]; then
@@ -104,8 +103,7 @@ xcodebuild \
     -exportArchive \
     -archivePath "$BUILD_DIR/$SCHEME.xcarchive" \
     -exportPath "$BUILD_DIR/Export" \
-    -exportOptionsPlist "$EXPORT_OPTIONS" \
-    | xcpretty || true
+    -exportOptionsPlist "$EXPORT_OPTIONS"
 
 # Check if app was exported
 APP_PATH="$BUILD_DIR/Export/$SCHEME.app"
