@@ -11,8 +11,13 @@ IOS_DIR="$APP_DIR/ios"
 BUILD_DIR="$IOS_DIR/build"
 
 BUILD_TYPE="${1:-release}"
-SCHEME="JotDev"
-WORKSPACE="$IOS_DIR/JotDev.xcworkspace"
+
+# Auto-detect workspace (production builds create "Jot", dev builds create "JotDev")
+WORKSPACE=$(find "$IOS_DIR" -maxdepth 1 -name "*.xcworkspace" -not -name "project.xcworkspace" | head -1)
+if [ -z "$WORKSPACE" ]; then
+    error "No .xcworkspace found in $IOS_DIR. Run 'pod install' first."
+fi
+SCHEME=$(basename "$WORKSPACE" .xcworkspace)
 
 # Colors for output
 RED='\033[0;31m'
@@ -38,10 +43,7 @@ if [ ! -d "$IOS_DIR" ]; then
     error "ios directory not found. Run 'npx expo prebuild --platform macos' first."
 fi
 
-# Check for workspace
-if [ ! -d "$WORKSPACE" ]; then
-    error "Workspace not found at $WORKSPACE. Run 'pod install' in the ios directory first."
-fi
+log "Using workspace: $WORKSPACE (scheme: $SCHEME)"
 
 # Set configuration based on build type
 if [ "$BUILD_TYPE" = "debug" ]; then
