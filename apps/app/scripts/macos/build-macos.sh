@@ -67,7 +67,7 @@ xcodebuild \
     -configuration "$CONFIGURATION" \
     -derivedDataPath "$BUILD_DIR/DerivedData" \
     -archivePath "$BUILD_DIR/$SCHEME.xcarchive" \
-    -destination "generic/platform=macOS,variant=Designed for [iPad,iPhone]" \
+    -destination 'generic/platform=macOS,variant=Designed for [iPad,iPhone]' \
     archive
 
 # Check if archive was created
