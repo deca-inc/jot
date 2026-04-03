@@ -7,12 +7,12 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-MACOS_DIR="$APP_DIR/macos"
-BUILD_DIR="$MACOS_DIR/build"
+IOS_DIR="$APP_DIR/ios"
+BUILD_DIR="$IOS_DIR/build"
 
 BUILD_TYPE="${1:-release}"
-SCHEME="Jot"
-WORKSPACE="$MACOS_DIR/Jot.xcworkspace"
+SCHEME="JotDev"
+WORKSPACE="$IOS_DIR/JotDev.xcworkspace"
 
 # Colors for output
 RED='\033[0;31m'
@@ -33,14 +33,14 @@ error() {
     exit 1
 }
 
-# Check if macos directory exists
-if [ ! -d "$MACOS_DIR" ]; then
-    error "macOS directory not found. Run 'npx expo prebuild --platform macos' first."
+# Check if ios directory exists
+if [ ! -d "$IOS_DIR" ]; then
+    error "ios directory not found. Run 'npx expo prebuild --platform macos' first."
 fi
 
 # Check for workspace
 if [ ! -d "$WORKSPACE" ]; then
-    error "Workspace not found at $WORKSPACE. Run 'pod install' in the macos directory first."
+    error "Workspace not found at $WORKSPACE. Run 'pod install' in the ios directory first."
 fi
 
 # Set configuration based on build type
