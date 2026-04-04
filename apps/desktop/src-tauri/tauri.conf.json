@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.betazeta.jot",
   "build": {
-    "devUrl": "http://localhost:8081",
+    "devUrl": "http://localhost:19006",
     "frontendDist": "../../app/dist"
   },
   "app": {
