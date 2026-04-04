@@ -40,7 +40,7 @@ export function registerBackgroundTasks() {
     (err: unknown) => {
       const error = err as { code?: string; message?: string };
       const code = error?.code || error?.message || String(err);
-      console.warn("[BackgroundTask] Failed to register:", code);
+      console.info("[BackgroundTask] Failed to register:", code);
     },
   );
 }

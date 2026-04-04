@@ -58,13 +58,15 @@ export function ConditionalPostHogProvider({
       options={{
         host: "https://us.i.posthog.com",
         flushAt: 1,
-        errorTracking: {
-          autocapture: {
-            uncaughtExceptions: true,
-            unhandledRejections: true,
-            console: ["error", "warn"],
-          },
-        },
+        errorTracking: __DEV__
+          ? undefined
+          : {
+              autocapture: {
+                uncaughtExceptions: true,
+                unhandledRejections: true,
+                console: ["error", "warn"],
+              },
+            },
       }}
     >
       {children}

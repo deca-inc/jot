@@ -149,7 +149,7 @@ export class SyncClient {
       onDisconnect: () => {
         if (!this.isShuttingDown) {
           this.connectionFailureCount++;
-          console.warn(
+          console.info(
             `[SyncClient] Connection failed ${this.connectionFailureCount}/${this.maxConnectionFailures} for ${docId}`,
           );
 
@@ -165,7 +165,7 @@ export class SyncClient {
       },
       onAuthenticationFailed: () => {
         this.authFailureCount++;
-        console.warn(
+        console.info(
           `[SyncClient] Auth failure ${this.authFailureCount}/${this.maxAuthFailures}`,
         );
 
@@ -233,7 +233,7 @@ export class SyncClient {
       ]);
       return true;
     } catch {
-      console.warn(`[SyncClient] Sync timeout for document ${docId}`);
+      console.info(`[SyncClient] Sync timeout for document ${docId}`);
       return false;
     }
   }

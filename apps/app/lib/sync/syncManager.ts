@@ -150,7 +150,7 @@ export class SyncManager {
       // Verify UEK exists (set up during login/registration)
       const hasKey = await hasUEK();
       if (!hasKey) {
-        console.warn("[SyncManager] UEK not found - E2EE may not work");
+        console.info("[SyncManager] UEK not found - E2EE may not work");
       }
     } catch (error) {
       console.error("[SyncManager] E2EE initialization failed:", error);
@@ -189,7 +189,7 @@ export class SyncManager {
       // Check for stale UEK before proceeding with sync
       const stale = await isUEKStale(uekVersion);
       if (stale) {
-        console.warn(
+        console.info(
           "[SyncManager] Local UEK is stale (server version:",
           uekVersion,
           ")",
@@ -493,7 +493,7 @@ export class SyncManager {
     // Extract encrypted data
     const encryptedData = yjsToEncryptedEntry(ydoc);
     if (!encryptedData) {
-      console.warn("[SyncManager] Could not extract encrypted data");
+      console.info("[SyncManager] Could not extract encrypted data");
       return;
     }
 
@@ -618,7 +618,7 @@ export class SyncManager {
     const ydoc = await this.client.connectDocument(uuid);
     const synced = await this.client.waitForSync(uuid);
     if (!synced) {
-      console.warn("[SyncManager] pullServerEntry: sync timeout");
+      console.info("[SyncManager] pullServerEntry: sync timeout");
       this.client.disconnectDocument(uuid);
       return;
     }
@@ -638,7 +638,7 @@ export class SyncManager {
     if (isYjsEncrypted(ydoc)) {
       const encryptedData = yjsToEncryptedEntry(ydoc);
       if (!encryptedData) {
-        console.warn(
+        console.info(
           "[SyncManager] pullServerEntry: could not extract encrypted data",
         );
         this.client.disconnectDocument(uuid);

@@ -208,7 +208,7 @@ export async function verifyAllModels(
   for (const modelId of downloadedModelIds) {
     const config = allModels.find((m) => m.modelId === modelId);
     if (!config) {
-      console.warn(`Model config not found for ${modelId}`);
+      console.info(`Model config not found for ${modelId}`);
       missing.push(modelId);
       continue;
     }
