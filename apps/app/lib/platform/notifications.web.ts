@@ -63,3 +63,7 @@ export async function setNotificationChannelAsync(
   _id: string,
   _channel: unknown,
 ) {}
+
+export async function getLastNotificationResponseAsync() {
+  return null;
+}

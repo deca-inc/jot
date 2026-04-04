@@ -77,6 +77,7 @@ module.exports = async function (env, argv) {
   const forceReplace = {
     "expo-file-system": path.resolve(platformDir, "fileSystem.web.ts"),
     "expo-sqlite": path.resolve(platformDir, "expoSqlite.web.ts"),
+    "expo-notifications": path.resolve(platformDir, "notifications.web.ts"),
     "@dr.pogodin/react-native-fs": path.resolve(
       platformDir,
       "reactNativeFs.web.ts",
