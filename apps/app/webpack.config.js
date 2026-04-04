@@ -30,11 +30,25 @@ module.exports = async function (env, argv) {
       platformDir,
       "staticServer.web.ts",
     ),
+    // Suppress posthog optional dependency warnings
+    "react-native-device-info": false,
+    "react-native-localize": false,
+    "@react-navigation/native": false,
+    "react-native-navigation": false,
+    "posthog-react-native-session-replay": false,
   };
 
   config.resolve.alias = {
     ...config.resolve.alias,
     ...shims,
+  };
+
+  // Provide empty fallbacks for Node.js modules used by sql.js-fts5
+  config.resolve.fallback = {
+    ...config.resolve.fallback,
+    fs: false,
+    path: false,
+    crypto: false,
   };
 
   // Force replace native modules whose aliases don't match correctly
@@ -59,6 +73,9 @@ module.exports = async function (env, argv) {
       ),
     );
   }
+
+  // Suppress "Critical dependency" warning from react-native-worklets
+  config.module.exprContextCritical = false;
 
   return config;
 };

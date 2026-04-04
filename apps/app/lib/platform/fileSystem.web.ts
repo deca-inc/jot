@@ -114,6 +114,36 @@ export function createDownloadResumable(
   };
 }
 
+export async function getFreeDiskStorageAsync(): Promise<number> {
+  // Estimate: report 1GB available on web
+  return 1_073_741_824;
+}
+
+export class DownloadResumable {
+  _url: string;
+  _fileUri: string;
+  constructor(
+    url: string,
+    fileUri: string,
+    _options?: Record<string, unknown>,
+    _callback?: unknown,
+  ) {
+    this._url = url;
+    this._fileUri = fileUri;
+  }
+  async downloadAsync() {
+    console.warn("[fileSystem.web] DownloadResumable.downloadAsync is a stub");
+    return { uri: this._fileUri, status: 200, headers: {} };
+  }
+  async pauseAsync() {
+    return {};
+  }
+  async resumeAsync() {
+    return { uri: this._fileUri, status: 200, headers: {} };
+  }
+  async cancelAsync() {}
+}
+
 /** Stub Paths API for expo-file-system new API */
 export const Paths = {
   document: { uri: "/web-documents/" },
