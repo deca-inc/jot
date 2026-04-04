@@ -67,8 +67,7 @@ xcodebuild \
     -configuration "$CONFIGURATION" \
     -derivedDataPath "$BUILD_DIR/DerivedData" \
     -archivePath "$BUILD_DIR/$SCHEME.xcarchive" \
-    -sdk macosx \
-    -arch arm64 \
+    -destination "generic/platform=iOS" \
     CODE_SIGNING_ALLOWED=NO \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGN_IDENTITY="" \
