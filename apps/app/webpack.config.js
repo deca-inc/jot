@@ -55,7 +55,10 @@ module.exports = async function (env, argv) {
     // Suppress posthog optional dependency warnings
     "react-native-device-info": false,
     "react-native-localize": false,
-    "@react-navigation/native": false,
+    "@react-navigation/native": path.resolve(
+      platformDir,
+      "reactNavigation.web.ts",
+    ),
     "react-native-navigation": false,
     "posthog-react-native-session-replay": false,
   };
@@ -78,6 +81,12 @@ module.exports = async function (env, argv) {
     "expo-file-system": path.resolve(platformDir, "fileSystem.web.ts"),
     "expo-sqlite": path.resolve(platformDir, "expoSqlite.web.ts"),
     "expo-notifications": path.resolve(platformDir, "notifications.web.ts"),
+    "expo-task-manager": path.resolve(platformDir, "taskManager.web.ts"),
+    "expo-background-task": path.resolve(platformDir, "backgroundTask.web.ts"),
+    "expo-background-fetch": path.resolve(
+      platformDir,
+      "backgroundFetch.web.ts",
+    ),
     "@dr.pogodin/react-native-fs": path.resolve(
       platformDir,
       "reactNativeFs.web.ts",
