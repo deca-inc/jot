@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
+  "productName": "Jot",
+  "version": "0.1.0",
+  "identifier": "com.betazeta.jot",
+  "build": {
+    "devUrl": "http://localhost:8081",
+    "frontendDist": "../../app/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Jot",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/deca-inc/jot/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
+    }
+  }
+}

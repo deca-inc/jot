@@ -1,0 +1,20 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default permissions for the Jot desktop app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "sql:default",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "fs:default",
+    "fs:allow-read",
+    "fs:allow-write",
+    "fs:allow-exists",
+    "fs:allow-mkdir",
+    "shell:default",
+    "shell:allow-spawn",
+    "shell:allow-execute"
+  ]
+}

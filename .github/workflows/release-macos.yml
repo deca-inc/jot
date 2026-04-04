@@ -1,8 +1,19 @@
-name: Build and Release macOS App
+# ===========================================================================
+# DEPRECATED: This workflow is superseded by release-desktop.yml
+#
+# The Jot app has moved from Sparkle-based macOS distribution (iOS
+# "Designed for iPad" + Sparkle updater) to Tauri, which handles building,
+# signing, notarization, and auto-updates natively.
+#
+# This file is preserved for reference only. It will only run on manual
+# dispatch — the automatic tag trigger has been removed.
+#
+# See: .github/workflows/release-desktop.yml
+# ===========================================================================
+
+name: "[DEPRECATED] Build and Release macOS App (Sparkle)"
 
 on:
-  push:
-    tags: ['app-v*']
   workflow_dispatch:
     inputs:
       version:
