@@ -282,12 +282,24 @@ export function JournalComposer({
     [entryId, actionContext],
   );
 
-  // Clean up debounced function on unmount
+  // On unmount or entry switch, cancel pending debounce and save with cache update.
+  // This ensures the React Query cache reflects the latest content when navigating
+  // away via sidebar (where handleBackPress is not called).
   useEffect(() => {
     return () => {
       debouncedSave.cancel();
+
+      const currentContent = htmlContentRef.current;
+      if (currentContent.trim() && !isDeletingRef.current) {
+        const sanitizedContent = stripBase64FromAttachments(currentContent);
+        saveJournalContent(entryId, sanitizedContent, "", actionContext, {
+          updateCache: true,
+        }).catch((error) => {
+          console.error("[JournalComposer] Error saving on unmount:", error);
+        });
+      }
     };
-  }, [debouncedSave]);
+  }, [debouncedSave, entryId, actionContext]);
 
   // Track initial content hash to detect sync updates
   const lastAppliedContentRef = useRef<string | null>(null);

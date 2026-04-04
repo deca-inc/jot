@@ -726,18 +726,6 @@ function EntryListItemComponent({
           >
             {compactPreview}
           </Text>
-          {entry.type !== "countdown" && previewText && entry.title && (
-            <Text
-              variant="caption"
-              numberOfLines={1}
-              style={{
-                color: itemTheme.textSecondary,
-                fontSize: 12,
-              }}
-            >
-              {previewText}
-            </Text>
-          )}
         </View>
         {entry.isPinned && (
           <PinIcon size={12} color={itemTheme.textSecondary + "80"} />

@@ -184,6 +184,7 @@ export function ComposerScreen({
     if (actualEntryId) {
       return (
         <JournalComposer
+          key={`journal-${actualEntryId}`}
           entryId={actualEntryId}
           onSave={onSave}
           onCancel={handleJournalCancel}
