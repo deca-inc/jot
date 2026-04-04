@@ -95,7 +95,7 @@ export function BottomComposer({
           ]}
         >
           <Ionicons
-            name={mode === "journal" ? "book" : "book-outline"}
+            name={mode === "journal" ? "create" : "create-outline"}
             size={16}
             color={
               mode === "journal"

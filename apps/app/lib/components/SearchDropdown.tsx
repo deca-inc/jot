@@ -34,6 +34,8 @@ export interface SearchDropdownProps {
   entryTypeFilter?: EntryTypeFilter;
   onEntryTypeFilterChange?: (filter: EntryTypeFilter) => void;
   onOpenSettings?: () => void;
+  /** Compact mode for sidebar — smaller search bar, hide settings */
+  compact?: boolean;
 }
 
 export function SearchDropdown({
@@ -53,6 +55,7 @@ export function SearchDropdown({
   entryTypeFilter = "all",
   onEntryTypeFilterChange,
   onOpenSettings,
+  compact = false,
 }: SearchDropdownProps) {
   const seasonalTheme = useSeasonalTheme();
   const trackEvent = useTrackEvent();
@@ -102,11 +105,11 @@ export function SearchDropdown({
   });
 
   return (
-    <View style={styles.container}>
+    <View style={compact ? compactSearchStyles.container : styles.container}>
       {/* Search bar - higher z-index keeps it on top */}
       <View
         style={[
-          styles.searchBar,
+          compact ? compactSearchStyles.searchBar : styles.searchBar,
           {
             backgroundColor: seasonalTheme.cardBg,
             borderColor: seasonalTheme.textSecondary + "20",
@@ -115,18 +118,18 @@ export function SearchDropdown({
       >
         <Ionicons
           name="search-outline"
-          size={20}
+          size={compact ? 16 : 20}
           color={seasonalTheme.textSecondary}
-          style={styles.searchIcon}
+          style={compact ? compactSearchStyles.searchIcon : styles.searchIcon}
         />
         <TextInput
           style={[
-            styles.searchInput,
+            compact ? compactSearchStyles.searchInput : styles.searchInput,
             {
               color: seasonalTheme.textPrimary,
             },
           ]}
-          placeholder="Search your entries..."
+          placeholder={compact ? "Search..." : "Search your entries..."}
           placeholderTextColor={seasonalTheme.textSecondary}
           value={searchQuery}
           onChangeText={onSearchChange}
@@ -135,7 +138,7 @@ export function SearchDropdown({
           <TouchableOpacity onPress={onClearSearch} style={styles.clearButton}>
             <Ionicons
               name="close-circle"
-              size={20}
+              size={compact ? 16 : 20}
               color={seasonalTheme.textSecondary}
             />
           </TouchableOpacity>
@@ -146,7 +149,7 @@ export function SearchDropdown({
             trackEvent("Toggle Filters", { visible: !showFilters });
           }}
           style={[
-            styles.iconButton,
+            compact ? compactSearchStyles.iconButton : styles.iconButton,
             {
               backgroundColor:
                 showFilters ||
@@ -162,11 +165,11 @@ export function SearchDropdown({
         >
           <Ionicons
             name="filter-outline"
-            size={20}
+            size={compact ? 16 : 20}
             color={seasonalTheme.textSecondary}
           />
         </TouchableOpacity>
-        {onOpenSettings && (
+        {!compact && onOpenSettings && (
           <TouchableOpacity onPress={onOpenSettings} style={styles.iconButton}>
             <Ionicons
               name="settings-outline"
@@ -237,7 +240,7 @@ export function SearchDropdown({
                           type === "all"
                             ? "apps-outline"
                             : type === "journal"
-                              ? "book-outline"
+                              ? "create-outline"
                               : "chatbubbles-outline"
                         }
                         size={14}
@@ -255,7 +258,7 @@ export function SearchDropdown({
                         {type === "all"
                           ? "All"
                           : type === "journal"
-                            ? "Journal"
+                            ? "Note"
                             : "AI Chat"}
                       </Text>
                     </View>
@@ -569,5 +572,40 @@ const styles = StyleSheet.create({
   toggleLabel: {
     flexDirection: "row",
     alignItems: "center",
+  },
+});
+
+const compactSearchStyles = StyleSheet.create({
+  container: {
+    zIndex: 100,
+    paddingHorizontal: spacingPatterns.xs,
+    paddingTop: spacingPatterns.xs,
+    paddingBottom: 4,
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    minHeight: 34,
+    paddingHorizontal: spacingPatterns.sm,
+    gap: 4,
+    zIndex: 2,
+    position: "relative",
+  },
+  searchIcon: {
+    marginRight: 4,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    paddingVertical: 4,
+  },
+  iconButton: {
+    borderRadius: borderRadius.full,
+    width: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

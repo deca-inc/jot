@@ -8,7 +8,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Platform,
   Keyboard,
   LayoutAnimation,
@@ -16,7 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
-import { Text, Input, FormField } from "../components";
+import { Text, Input, FormField, Toggle } from "../components";
 import { useDatabase } from "../db/DatabaseProvider";
 import { EntryRepository } from "../db/entries";
 import { useCreateEntry, useUpdateEntry, useEntry } from "../db/useEntries";
@@ -39,6 +38,8 @@ export interface CountdownComposerProps {
   entryId?: number;
   onSave?: (entryId: number) => void;
   onCancel?: () => void;
+  /** Compact mode — hides header, constrains width (used in sidebar layout) */
+  compact?: boolean;
 }
 
 // Helper to format date for display
@@ -86,6 +87,7 @@ export function CountdownComposer({
   entryId,
   onSave,
   onCancel,
+  compact = false,
 }: CountdownComposerProps) {
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
@@ -453,33 +455,35 @@ export function CountdownComposer({
         { backgroundColor: seasonalTheme.gradient.middle },
       ]}
     >
-      {/* Header - minimal top padding */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top / 2,
-          },
-        ]}
-      >
-        <TouchableOpacity onPress={handleCancel} style={styles.backButton}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={seasonalTheme.textPrimary}
-          />
-        </TouchableOpacity>
-        <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
-          {entryId ? "Edit Timer" : "New Timer"}
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      {/* Header - hidden in compact/sidebar mode */}
+      {!compact && (
+        <View
+          style={[
+            styles.header,
+            {
+              paddingTop: insets.top / 2,
+            },
+          ]}
+        >
+          <TouchableOpacity onPress={handleCancel} style={styles.backButton}>
+            <Ionicons
+              name="chevron-back"
+              size={24}
+              color={seasonalTheme.textPrimary}
+            />
+          </TouchableOpacity>
+          <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
+            {entryId ? "Edit Timer" : "New Timer"}
+          </Text>
+          <View style={styles.headerSpacer} />
+        </View>
+      )}
 
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={[
-          styles.content,
+          compact ? styles.contentCompact : styles.content,
           // Add extra padding at bottom for the fixed footer + keyboard when visible
           {
             paddingBottom:
@@ -509,7 +513,7 @@ export function CountdownComposer({
         </FormField>
 
         {/* Countdown / Time Since Toggle */}
-        <View style={styles.formGroup}>
+        <View style={compact ? styles.formGroupCompact : styles.formGroup}>
           <Text
             variant="caption"
             style={[styles.label, { color: seasonalTheme.textSecondary }]}
@@ -636,7 +640,7 @@ export function CountdownComposer({
         </View>
 
         {/* Date and Time */}
-        <View style={styles.formGroup}>
+        <View style={compact ? styles.formGroupCompact : styles.formGroup}>
           <Text
             variant="caption"
             style={[styles.label, { color: seasonalTheme.textSecondary }]}
@@ -750,7 +754,7 @@ export function CountdownComposer({
 
         {/* Notification Toggle - only for countdowns, not Time Since */}
         {!isCountUp && (
-          <View style={styles.formGroup}>
+          <View style={compact ? styles.formGroupCompact : styles.formGroup}>
             <View style={styles.toggleRow}>
               <View style={styles.toggleLabel}>
                 <Ionicons
@@ -768,14 +772,9 @@ export function CountdownComposer({
                   Notify When Complete
                 </Text>
               </View>
-              <Switch
+              <Toggle
                 value={notificationEnabled}
                 onValueChange={handleNotificationToggle}
-                trackColor={{
-                  false: seasonalTheme.textSecondary + "30",
-                  true: seasonalTheme.chipText,
-                }}
-                thumbColor={seasonalTheme.isDark ? "#ffffff" : "#f4f3f4"}
               />
             </View>
             <Text
@@ -789,7 +788,7 @@ export function CountdownComposer({
 
         {/* Check-in Reminders - only for countdowns, not Time Since */}
         {!isCountUp && (
-          <View style={styles.formGroup}>
+          <View style={compact ? styles.formGroupCompact : styles.formGroup}>
             <Text
               variant="caption"
               style={[styles.label, { color: seasonalTheme.textSecondary }]}
@@ -798,18 +797,16 @@ export function CountdownComposer({
             </Text>
 
             {/* Recurrence Type Selector */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
+            <View
               style={[
                 styles.recurrenceTypeContainer,
+                styles.recurrenceTypeContent,
                 {
                   backgroundColor: seasonalTheme.isDark
                     ? "rgba(255, 255, 255, 0.08)"
                     : "rgba(0, 0, 0, 0.06)",
                 },
               ]}
-              contentContainerStyle={styles.recurrenceTypeContent}
             >
               {(["none", "daily", "weekly", "monthly"] as const).map((type) => (
                 <TouchableOpacity
@@ -839,7 +836,7 @@ export function CountdownComposer({
                   </Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
 
             {/* Interval Selector - for any non-none recurrence */}
             {recurrenceType !== "none" && (
@@ -1164,7 +1161,9 @@ export function CountdownComposer({
 
             {/* Confetti Toggle - only for countdowns, not Time Since */}
             {!isCountUp && (
-              <View style={styles.formGroup}>
+              <View
+                style={compact ? styles.formGroupCompact : styles.formGroup}
+              >
                 <View style={styles.toggleRow}>
                   <View style={styles.toggleLabel}>
                     <Ionicons
@@ -1182,14 +1181,9 @@ export function CountdownComposer({
                       Confetti Effect
                     </Text>
                   </View>
-                  <Switch
+                  <Toggle
                     value={confettiEnabled}
                     onValueChange={setConfettiEnabled}
-                    trackColor={{
-                      false: seasonalTheme.textSecondary + "30",
-                      true: seasonalTheme.chipText,
-                    }}
-                    thumbColor={seasonalTheme.isDark ? "#ffffff" : "#f4f3f4"}
                   />
                 </View>
                 <Text
@@ -1214,8 +1208,6 @@ export function CountdownComposer({
               keyboardHeight > 0
                 ? spacingPatterns.md
                 : insets.bottom + spacingPatterns.md,
-            // On Android with edge-to-edge, add insets.bottom to account for the
-            // navigation bar area that the keyboard doesn't fully cover
             bottom:
               keyboardHeight > 0
                 ? Platform.OS === "android"
@@ -1225,39 +1217,41 @@ export function CountdownComposer({
           },
         ]}
       >
-        <TouchableOpacity
-          style={[
-            styles.saveButton,
-            isFormValid && !isSaving
-              ? {
-                  backgroundColor: seasonalTheme.textPrimary,
-                }
-              : {
-                  backgroundColor: seasonalTheme.isDark
-                    ? "rgba(255, 255, 255, 0.15)"
-                    : "rgba(0, 0, 0, 0.08)",
-                },
-          ]}
-          onPress={handleSave}
-          disabled={!isFormValid || isSaving}
-          activeOpacity={0.8}
-        >
-          <Text
-            variant="body"
+        <View style={compact ? styles.footerCompactInner : undefined}>
+          <TouchableOpacity
             style={[
-              styles.saveButtonText,
+              styles.saveButton,
               isFormValid && !isSaving
                 ? {
-                    color: seasonalTheme.gradient.middle,
+                    backgroundColor: seasonalTheme.textPrimary,
                   }
                 : {
-                    color: seasonalTheme.textSecondary,
+                    backgroundColor: seasonalTheme.isDark
+                      ? "rgba(255, 255, 255, 0.15)"
+                      : "rgba(0, 0, 0, 0.08)",
                   },
             ]}
+            onPress={handleSave}
+            disabled={!isFormValid || isSaving}
+            activeOpacity={0.8}
           >
-            {isSaving ? "Saving..." : "Save"}
-          </Text>
-        </TouchableOpacity>
+            <Text
+              variant="body"
+              style={[
+                styles.saveButtonText,
+                isFormValid && !isSaving
+                  ? {
+                      color: seasonalTheme.gradient.middle,
+                    }
+                  : {
+                      color: seasonalTheme.textSecondary,
+                    },
+              ]}
+            >
+              {isSaving ? "Saving..." : "Save"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -1288,8 +1282,19 @@ const styles = StyleSheet.create({
     paddingTop: spacingPatterns.sm,
     paddingBottom: spacingPatterns.md,
   },
+  contentCompact: {
+    paddingHorizontal: spacingPatterns.screen,
+    paddingTop: spacingPatterns.sm,
+    paddingBottom: spacingPatterns.md,
+    maxWidth: 640,
+    alignSelf: "center",
+    width: "100%",
+  },
   formGroup: {
     marginBottom: spacingPatterns.lg,
+  },
+  formGroupCompact: {
+    marginBottom: spacingPatterns.md,
   },
   label: {
     marginBottom: spacingPatterns.sm,
@@ -1368,6 +1373,11 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: spacingPatterns.screen,
     paddingTop: spacingPatterns.md,
+  },
+  footerCompactInner: {
+    maxWidth: 640,
+    alignSelf: "center",
+    width: "100%",
   },
   saveButton: {
     borderRadius: borderRadius.md,

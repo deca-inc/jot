@@ -13,6 +13,13 @@ export interface ComposerScreenProps {
   entryId?: number; // For editing existing entries
   parentId?: number; // For creating check-ins linked to a parent entry
   fullScreen?: boolean;
+  /** Hide the back button (e.g., in sidebar layout) */
+  hideBackButton?: boolean;
+  /** Called by AI chat with model info for header rendering */
+  onModelInfo?: (info: {
+    displayName: string;
+    openSelector: () => void;
+  }) => void;
 }
 
 export function ComposerScreen({
@@ -23,6 +30,8 @@ export function ComposerScreen({
   entryId,
   parentId,
   fullScreen = false,
+  hideBackButton = false,
+  onModelInfo,
 }: ComposerScreenProps) {
   const theme = useTheme();
   const entryRepository = useEntryRepository();
@@ -162,6 +171,8 @@ export function ComposerScreen({
         entryId={actualEntryId}
         onSave={handleAIChatSave}
         onCancel={onCancel}
+        hideBackButton={hideBackButton}
+        onModelInfo={onModelInfo}
       />
     );
   }
@@ -176,6 +187,7 @@ export function ComposerScreen({
           entryId={actualEntryId}
           onSave={onSave}
           onCancel={handleJournalCancel}
+          hideBackButton={hideBackButton}
         />
       );
     }

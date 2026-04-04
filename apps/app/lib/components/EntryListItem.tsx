@@ -47,6 +47,7 @@ import { Card } from "./Card";
 import { Dialog } from "./Dialog";
 import { PinIcon } from "./icons/PinIcon";
 import { MenuItem } from "./MenuItem";
+import { PopoverMenu } from "./PopoverMenu";
 import { Text } from "./Text";
 
 export interface EntryListItemProps {
@@ -58,6 +59,10 @@ export interface EntryListItemProps {
   onArchive?: (entry: Entry) => void;
   onResetCountup?: (entry: Entry) => void;
   seasonalTheme?: SeasonalTheme;
+  /** Whether this entry is currently selected (highlighted in sidebar layout) */
+  isSelected?: boolean;
+  /** Compact mode for sidebar — renders slim row instead of full card */
+  compact?: boolean;
 }
 
 function EntryListItemComponent({
@@ -69,6 +74,8 @@ function EntryListItemComponent({
   onArchive,
   onResetCountup,
   seasonalTheme: seasonalThemeProp,
+  isSelected = false,
+  compact = false,
 }: EntryListItemProps) {
   const seasonalThemeFromContext = useSeasonalTheme();
   const { width, height } = useWindowDimensions();
@@ -673,6 +680,160 @@ function EntryListItemComponent({
     }
   };
 
+  // Compact mode: slim row for sidebar
+  if (compact) {
+    const compactPreview =
+      entry.type === "ai_chat"
+        ? entry.title || "AI Chat"
+        : entry.title || previewText || "Untitled";
+
+    return (
+      <TouchableOpacity
+        onPress={() => onPress?.(entry)}
+        activeOpacity={0.7}
+        style={[
+          compactStyles.container,
+          {
+            backgroundColor: isSelected
+              ? itemTheme.textPrimary + "15"
+              : "transparent",
+          },
+        ]}
+      >
+        <Ionicons
+          name={
+            entry.type === "journal"
+              ? "create-outline"
+              : entry.type === "countdown"
+                ? "timer-outline"
+                : "chatbubble-ellipses-outline"
+          }
+          size={16}
+          color={itemTheme.textSecondary}
+          style={compactStyles.icon}
+        />
+        <View style={compactStyles.textContainer}>
+          <Text
+            variant="body"
+            numberOfLines={1}
+            style={[
+              compactStyles.title,
+              {
+                color: itemTheme.textPrimary,
+                fontWeight: isSelected ? "600" : "400",
+              },
+            ]}
+          >
+            {compactPreview}
+          </Text>
+          {entry.type !== "countdown" && previewText && entry.title && (
+            <Text
+              variant="caption"
+              numberOfLines={1}
+              style={{
+                color: itemTheme.textSecondary,
+                fontSize: 12,
+              }}
+            >
+              {previewText}
+            </Text>
+          )}
+        </View>
+        {entry.isPinned && (
+          <PinIcon size={12} color={itemTheme.textSecondary + "80"} />
+        )}
+        {entry.isFavorite && <Ionicons name="star" size={12} color="#FFA500" />}
+
+        {/* Overflow menu as popover */}
+        <PopoverMenu
+          visible={showMenu}
+          onClose={() => setShowMenu(false)}
+          trigger={
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                setShowMenu(true);
+              }}
+              style={compactStyles.menuButton}
+            >
+              <Ionicons
+                name="ellipsis-horizontal"
+                size={16}
+                color={itemTheme.textSecondary}
+              />
+            </TouchableOpacity>
+          }
+        >
+          {entry.type === "countdown" && onEdit && (
+            <MenuItem
+              compact
+              icon="pencil-outline"
+              label="Edit Timer"
+              onPress={() => {
+                setShowMenu(false);
+                onEdit(entry);
+              }}
+            />
+          )}
+          {entry.type === "countdown" && countdownData?.isCountUp && (
+            <MenuItem
+              compact
+              icon="refresh-outline"
+              label="Reset Timer"
+              onPress={() => {
+                setShowMenu(false);
+                setShowResetDialog(true);
+              }}
+            />
+          )}
+          {entry.type === "ai_chat" && (
+            <MenuItem
+              compact
+              icon="pencil-outline"
+              label="Rename"
+              onPress={() => {
+                setShowMenu(false);
+                handleRename();
+              }}
+            />
+          )}
+          <MenuItem
+            compact
+            icon={entry.isFavorite ? "star" : "star-outline"}
+            label={entry.isFavorite ? "Unfavorite" : "Favorite"}
+            onPress={() => {
+              setShowMenu(false);
+              onToggleFavorite?.(entry);
+            }}
+          />
+          <MenuItem
+            compact
+            customIcon={<PinIcon size={16} color={itemTheme.textPrimary} />}
+            label={entry.isPinned ? "Unpin" : "Pin"}
+            onPress={() => {
+              setShowMenu(false);
+              if (onTogglePinned) {
+                onTogglePinned(entry);
+              } else {
+                togglePinnedMutation.mutate(entry.id);
+              }
+            }}
+          />
+          <MenuItem
+            compact
+            icon="trash-outline"
+            label="Delete"
+            variant="destructive"
+            onPress={() => {
+              setShowMenu(false);
+              handleDelete();
+            }}
+          />
+        </PopoverMenu>
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <TouchableOpacity
       onPress={() => onPress?.(entry)}
@@ -687,6 +848,10 @@ function EntryListItemComponent({
             backgroundColor: itemTheme.cardBg,
             shadowColor: itemTheme.subtleGlow.shadowColor,
             shadowOpacity: itemTheme.subtleGlow.shadowOpacity,
+          },
+          isSelected && {
+            borderWidth: 2,
+            borderColor: itemTheme.textPrimary + "40",
           },
         ]}
       >
@@ -705,7 +870,7 @@ function EntryListItemComponent({
             <Ionicons
               name={
                 entry.type === "journal"
-                  ? "book-outline"
+                  ? "create-outline"
                   : entry.type === "countdown"
                     ? "timer-outline"
                     : "chatbubble-ellipses-outline"
@@ -1331,6 +1496,14 @@ function arePropsEqual(
     return false;
   }
 
+  // Compare isSelected and compact
+  if (
+    prevProps.isSelected !== nextProps.isSelected ||
+    prevProps.compact !== nextProps.compact
+  ) {
+    return false;
+  }
+
   // Compare callbacks by reference (they should be stable via useCallback)
   if (
     prevProps.onPress !== nextProps.onPress ||
@@ -1590,5 +1763,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingPatterns.md,
     borderRadius: borderRadius.md,
     alignItems: "center",
+  },
+});
+
+const compactStyles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.md,
+    marginBottom: 2,
+    gap: 8,
+  },
+  icon: {
+    flexShrink: 0,
+  },
+  textContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
+  title: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  menuButton: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
 });

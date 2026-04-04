@@ -27,3 +27,6 @@ export * from "./FormModal";
 export * from "./SyncSetupModal";
 export * from "./SyncSettingsCard";
 export * from "./SyncStatusBanner";
+export * from "./SearchModal";
+export * from "./PopoverMenu";
+export * from "./Toggle";

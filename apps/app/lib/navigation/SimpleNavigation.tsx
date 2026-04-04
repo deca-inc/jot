@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
@@ -6,9 +7,14 @@ import {
   Animated,
   BackHandler,
   Linking,
+  TouchableOpacity,
+  Image,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCreateEntry } from "../db/useEntries";
+import { Text, SearchModal, MenuItem, PopoverMenu } from "../components";
+import { useCreateEntry, useEntry, useDeleteEntry } from "../db/useEntries";
+import { useIsWideScreen } from "../hooks/useIsWideScreen";
 import {
   HomeScreen,
   SettingsScreen,
@@ -18,8 +24,13 @@ import {
 } from "../screens";
 import { CountdownComposer } from "../screens/CountdownComposer";
 import { CountdownViewer } from "../screens/CountdownViewer";
+import { useSyncAuthContext } from "../sync/SyncAuthProvider";
+import { borderRadius, spacingPatterns } from "../theme";
 import { springPresets } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
+
+const appIcon = require("../../assets/icon.png") as number;
 
 type Screen =
   | "home"
@@ -195,16 +206,18 @@ export function SimpleNavigation() {
     });
   }, [canGoBack, handleGoBack, swipeX]);
 
-  // Handle hardware back button (Android) and system back gestures
+  // Handle hardware back button (Android only)
   useEffect(() => {
+    if (Platform.OS === "web") return;
+
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
         if (canGoBack) {
           handleGoBack();
-          return true; // Prevent default behavior (exiting app)
+          return true;
         }
-        return false; // Allow default behavior (exit app) when on home screen
+        return false;
       },
     );
 
@@ -536,6 +549,72 @@ export function SimpleNavigation() {
   };
 
   const seasonalTheme = useSeasonalTheme();
+  const theme = useTheme();
+  const isWideScreen = useIsWideScreen();
+  const syncAuth = useSyncAuthContext();
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showContentMenu, setShowContentMenu] = useState(false);
+  const [modelInfo, setModelInfo] = useState<{
+    displayName: string;
+    openSelector: () => void;
+  } | null>(null);
+  const deleteEntryMutation = useDeleteEntry();
+
+  // Cmd+K / Ctrl+K to open search
+  useEffect(() => {
+    if (!isWideScreen) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setShowSearchModal((v) => !v);
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isWideScreen]);
+
+  const handleSearchSelect = useCallback(
+    (entryId: number, entryType: "journal" | "ai_chat" | "countdown") => {
+      handleOpenEntryEditor(entryId, entryType);
+    },
+    [handleOpenEntryEditor],
+  );
+
+  // Determine currently active entry ID for sidebar highlight
+  const activeEntryId =
+    currentScreen === "entryEditor"
+      ? editingEntryId
+      : currentScreen === "fullEditor"
+        ? fullEditorEntryId
+        : currentScreen === "countdownViewer"
+          ? countdownViewerEntryId
+          : currentScreen === "countdownComposer"
+            ? countdownEntryId
+            : undefined;
+
+  // Fetch active entry for content header title
+  const activeEntryQuery = useEntry(activeEntryId);
+  const activeEntryTitle = activeEntryQuery.data?.title || "";
+  const activeEntryParentId = activeEntryQuery.data?.parentId ?? undefined;
+
+  // Fetch parent entry for breadcrumb
+  const parentEntryQuery = useEntry(activeEntryParentId);
+  const parentEntryTitle = parentEntryQuery.data?.title || "";
+
+  // Auto-select first entry on wide screens when nothing is selected
+  const handleFirstEntryAvailable = useCallback(
+    (entryId: number, entryType: string) => {
+      if (isWideScreen && currentScreen === "home") {
+        handleOpenEntryEditor(
+          entryId,
+          entryType as "journal" | "ai_chat" | "countdown",
+        );
+      }
+    },
+    [isWideScreen, currentScreen, handleOpenEntryEditor],
+  );
 
   // Render overlay screen (everything except home)
   const renderOverlayScreen = () => {
@@ -608,6 +687,565 @@ export function SimpleNavigation() {
 
   const isHomeScreen = currentScreen === "home";
 
+  // Check if current screen is an entry-level screen (shown in content panel on wide)
+  const isEntryScreen =
+    currentScreen === "entryEditor" ||
+    currentScreen === "fullEditor" ||
+    currentScreen === "countdownViewer" ||
+    currentScreen === "countdownComposer" ||
+    currentScreen === "composer";
+
+  // On wide screens, render content panel inline (no overlay)
+  const renderContentPanel = () => {
+    if (currentScreen === "entryEditor") {
+      entryEditorOnCancelRef.current = handleEntryEditorCancel;
+      return (
+        <ComposerScreen
+          entryId={editingEntryId}
+          initialType={composerEntryType}
+          parentId={checkinParentId}
+          onSave={handleEntryEditorSave}
+          onCancel={handleEntryEditorCancel}
+          hideBackButton
+          onModelInfo={setModelInfo}
+        />
+      );
+    }
+    if (currentScreen === "fullEditor") {
+      fullEditorOnCancelRef.current = handleFullEditorCancel;
+      return (
+        <ComposerScreen
+          entryId={fullEditorEntryId}
+          onSave={handleFullEditorSave}
+          onCancel={handleFullEditorCancel}
+          fullScreen
+          hideBackButton
+        />
+      );
+    }
+    if (currentScreen === "composer") {
+      return (
+        <ComposerScreen
+          initialType={composerEntryType}
+          onSave={handleComposerSave}
+          onCancel={handleComposerCancel}
+          hideBackButton
+        />
+      );
+    }
+    if (currentScreen === "countdownComposer") {
+      countdownOnCancelRef.current = handleCountdownCancel;
+      return (
+        <CountdownComposer
+          entryId={countdownEntryId}
+          onSave={handleCountdownSave}
+          onCancel={handleCountdownCancel}
+          compact
+        />
+      );
+    }
+    if (currentScreen === "countdownViewer" && countdownViewerEntryId) {
+      countdownViewerOnCloseRef.current = handleCountdownViewerClose;
+      return (
+        <CountdownViewer
+          entryId={countdownViewerEntryId}
+          onClose={handleCountdownViewerClose}
+          onEdit={handleCountdownViewerEdit}
+          onAddCheckin={handleAddCheckin}
+          onOpenCheckin={handleOpenCheckin}
+          compact
+        />
+      );
+    }
+    return null;
+  };
+
+  // Wide screen: sidebar + content panel
+  if (isWideScreen) {
+    return (
+      <SafeAreaView
+        style={[
+          styles.safeAreaContainer,
+          { backgroundColor: seasonalTheme.gradient.middle },
+        ]}
+        edges={["top"]}
+        onLayout={(event) => {
+          screenWidth.current = event.nativeEvent.layout.width;
+        }}
+      >
+        <View style={styles.sidebarLayout}>
+          {/* Sidebar */}
+          <View
+            style={[
+              styles.sidebar,
+              {
+                borderRightColor: seasonalTheme.isDark
+                  ? "rgba(255,255,255,0.1)"
+                  : "rgba(0,0,0,0.1)",
+              },
+            ]}
+          >
+            {/* Sidebar header */}
+            <View
+              style={[
+                styles.panelHeader,
+                {
+                  borderBottomColor: seasonalTheme.isDark
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.08)",
+                },
+              ]}
+            >
+              <Image source={appIcon} style={styles.logoIcon} />
+              <Text
+                variant="body"
+                style={{
+                  color: seasonalTheme.textPrimary,
+                  fontWeight: "700",
+                  fontSize: 16,
+                }}
+              >
+                Jot
+              </Text>
+            </View>
+
+            {/* New entry actions */}
+            <View style={styles.sidebarActions}>
+              <TouchableOpacity
+                style={styles.sidebarActionButton}
+                onPress={() => handleOpenFullEditor()}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={16}
+                  color={seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontSize: 13,
+                    marginLeft: 8,
+                  }}
+                >
+                  New Note
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sidebarActionButton}
+                onPress={handleCreateNewAIChat}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="chatbubbles-outline"
+                  size={16}
+                  color={seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontSize: 13,
+                    marginLeft: 8,
+                  }}
+                >
+                  New AI Chat
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sidebarActionButton}
+                onPress={handleCreateCountdown}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="timer-outline"
+                  size={16}
+                  color={seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontSize: 13,
+                    marginLeft: 8,
+                  }}
+                >
+                  New Countdown
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sidebarActionButton}
+                onPress={() => setShowSearchModal(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="search-outline"
+                  size={16}
+                  color={seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontSize: 13,
+                    marginLeft: 8,
+                    flex: 1,
+                  }}
+                >
+                  Search
+                </Text>
+                <Text
+                  variant="caption"
+                  style={{
+                    color: seasonalTheme.textSecondary + "80",
+                    fontSize: 11,
+                  }}
+                >
+                  {"\u2318K"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Entry list */}
+            <View style={styles.sidebarList}>
+              <HomeScreen
+                refreshKey={_homeRefreshKey}
+                isVisible={true}
+                onOpenFullEditor={handleOpenFullEditor}
+                onOpenSettings={handleOpenSettings}
+                onOpenEntryEditor={handleOpenEntryEditor}
+                onEditCountdown={handleCountdownViewerEdit}
+                onCreateNewAIChat={handleCreateNewAIChat}
+                onCreateCountdown={handleCreateCountdown}
+                selectedEntryId={activeEntryId}
+                onFirstEntryAvailable={handleFirstEntryAvailable}
+                compact
+              />
+            </View>
+
+            {/* Settings bar at bottom */}
+            <TouchableOpacity
+              style={[
+                styles.sidebarFooter,
+                {
+                  borderTopColor: seasonalTheme.isDark
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.08)",
+                },
+              ]}
+              onPress={handleOpenSettings}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="settings-outline"
+                size={18}
+                color={seasonalTheme.textSecondary}
+              />
+              <Text
+                variant="body"
+                numberOfLines={1}
+                style={{
+                  color: seasonalTheme.textSecondary,
+                  fontSize: 13,
+                  marginLeft: 8,
+                  flex: 1,
+                }}
+              >
+                {syncAuth.state.status === "authenticated" &&
+                syncAuth.state.settings?.email
+                  ? syncAuth.state.settings.email
+                  : "Settings"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Content panel */}
+          <View style={styles.contentPanel}>
+            {/* Content header */}
+            <View
+              style={[
+                styles.panelHeader,
+                {
+                  borderBottomColor: seasonalTheme.isDark
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.08)",
+                },
+              ]}
+            >
+              <View style={styles.headerTitleRow}>
+                {isEntryScreen && activeEntryParentId && parentEntryTitle ? (
+                  <>
+                    <TouchableOpacity
+                      onPress={() =>
+                        handleOpenEntryEditor(
+                          activeEntryParentId,
+                          parentEntryQuery.data?.type as
+                            | "journal"
+                            | "ai_chat"
+                            | "countdown",
+                        )
+                      }
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        variant="body"
+                        numberOfLines={1}
+                        style={{
+                          color: seasonalTheme.textSecondary,
+                          fontSize: 14,
+                        }}
+                      >
+                        {parentEntryTitle}
+                      </Text>
+                    </TouchableOpacity>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={14}
+                      color={seasonalTheme.textSecondary + "80"}
+                      style={{ marginHorizontal: 4 }}
+                    />
+                    <Text
+                      variant="body"
+                      numberOfLines={1}
+                      style={{
+                        color: seasonalTheme.textPrimary,
+                        fontWeight: "600",
+                        fontSize: 14,
+                        flexShrink: 1,
+                      }}
+                    >
+                      {activeEntryTitle || ""}
+                    </Text>
+                  </>
+                ) : (
+                  <Text
+                    variant="body"
+                    numberOfLines={1}
+                    style={{
+                      color: seasonalTheme.textPrimary,
+                      fontWeight: "600",
+                      fontSize: 15,
+                    }}
+                  >
+                    {currentScreen === "settings"
+                      ? "Settings"
+                      : currentScreen === "playground"
+                        ? "Component Playground"
+                        : currentScreen === "countdownComposer"
+                          ? countdownEntryId
+                            ? "Edit Timer"
+                            : "New Timer"
+                          : activeEntryTitle ||
+                            (composerEntryType === "ai_chat" ? "New Chat" : "")}
+                  </Text>
+                )}
+                {/* Model selector in header for AI chats */}
+                {(activeEntryQuery.data?.type === "ai_chat" ||
+                  composerEntryType === "ai_chat") &&
+                  modelInfo && (
+                    <TouchableOpacity
+                      style={styles.headerModelSelector}
+                      onPress={modelInfo.openSelector}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="hardware-chip-outline"
+                        size={13}
+                        color={seasonalTheme.textSecondary}
+                      />
+                      <Text
+                        variant="caption"
+                        numberOfLines={1}
+                        style={{
+                          color: seasonalTheme.textSecondary,
+                          fontSize: 12,
+                          marginLeft: 3,
+                        }}
+                      >
+                        {modelInfo.displayName}
+                      </Text>
+                      <Ionicons
+                        name="chevron-down"
+                        size={11}
+                        color={seasonalTheme.textSecondary + "80"}
+                        style={{ marginLeft: 1 }}
+                      />
+                    </TouchableOpacity>
+                  )}
+              </View>
+              {isEntryScreen && activeEntryId && (
+                <PopoverMenu
+                  visible={showContentMenu}
+                  onClose={() => setShowContentMenu(false)}
+                  trigger={
+                    <TouchableOpacity
+                      onPress={() => setShowContentMenu(true)}
+                      style={styles.headerMenuButton}
+                    >
+                      <Ionicons
+                        name="ellipsis-horizontal"
+                        size={20}
+                        color={seasonalTheme.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  }
+                >
+                  {currentScreen === "countdownViewer" && (
+                    <MenuItem
+                      icon="pencil-outline"
+                      label="Edit Timer"
+                      compact
+                      onPress={() => {
+                        setShowContentMenu(false);
+                        if (activeEntryId) {
+                          handleCountdownViewerEdit(activeEntryId);
+                        }
+                      }}
+                    />
+                  )}
+                  <MenuItem
+                    icon="trash-outline"
+                    label="Delete"
+                    variant="destructive"
+                    compact
+                    onPress={() => {
+                      setShowContentMenu(false);
+                      deleteEntryMutation.mutate(activeEntryId, {
+                        onSuccess: () => {
+                          setCurrentScreen("home");
+                          setEditingEntryId(undefined);
+                          setFullEditorEntryId(undefined);
+                        },
+                      });
+                    }}
+                  />
+                </PopoverMenu>
+              )}
+            </View>
+
+            {/* Content body */}
+            <View style={styles.contentBody}>
+              {isEntryScreen ? (
+                renderContentPanel()
+              ) : currentScreen === "settings" ? (
+                <SettingsScreen
+                  onNavigateToPlayground={handleNavigateToPlayground}
+                  onNavigateToQuillEditor={handleNavigateToQuillEditor}
+                  onBack={handleSettingsBack}
+                  compact
+                />
+              ) : currentScreen === "playground" ? (
+                <ComponentPlaygroundScreen onBack={handlePlaygroundBack} />
+              ) : currentScreen === "quillEditor" ? (
+                <QuillEditorScreen onBack={handleQuillEditorBack} />
+              ) : (
+                /* Empty state */
+                <View
+                  style={[
+                    styles.emptyContentPanel,
+                    { backgroundColor: seasonalTheme.gradient.middle },
+                  ]}
+                >
+                  <Ionicons
+                    name="journal-outline"
+                    size={48}
+                    color={seasonalTheme.textSecondary + "60"}
+                  />
+                  <Text
+                    variant="h3"
+                    style={{
+                      color: seasonalTheme.textSecondary,
+                      marginTop: spacingPatterns.md,
+                      textAlign: "center",
+                    }}
+                  >
+                    Select an entry
+                  </Text>
+                  <Text
+                    variant="body"
+                    style={{
+                      color: seasonalTheme.textSecondary + "80",
+                      marginTop: spacingPatterns.xs,
+                      textAlign: "center",
+                    }}
+                  >
+                    Or create a new note, AI chat, or countdown
+                  </Text>
+                  <View style={styles.emptyActions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.emptyActionButton,
+                        {
+                          backgroundColor: seasonalTheme.isDark
+                            ? "rgba(255,255,255,0.08)"
+                            : "rgba(0,0,0,0.05)",
+                        },
+                      ]}
+                      onPress={() => handleOpenFullEditor()}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="create-outline"
+                        size={20}
+                        color={theme.colors.accent}
+                      />
+                      <Text
+                        variant="body"
+                        style={{
+                          color: seasonalTheme.textPrimary,
+                          fontWeight: "500",
+                          marginLeft: spacingPatterns.xs,
+                        }}
+                      >
+                        New Note
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.emptyActionButton,
+                        {
+                          backgroundColor: seasonalTheme.isDark
+                            ? "rgba(255,255,255,0.08)"
+                            : "rgba(0,0,0,0.05)",
+                        },
+                      ]}
+                      onPress={handleCreateNewAIChat}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="chatbubbles-outline"
+                        size={20}
+                        color={theme.colors.accent}
+                      />
+                      <Text
+                        variant="body"
+                        style={{
+                          color: seasonalTheme.textPrimary,
+                          fontWeight: "500",
+                          marginLeft: spacingPatterns.xs,
+                        }}
+                      >
+                        AI Chat
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+
+        <SearchModal
+          visible={showSearchModal}
+          onClose={() => setShowSearchModal(false)}
+          onSelectEntry={handleSearchSelect}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // Narrow screen: stacked navigation (original behavior)
   return (
     <SafeAreaView
       style={[
@@ -677,5 +1315,109 @@ const styles = StyleSheet.create({
   overlayContent: {
     ...StyleSheet.absoluteFillObject,
     flex: 1,
+  },
+  sidebarLayout: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  sidebar: {
+    width: 280,
+    borderRightWidth: 1,
+    // Absolute positioning gives a definite height from the parent,
+    // so children (FlatList) scroll within bounds instead of stretching the row
+    position: "absolute",
+    top: 0,
+    left: 0,
+    bottom: 0,
+    flexDirection: "column",
+  },
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 48,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    flexShrink: 0,
+    gap: 8,
+  },
+  logoIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+  },
+  headerTitleRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+  },
+  headerModelSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: spacingPatterns.sm,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius: borderRadius.sm,
+  },
+  headerMenuButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: borderRadius.md,
+  },
+  contentBody: {
+    flex: 1,
+  },
+  sidebarActions: {
+    paddingHorizontal: spacingPatterns.xs,
+    paddingTop: spacingPatterns.xs,
+    paddingBottom: 4,
+    flexShrink: 0,
+  },
+  sidebarActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: borderRadius.md,
+  },
+  sidebarList: {
+    flex: 1,
+    overflow: "hidden",
+  },
+  sidebarFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderTopWidth: 1,
+    flexShrink: 0,
+  },
+  contentPanel: {
+    // Absolute positioning gives a definite height so ScrollView/FlatList
+    // inside (e.g. Settings) scrolls within bounds
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 280,
+  },
+  emptyContentPanel: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacingPatterns.xl,
+  },
+  emptyActions: {
+    marginTop: spacingPatterns.lg,
+    gap: spacingPatterns.sm,
+  },
+  emptyActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacingPatterns.sm,
+    paddingHorizontal: spacingPatterns.md,
+    borderRadius: 8,
   },
 });

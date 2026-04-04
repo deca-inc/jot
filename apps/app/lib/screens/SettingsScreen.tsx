@@ -34,12 +34,15 @@ interface SettingsScreenProps {
   onNavigateToPlayground?: () => void;
   onNavigateToQuillEditor?: () => void;
   onBack?: () => void;
+  /** Compact mode — hides back button and header (used in sidebar layout where header is external) */
+  compact?: boolean;
 }
 
 export function SettingsScreen({
   onNavigateToPlayground,
   onNavigateToQuillEditor,
   onBack,
+  compact = false,
 }: SettingsScreenProps) {
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
@@ -185,6 +188,12 @@ export function SettingsScreen({
     }
   };
 
+  const sectionStyle = compact ? styles.sectionCompact : styles.section;
+  const titleStyle = compact ? styles.sectionTitleCompact : styles.sectionTitle;
+  const descStyle = compact
+    ? styles.sectionDescriptionCompact
+    : styles.sectionDescription;
+
   // Show UI shell immediately - settings are loaded by ThemeControl component
   return (
     <View
@@ -196,37 +205,39 @@ export function SettingsScreen({
       <ScrollView
         style={styles.container}
         contentContainerStyle={[
-          styles.content,
+          compact ? styles.contentCompact : styles.content,
           { paddingBottom: insets.bottom + spacingPatterns.screen },
         ]}
       >
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            {onBack && (
-              <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                <Ionicons
-                  name="arrow-back"
-                  size={24}
-                  color={seasonalTheme.textPrimary}
-                />
-              </TouchableOpacity>
-            )}
-            <Text
-              variant="h1"
-              style={[
-                onBack && styles.headerWithBack,
-                { color: seasonalTheme.textPrimary },
-              ]}
-            >
-              Settings
-            </Text>
+        {!compact && (
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              {onBack && (
+                <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                  <Ionicons
+                    name="arrow-back"
+                    size={24}
+                    color={seasonalTheme.textPrimary}
+                  />
+                </TouchableOpacity>
+              )}
+              <Text
+                variant="h1"
+                style={[
+                  onBack && styles.headerWithBack,
+                  { color: seasonalTheme.textPrimary },
+                ]}
+              >
+                Settings
+              </Text>
+            </View>
           </View>
-        </View>
+        )}
 
         <Card
           variant="borderless"
           style={[
-            styles.section,
+            sectionStyle,
             {
               backgroundColor: seasonalTheme.cardBg,
               shadowColor: seasonalTheme.subtleGlow.shadowColor,
@@ -235,17 +246,17 @@ export function SettingsScreen({
           ]}
         >
           <Text
-            variant="h3"
-            style={[styles.sectionTitle, { color: seasonalTheme.textPrimary }]}
+            variant={compact ? "body" : "h3"}
+            style={[
+              titleStyle,
+              { color: seasonalTheme.textPrimary, fontWeight: "600" },
+            ]}
           >
             Theme
           </Text>
           <Text
             variant="body"
-            style={[
-              styles.sectionDescription,
-              { color: seasonalTheme.textSecondary },
-            ]}
+            style={[descStyle, { color: seasonalTheme.textSecondary }]}
           >
             Customize the app's seasonal theme
           </Text>
@@ -256,7 +267,7 @@ export function SettingsScreen({
         <Card
           variant="borderless"
           style={[
-            styles.section,
+            sectionStyle,
             {
               backgroundColor: seasonalTheme.cardBg,
               shadowColor: seasonalTheme.subtleGlow.shadowColor,
@@ -265,17 +276,17 @@ export function SettingsScreen({
           ]}
         >
           <Text
-            variant="h3"
-            style={[styles.sectionTitle, { color: seasonalTheme.textPrimary }]}
+            variant={compact ? "body" : "h3"}
+            style={[
+              titleStyle,
+              { color: seasonalTheme.textPrimary, fontWeight: "600" },
+            ]}
           >
             AI Models
           </Text>
           <Text
             variant="body"
-            style={[
-              styles.sectionDescription,
-              { color: seasonalTheme.textSecondary },
-            ]}
+            style={[descStyle, { color: seasonalTheme.textSecondary }]}
           >
             Manage on-device AI models
           </Text>
@@ -334,7 +345,7 @@ export function SettingsScreen({
         <Card
           variant="borderless"
           style={[
-            styles.section,
+            sectionStyle,
             {
               backgroundColor: seasonalTheme.cardBg,
               shadowColor: seasonalTheme.subtleGlow.shadowColor,
@@ -343,17 +354,17 @@ export function SettingsScreen({
           ]}
         >
           <Text
-            variant="h3"
-            style={[styles.sectionTitle, { color: seasonalTheme.textPrimary }]}
+            variant={compact ? "body" : "h3"}
+            style={[
+              titleStyle,
+              { color: seasonalTheme.textPrimary, fontWeight: "600" },
+            ]}
           >
             Encryption
           </Text>
           <Text
             variant="body"
-            style={[
-              styles.sectionDescription,
-              { color: seasonalTheme.textSecondary },
-            ]}
+            style={[descStyle, { color: seasonalTheme.textSecondary }]}
           >
             Manage encryption settings and master key
           </Text>
@@ -368,7 +379,7 @@ export function SettingsScreen({
         <Card
           variant="borderless"
           style={[
-            styles.section,
+            sectionStyle,
             {
               backgroundColor: seasonalTheme.cardBg,
               shadowColor: seasonalTheme.subtleGlow.shadowColor,
@@ -377,17 +388,17 @@ export function SettingsScreen({
           ]}
         >
           <Text
-            variant="h3"
-            style={[styles.sectionTitle, { color: seasonalTheme.textPrimary }]}
+            variant={compact ? "body" : "h3"}
+            style={[
+              titleStyle,
+              { color: seasonalTheme.textPrimary, fontWeight: "600" },
+            ]}
           >
             Backup
           </Text>
           <Text
             variant="body"
-            style={[
-              styles.sectionDescription,
-              { color: seasonalTheme.textSecondary },
-            ]}
+            style={[descStyle, { color: seasonalTheme.textSecondary }]}
           >
             Configure backup providers and schedule
           </Text>
@@ -405,7 +416,7 @@ export function SettingsScreen({
         <Card
           variant="borderless"
           style={[
-            styles.section,
+            sectionStyle,
             {
               backgroundColor: seasonalTheme.cardBg,
               shadowColor: seasonalTheme.subtleGlow.shadowColor,
@@ -414,17 +425,17 @@ export function SettingsScreen({
           ]}
         >
           <Text
-            variant="h3"
-            style={[styles.sectionTitle, { color: seasonalTheme.textPrimary }]}
+            variant={compact ? "body" : "h3"}
+            style={[
+              titleStyle,
+              { color: seasonalTheme.textPrimary, fontWeight: "600" },
+            ]}
           >
             Privacy
           </Text>
           <Text
             variant="body"
-            style={[
-              styles.sectionDescription,
-              { color: seasonalTheme.textSecondary },
-            ]}
+            style={[descStyle, { color: seasonalTheme.textSecondary }]}
           >
             Control your data and privacy preferences
           </Text>
@@ -566,7 +577,7 @@ export function SettingsScreen({
           <Card
             variant="borderless"
             style={[
-              styles.section,
+              sectionStyle,
               styles.adminSection,
               {
                 backgroundColor: seasonalTheme.cardBg,
@@ -577,20 +588,17 @@ export function SettingsScreen({
             ]}
           >
             <Text
-              variant="h3"
+              variant={compact ? "body" : "h3"}
               style={[
-                styles.sectionTitle,
-                { color: seasonalTheme.textPrimary },
+                titleStyle,
+                { color: seasonalTheme.textPrimary, fontWeight: "600" },
               ]}
             >
               🔧 Admin (Dev Only)
             </Text>
             <Text
               variant="body"
-              style={[
-                styles.sectionDescription,
-                { color: seasonalTheme.textSecondary },
-              ]}
+              style={[descStyle, { color: seasonalTheme.textSecondary }]}
             >
               Developer tools and utilities
             </Text>
@@ -751,6 +759,13 @@ const styles = StyleSheet.create({
   content: {
     padding: spacingPatterns.screen,
   },
+  contentCompact: {
+    paddingHorizontal: spacingPatterns.screen,
+    paddingTop: spacingPatterns.xs,
+    maxWidth: 640,
+    alignSelf: "center",
+    width: "100%",
+  },
   header: {
     marginBottom: spacingPatterns.section,
   },
@@ -772,6 +787,10 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: spacingPatterns.md,
   },
+  sectionCompact: {
+    marginBottom: spacingPatterns.sm,
+    padding: spacingPatterns.sm,
+  },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -784,9 +803,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginBottom: spacingPatterns.xs,
   },
+  sectionTitleCompact: {
+    marginBottom: 2,
+    fontSize: 15,
+  },
   sectionDescription: {
     marginTop: spacingPatterns.xs,
     marginBottom: spacingPatterns.xxs,
+  },
+  sectionDescriptionCompact: {
+    marginTop: 2,
+    marginBottom: 0,
+    fontSize: 13,
   },
   subsectionTitle: {
     marginTop: spacingPatterns.md,

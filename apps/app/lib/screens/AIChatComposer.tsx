@@ -74,6 +74,13 @@ export interface AIChatComposerProps {
   initialBlocks?: Block[];
   onSave?: (entryId: number) => void;
   onCancel?: () => void;
+  /** Hide the back button (e.g., in sidebar layout) */
+  hideBackButton?: boolean;
+  /** Called with model display name so parent can render it in the header */
+  onModelInfo?: (info: {
+    displayName: string;
+    openSelector: () => void;
+  }) => void;
 }
 
 // Stable empty arrays to avoid re-renders
@@ -289,6 +296,8 @@ export function AIChatComposer({
   initialBlocks = EMPTY_BLOCKS,
   onSave: _onSave,
   onCancel,
+  hideBackButton = false,
+  onModelInfo,
 }: AIChatComposerProps) {
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
@@ -438,6 +447,27 @@ export function AIChatComposer({
     remoteModels,
     customLocalModels,
   ]);
+
+  // Expose model info to parent for header rendering
+  const hasAnyModels =
+    downloadedModels.length > 0 ||
+    platformLLMs.length > 0 ||
+    remoteModels.some((m) => m.isEnabled && m.privacyAcknowledged) ||
+    customLocalModels.length > 0;
+  const onModelInfoRef = useRef(onModelInfo);
+  onModelInfoRef.current = onModelInfo;
+  useEffect(() => {
+    onModelInfoRef.current?.({
+      displayName: hasAnyModels ? selectorDisplayName : "No Model",
+      openSelector: () => {
+        if (hasAnyModels) {
+          setShowModelSelector(true);
+        } else {
+          setShowModelManager(true);
+        }
+      },
+    });
+  }, [selectorDisplayName, hasAnyModels]);
 
   // Handle agent selection
   const handleSelectAgent = useCallback(
@@ -1117,110 +1147,112 @@ export function AIChatComposer({
         disabled={createEntry.isPending || updateEntry.isPending}
         deleteConfirmTitle="Delete Conversation"
         deleteConfirmMessage="Are you sure you want to delete this conversation? This action cannot be undone."
+        hideBackButton={hideBackButton}
       />
 
-      {/* Model Selector - next to back button (show if multiple options available) */}
-      {(downloadedModels.length > 1 ||
-        platformLLMs.length > 0 ||
-        agents.length > 0) && (
-        <View
-          style={[
-            styles.modelSelectorContainer,
-            !glassAvailable && styles.fallbackShadow,
-          ]}
-        >
-          {glassAvailable ? (
-            <GlassView
-              glassEffectStyle="regular"
-              tintColor={seasonalTheme.cardBg}
-              style={styles.modelSelectorGlass}
-            >
-              <TouchableOpacity
-                onPress={() => setShowModelSelector(true)}
-                style={styles.modelSelectorButton}
-                disabled={isGenerating}
+      {/* Model Selector - floating glass pill (mobile only, desktop uses header) */}
+      {!hideBackButton &&
+        (downloadedModels.length > 1 ||
+          platformLLMs.length > 0 ||
+          agents.length > 0) && (
+          <View
+            style={[
+              styles.modelSelectorContainer,
+              !glassAvailable && styles.fallbackShadow,
+            ]}
+          >
+            {glassAvailable ? (
+              <GlassView
+                glassEffectStyle="regular"
+                tintColor={seasonalTheme.cardBg}
+                style={styles.modelSelectorGlass}
               >
-                <Ionicons
-                  name="hardware-chip-outline"
-                  size={16}
-                  color={
-                    isGenerating
-                      ? seasonalTheme.textSecondary
-                      : seasonalTheme.textPrimary
-                  }
-                />
-                <Text
-                  variant="caption"
-                  style={{
-                    color: isGenerating
-                      ? seasonalTheme.textSecondary
-                      : seasonalTheme.textPrimary,
-                    fontWeight: "500",
-                    marginLeft: 4,
-                  }}
-                  numberOfLines={1}
+                <TouchableOpacity
+                  onPress={() => setShowModelSelector(true)}
+                  style={styles.modelSelectorButton}
+                  disabled={isGenerating}
                 >
-                  {selectorDisplayName}
-                </Text>
-                <Ionicons
-                  name="chevron-down"
-                  size={14}
-                  color={
-                    isGenerating
-                      ? seasonalTheme.textSecondary
-                      : seasonalTheme.textPrimary
-                  }
-                />
-              </TouchableOpacity>
-            </GlassView>
-          ) : (
-            <View
-              style={[
-                styles.modelSelectorGlass,
-                { backgroundColor: seasonalTheme.glassFallbackBg },
-              ]}
-            >
-              <TouchableOpacity
-                onPress={() => setShowModelSelector(true)}
-                style={styles.modelSelectorButton}
-                disabled={isGenerating}
+                  <Ionicons
+                    name="hardware-chip-outline"
+                    size={16}
+                    color={
+                      isGenerating
+                        ? seasonalTheme.textSecondary
+                        : seasonalTheme.textPrimary
+                    }
+                  />
+                  <Text
+                    variant="caption"
+                    style={{
+                      color: isGenerating
+                        ? seasonalTheme.textSecondary
+                        : seasonalTheme.textPrimary,
+                      fontWeight: "500",
+                      marginLeft: 4,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {selectorDisplayName}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={14}
+                    color={
+                      isGenerating
+                        ? seasonalTheme.textSecondary
+                        : seasonalTheme.textPrimary
+                    }
+                  />
+                </TouchableOpacity>
+              </GlassView>
+            ) : (
+              <View
+                style={[
+                  styles.modelSelectorGlass,
+                  { backgroundColor: seasonalTheme.glassFallbackBg },
+                ]}
               >
-                <Ionicons
-                  name="hardware-chip-outline"
-                  size={16}
-                  color={
-                    isGenerating
-                      ? seasonalTheme.textSecondary
-                      : seasonalTheme.textPrimary
-                  }
-                />
-                <Text
-                  variant="caption"
-                  style={{
-                    color: isGenerating
-                      ? seasonalTheme.textSecondary
-                      : seasonalTheme.textPrimary,
-                    fontWeight: "500",
-                    marginLeft: 4,
-                  }}
-                  numberOfLines={1}
+                <TouchableOpacity
+                  onPress={() => setShowModelSelector(true)}
+                  style={styles.modelSelectorButton}
+                  disabled={isGenerating}
                 >
-                  {selectorDisplayName}
-                </Text>
-                <Ionicons
-                  name="chevron-down"
-                  size={14}
-                  color={
-                    isGenerating
-                      ? seasonalTheme.textSecondary
-                      : seasonalTheme.textPrimary
-                  }
-                />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      )}
+                  <Ionicons
+                    name="hardware-chip-outline"
+                    size={16}
+                    color={
+                      isGenerating
+                        ? seasonalTheme.textSecondary
+                        : seasonalTheme.textPrimary
+                    }
+                  />
+                  <Text
+                    variant="caption"
+                    style={{
+                      color: isGenerating
+                        ? seasonalTheme.textSecondary
+                        : seasonalTheme.textPrimary,
+                      fontWeight: "500",
+                      marginLeft: 4,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {selectorDisplayName}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={14}
+                    color={
+                      isGenerating
+                        ? seasonalTheme.textSecondary
+                        : seasonalTheme.textPrimary
+                    }
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
 
       {/* Model Selector Dialog */}
       <Dialog
@@ -1644,10 +1676,13 @@ export function AIChatComposer({
           styles.chatMessagesContent,
           {
             // Ensure content clears the floating header (4px offset + 44px button + 8px gap)
-            paddingTop: Math.max(
-              insets.top,
-              spacingPatterns.xxs + 44 + spacingPatterns.xs,
-            ),
+            // When back button is hidden (desktop sidebar), use minimal padding
+            paddingTop: hideBackButton
+              ? spacingPatterns.sm
+              : Math.max(
+                  insets.top,
+                  spacingPatterns.xxs + 44 + spacingPatterns.xs,
+                ),
             // Add padding for the absolutely positioned input container (~70px)
             paddingBottom: 80 + (insets.bottom || spacingPatterns.sm),
           },
@@ -1728,7 +1763,7 @@ export function AIChatComposer({
         style={[
           styles.chatInputContainer,
           {
-            backgroundColor: seasonalTheme.cardBg,
+            backgroundColor: seasonalTheme.gradient.middle,
             paddingBottom:
               keyboardHeight > 0
                 ? spacingPatterns.sm
@@ -1749,7 +1784,7 @@ export function AIChatComposer({
               left: 0,
               right: 0,
               height: 200,
-              backgroundColor: seasonalTheme.cardBg,
+              backgroundColor: seasonalTheme.gradient.middle,
             }}
           />
         )}
@@ -1761,7 +1796,11 @@ export function AIChatComposer({
             {
               color: seasonalTheme.textPrimary,
               borderColor: seasonalTheme.textSecondary + "20",
+              backgroundColor: seasonalTheme.isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.04)",
             },
+            { outlineStyle: "none" } as any, // web-only: remove browser focus outline
           ]}
           placeholder="Type your message..."
           placeholderTextColor={seasonalTheme.textSecondary}

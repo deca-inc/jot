@@ -37,6 +37,8 @@ export interface CountdownViewerProps {
   onOpenCheckin?: (entryId: number) => void;
   showCheckinPrompt?: boolean;
   onDismissCheckinPrompt?: () => void;
+  /** Compact mode — hides header, constrains width (used in sidebar layout) */
+  compact?: boolean;
 }
 
 // Helper to format date for display
@@ -86,6 +88,7 @@ export function CountdownViewer({
   onEdit,
   onAddCheckin,
   onOpenCheckin,
+  compact = false,
 }: CountdownViewerProps) {
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
@@ -301,35 +304,37 @@ export function CountdownViewer({
         { backgroundColor: seasonalTheme.gradient.middle },
       ]}
     >
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity onPress={handleClose} style={styles.backButton}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={seasonalTheme.textPrimary}
-          />
-        </TouchableOpacity>
-        <Text
-          variant="body"
-          style={{ color: seasonalTheme.textSecondary, flex: 1 }}
-        >
-          {countdownData.isCountUp ? "Time Since" : "Countdown"}
-        </Text>
-        <TouchableOpacity
-          onPress={() => setShowMenu(true)}
-          style={styles.menuButton}
-        >
-          <Ionicons
-            name="ellipsis-horizontal"
-            size={24}
-            color={seasonalTheme.textPrimary}
-          />
-        </TouchableOpacity>
-      </View>
+      {/* Header — hidden in compact/sidebar mode */}
+      {!compact && (
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <TouchableOpacity onPress={handleClose} style={styles.backButton}>
+            <Ionicons
+              name="chevron-back"
+              size={24}
+              color={seasonalTheme.textPrimary}
+            />
+          </TouchableOpacity>
+          <Text
+            variant="body"
+            style={{ color: seasonalTheme.textSecondary, flex: 1 }}
+          >
+            {countdownData.isCountUp ? "Time Since" : "Countdown"}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setShowMenu(true)}
+            style={styles.menuButton}
+          >
+            <Ionicons
+              name="ellipsis-horizontal"
+              size={24}
+              color={seasonalTheme.textPrimary}
+            />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Fixed Top Section - Title, Timer, Date */}
-      <View style={styles.topSection}>
+      <View style={[styles.topSection, compact && styles.topSectionCompact]}>
         {/* Title */}
         <Text
           variant="h1"
@@ -398,6 +403,7 @@ export function CountdownViewer({
           style={[
             styles.checkinsSectionHeader,
             { paddingHorizontal: spacingPatterns.screen },
+            compact && styles.checkinsSectionHeaderCompact,
           ]}
         >
           <Text variant="h3" style={{ color: seasonalTheme.textPrimary }}>
@@ -417,7 +423,7 @@ export function CountdownViewer({
         <ScrollView
           style={styles.checkinsScrollView}
           contentContainerStyle={[
-            styles.checkinsContent,
+            compact ? styles.checkinsContentCompact : styles.checkinsContent,
             { paddingBottom: insets.bottom + 80 },
           ]}
           refreshControl={
@@ -526,33 +532,38 @@ export function CountdownViewer({
           },
         ]}
       >
-        <TouchableOpacity
-          style={[
-            styles.addCheckinButton,
-            { backgroundColor: seasonalTheme.chipText },
-          ]}
-          onPress={handleAddCheckin}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="add"
-            size={20}
-            color={seasonalTheme.isDark ? "#000" : "#fff"}
-          />
-          <Text
-            variant="body"
+        <View style={compact ? styles.footerCompactInner : undefined}>
+          <TouchableOpacity
             style={[
-              styles.addCheckinText,
-              { color: seasonalTheme.isDark ? "#000" : "#fff" },
+              styles.addCheckinButton,
+              { backgroundColor: seasonalTheme.chipText },
             ]}
+            onPress={handleAddCheckin}
+            activeOpacity={0.8}
           >
-            Add Check-in
-          </Text>
-        </TouchableOpacity>
+            <Ionicons
+              name="add"
+              size={20}
+              color={seasonalTheme.isDark ? "#000" : "#fff"}
+            />
+            <Text
+              variant="body"
+              style={[
+                styles.addCheckinText,
+                { color: seasonalTheme.isDark ? "#000" : "#fff" },
+              ]}
+            >
+              Add Check-in
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Overflow Menu Dialog */}
-      <Dialog visible={showMenu} onRequestClose={() => setShowMenu(false)}>
+      {/* Overflow Menu Dialog — only on mobile (desktop uses content header menu) */}
+      <Dialog
+        visible={!compact && showMenu}
+        onRequestClose={() => setShowMenu(false)}
+      >
         <MenuItem
           icon="pencil-outline"
           label="Edit Timer"
@@ -694,6 +705,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingPatterns.screen,
     paddingTop: spacingPatterns.sm,
   },
+  topSectionCompact: {
+    maxWidth: 640,
+    alignSelf: "center",
+    width: "100%",
+    paddingTop: spacingPatterns.sm,
+  },
   title: {
     marginBottom: spacingPatterns.sm,
   },
@@ -733,6 +750,11 @@ const styles = StyleSheet.create({
     gap: spacingPatterns.xs,
     marginBottom: spacingPatterns.sm,
   },
+  checkinsSectionHeaderCompact: {
+    maxWidth: 640,
+    alignSelf: "center",
+    width: "100%",
+  },
   promptCard: {
     padding: spacingPatterns.md,
     borderRadius: borderRadius.md,
@@ -763,6 +785,12 @@ const styles = StyleSheet.create({
   },
   checkinsContent: {
     paddingHorizontal: spacingPatterns.screen,
+  },
+  checkinsContentCompact: {
+    paddingHorizontal: spacingPatterns.screen,
+    maxWidth: 640,
+    alignSelf: "center",
+    width: "100%",
   },
   rewardsCard: {
     flexDirection: "row",
@@ -801,6 +829,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: spacingPatterns.screen,
     paddingTop: spacingPatterns.md,
+  },
+  footerCompactInner: {
+    maxWidth: 640,
+    alignSelf: "center",
+    width: "100%",
   },
   addCheckinButton: {
     flexDirection: "row",

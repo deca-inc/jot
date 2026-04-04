@@ -21,6 +21,8 @@ export interface MenuItemProps {
   variant?: "default" | "destructive";
   style?: ViewStyle;
   textStyle?: TextStyle;
+  /** Compact mode — smaller padding, icons, and text for desktop popovers */
+  compact?: boolean;
 }
 
 /**
@@ -36,6 +38,7 @@ export function MenuItem({
   variant = "default",
   style,
   textStyle,
+  compact = false,
 }: MenuItemProps) {
   const seasonalTheme = useSeasonalTheme();
 
@@ -47,12 +50,12 @@ export function MenuItem({
   return (
     <TouchableOpacity
       style={[
-        styles.menuItem,
+        compact ? compactMenuStyles.menuItem : styles.menuItem,
         isDestructive &&
           Platform.OS === "android" && {
             backgroundColor: seasonalTheme.isDark
-              ? "rgba(255, 59, 48, 0.15)" // Dark mode - more visible
-              : "rgba(255, 59, 48, 0.08)", // Light mode - subtle
+              ? "rgba(255, 59, 48, 0.15)"
+              : "rgba(255, 59, 48, 0.08)",
           },
         style,
       ]}
@@ -60,19 +63,22 @@ export function MenuItem({
       activeOpacity={0.7}
     >
       {customIcon ? (
-        <View style={styles.menuIcon}>{customIcon}</View>
+        <View style={compact ? compactMenuStyles.menuIcon : styles.menuIcon}>
+          {customIcon}
+        </View>
       ) : icon ? (
         <Ionicons
           name={icon}
-          size={20}
+          size={compact ? 16 : 20}
           color={finalIconColor}
-          style={styles.menuIcon}
+          style={compact ? compactMenuStyles.menuIcon : styles.menuIcon}
         />
       ) : null}
       <Text
         style={[
           {
             color: textColor,
+            fontSize: compact ? 13 : undefined,
             fontWeight: Platform.OS === "android" ? "600" : "400",
           },
           textStyle,
@@ -93,5 +99,18 @@ const styles = StyleSheet.create({
   },
   menuIcon: {
     marginRight: spacingPatterns.sm,
+  },
+});
+
+const compactMenuStyles = StyleSheet.create({
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: borderRadius.sm,
+  },
+  menuIcon: {
+    marginRight: 8,
   },
 });

@@ -27,6 +27,8 @@ export interface FloatingComposerHeaderProps {
   deleteConfirmMessage?: string;
   /** Optional content to render in the top-right area (before settings button) */
   rightContent?: React.ReactNode;
+  /** Hide the back button (e.g., in sidebar layout where navigation is handled differently) */
+  hideBackButton?: boolean;
 }
 
 export function FloatingComposerHeader({
@@ -37,6 +39,7 @@ export function FloatingComposerHeader({
   deleteConfirmTitle = "Delete Entry",
   deleteConfirmMessage = "Are you sure you want to delete this entry? This action cannot be undone.",
   rightContent,
+  hideBackButton = false,
 }: FloatingComposerHeaderProps) {
   const seasonalTheme = useSeasonalTheme();
   const [showMenu, setShowMenu] = useState(false);
@@ -81,38 +84,40 @@ export function FloatingComposerHeader({
   return (
     <>
       {/* Floating Back Button */}
-      <View
-        style={[
-          styles.floatingButton,
-          styles.backButtonContainer,
-          needsBackgroundFallback && styles.fallbackShadow,
-        ]}
-      >
-        <ButtonWrapper
-          {...(glassAvailable && {
-            glassEffectStyle: "regular",
-            tintColor: seasonalTheme.cardBg,
-          })}
+      {!hideBackButton && (
+        <View
           style={[
-            styles.buttonGlass,
-            needsBackgroundFallback && {
-              backgroundColor: seasonalTheme.glassFallbackBg,
-            },
+            styles.floatingButton,
+            styles.backButtonContainer,
+            needsBackgroundFallback && styles.fallbackShadow,
           ]}
         >
-          <TouchableOpacity
-            onPress={onBack}
-            style={styles.button}
-            disabled={disabled}
+          <ButtonWrapper
+            {...(glassAvailable && {
+              glassEffectStyle: "regular",
+              tintColor: seasonalTheme.cardBg,
+            })}
+            style={[
+              styles.buttonGlass,
+              needsBackgroundFallback && {
+                backgroundColor: seasonalTheme.glassFallbackBg,
+              },
+            ]}
           >
-            <Ionicons
-              name="arrow-back"
-              size={24}
-              color={seasonalTheme.textPrimary}
-            />
-          </TouchableOpacity>
-        </ButtonWrapper>
-      </View>
+            <TouchableOpacity
+              onPress={onBack}
+              style={styles.button}
+              disabled={disabled}
+            >
+              <Ionicons
+                name="arrow-back"
+                size={24}
+                color={seasonalTheme.textPrimary}
+              />
+            </TouchableOpacity>
+          </ButtonWrapper>
+        </View>
+      )}
 
       {/* Right Content (e.g., voice button) */}
       {rightContent && (
@@ -140,8 +145,8 @@ export function FloatingComposerHeader({
         </View>
       )}
 
-      {/* Floating Settings Button */}
-      {entryId && (
+      {/* Floating Settings Button — hidden when back button is hidden (desktop header handles it) */}
+      {entryId && !hideBackButton && (
         <View
           style={[
             styles.floatingButton,

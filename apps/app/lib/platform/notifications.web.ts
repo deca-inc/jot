@@ -1,31 +1,92 @@
 /**
  * Web shim for expo-notifications
  *
- * No-op on web. TODO: Add Web Push Notifications or Tauri notifications later.
+ * Uses the Web Notifications API where available.
+ * Scheduled notifications are stored in memory (lost on refresh — acceptable for web).
  */
 
 export async function getPermissionsAsync() {
-  return { status: "undetermined", granted: false, canAskAgain: false };
+  if (typeof Notification === "undefined") {
+    return { status: "unavailable", granted: false, canAskAgain: false };
+  }
+  const granted = Notification.permission === "granted";
+  const denied = Notification.permission === "denied";
+  return {
+    status: granted ? "granted" : denied ? "denied" : "undetermined",
+    granted,
+    canAskAgain: !denied,
+  };
 }
 
 export async function requestPermissionsAsync() {
-  return { status: "undetermined", granted: false, canAskAgain: false };
+  if (typeof Notification === "undefined") {
+    return { status: "unavailable", granted: false, canAskAgain: false };
+  }
+  const result = await Notification.requestPermission();
+  const granted = result === "granted";
+  return {
+    status: granted ? "granted" : "denied",
+    granted,
+    canAskAgain: result !== "denied",
+  };
 }
 
 export async function getExpoPushTokenAsync() {
   return { data: "" };
 }
 
-export async function scheduleNotificationAsync(_content: unknown) {
-  return "";
+// In-memory store for scheduled notifications
+const scheduledNotifications = new Map<
+  string,
+  { timeoutId: ReturnType<typeof setTimeout>; content: unknown }
+>();
+
+let nextId = 1;
+
+export async function scheduleNotificationAsync(request: {
+  content: { title?: string; body?: string };
+  trigger?: { date?: Date | number } | null;
+}) {
+  const id = String(nextId++);
+  const { content, trigger } = request;
+
+  if (trigger && "date" in trigger && trigger.date) {
+    const date =
+      typeof trigger.date === "number" ? trigger.date : trigger.date.getTime();
+    const delay = date - Date.now();
+    if (delay > 0 && typeof Notification !== "undefined") {
+      const timeoutId = setTimeout(() => {
+        if (Notification.permission === "granted") {
+          new Notification(content.title || "Jot", {
+            body: content.body || "",
+          });
+        }
+        scheduledNotifications.delete(id);
+      }, delay);
+      scheduledNotifications.set(id, { timeoutId, content });
+    }
+  }
+
+  return id;
 }
 
-export async function cancelScheduledNotificationAsync(_id: string) {}
+export async function cancelScheduledNotificationAsync(id: string) {
+  const entry = scheduledNotifications.get(id);
+  if (entry) {
+    clearTimeout(entry.timeoutId);
+    scheduledNotifications.delete(id);
+  }
+}
 
-export async function cancelAllScheduledNotificationsAsync() {}
+export async function cancelAllScheduledNotificationsAsync() {
+  for (const [id, entry] of scheduledNotifications) {
+    clearTimeout(entry.timeoutId);
+    scheduledNotifications.delete(id);
+  }
+}
 
 export async function getAllScheduledNotificationsAsync() {
-  return [];
+  return Array.from(scheduledNotifications.keys()).map((id) => ({ id }));
 }
 
 export async function getPresentedNotificationsAsync() {

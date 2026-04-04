@@ -36,12 +36,15 @@ export interface JournalComposerProps {
   entryId: number;
   onSave?: (entryId: number) => void;
   onCancel?: () => void;
+  /** Hide the back button (e.g., in sidebar layout) */
+  hideBackButton?: boolean;
 }
 
 export function JournalComposer({
   entryId,
   onSave,
   onCancel,
+  hideBackButton = false,
 }: JournalComposerProps) {
   const seasonalTheme = useSeasonalTheme();
 
@@ -470,6 +473,7 @@ export function JournalComposer({
         onBack={handleBackPress}
         onBeforeDelete={handleBeforeDelete}
         disabled={updateEntryMutation.isPending}
+        hideBackButton={hideBackButton}
       />
 
       {/* Quill Rich Editor */}
@@ -478,10 +482,13 @@ export function JournalComposer({
           styles.editorContainer,
           {
             // Ensure content clears the floating header (4px offset + 44px button + 8px gap)
-            paddingTop: Math.max(
-              insets.top,
-              spacingPatterns.xxs + 44 + spacingPatterns.xs,
-            ),
+            // When back button is hidden (desktop sidebar), use minimal padding
+            paddingTop: hideBackButton
+              ? spacingPatterns.sm
+              : Math.max(
+                  insets.top,
+                  spacingPatterns.xxs + 44 + spacingPatterns.xs,
+                ),
           },
         ]}
       >

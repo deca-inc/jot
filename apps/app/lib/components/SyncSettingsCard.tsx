@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Switch,
 } from "react-native";
 import { useSyncAuth } from "../sync/useSyncAuth";
 import { useSyncEngine } from "../sync/useSyncEngine";
@@ -23,6 +22,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { Card } from "./Card";
 import { SyncSetupModal } from "./SyncSetupModal";
 import { Text } from "./Text";
+import { Toggle } from "./Toggle";
 
 export function SyncSettingsCard() {
   const theme = useTheme();
@@ -343,14 +343,9 @@ export function SyncSettingsCard() {
                   Files over 5MB wait for WiFi
                 </Text>
               </View>
-              <Switch
+              <Toggle
                 value={wifiOnlyEnabled}
                 onValueChange={setWifiOnlyEnabled}
-                trackColor={{
-                  false: "#767577",
-                  true: `${theme.colors.accent}60`,
-                }}
-                thumbColor={wifiOnlyEnabled ? theme.colors.accent : "#f4f3f4"}
               />
             </View>
 

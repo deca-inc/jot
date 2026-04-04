@@ -57,6 +57,12 @@ export interface HomeScreenProps {
   onEditCountdown?: (entryId: number) => void;
   onCreateNewAIChat?: () => void;
   onCreateCountdown?: () => void;
+  /** Currently selected entry ID (for sidebar highlight) */
+  selectedEntryId?: number;
+  /** Called when entries are loaded, with the first entry ID (for auto-select) */
+  onFirstEntryAvailable?: (entryId: number, entryType: string) => void;
+  /** Compact mode for sidebar — tighter spacing, slim entry rows */
+  compact?: boolean;
 }
 
 export function HomeScreen(props: HomeScreenProps = {}) {
@@ -68,6 +74,9 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     onCreateNewAIChat,
     onCreateCountdown,
     isVisible = true,
+    selectedEntryId,
+    onFirstEntryAvailable,
+    compact = false,
   } = props;
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
@@ -215,6 +224,20 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const entries = useMemo(() => {
     return entriesQuery.data?.pages.flatMap((page) => page.entries) ?? [];
   }, [entriesQuery.data]);
+
+  // Notify parent of first entry (for sidebar auto-select)
+  const hasNotifiedFirstEntryRef = useRef(false);
+  const onFirstEntryAvailableRef = useRef(onFirstEntryAvailable);
+  onFirstEntryAvailableRef.current = onFirstEntryAvailable;
+  if (
+    !hasNotifiedFirstEntryRef.current &&
+    entries.length > 0 &&
+    onFirstEntryAvailableRef.current
+  ) {
+    hasNotifiedFirstEntryRef.current = true;
+    const first = entries[0];
+    onFirstEntryAvailableRef.current(first.id, first.type);
+  }
 
   // React Query mutations
   const createEntry = useCreateEntry();
@@ -468,17 +491,41 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   > = useCallback(
     ({ item }) => {
       if (item.type === "pinnedSpacer") {
-        // Spacer to add top margin for pinned section
+        if (compact) {
+          return (
+            <Text
+              variant="caption"
+              style={{
+                color: seasonalTheme.textSecondary,
+                marginBottom: spacingPatterns.xs,
+                marginTop: spacingPatterns.sm,
+                fontSize: 11,
+                fontWeight: "600",
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
+            >
+              Pinned
+            </Text>
+          );
+        }
         return <View style={{ height: spacingPatterns.lg / 2 }} />;
       }
 
       if (item.type === "header") {
         return (
           <Text
-            variant="h2"
+            variant={compact ? "caption" : "h2"}
             style={{
-              color: seasonalTheme.textPrimary,
-              marginBottom: spacingPatterns.lg,
+              color: compact
+                ? seasonalTheme.textSecondary
+                : seasonalTheme.textPrimary,
+              marginBottom: compact ? spacingPatterns.xs : spacingPatterns.lg,
+              marginTop: compact ? spacingPatterns.sm : 0,
+              fontSize: compact ? 11 : undefined,
+              fontWeight: compact ? "600" : undefined,
+              textTransform: compact ? "uppercase" : undefined,
+              letterSpacing: compact ? 0.5 : undefined,
             }}
           >
             {formatDateHeader(item.dateKey)}
@@ -494,6 +541,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           onToggleFavorite={handleToggleFavorite}
           onResetCountup={handleResetCountup}
           seasonalTheme={seasonalTheme}
+          isSelected={selectedEntryId === item.entry.id}
+          compact={compact}
         />
       );
     },
@@ -504,6 +553,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       handleEditEntry,
       handleToggleFavorite,
       handleResetCountup,
+      selectedEntryId,
+      compact,
     ],
   );
 
@@ -605,7 +656,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
             activeOpacity={0.7}
           >
             <Ionicons
-              name="book-outline"
+              name="create-outline"
               size={24}
               color={theme.colors.accent}
             />
@@ -618,7 +669,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
                   marginBottom: spacingPatterns.xxs,
                 }}
               >
-                New Journal Entry
+                New Note
               </Text>
               <Text
                 variant="caption"
@@ -686,8 +737,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
         </View>
       );
     }
-    return <View style={{ height: 100 }} />; // Space for FAB
-  }, [entriesQuery.isFetchingNextPage, seasonalTheme]);
+    return <View style={{ height: compact ? spacingPatterns.md : 100 }} />;
+  }, [entriesQuery.isFetchingNextPage, seasonalTheme, compact]);
 
   return (
     <View
@@ -697,31 +748,33 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       ]}
     >
       <View style={styles.container}>
-        {/* Search dropdown */}
-        <SearchDropdown
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onClearSearch={handleClearSearch}
-          showFilters={showFilters}
-          onToggleFilters={() => setShowFilters(!showFilters)}
-          dateFilter={dateFilter}
-          onDateFilterChange={setDateFilter}
-          favoritesOnly={favoritesOnly}
-          onFavoritesToggle={() => setFavoritesOnly(!favoritesOnly)}
-          showPinned={showPinned}
-          onShowPinnedToggle={() => setShowPinned(!showPinned)}
-          includeArchived={includeArchived}
-          onIncludeArchivedToggle={() => setIncludeArchived(!includeArchived)}
-          entryTypeFilter={entryTypeFilter}
-          onEntryTypeFilterChange={setEntryTypeFilter}
-          onOpenSettings={onOpenSettings}
-        />
+        {/* Search dropdown — hidden in compact sidebar (search is a modal there) */}
+        {!compact && (
+          <SearchDropdown
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onClearSearch={handleClearSearch}
+            showFilters={showFilters}
+            onToggleFilters={() => setShowFilters(!showFilters)}
+            dateFilter={dateFilter}
+            onDateFilterChange={setDateFilter}
+            favoritesOnly={favoritesOnly}
+            onFavoritesToggle={() => setFavoritesOnly(!favoritesOnly)}
+            showPinned={showPinned}
+            onShowPinnedToggle={() => setShowPinned(!showPinned)}
+            includeArchived={includeArchived}
+            onIncludeArchivedToggle={() => setIncludeArchived(!includeArchived)}
+            entryTypeFilter={entryTypeFilter}
+            onEntryTypeFilterChange={setEntryTypeFilter}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
 
-        {/* Model download indicator (active downloads) */}
-        <ModelDownloadIndicator />
+        {/* Model download indicator (active downloads) — hidden in compact sidebar */}
+        {!compact && <ModelDownloadIndicator />}
 
-        {/* Pending download banner (paused/interrupted downloads) */}
-        <PendingDownloadBanner />
+        {/* Pending download banner (paused/interrupted downloads) — hidden in compact sidebar */}
+        {!compact && <PendingDownloadBanner />}
 
         {/* Unified entries list */}
         <FlatList
@@ -731,7 +784,13 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           ListEmptyComponent={ListEmptyComponent}
           ListFooterComponent={ListFooterComponent}
           contentContainerStyle={[
-            groupedData.length > 0 ? styles.content : styles.contentEmpty,
+            groupedData.length > 0
+              ? compact
+                ? styles.contentCompact
+                : styles.content
+              : compact
+                ? styles.contentCompactEmpty
+                : styles.contentEmpty,
           ]}
           refreshing={false}
           onRefresh={handleRefresh}
@@ -744,15 +803,17 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           windowSize={21}
         />
 
-        {/* FAB with speed dial menu */}
-        <FloatingActionButton
-          onPress={handleFABPress}
-          isOpen={fabMenuOpen}
-          onCreateJournal={handleCreateJournalEntry}
-          onCreateAIChat={handleCreateAIChat}
-          onCreateCountdown={handleCreateCountdown}
-          onClose={() => setFabMenuOpen(false)}
-        />
+        {/* FAB with speed dial menu — hidden in compact sidebar (handled by parent) */}
+        {!compact && (
+          <FloatingActionButton
+            onPress={handleFABPress}
+            isOpen={fabMenuOpen}
+            onCreateJournal={handleCreateJournalEntry}
+            onCreateAIChat={handleCreateAIChat}
+            onCreateCountdown={handleCreateCountdown}
+            onClose={() => setFabMenuOpen(false)}
+          />
+        )}
       </View>
     </View>
   );
@@ -770,10 +831,21 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: spacingPatterns.screen,
   },
+  contentCompact: {
+    paddingHorizontal: spacingPatterns.xs,
+    paddingTop: 4,
+    paddingBottom: spacingPatterns.xs,
+  },
   contentEmpty: {
     paddingHorizontal: spacingPatterns.screen,
     paddingTop: 8,
     paddingBottom: spacingPatterns.screen,
+    flexGrow: 1,
+  },
+  contentCompactEmpty: {
+    paddingHorizontal: spacingPatterns.xs,
+    paddingTop: 4,
+    paddingBottom: spacingPatterns.xs,
     flexGrow: 1,
   },
   emptyState: {

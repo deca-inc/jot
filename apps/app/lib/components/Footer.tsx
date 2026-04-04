@@ -71,7 +71,7 @@ export function Footer({ mode, onModeChange }: FooterProps) {
           activeOpacity={0.7}
         >
           <Ionicons
-            name={mode === "journal" ? "book" : "book-outline"}
+            name={mode === "journal" ? "create" : "create-outline"}
             size={22}
             color={
               mode === "journal"

@@ -205,7 +205,7 @@ export function FloatingActionButton({
               ]}
             />
             <Ionicons
-              name="book-outline"
+              name="create-outline"
               size={22}
               color={seasonalTheme.chipText}
             />
@@ -225,7 +225,7 @@ export function FloatingActionButton({
               variant="caption"
               style={{ color: seasonalTheme.textPrimary, fontWeight: "600" }}
             >
-              New Entry
+              New Note
             </Text>
           </Animated.View>
         </Animated.View>
