@@ -1,6 +1,10 @@
 # Sparkle private key
 private_key.pem
 
+# Tauri build artifacts
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
 # Claude Code MCP config (contains API keys)
 .claude/mcp.json
 

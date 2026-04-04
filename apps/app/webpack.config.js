@@ -30,6 +30,28 @@ module.exports = async function (env, argv) {
       platformDir,
       "staticServer.web.ts",
     ),
+    "expo-notifications": path.resolve(platformDir, "notifications.web.ts"),
+    "expo-crypto": path.resolve(platformDir, "cryptoExpo.web.ts"),
+    "expo-glass-effect": path.resolve(platformDir, "glassEffect.web.ts"),
+    "expo-asset": path.resolve(platformDir, "asset.web.ts"),
+    "expo-audio": path.resolve(platformDir, "audio.web.ts"),
+    "expo-device": path.resolve(platformDir, "device.web.ts"),
+    "react-native-fast-confetti": path.resolve(platformDir, "confetti.web.ts"),
+    "react-native-render-html": path.resolve(platformDir, "renderHtml.web.tsx"),
+    "expo-background-fetch": path.resolve(
+      platformDir,
+      "backgroundFetch.web.ts",
+    ),
+    "expo-task-manager": path.resolve(platformDir, "taskManager.web.ts"),
+    "expo-background-task": path.resolve(platformDir, "backgroundTask.web.ts"),
+    "@react-native-community/datetimepicker": path.resolve(
+      platformDir,
+      "datetimepicker.web.tsx",
+    ),
+    "@react-native-community/netinfo": path.resolve(
+      platformDir,
+      "netinfo.web.ts",
+    ),
     // Suppress posthog optional dependency warnings
     "react-native-device-info": false,
     "react-native-localize": false,
