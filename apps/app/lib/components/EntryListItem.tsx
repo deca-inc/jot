@@ -726,6 +726,21 @@ function EntryListItemComponent({
           >
             {compactPreview}
           </Text>
+          {countdownData && (
+            <Text
+              variant="caption"
+              numberOfLines={1}
+              style={{
+                color: itemTheme.textSecondary,
+                fontSize: 11,
+                marginTop: 1,
+              }}
+            >
+              {countdownData.isCountUp
+                ? `started ${formatCountdown(countdownData.targetDate, countdownData.isCountUp)} ago`
+                : `${formatCountdown(countdownData.targetDate, countdownData.isCountUp)} left`}
+            </Text>
+          )}
         </View>
         {entry.isPinned && (
           <PinIcon size={12} color={itemTheme.textSecondary + "80"} />

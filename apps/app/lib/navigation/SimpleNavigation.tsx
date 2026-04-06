@@ -6,13 +6,19 @@ import {
   PanResponder,
   Animated,
   BackHandler,
+  Keyboard,
   Linking,
   TouchableOpacity,
   Image,
   Platform,
+  useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Text, SearchModal, MenuItem, PopoverMenu } from "../components";
+import { DrawerIcon } from "../components/icons/DrawerIcon";
 import { useCreateEntry, useEntry, useDeleteEntry } from "../db/useEntries";
 import { useIsWideScreen } from "../hooks/useIsWideScreen";
 import {
@@ -84,7 +90,6 @@ export function SimpleNavigation() {
   );
   const [_homeRefreshKey, _setHomeRefreshKey] = useState(0);
   const createEntry = useCreateEntry();
-  const swipeX = useRef(new Animated.Value(0)).current;
   const screenWidth = useRef(0);
 
   // Store onCancel handlers so we can call them when swiping back
@@ -101,6 +106,38 @@ export function SimpleNavigation() {
   const countdownViewerOnCloseRef = useRef<(() => void | Promise<void>) | null>(
     null,
   );
+
+  // Mobile drawer state
+  const [drawerOpen, setDrawerOpen] = useState(true); // starts open on launch
+  const drawerTranslateX = useRef(new Animated.Value(0)).current;
+  const backdropOpacity = useRef(new Animated.Value(1)).current;
+  const { width: windowWidth } = useWindowDimensions();
+  const drawerWidth = Math.min(windowWidth * 0.85, 320);
+
+  // Desktop sidebar collapsed state (icon-only rail)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const SIDEBAR_WIDTH = 280;
+  const SIDEBAR_COLLAPSED_WIDTH = 52;
+  // 0 = expanded, 1 = collapsed
+  const sidebarAnim = useRef(new Animated.Value(0)).current;
+  const sidebarAnimWidth = sidebarAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH],
+  });
+  const sidebarContentOpacity = sidebarAnim.interpolate({
+    inputRange: [0, 0.4],
+    outputRange: [1, 0],
+    extrapolate: "clamp",
+  });
+  const toggleSidebar = useCallback(() => {
+    const toCollapsed = !sidebarCollapsed;
+    setSidebarCollapsed(toCollapsed);
+    Animated.spring(sidebarAnim, {
+      toValue: toCollapsed ? 1 : 0,
+      ...springPresets.modal,
+      useNativeDriver: false,
+    }).start();
+  }, [sidebarCollapsed, sidebarAnim]);
 
   const canGoBack = currentScreen !== "home";
 
@@ -135,76 +172,67 @@ export function SimpleNavigation() {
     }
   }, [currentScreen]);
 
-  // Only handle swipe gestures from the left edge
-  // This won't interfere with vertical scrolling
-  const panResponderRef = useRef<ReturnType<typeof PanResponder.create> | null>(
-    null,
-  );
+  // Drawer close gesture: drag left on the open drawer to dismiss
+  const drawerClosePanRef = useRef<ReturnType<
+    typeof PanResponder.create
+  > | null>(null);
 
   useEffect(() => {
-    panResponderRef.current = PanResponder.create({
+    drawerClosePanRef.current = PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (evt, gestureState) => {
-        if (!canGoBack) return false;
-
-        // Only respond if gesture starts from the very left edge (< 20px)
-        const startX = evt.nativeEvent.pageX;
-        if (startX > 20) return false;
-
-        // Only respond to clearly horizontal gestures
-        // Require horizontal movement to be at least 2x vertical movement
+      onMoveShouldSetPanResponder: (_evt, gestureState) => {
         const isHorizontal =
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2;
         if (!isHorizontal) return false;
-
-        // Only respond to rightward swipes
-        if (gestureState.dx < 10) return false;
-
+        // Only respond to leftward swipes
+        if (gestureState.dx > -10) return false;
         return true;
       },
-      onPanResponderTerminationRequest: (evt, gestureState) => {
-        // Allow termination if gesture becomes vertical (for ScrollView)
+      onPanResponderTerminationRequest: (_evt, gestureState) => {
         const isVertical =
           Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
         return isVertical;
       },
-      onPanResponderGrant: () => {
-        swipeX.stopAnimation((value) => {
-          swipeX.setOffset(value);
-          swipeX.setValue(0);
-        });
+      onPanResponderMove: (_evt, gestureState) => {
+        // Map leftward drag to translateX (0..-drawerWidth)
+        const dx = Math.min(0, gestureState.dx);
+        drawerTranslateX.setValue(dx);
+        backdropOpacity.setValue(1 + dx / drawerWidthRef.current);
       },
-      onPanResponderMove: (evt, gestureState) => {
-        // Only allow rightward swipe
-        if (gestureState.dx > 0) {
-          swipeX.setValue(Math.min(gestureState.dx, screenWidth.current));
-        }
-      },
-      onPanResponderRelease: (evt, gestureState) => {
-        swipeX.flattenOffset();
-        const swipeThreshold = screenWidth.current * 0.25; // 25% threshold
-
-        if (gestureState.dx > swipeThreshold || gestureState.vx > 0.3) {
-          // Complete the swipe - navigate back
-          Animated.spring(swipeX, {
-            toValue: screenWidth.current,
-            ...springPresets.modal,
-            useNativeDriver: false,
-          }).start(() => {
-            handleGoBack();
-            swipeX.setValue(0);
-          });
+      onPanResponderRelease: (_evt, gestureState) => {
+        const threshold = drawerWidthRef.current * 0.3;
+        if (gestureState.dx < -threshold || gestureState.vx < -0.3) {
+          // Complete close
+          Animated.parallel([
+            Animated.spring(drawerTranslateX, {
+              toValue: -drawerWidthRef.current,
+              ...springPresets.modal,
+              useNativeDriver: false,
+            }),
+            Animated.timing(backdropOpacity, {
+              toValue: 0,
+              duration: 150,
+              useNativeDriver: false,
+            }),
+          ]).start(() => setDrawerOpen(false));
         } else {
-          // Cancel the swipe - return to original position
-          Animated.spring(swipeX, {
-            toValue: 0,
-            ...springPresets.modal,
-            useNativeDriver: false,
-          }).start();
+          // Snap back open
+          Animated.parallel([
+            Animated.spring(drawerTranslateX, {
+              toValue: 0,
+              ...springPresets.modal,
+              useNativeDriver: false,
+            }),
+            Animated.timing(backdropOpacity, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: false,
+            }),
+          ]).start();
         }
       },
     });
-  }, [canGoBack, handleGoBack, swipeX]);
+  }, [drawerTranslateX, backdropOpacity]);
 
   // Handle hardware back button (Android only)
   useEffect(() => {
@@ -551,6 +579,7 @@ export function SimpleNavigation() {
   const seasonalTheme = useSeasonalTheme();
   const theme = useTheme();
   const isWideScreen = useIsWideScreen();
+  const insets = useSafeAreaInsets();
   const syncAuth = useSyncAuthContext();
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showContentMenu, setShowContentMenu] = useState(false);
@@ -559,6 +588,114 @@ export function SimpleNavigation() {
     openSelector: () => void;
   } | null>(null);
   const deleteEntryMutation = useDeleteEntry();
+
+  // Drawer open/close helpers (mobile only)
+  const drawerWidthRef = useRef(drawerWidth);
+  drawerWidthRef.current = drawerWidth;
+
+  const openDrawer = useCallback(() => {
+    // Dismiss keyboard so it doesn't stay open behind the drawer
+    Keyboard.dismiss();
+    if (
+      Platform.OS === "web" &&
+      document.activeElement instanceof HTMLElement
+    ) {
+      document.activeElement.blur();
+    }
+    setDrawerOpen(true);
+    Animated.parallel([
+      Animated.spring(drawerTranslateX, {
+        toValue: 0,
+        ...springPresets.modal,
+        useNativeDriver: false,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [drawerTranslateX, backdropOpacity]);
+
+  const closeDrawer = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(drawerTranslateX, {
+        toValue: -drawerWidthRef.current,
+        ...springPresets.modal,
+        useNativeDriver: false,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start(() => {
+      setDrawerOpen(false);
+    });
+  }, [drawerTranslateX, backdropOpacity]);
+
+  // Sidebar actions that also close the drawer on mobile
+  const closeDrawerRef = useRef(closeDrawer);
+  closeDrawerRef.current = closeDrawer;
+
+  const handleSidebarEntryPress = useCallback(
+    (entryId: number, entryType?: "journal" | "ai_chat" | "countdown") => {
+      handleOpenEntryEditor(entryId, entryType);
+      closeDrawerRef.current();
+    },
+    [handleOpenEntryEditor],
+  );
+
+  const handleSidebarOpenFullEditor = useCallback(
+    (initialText?: string) => {
+      handleOpenFullEditor(initialText);
+      closeDrawerRef.current();
+    },
+    [handleOpenFullEditor],
+  );
+
+  const handleSidebarCreateNewAIChat = useCallback(() => {
+    handleCreateNewAIChat();
+    closeDrawerRef.current();
+  }, [handleCreateNewAIChat]);
+
+  const handleSidebarCreateCountdown = useCallback(() => {
+    handleCreateCountdown();
+    closeDrawerRef.current();
+  }, [handleCreateCountdown]);
+
+  const handleSidebarOpenSettings = useCallback(() => {
+    handleOpenSettings();
+    closeDrawerRef.current();
+  }, [handleOpenSettings]);
+
+  const handleSidebarSearchSelect = useCallback(
+    (entryId: number, entryType: "journal" | "ai_chat" | "countdown") => {
+      handleOpenEntryEditor(entryId, entryType);
+      closeDrawerRef.current();
+    },
+    [handleOpenEntryEditor],
+  );
+
+  // Suppress keyboard/focus while drawer is open (prevents race with editor auto-focus)
+  useEffect(() => {
+    if (!drawerOpen || isWideScreen) return;
+
+    if (Platform.OS === "web") {
+      const handler = () => {
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      };
+      document.addEventListener("focusin", handler);
+      return () => document.removeEventListener("focusin", handler);
+    } else {
+      const sub = Keyboard.addListener("keyboardDidShow", () => {
+        Keyboard.dismiss();
+      });
+      return () => sub.remove();
+    }
+  }, [drawerOpen, isWideScreen]);
 
   // Cmd+K / Ctrl+K to open search
   useEffect(() => {
@@ -603,89 +740,18 @@ export function SimpleNavigation() {
   const parentEntryQuery = useEntry(activeEntryParentId);
   const parentEntryTitle = parentEntryQuery.data?.title || "";
 
-  // Auto-select first entry on wide screens when nothing is selected
+  // Auto-select first entry when nothing is selected (both mobile and desktop)
   const handleFirstEntryAvailable = useCallback(
     (entryId: number, entryType: string) => {
-      if (isWideScreen && currentScreen === "home") {
+      if (currentScreen === "home") {
         handleOpenEntryEditor(
           entryId,
           entryType as "journal" | "ai_chat" | "countdown",
         );
       }
     },
-    [isWideScreen, currentScreen, handleOpenEntryEditor],
+    [currentScreen, handleOpenEntryEditor],
   );
-
-  // Render overlay screen (everything except home)
-  const renderOverlayScreen = () => {
-    switch (currentScreen) {
-      case "settings":
-        return (
-          <SettingsScreen
-            onNavigateToPlayground={handleNavigateToPlayground}
-            onNavigateToQuillEditor={handleNavigateToQuillEditor}
-            onBack={handleSettingsBack}
-          />
-        );
-      case "playground":
-        return <ComponentPlaygroundScreen onBack={handlePlaygroundBack} />;
-      case "quillEditor":
-        return <QuillEditorScreen onBack={handleQuillEditorBack} />;
-      case "composer":
-        return (
-          <ComposerScreen
-            initialType={composerEntryType}
-            onSave={handleComposerSave}
-            onCancel={handleComposerCancel}
-          />
-        );
-      case "fullEditor":
-        fullEditorOnCancelRef.current = handleFullEditorCancel;
-        return (
-          <ComposerScreen
-            entryId={fullEditorEntryId}
-            onSave={handleFullEditorSave}
-            onCancel={handleFullEditorCancel}
-            fullScreen={true}
-          />
-        );
-      case "entryEditor":
-        entryEditorOnCancelRef.current = handleEntryEditorCancel;
-        return (
-          <ComposerScreen
-            entryId={editingEntryId}
-            initialType={composerEntryType}
-            parentId={checkinParentId}
-            onSave={handleEntryEditorSave}
-            onCancel={handleEntryEditorCancel}
-          />
-        );
-      case "countdownComposer":
-        countdownOnCancelRef.current = handleCountdownCancel;
-        return (
-          <CountdownComposer
-            entryId={countdownEntryId}
-            onSave={handleCountdownSave}
-            onCancel={handleCountdownCancel}
-          />
-        );
-      case "countdownViewer":
-        countdownViewerOnCloseRef.current = handleCountdownViewerClose;
-        return countdownViewerEntryId ? (
-          <CountdownViewer
-            entryId={countdownViewerEntryId}
-            onClose={handleCountdownViewerClose}
-            onEdit={handleCountdownViewerEdit}
-            onAddCheckin={handleAddCheckin}
-            onOpenCheckin={handleOpenCheckin}
-          />
-        ) : null;
-      default:
-        return null;
-    }
-  };
-
-  const isHomeScreen = currentScreen === "home";
 
   // Check if current screen is an entry-level screen (shown in content panel on wide)
   const isEntryScreen =
@@ -695,7 +761,7 @@ export function SimpleNavigation() {
     currentScreen === "countdownComposer" ||
     currentScreen === "composer";
 
-  // On wide screens, render content panel inline (no overlay)
+  // Render content panel (used by both desktop sidebar and mobile drawer layouts)
   const renderContentPanel = () => {
     if (currentScreen === "entryEditor") {
       entryEditorOnCancelRef.current = handleEntryEditorCancel;
@@ -774,18 +840,19 @@ export function SimpleNavigation() {
         }}
       >
         <View style={styles.sidebarLayout}>
-          {/* Sidebar */}
-          <View
+          {/* Sidebar — animated width */}
+          <Animated.View
             style={[
               styles.sidebar,
               {
+                width: sidebarAnimWidth,
                 borderRightColor: seasonalTheme.isDark
                   ? "rgba(255,255,255,0.1)"
                   : "rgba(0,0,0,0.1)",
               },
             ]}
           >
-            {/* Sidebar header */}
+            {/* Sidebar header — logo always visible, "Jot" fades */}
             <View
               style={[
                 styles.panelHeader,
@@ -797,19 +864,22 @@ export function SimpleNavigation() {
               ]}
             >
               <Image source={appIcon} style={styles.logoIcon} />
-              <Text
-                variant="body"
-                style={{
-                  color: seasonalTheme.textPrimary,
-                  fontWeight: "700",
-                  fontSize: 16,
-                }}
-              >
-                Jot
-              </Text>
+              <Animated.View style={{ opacity: sidebarContentOpacity }}>
+                <Text
+                  variant="body"
+                  numberOfLines={1}
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontWeight: "700",
+                    fontSize: 16,
+                  }}
+                >
+                  Jot
+                </Text>
+              </Animated.View>
             </View>
 
-            {/* New entry actions */}
+            {/* Action buttons — icons stay in place, text fades out */}
             <View style={styles.sidebarActions}>
               <TouchableOpacity
                 style={styles.sidebarActionButton}
@@ -821,16 +891,17 @@ export function SimpleNavigation() {
                   size={16}
                   color={seasonalTheme.textPrimary}
                 />
-                <Text
-                  variant="body"
+                <Animated.Text
+                  numberOfLines={1}
                   style={{
                     color: seasonalTheme.textPrimary,
                     fontSize: 13,
                     marginLeft: 8,
+                    opacity: sidebarContentOpacity,
                   }}
                 >
                   New Note
-                </Text>
+                </Animated.Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.sidebarActionButton}
@@ -842,16 +913,17 @@ export function SimpleNavigation() {
                   size={16}
                   color={seasonalTheme.textPrimary}
                 />
-                <Text
-                  variant="body"
+                <Animated.Text
+                  numberOfLines={1}
                   style={{
                     color: seasonalTheme.textPrimary,
                     fontSize: 13,
                     marginLeft: 8,
+                    opacity: sidebarContentOpacity,
                   }}
                 >
                   New AI Chat
-                </Text>
+                </Animated.Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.sidebarActionButton}
@@ -863,16 +935,17 @@ export function SimpleNavigation() {
                   size={16}
                   color={seasonalTheme.textPrimary}
                 />
-                <Text
-                  variant="body"
+                <Animated.Text
+                  numberOfLines={1}
                   style={{
                     color: seasonalTheme.textPrimary,
                     fontSize: 13,
                     marginLeft: 8,
+                    opacity: sidebarContentOpacity,
                   }}
                 >
                   New Countdown
-                </Text>
+                </Animated.Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.sidebarActionButton}
@@ -884,31 +957,36 @@ export function SimpleNavigation() {
                   size={16}
                   color={seasonalTheme.textPrimary}
                 />
-                <Text
-                  variant="body"
+                <Animated.Text
+                  numberOfLines={1}
                   style={{
                     color: seasonalTheme.textPrimary,
                     fontSize: 13,
                     marginLeft: 8,
                     flex: 1,
+                    opacity: sidebarContentOpacity,
                   }}
                 >
                   Search
-                </Text>
-                <Text
-                  variant="caption"
+                </Animated.Text>
+                <Animated.Text
+                  numberOfLines={1}
                   style={{
                     color: seasonalTheme.textSecondary + "80",
                     fontSize: 11,
+                    opacity: sidebarContentOpacity,
                   }}
                 >
                   {"\u2318K"}
-                </Text>
+                </Animated.Text>
               </TouchableOpacity>
             </View>
 
-            {/* Entry list */}
-            <View style={styles.sidebarList}>
+            {/* Entry list — fades out when collapsed */}
+            <Animated.View
+              style={[styles.sidebarList, { opacity: sidebarContentOpacity }]}
+              pointerEvents={sidebarCollapsed ? "none" : "auto"}
+            >
               <HomeScreen
                 refreshKey={_homeRefreshKey}
                 isVisible={true}
@@ -922,9 +1000,9 @@ export function SimpleNavigation() {
                 onFirstEntryAvailable={handleFirstEntryAvailable}
                 compact
               />
-            </View>
+            </Animated.View>
 
-            {/* Settings bar at bottom */}
+            {/* Settings bar at bottom — icon always visible, text fades */}
             <TouchableOpacity
               style={[
                 styles.sidebarFooter,
@@ -942,26 +1020,34 @@ export function SimpleNavigation() {
                 size={18}
                 color={seasonalTheme.textSecondary}
               />
-              <Text
-                variant="body"
-                numberOfLines={1}
+              <Animated.View
                 style={{
-                  color: seasonalTheme.textSecondary,
-                  fontSize: 13,
-                  marginLeft: 8,
+                  opacity: sidebarContentOpacity,
                   flex: 1,
+                  marginLeft: 8,
                 }}
               >
-                {syncAuth.state.status === "authenticated" &&
-                syncAuth.state.settings?.email
-                  ? syncAuth.state.settings.email
-                  : "Settings"}
-              </Text>
+                <Text
+                  variant="body"
+                  numberOfLines={1}
+                  style={{
+                    color: seasonalTheme.textSecondary,
+                    fontSize: 13,
+                  }}
+                >
+                  {syncAuth.state.status === "authenticated" &&
+                  syncAuth.state.settings?.email
+                    ? syncAuth.state.settings.email
+                    : "Settings"}
+                </Text>
+              </Animated.View>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
 
-          {/* Content panel */}
-          <View style={styles.contentPanel}>
+          {/* Content panel — animated left offset */}
+          <Animated.View
+            style={[styles.contentPanel, { left: sidebarAnimWidth }]}
+          >
             {/* Content header */}
             <View
               style={[
@@ -973,6 +1059,14 @@ export function SimpleNavigation() {
                 },
               ]}
             >
+              {/* Sidebar collapse/expand toggle */}
+              <TouchableOpacity
+                onPress={toggleSidebar}
+                style={styles.headerMenuButton}
+                activeOpacity={0.7}
+              >
+                <DrawerIcon size={18} color={seasonalTheme.textSecondary} />
+              </TouchableOpacity>
               <View style={styles.headerTitleRow}>
                 {isEntryScreen && activeEntryParentId && parentEntryTitle ? (
                   <>
@@ -1233,7 +1327,7 @@ export function SimpleNavigation() {
                 </View>
               )}
             </View>
-          </View>
+          </Animated.View>
         </View>
 
         <SearchModal
@@ -1245,7 +1339,7 @@ export function SimpleNavigation() {
     );
   }
 
-  // Narrow screen: stacked navigation (original behavior)
+  // Narrow screen: drawer sidebar + full-width content panel
   return (
     <SafeAreaView
       style={[
@@ -1258,38 +1352,505 @@ export function SimpleNavigation() {
       }}
     >
       <View style={styles.container}>
-        {/* HomeScreen is always mounted but hidden when not active */}
-        <View
-          style={[styles.content, !isHomeScreen && styles.hidden]}
-          pointerEvents={isHomeScreen ? "auto" : "none"}
-        >
-          <HomeScreen
-            refreshKey={_homeRefreshKey}
-            isVisible={isHomeScreen}
-            onOpenFullEditor={handleOpenFullEditor}
-            onOpenSettings={handleOpenSettings}
-            onOpenEntryEditor={handleOpenEntryEditor}
-            onEditCountdown={handleCountdownViewerEdit}
-            onCreateNewAIChat={handleCreateNewAIChat}
-            onCreateCountdown={handleCreateCountdown}
-          />
-        </View>
-
-        {/* Overlay screens render on top when not on home */}
-        {!isHomeScreen && (
-          <Animated.View
+        {/* Content panel (full width, always visible) */}
+        <View style={styles.mobileContentPanel}>
+          {/* Content header */}
+          <View
             style={[
-              styles.overlayContent,
+              styles.panelHeader,
               {
-                transform: [{ translateX: swipeX }],
+                borderBottomColor: seasonalTheme.isDark
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(0,0,0,0.08)",
               },
             ]}
-            {...(panResponderRef.current?.panHandlers || {})}
           >
-            {renderOverlayScreen()}
+            {/* Drawer toggle */}
+            <TouchableOpacity
+              onPress={openDrawer}
+              style={styles.headerMenuButton}
+              activeOpacity={0.7}
+            >
+              <DrawerIcon size={20} color={seasonalTheme.textPrimary} />
+            </TouchableOpacity>
+
+            <View style={styles.headerTitleRow}>
+              {isEntryScreen && activeEntryParentId && parentEntryTitle ? (
+                <>
+                  <TouchableOpacity
+                    onPress={() =>
+                      handleOpenEntryEditor(
+                        activeEntryParentId,
+                        parentEntryQuery.data?.type as
+                          | "journal"
+                          | "ai_chat"
+                          | "countdown",
+                      )
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      variant="body"
+                      numberOfLines={1}
+                      style={{
+                        color: seasonalTheme.textSecondary,
+                        fontSize: 14,
+                      }}
+                    >
+                      {parentEntryTitle}
+                    </Text>
+                  </TouchableOpacity>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={14}
+                    color={seasonalTheme.textSecondary + "80"}
+                    style={{ marginHorizontal: 4 }}
+                  />
+                  <Text
+                    variant="body"
+                    numberOfLines={1}
+                    style={{
+                      color: seasonalTheme.textPrimary,
+                      fontWeight: "600",
+                      fontSize: 14,
+                      flexShrink: 1,
+                    }}
+                  >
+                    {activeEntryTitle || ""}
+                  </Text>
+                </>
+              ) : (
+                <Text
+                  variant="body"
+                  numberOfLines={1}
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontWeight: "600",
+                    fontSize: 15,
+                  }}
+                >
+                  {currentScreen === "settings"
+                    ? "Settings"
+                    : currentScreen === "playground"
+                      ? "Component Playground"
+                      : currentScreen === "countdownComposer"
+                        ? countdownEntryId
+                          ? "Edit Timer"
+                          : "New Timer"
+                        : activeEntryTitle ||
+                          (composerEntryType === "ai_chat" ? "New Chat" : "")}
+                </Text>
+              )}
+              {/* Model selector in header for AI chats */}
+              {(activeEntryQuery.data?.type === "ai_chat" ||
+                composerEntryType === "ai_chat") &&
+                modelInfo && (
+                  <TouchableOpacity
+                    style={styles.headerModelSelector}
+                    onPress={modelInfo.openSelector}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="hardware-chip-outline"
+                      size={13}
+                      color={seasonalTheme.textSecondary}
+                    />
+                    <Text
+                      variant="caption"
+                      numberOfLines={1}
+                      style={{
+                        color: seasonalTheme.textSecondary,
+                        fontSize: 12,
+                        marginLeft: 3,
+                      }}
+                    >
+                      {modelInfo.displayName}
+                    </Text>
+                    <Ionicons
+                      name="chevron-down"
+                      size={11}
+                      color={seasonalTheme.textSecondary + "80"}
+                      style={{ marginLeft: 1 }}
+                    />
+                  </TouchableOpacity>
+                )}
+            </View>
+            {isEntryScreen && activeEntryId && (
+              <PopoverMenu
+                visible={showContentMenu}
+                onClose={() => setShowContentMenu(false)}
+                trigger={
+                  <TouchableOpacity
+                    onPress={() => setShowContentMenu(true)}
+                    style={styles.headerMenuButton}
+                  >
+                    <Ionicons
+                      name="ellipsis-horizontal"
+                      size={20}
+                      color={seasonalTheme.textSecondary}
+                    />
+                  </TouchableOpacity>
+                }
+              >
+                {currentScreen === "countdownViewer" && (
+                  <MenuItem
+                    icon="pencil-outline"
+                    label="Edit Timer"
+                    compact
+                    onPress={() => {
+                      setShowContentMenu(false);
+                      if (activeEntryId) {
+                        handleCountdownViewerEdit(activeEntryId);
+                      }
+                    }}
+                  />
+                )}
+                <MenuItem
+                  icon="trash-outline"
+                  label="Delete"
+                  variant="destructive"
+                  compact
+                  onPress={() => {
+                    setShowContentMenu(false);
+                    deleteEntryMutation.mutate(activeEntryId, {
+                      onSuccess: () => {
+                        setCurrentScreen("home");
+                        setEditingEntryId(undefined);
+                        setFullEditorEntryId(undefined);
+                      },
+                    });
+                  }}
+                />
+              </PopoverMenu>
+            )}
+          </View>
+
+          {/* Content body */}
+          <View style={styles.contentBody}>
+            {isEntryScreen ? (
+              renderContentPanel()
+            ) : currentScreen === "settings" ? (
+              <SettingsScreen
+                onNavigateToPlayground={handleNavigateToPlayground}
+                onNavigateToQuillEditor={handleNavigateToQuillEditor}
+                onBack={handleSettingsBack}
+                compact
+              />
+            ) : currentScreen === "playground" ? (
+              <ComponentPlaygroundScreen onBack={handlePlaygroundBack} />
+            ) : currentScreen === "quillEditor" ? (
+              <QuillEditorScreen onBack={handleQuillEditorBack} />
+            ) : (
+              /* Empty state */
+              <View
+                style={[
+                  styles.emptyContentPanel,
+                  { backgroundColor: seasonalTheme.gradient.middle },
+                ]}
+              >
+                <Ionicons
+                  name="journal-outline"
+                  size={48}
+                  color={seasonalTheme.textSecondary + "60"}
+                />
+                <Text
+                  variant="h3"
+                  style={{
+                    color: seasonalTheme.textSecondary,
+                    marginTop: spacingPatterns.md,
+                    textAlign: "center",
+                  }}
+                >
+                  Select an entry
+                </Text>
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textSecondary + "80",
+                    marginTop: spacingPatterns.xs,
+                    textAlign: "center",
+                  }}
+                >
+                  Or create a new note, AI chat, or countdown
+                </Text>
+                <View style={styles.emptyActions}>
+                  <TouchableOpacity
+                    style={[
+                      styles.emptyActionButton,
+                      {
+                        backgroundColor: seasonalTheme.isDark
+                          ? "rgba(255,255,255,0.08)"
+                          : "rgba(0,0,0,0.05)",
+                      },
+                    ]}
+                    onPress={() => handleOpenFullEditor()}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="create-outline"
+                      size={20}
+                      color={theme.colors.accent}
+                    />
+                    <Text
+                      variant="body"
+                      style={{
+                        color: seasonalTheme.textPrimary,
+                        fontWeight: "500",
+                        marginLeft: spacingPatterns.xs,
+                      }}
+                    >
+                      New Note
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.emptyActionButton,
+                      {
+                        backgroundColor: seasonalTheme.isDark
+                          ? "rgba(255,255,255,0.08)"
+                          : "rgba(0,0,0,0.05)",
+                      },
+                    ]}
+                    onPress={handleCreateNewAIChat}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="chatbubbles-outline"
+                      size={20}
+                      color={theme.colors.accent}
+                    />
+                    <Text
+                      variant="body"
+                      style={{
+                        color: seasonalTheme.textPrimary,
+                        fontWeight: "500",
+                        marginLeft: spacingPatterns.xs,
+                      }}
+                    >
+                      AI Chat
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Drawer backdrop */}
+        {drawerOpen && (
+          <Animated.View
+            style={[
+              styles.mobileDrawerBackdrop,
+              {
+                opacity: backdropOpacity.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.5],
+                }),
+                backgroundColor: "#000",
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={StyleSheet.absoluteFillObject}
+              activeOpacity={1}
+              onPress={closeDrawer}
+            />
+          </Animated.View>
+        )}
+
+        {/* Sidebar drawer */}
+        {drawerOpen && (
+          <Animated.View
+            style={[
+              styles.mobileDrawer,
+              {
+                width: drawerWidth,
+                backgroundColor: seasonalTheme.gradient.middle,
+                borderRightColor: seasonalTheme.isDark
+                  ? "rgba(255,255,255,0.1)"
+                  : "rgba(0,0,0,0.1)",
+                transform: [{ translateX: drawerTranslateX }],
+              },
+            ]}
+            {...(drawerClosePanRef.current?.panHandlers || {})}
+          >
+            {/* Sidebar header */}
+            <View
+              style={[
+                styles.panelHeader,
+                {
+                  borderBottomColor: seasonalTheme.isDark
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.08)",
+                },
+              ]}
+            >
+              <Image source={appIcon} style={styles.logoIcon} />
+              <Text
+                variant="body"
+                style={{
+                  color: seasonalTheme.textPrimary,
+                  fontWeight: "700",
+                  fontSize: 16,
+                }}
+              >
+                Jot
+              </Text>
+            </View>
+
+            {/* New entry actions */}
+            <View style={styles.sidebarActions}>
+              <TouchableOpacity
+                style={styles.sidebarActionButton}
+                onPress={() => handleSidebarOpenFullEditor()}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={16}
+                  color={seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontSize: 13,
+                    marginLeft: 8,
+                  }}
+                >
+                  New Note
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sidebarActionButton}
+                onPress={handleSidebarCreateNewAIChat}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="chatbubbles-outline"
+                  size={16}
+                  color={seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontSize: 13,
+                    marginLeft: 8,
+                  }}
+                >
+                  New AI Chat
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sidebarActionButton}
+                onPress={handleSidebarCreateCountdown}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="timer-outline"
+                  size={16}
+                  color={seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontSize: 13,
+                    marginLeft: 8,
+                  }}
+                >
+                  New Countdown
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sidebarActionButton}
+                onPress={() => {
+                  setShowSearchModal(true);
+                  closeDrawer();
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="search-outline"
+                  size={16}
+                  color={seasonalTheme.textPrimary}
+                />
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontSize: 13,
+                    marginLeft: 8,
+                    flex: 1,
+                  }}
+                >
+                  Search
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Entry list */}
+            <View style={styles.sidebarList}>
+              <HomeScreen
+                refreshKey={_homeRefreshKey}
+                isVisible={true}
+                onOpenFullEditor={handleSidebarOpenFullEditor}
+                onOpenSettings={handleSidebarOpenSettings}
+                onOpenEntryEditor={handleSidebarEntryPress}
+                onEditCountdown={handleCountdownViewerEdit}
+                onCreateNewAIChat={handleSidebarCreateNewAIChat}
+                onCreateCountdown={handleSidebarCreateCountdown}
+                selectedEntryId={activeEntryId}
+                onFirstEntryAvailable={handleFirstEntryAvailable}
+                compact
+              />
+            </View>
+
+            {/* Settings bar at bottom */}
+            <TouchableOpacity
+              style={[
+                styles.sidebarFooter,
+                {
+                  paddingBottom: Math.max(10, insets.bottom),
+                  borderTopColor: seasonalTheme.isDark
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.08)",
+                },
+              ]}
+              onPress={handleSidebarOpenSettings}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="settings-outline"
+                size={18}
+                color={seasonalTheme.textSecondary}
+              />
+              <Text
+                variant="body"
+                numberOfLines={1}
+                style={{
+                  color: seasonalTheme.textSecondary,
+                  fontSize: 13,
+                  marginLeft: 8,
+                  flex: 1,
+                }}
+              >
+                {syncAuth.state.status === "authenticated" &&
+                syncAuth.state.settings?.email
+                  ? syncAuth.state.settings.email
+                  : "Settings"}
+              </Text>
+            </TouchableOpacity>
           </Animated.View>
         )}
       </View>
+
+      <SearchModal
+        visible={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        onSelectEntry={handleSidebarSearchSelect}
+      />
     </SafeAreaView>
   );
 }
@@ -1301,27 +1862,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  mobileContentPanel: {
     flex: 1,
+    zIndex: 1,
   },
-  hidden: {
+  mobileDrawerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+  },
+  mobileDrawer: {
     position: "absolute",
     top: 0,
-    left: 0,
-    right: 0,
     bottom: 0,
-    opacity: 0,
-  },
-  overlayContent: {
-    ...StyleSheet.absoluteFillObject,
-    flex: 1,
+    left: 0,
+    flexDirection: "column",
+    borderRightWidth: 1,
+    zIndex: 20,
   },
   sidebarLayout: {
     flex: 1,
     flexDirection: "row",
   },
   sidebar: {
-    width: 280,
+    // width is set dynamically based on sidebarCollapsed
     borderRightWidth: 1,
     // Absolute positioning gives a definite height from the parent,
     // so children (FlatList) scroll within bounds instead of stretching the row
@@ -1330,6 +1893,7 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     flexDirection: "column",
+    overflow: "hidden",
   },
   panelHeader: {
     flexDirection: "row",
@@ -1390,7 +1954,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
     flexShrink: 0,
   },
@@ -1401,7 +1965,7 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     bottom: 0,
-    left: 280,
+    // left is set dynamically based on sidebarCollapsed
   },
   emptyContentPanel: {
     flex: 1,
