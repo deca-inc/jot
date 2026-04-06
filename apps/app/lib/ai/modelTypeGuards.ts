@@ -18,6 +18,8 @@ import { z } from "zod";
 
 export const REMOTE_MODEL_PREFIX = "remote-";
 export const CUSTOM_LOCAL_MODEL_PREFIX = "custom-";
+export const WEB_LLM_MODEL_PREFIX = "web-";
+export const DESKTOP_LLM_MODEL_PREFIX = "desktop-";
 
 // Built-in model IDs (from modelConfig.ts)
 export const BUILT_IN_MODEL_IDS = [
@@ -61,12 +63,26 @@ export const CustomLocalModelIdSchema = z
   .startsWith(CUSTOM_LOCAL_MODEL_PREFIX)
   .describe("Custom local model ID (e.g., custom-mistral-7b)");
 
+/** Schema for web-llm model IDs (starts with "web-") */
+export const WebLLMModelIdSchema = z
+  .string()
+  .startsWith(WEB_LLM_MODEL_PREFIX)
+  .describe("Web LLM model ID (MLC-compiled, e.g. web-qwen-2.5-1.5b)");
+
+/** Schema for desktop-llm model IDs (starts with "desktop-") */
+export const DesktopLLMModelIdSchema = z
+  .string()
+  .startsWith(DESKTOP_LLM_MODEL_PREFIX)
+  .describe("Desktop LLM model ID (GGUF, e.g. desktop-llama-3.2-3b)");
+
 /** Schema for any valid model ID */
 export const ModelIdSchema = z.union([
   BuiltInModelIdSchema,
   PlatformModelIdSchema,
   RemoteModelIdSchema,
   CustomLocalModelIdSchema,
+  WebLLMModelIdSchema,
+  DesktopLLMModelIdSchema,
 ]);
 
 // =============================================================================
@@ -78,6 +94,8 @@ export type ModelCategory =
   | "platform" // OS-native platform models (Apple Foundation, Gemini Nano)
   | "remote" // Remote API models (OpenAI, Anthropic, etc.)
   | "custom-local" // User-added local ExecuTorch models
+  | "web-llm" // Browser WebGPU models (MLC-compiled)
+  | "desktop-llm" // Desktop GGUF models (mistralrs via Tauri)
   | "unknown"; // Unrecognized model ID
 
 export const ModelCategorySchema = z.enum([
@@ -85,6 +103,8 @@ export const ModelCategorySchema = z.enum([
   "platform",
   "remote",
   "custom-local",
+  "web-llm",
+  "desktop-llm",
   "unknown",
 ]);
 
@@ -140,6 +160,22 @@ export function isPlatformModelId(modelId: string): boolean {
 }
 
 /**
+ * Check if the modelId is a web-llm model (MLC-compiled, WebGPU).
+ * Web LLM models have the "web-" prefix.
+ */
+export function isWebLLMModelId(modelId: string): boolean {
+  return WebLLMModelIdSchema.safeParse(modelId).success;
+}
+
+/**
+ * Check if the modelId is a desktop-llm model (GGUF via mistralrs/Tauri).
+ * Desktop LLM models have the "desktop-" prefix.
+ */
+export function isDesktopLLMModelId(modelId: string): boolean {
+  return DesktopLLMModelIdSchema.safeParse(modelId).success;
+}
+
+/**
  * Get the category of a model based on its ID.
  * Useful for routing and UI display.
  */
@@ -156,6 +192,17 @@ export function getModelCategory(modelId: string): ModelCategory {
   // Check custom local (prefix-based)
   if (isCustomLocalModelId(modelId)) {
     return "custom-local";
+  }
+
+  // Check web-llm (prefix-based, must come before built-in enum check
+  // because BUILT_IN_MODEL_IDS is mobile-only)
+  if (isWebLLMModelId(modelId)) {
+    return "web-llm";
+  }
+
+  // Check desktop-llm (prefix-based)
+  if (isDesktopLLMModelId(modelId)) {
+    return "desktop-llm";
   }
 
   // Check platform models
@@ -181,14 +228,16 @@ export function requiresNetworkForInference(modelId: string): boolean {
 
 /**
  * Check if a model runs locally on the device.
- * Returns true for built-in, platform, and custom local models.
+ * Returns true for built-in, platform, custom local, web-llm, and desktop-llm models.
  */
 export function isLocalModel(modelId: string): boolean {
   const category = getModelCategory(modelId);
   return (
     category === "built-in" ||
     category === "platform" ||
-    category === "custom-local"
+    category === "custom-local" ||
+    category === "web-llm" ||
+    category === "desktop-llm"
   );
 }
 

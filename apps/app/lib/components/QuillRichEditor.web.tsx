@@ -9,6 +9,7 @@
  * props as the native version so consuming screens need no changes.
  */
 
+import Quill from "quill";
 import React, {
   useRef,
   useEffect,
@@ -18,8 +19,7 @@ import React, {
   useState,
 } from "react";
 import { View, StyleSheet } from "react-native";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Quill v1.3.7 has no bundled types; we type what we use below
-import Quill from "quill";
+
 import "quill/dist/quill.snow.css";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -898,7 +898,6 @@ function attachCheckboxFix(
         quill.formatLine(index, 1, "list", newValue, "user");
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn("Checkbox toggle error:", err);
     }
   }

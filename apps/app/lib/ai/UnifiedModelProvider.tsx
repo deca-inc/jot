@@ -23,6 +23,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
+import { Platform } from "react-native";
 import { LLMModule, Message } from "react-native-executorch";
 import {
   generateWithPlatformAI,
@@ -30,9 +31,14 @@ import {
 } from "../../modules/platform-ai/src";
 import { useModelSettings } from "../db/modelSettings";
 import { useCustomModels } from "../db/useCustomModels";
+import { isTauri } from "../platform/isTauri";
+import { ensureDesktopModelDownloaded } from "../platform/tauriDownload";
+import { createTauriLLMEngine } from "../platform/tauriLLM";
+import { createWebLLMEngine } from "../platform/webLLM";
 import { getApiKey } from "./apiKeyStorage";
 import { registerBackgroundTasks } from "./backgroundTasks";
 import { truncateContext, fitsInContext } from "./contextManager";
+import { createLLMRouter, type LLMRouter } from "./llmRouter";
 import {
   LlmModelConfig,
   SpeechToTextModelConfig,
@@ -44,7 +50,11 @@ import {
 } from "./modelConfig";
 import { modelDownloadStatus } from "./modelDownloadStatus";
 import { ensureModelPresent, ensureCustomModelPresent } from "./modelManager";
-import { isRemoteModelId, isCustomLocalModelId } from "./modelTypeGuards";
+import {
+  isRemoteModelId,
+  isCustomLocalModelId,
+  getModelCategory,
+} from "./modelTypeGuards";
 import { logStorageDebugInfo, verifyAllModels } from "./modelVerification";
 import { persistentDownloadManager } from "./persistentDownloadManager";
 import { isPlatformModelId, type PlatformLlmConfig } from "./platformModels";
@@ -132,6 +142,47 @@ interface ModelLibrary {
 // Singleton - exists outside React lifecycle to avoid closure/ref issues
 const modelLibrarySingleton: ModelLibrary = {};
 
+// LLM router singleton — owns the web-llm / tauri-llm engine slots.
+// Lives outside React for the same reason as modelLibrarySingleton.
+const llmRouter: LLMRouter = createLLMRouter({
+  createWebLLMEngine,
+  createTauriLLMEngine,
+  ensureDesktopModelPresent: async (config: LlmModelConfig) => {
+    // In a Tauri webview, GGUF files are downloaded via a native Rust
+    // command straight to the Tauri app-data directory. expo-file-system
+    // is not available there, so we bypass `ensureModelPresent` entirely.
+    if (isTauri() && config.pteSource.kind === "remote") {
+      modelDownloadStatus.startDownload(config.modelId, config.displayName);
+      try {
+        const path = await ensureDesktopModelDownloaded(
+          {
+            folderName: config.folderName,
+            fileName: config.pteFileName,
+            url: config.pteSource.url,
+          },
+          (progress) => {
+            const fraction =
+              progress.total > 0 ? progress.loaded / progress.total : 0;
+            modelDownloadStatus.updateProgress(config.modelId, fraction);
+          },
+        );
+        modelDownloadStatus.completeDownload(config.modelId);
+        return path;
+      } catch (e) {
+        modelDownloadStatus.failDownload(
+          config.modelId,
+          e instanceof Error ? e.message : String(e),
+        );
+        throw e;
+      }
+    }
+    const result = await ensureModelPresent(config);
+    return result.ptePath;
+  },
+  isWebPlatform: () => Platform.OS === "web",
+  isTauriPlatform: () => isTauri(),
+});
+
 // Cache for platform model configs
 let platformLLMsCache: PlatformLlmConfig[] | null = null;
 
@@ -165,6 +216,11 @@ function addFilePrefix(path: string): string {
  * Platform models don't need loading - they're always available via native modules
  */
 async function loadLLM(modelId: MODEL_IDS): Promise<void> {
+  // Unload any web-llm / tauri-llm engines — we're switching to executorch.
+  if (llmRouter.isAnyLoaded()) {
+    await llmRouter.unloadAll();
+  }
+
   // Platform models don't need loading - skip
   if (isPlatformModelId(modelId)) {
     // Unload any downloadable model since we're switching to platform
@@ -431,10 +487,15 @@ async function sendLLMMessage(
   let preparedMessages = messages;
   if (!modelLibrarySingleton.llm) throw new Error("Model not loaded");
 
-  if (!fitsInContext(messages, modelLibrarySingleton.llm.config.modelId)) {
+  if (
+    !fitsInContext(
+      messages,
+      modelLibrarySingleton.llm.config.modelId as MODEL_IDS,
+    )
+  ) {
     preparedMessages = truncateContext(
       messages,
-      modelLibrarySingleton.llm.config.modelId,
+      modelLibrarySingleton.llm.config.modelId as MODEL_IDS,
     );
   }
 
@@ -476,6 +537,10 @@ function unloadLLM(): void {
     modelLibrarySingleton.llm.module.delete();
     delete modelLibrarySingleton.llm;
   }
+  // Also release any web-llm / tauri-llm engines owned by the router.
+  void llmRouter.unloadAll().catch(() => {
+    // best-effort cleanup
+  });
 }
 
 // =============================================================================
@@ -689,6 +754,37 @@ export function UnifiedModelProvider({
       resetIdleTimer(); // Reset idle timer on activity
 
       try {
+        // Check if this is a web-llm or desktop-llm model first —
+        // these are routed through the dedicated engine router.
+        const category = getModelCategory(selectedModelId);
+        if (category === "web-llm" || category === "desktop-llm") {
+          // Unload any executorch model — we're switching engines.
+          if (modelLibrarySingleton.llm) {
+            modelLibrarySingleton.llm.module.interrupt();
+            modelLibrarySingleton.llm.module.delete();
+            delete modelLibrarySingleton.llm;
+          }
+
+          const targetConfig = getModelById(selectedModelId);
+          if (!targetConfig) {
+            const label = category === "web-llm" ? "Web" : "Desktop";
+            throw new Error(`${label} model not found: ${selectedModelId}`);
+          }
+
+          if (category === "web-llm") {
+            return await llmRouter.sendWebLLMMessage(
+              selectedModelId,
+              messages,
+              options,
+            );
+          }
+          return await llmRouter.sendTauriLLMMessage(
+            targetConfig,
+            messages,
+            options,
+          );
+        }
+
         // Check if this is a remote API model
         if (isRemoteModelId(selectedModelId)) {
           // Convert Message[] to ChatMessage[] format for remote API
@@ -768,6 +864,7 @@ export function UnifiedModelProvider({
 
   const interruptLLM = useCallback(() => {
     modelLibrarySingleton.llm?.module.interrupt();
+    llmRouter.interruptAll();
   }, []);
 
   // ==========================================================================
@@ -787,7 +884,7 @@ export function UnifiedModelProvider({
   // CONTEXT VALUE
   // ==========================================================================
 
-  const isLLMLoaded = !!modelLibrarySingleton.llm;
+  const isLLMLoaded = !!modelLibrarySingleton.llm || llmRouter.isAnyLoaded();
   const isSTTLoaded = false; // Will be implemented in Phase 5
   const isTranscribing = false; // Will be implemented in Phase 5
 

@@ -17,13 +17,12 @@ import React, {
   useState,
 } from "react";
 import initSqlJs, { type Database as SqlJsDatabase } from "sql.js-fts5";
-
+import { migrateTo } from "./migrations";
 import type {
   DatabaseAdapter,
   DatabaseContextValue,
   RunResult,
 } from "./adapter";
-import { migrateTo } from "./migrations";
 import "./migrations/index"; // Register all migrations
 
 const DB_STORAGE_KEY = "jot_sqljs_db";

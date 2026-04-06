@@ -1,6 +1,10 @@
 // Central config for on-device AI model assets
 // Supports multiple model types (LLM, Speech-to-Text) via ExecuTorch .pte format
 
+// Inline AppPlatform type to avoid circular import with platformFilter
+// (platformFilter imports LlmModelConfig from this module)
+export type AppPlatform = "ios" | "android" | "macos" | "web" | "tauri";
+
 // Import STT_MODEL_IDS type (defined in sttConfig to avoid circular dependency)
 import type { STT_MODEL_IDS } from "./sttConfig";
 
@@ -48,7 +52,9 @@ export interface BaseModelConfig {
 
 export interface LlmModelConfig extends BaseModelConfig {
   modelType: "llm";
-  modelId: MODEL_IDS;
+  // Widened to `string` (was `MODEL_IDS`) so web-* and desktop-* prefixed IDs
+  // can coexist with the built-in mobile enum without bloating it.
+  modelId: string;
   quantization?: string; // e.g., "SpinQuant", "4-bit", "8-bit"
   // Local filenames under the app's sandbox if downloaded
   pteFileName: string;
@@ -58,6 +64,15 @@ export interface LlmModelConfig extends BaseModelConfig {
   pteSource: ModelSource;
   tokenizerSource: ModelSource;
   tokenizerConfigSource: ModelSource;
+  // Which platforms this model runs on. Legacy models without this field
+  // are treated as mobile-only (ios/android) — see platformFilter.ts.
+  supportedPlatforms?: AppPlatform[];
+  /**
+   * Logical model family identifier, groups platform variants of the same base model.
+   * E.g. "llama-3.2-3b" applies to mobile .pte, web MLC, and desktop GGUF variants.
+   * Used for cross-platform persona resolution.
+   */
+  modelFamily?: string;
 }
 
 // =============================================================================
@@ -140,9 +155,11 @@ export const SmolLM2_135M: LlmModelConfig = {
   pteFileName: "smolLm2_135M_8da4w.pte",
   tokenizerFileName: "tokenizer.json",
   tokenizerConfigFileName: "tokenizer_config.json",
+  modelFamily: "smollm2-135m",
   huggingFaceUrl:
     "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2",
   available: true,
+  supportedPlatforms: ["ios", "android"],
   pteSource: {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/smolLm-2-135M/quantized/smolLm2_135M_8da4w.pte",
@@ -169,9 +186,11 @@ export const SmolLM2_360M: LlmModelConfig = {
   pteFileName: "smolLm2_360M_8da4w.pte",
   tokenizerFileName: "tokenizer.json",
   tokenizerConfigFileName: "tokenizer_config.json",
+  modelFamily: "smollm2-360m",
   huggingFaceUrl:
     "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2",
   available: true,
+  supportedPlatforms: ["ios", "android"],
   pteSource: {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/smolLm-2-360M/quantized/smolLm2_360M_8da4w.pte",
@@ -198,9 +217,11 @@ export const SmolLM2_1_7B: LlmModelConfig = {
   pteFileName: "smolLm2_1_7B_8da4w.pte",
   tokenizerFileName: "tokenizer.json",
   tokenizerConfigFileName: "tokenizer_config.json",
+  modelFamily: "smollm2-1.7b",
   huggingFaceUrl:
     "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2",
   available: true,
+  supportedPlatforms: ["ios", "android"],
   pteSource: {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-smolLm-2/resolve/639e46227780d93aadc18feff6d63125eec18144/smolLm-2-1.7B/quantized/smolLm2_1_7B_8da4w.pte",
@@ -231,9 +252,11 @@ export const Llama32_1B_Instruct: LlmModelConfig = {
   pteFileName: "llama3_2_spinquant.pte",
   tokenizerFileName: "tokenizer.json",
   tokenizerConfigFileName: "tokenizer_config.json",
+  modelFamily: "llama-3.2-1b",
   huggingFaceUrl:
     "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2",
   available: true,
+  supportedPlatforms: ["ios", "android"],
   pteSource: {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2/resolve/76ab87fe4ceb2e00c19a24b18326e9c1506f3f20/llama-3.2-1B/spinquant/llama3_2_spinquant.pte",
@@ -261,9 +284,11 @@ export const Llama32_3B_Instruct: LlmModelConfig = {
   pteFileName: "llama3_2_3B_spinquant.pte",
   tokenizerFileName: "tokenizer.json",
   tokenizerConfigFileName: "tokenizer_config.json",
+  modelFamily: "llama-3.2-3b",
   huggingFaceUrl:
     "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2",
   available: true,
+  supportedPlatforms: ["ios", "android"],
   pteSource: {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-llama-3.2/resolve/76ab87fe4ceb2e00c19a24b18326e9c1506f3f20/llama-3.2-3B/spinquant/llama3_2_3B_spinquant.pte",
@@ -295,10 +320,12 @@ export const Qwen3_0_6B: LlmModelConfig = {
   pteFileName: "qwen3_0_6b_8da4w.pte",
   tokenizerFileName: "tokenizer.json",
   tokenizerConfigFileName: "tokenizer_config.json",
+  modelFamily: "qwen-3-0.6b",
   huggingFaceUrl:
     "https://huggingface.co/software-mansion/react-native-executorch-qwen-3",
   available: true,
   isDefault: false,
+  supportedPlatforms: ["ios", "android"],
   pteSource: {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/ae11f6fb40b8168952970e4dd84285697b5ac069/qwen-3-0.6B/quantized/qwen3_0_6b_8da4w.pte",
@@ -326,10 +353,12 @@ export const Qwen3_1_7B: LlmModelConfig = {
   pteFileName: "qwen3_1_7b_8da4w.pte",
   tokenizerFileName: "tokenizer.json",
   tokenizerConfigFileName: "tokenizer_config.json",
+  modelFamily: "qwen-3-1.7b",
   huggingFaceUrl:
     "https://huggingface.co/software-mansion/react-native-executorch-qwen-3",
   available: true,
   isDefault: true, // Default recommended model for most users
+  supportedPlatforms: ["ios", "android"],
   pteSource: {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/ae11f6fb40b8168952970e4dd84285697b5ac069/qwen-3-1.7B/quantized/qwen3_1_7b_8da4w.pte",
@@ -356,9 +385,11 @@ export const Qwen3_4B: LlmModelConfig = {
   pteFileName: "qwen3_4b_8da4w.pte",
   tokenizerFileName: "tokenizer.json",
   tokenizerConfigFileName: "tokenizer_config.json",
+  modelFamily: "qwen-3-4b",
   huggingFaceUrl:
     "https://huggingface.co/software-mansion/react-native-executorch-qwen-3",
   available: true,
+  supportedPlatforms: ["ios", "android"],
   pteSource: {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/ae11f6fb40b8168952970e4dd84285697b5ac069/qwen-3-4B/quantized/qwen3_4b_8da4w.pte",
@@ -371,6 +402,284 @@ export const Qwen3_4B: LlmModelConfig = {
     kind: "remote",
     url: "https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/ae11f6fb40b8168952970e4dd84285697b5ac069/tokenizer_config.json",
   },
+};
+
+// -----------------------------------------------------------------------------
+// WEB LLM MODELS (MLC-compiled, WebGPU via @mlc-ai/web-llm)
+// -----------------------------------------------------------------------------
+// These are not .pte files — the `pteSource.url` holds the MLC artifact ID
+// that the web-llm runtime resolves internally.
+
+export const WebQwen25_1_5B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "web-qwen-2.5-1.5b",
+  displayName: "Qwen 2.5 1.5B (Web)",
+  description: "1.5B params, ~900MB. Fast WebGPU inference in-browser.",
+  size: "1.5B",
+  quantization: "q4f16_1",
+  folderName: "web-qwen-2.5-1.5b",
+  pteFileName: "", // unused for web
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "qwen-2.5-1.5b",
+  huggingFaceUrl:
+    "https://huggingface.co/mlc-ai/Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+  available: true,
+  supportedPlatforms: ["web"],
+  pteSource: {
+    kind: "remote",
+    url: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Handled by web-llm" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Handled by web-llm" },
+};
+
+export const WebLlama32_3B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "web-llama-3.2-3b",
+  displayName: "Llama 3.2 3B (Web)",
+  description: "3B params, ~1.8GB. Higher-quality WebGPU inference.",
+  size: "3B",
+  quantization: "q4f16_1",
+  folderName: "web-llama-3.2-3b",
+  pteFileName: "",
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "llama-3.2-3b",
+  huggingFaceUrl:
+    "https://huggingface.co/mlc-ai/Llama-3.2-3B-Instruct-q4f16_1-MLC",
+  available: true,
+  supportedPlatforms: ["web"],
+  pteSource: {
+    kind: "remote",
+    url: "Llama-3.2-3B-Instruct-q4f16_1-MLC",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Handled by web-llm" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Handled by web-llm" },
+};
+
+// -----------------------------------------------------------------------------
+// DESKTOP GGUF MODELS (mistralrs via Tauri, Metal/CUDA/CPU)
+// -----------------------------------------------------------------------------
+// Tokenizer is embedded in the GGUF file, so tokenizer sources are unavailable.
+
+export const DesktopQwen25_1_5B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "desktop-qwen-2.5-1.5b",
+  displayName: "Qwen 2.5 1.5B (Desktop)",
+  description: "1.5B params, ~900MB GGUF. Metal/CUDA accelerated.",
+  size: "1.5B",
+  quantization: "Q4_K_M",
+  folderName: "desktop-qwen-2.5-1.5b",
+  pteFileName: "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "qwen-2.5-1.5b",
+  huggingFaceUrl: "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF",
+  available: true,
+  supportedPlatforms: ["tauri", "macos"],
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+};
+
+export const DesktopLlama32_3B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "desktop-llama-3.2-3b",
+  displayName: "Llama 3.2 3B (Desktop)",
+  description: "3B params, ~2GB GGUF. Metal/CUDA accelerated, higher quality.",
+  size: "3B",
+  quantization: "Q4_K_M",
+  folderName: "desktop-llama-3.2-3b",
+  pteFileName: "llama-3.2-3b-instruct-q4_k_m.gguf",
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "llama-3.2-3b",
+  huggingFaceUrl: "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF",
+  available: true,
+  supportedPlatforms: ["tauri", "macos"],
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+};
+
+// desktop-llama-3.2-1b (cross-platform sibling of mobile llama-3.2-1b-instruct)
+export const DesktopLlama32_1B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "desktop-llama-3.2-1b",
+  displayName: "Llama 3.2 1B (Desktop)",
+  description: "1B params, ~700MB GGUF. Fast Metal/CUDA inference.",
+  size: "1B",
+  quantization: "Q4_K_M",
+  folderName: "desktop-llama-3.2-1b",
+  pteFileName: "llama-3.2-1b-instruct-q4_k_m.gguf",
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "llama-3.2-1b",
+  huggingFaceUrl: "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF",
+  available: true,
+  supportedPlatforms: ["tauri", "macos"],
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+};
+
+// desktop-qwen-3-1.7b (cross-platform sibling of mobile qwen-3-1.7b)
+export const DesktopQwen3_1_7B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "desktop-qwen-3-1.7b",
+  displayName: "Qwen 3 1.7B (Desktop)",
+  description: "1.7B params, ~1GB GGUF. Fast, balanced quality.",
+  size: "1.7B",
+  quantization: "Q4_K_M",
+  folderName: "desktop-qwen-3-1.7b",
+  pteFileName: "qwen3-1.7b-q4_k_m.gguf",
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "qwen-3-1.7b",
+  huggingFaceUrl: "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF",
+  available: true,
+  supportedPlatforms: ["tauri", "macos"],
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+};
+
+// desktop-llama-3.1-8b (desktop-only, larger model)
+export const DesktopLlama31_8B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "desktop-llama-3.1-8b-instruct",
+  displayName: "Llama 3.1 8B Instruct (Desktop)",
+  description: "8B params, ~4.9GB GGUF. Higher quality, needs 8GB+ RAM.",
+  size: "8B",
+  quantization: "Q4_K_M",
+  folderName: "desktop-llama-3.1-8b-instruct",
+  pteFileName: "llama-3.1-8b-instruct-q4_k_m.gguf",
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "llama-3.1-8b",
+  huggingFaceUrl:
+    "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+  available: true,
+  supportedPlatforms: ["tauri", "macos"],
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+};
+
+// desktop-qwen-2.5-7b (desktop-only, larger model)
+export const DesktopQwen25_7B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "desktop-qwen-2.5-7b-instruct",
+  displayName: "Qwen 2.5 7B Instruct (Desktop)",
+  description: "7B params, ~4.7GB GGUF. Strong reasoning, needs 8GB+ RAM.",
+  size: "7B",
+  quantization: "Q4_K_M",
+  folderName: "desktop-qwen-2.5-7b-instruct",
+  pteFileName: "qwen2.5-7b-instruct-q4_k_m.gguf",
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "qwen-2.5-7b",
+  huggingFaceUrl: "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF",
+  available: true,
+  supportedPlatforms: ["tauri", "macos"],
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+};
+
+// desktop-qwen-2.5-14b (MacBook Pro sweet spot, fits 16GB unified memory)
+export const DesktopQwen25_14B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "desktop-qwen-2.5-14b-instruct",
+  displayName: "Qwen 2.5 14B Instruct (Desktop)",
+  description:
+    "14B params, ~8.8GB GGUF. Big quality jump from 7B. Needs 16GB+ RAM.",
+  size: "14B",
+  quantization: "Q4_K_M",
+  folderName: "desktop-qwen-2.5-14b-instruct",
+  pteFileName: "qwen2.5-14b-instruct-q4_k_m.gguf",
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "qwen-2.5-14b",
+  huggingFaceUrl: "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF",
+  available: true,
+  supportedPlatforms: ["tauri", "macos"],
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+};
+
+// desktop-qwen-2.5-32b (Pro tier, fills 7B→70B gap)
+export const DesktopQwen25_32B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "desktop-qwen-2.5-32b-instruct",
+  displayName: "Qwen 2.5 32B Instruct (Desktop)",
+  description:
+    "32B params, ~19GB GGUF. Near-70B quality, needs 32GB+ RAM (M*Pro/Max).",
+  size: "32B",
+  quantization: "Q4_K_M",
+  folderName: "desktop-qwen-2.5-32b-instruct",
+  pteFileName: "qwen2.5-32b-instruct-q4_k_m.gguf",
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "qwen-2.5-32b",
+  huggingFaceUrl: "https://huggingface.co/bartowski/Qwen2.5-32B-Instruct-GGUF",
+  available: true,
+  supportedPlatforms: ["tauri", "macos"],
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/bartowski/Qwen2.5-32B-Instruct-GGUF/resolve/main/Qwen2.5-32B-Instruct-Q4_K_M.gguf",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+};
+
+// desktop-llama-3.3-70b (flagship for M*Max users, ~42GB)
+export const DesktopLlama33_70B: LlmModelConfig = {
+  modelType: "llm",
+  modelId: "desktop-llama-3.3-70b-instruct",
+  displayName: "Llama 3.3 70B Instruct (Desktop)",
+  description:
+    "70B params, ~42GB GGUF. Frontier quality, needs 64GB+ RAM (M*Max).",
+  size: "70B",
+  quantization: "Q4_K_M",
+  folderName: "desktop-llama-3.3-70b-instruct",
+  pteFileName: "llama-3.3-70b-instruct-q4_k_m.gguf",
+  tokenizerFileName: undefined,
+  tokenizerConfigFileName: undefined,
+  modelFamily: "llama-3.3-70b",
+  huggingFaceUrl:
+    "https://huggingface.co/bartowski/Llama-3.3-70B-Instruct-GGUF",
+  available: true,
+  supportedPlatforms: ["tauri", "macos"],
+  pteSource: {
+    kind: "remote",
+    url: "https://huggingface.co/bartowski/Llama-3.3-70B-Instruct-GGUF/resolve/main/Llama-3.3-70B-Instruct-Q4_K_M.gguf",
+  },
+  tokenizerSource: { kind: "unavailable", reason: "Embedded in GGUF" },
+  tokenizerConfigSource: { kind: "unavailable", reason: "Embedded in GGUF" },
 };
 
 // =============================================================================
@@ -390,6 +699,19 @@ export const ALL_LLM_MODELS: LlmModelConfig[] = [
   SmolLM2_135M, // Ultra-lightweight
   SmolLM2_360M, // Good balance for older devices
   SmolLM2_1_7B, // Best SmolLM2 quality
+  // Web MLC models
+  WebQwen25_1_5B,
+  WebLlama32_3B,
+  // Desktop GGUF models
+  DesktopQwen25_1_5B,
+  DesktopLlama32_3B,
+  DesktopLlama32_1B,
+  DesktopQwen3_1_7B,
+  DesktopLlama31_8B,
+  DesktopQwen25_7B,
+  DesktopQwen25_14B,
+  DesktopQwen25_32B,
+  DesktopLlama33_70B,
 ];
 
 // Speech-to-Text Models (transcription) - configured in sttConfig.ts
@@ -419,6 +741,14 @@ export function getModelById(modelId: string): LlmModelConfig | undefined {
  */
 export function getLLMModelById(modelId: string): LlmModelConfig | undefined {
   return getModelById(modelId);
+}
+
+/**
+ * Get all models in a given family.
+ * Used for cross-platform persona resolution.
+ */
+export function getModelsByFamily(family: string): LlmModelConfig[] {
+  return ALL_LLM_MODELS.filter((m) => m.modelFamily === family);
 }
 
 // =============================================================================

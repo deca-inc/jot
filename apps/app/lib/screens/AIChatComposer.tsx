@@ -26,8 +26,15 @@ import {
 import { Message } from "react-native-executorch";
 import RenderHtml from "react-native-render-html";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ALL_MODELS, getModelById } from "../ai/modelConfig";
+import { ALL_MODELS, ALL_LLM_MODELS, getModelById } from "../ai/modelConfig";
 import { isRemoteModelId, isCustomLocalModelId } from "../ai/modelTypeGuards";
+import {
+  getAvailablePersonas,
+  getPersonaResolutionInfo,
+  isPersonaAvailableOnPlatform,
+  resolvePersonaModel,
+} from "../ai/personaAvailability";
+import { getCurrentPlatform } from "../ai/platformFilter";
 import { useAIChat } from "../ai/useAIChat";
 import { usePlatformModels, isPlatformModelId } from "../ai/usePlatformModels";
 import { useTrackScreenView } from "../analytics";
@@ -329,6 +336,43 @@ export function AIChatComposer({
   const [agents, setAgents] = useState<Agent[]>([]);
   const [currentAgent, setCurrentAgent] = useState<Agent | null>(null);
 
+  // Personas whose underlying model runs on this platform. Personas without
+  // a modelId are kept (they're editable but not launchable) so users can
+  // still see and fix them. See lib/ai/personaAvailability.ts.
+  const availableAgents = useMemo(() => {
+    const platform = getCurrentPlatform();
+    const withModel = agents.filter(
+      (a): a is Agent & { modelId: string } => a.modelId !== null,
+    );
+    const available = getAvailablePersonas(withModel, ALL_LLM_MODELS, platform);
+    const allowed = new Set<number>([
+      ...available.map((a) => a.id),
+      ...agents.filter((a) => a.modelId === null).map((a) => a.id),
+    ]);
+    return agents.filter((a) => allowed.has(a.id));
+  }, [agents]);
+
+  // Resolve the persona's model on this platform. May return a same-family
+  // sibling (e.g. a web/desktop variant of a mobile .pte model) when the
+  // persona's configured modelId doesn't run here.
+  const currentAgentResolution = useMemo(() => {
+    if (!currentAgent || !currentAgent.modelId) return null;
+    return getPersonaResolutionInfo(
+      { modelId: currentAgent.modelId },
+      ALL_LLM_MODELS,
+      getCurrentPlatform(),
+    );
+  }, [currentAgent]);
+
+  // Is the currently-selected persona's model usable on this platform?
+  const currentAgentUnavailable =
+    currentAgentResolution !== null && !currentAgentResolution.available;
+
+  // Whether we're using a family-fallback sibling instead of the persona's
+  // configured model. UI shows a subtle informational note in this case.
+  const currentAgentUsingFallback =
+    currentAgentResolution !== null && currentAgentResolution.usingFallback;
+
   // Model management modal state
   const [showModelManager, setShowModelManager] = useState(false);
 
@@ -381,18 +425,46 @@ export function AIChatComposer({
         return downloaded.some((m) => m.modelId === modelId);
       };
 
+      // Only activate the default persona if its model runs on this platform.
+      // Mobile-only personas cannot be the default on web/tauri/macos.
+      const currentPlatform = getCurrentPlatform();
+      const defaultAgentUsable =
+        defaultAgent &&
+        (defaultAgent.modelId === null ||
+          isPersonaAvailableOnPlatform(
+            { modelId: defaultAgent.modelId },
+            ALL_LLM_MODELS,
+            currentPlatform,
+          ));
+      if (defaultAgent && !defaultAgentUsable) {
+        console.warn(
+          `[AIChatComposer] Default persona "${defaultAgent.name}" uses model "${defaultAgent.modelId}" which is not available on ${currentPlatform}. Falling back to raw model.`,
+        );
+      }
+
       // Determine default: saved selection > persona
       // Note: Platform models don't use personas (no system prompt support)
       if (selected && isModelAvailable(selected)) {
         // User has a saved selection that still exists - use it
         setSelectedModelId(selected);
         // Only set agent if NOT a platform model (platform models can't use personas)
-        if (defaultAgent && !isPlatformModelId(selected)) {
+        // AND the default persona's model is available on this platform.
+        if (defaultAgentUsable && !isPlatformModelId(selected)) {
           setCurrentAgent(defaultAgent);
         }
-      } else if (defaultAgent) {
-        // No saved selection or model no longer exists - use default persona
-        setSelectedModelId(defaultAgent.modelId || null);
+      } else if (defaultAgentUsable && defaultAgent) {
+        // No saved selection or model no longer exists - use default persona.
+        // Resolve the persona modelId through family fallback so we pick a
+        // platform-available sibling when the persona's configured model
+        // doesn't run here.
+        const resolvedId = defaultAgent.modelId
+          ? (resolvePersonaModel(
+              { modelId: defaultAgent.modelId },
+              ALL_LLM_MODELS,
+              currentPlatform,
+            ) ?? defaultAgent.modelId)
+          : null;
+        setSelectedModelId(resolvedId);
         setCurrentAgent(defaultAgent);
       }
     };
@@ -473,14 +545,25 @@ export function AIChatComposer({
   const handleSelectAgent = useCallback(
     async (agent: Agent) => {
       setCurrentAgent(agent);
-      // If agent has a specific model, switch to it
+      // If agent has a specific model, switch to it — but resolve through
+      // family fallback so we use a platform-available sibling when the
+      // persona's configured mobile .pte (or web/desktop variant) isn't
+      // runnable here.
       if (agent.modelId) {
-        setSelectedModelId(agent.modelId);
-        await modelSettings.setSelectedModelId(agent.modelId);
+        const resolvedId =
+          resolvePersonaModel(
+            { modelId: agent.modelId },
+            ALL_LLM_MODELS,
+            getCurrentPlatform(),
+          ) ?? agent.modelId;
+        setSelectedModelId(resolvedId);
+        await modelSettings.setSelectedModelId(resolvedId);
       }
       setShowModelSelector(false);
 
-      // Save to entry if we have one
+      // Save to entry if we have one. We persist the persona's *original*
+      // modelId (agent.modelId) as `generationModelId` so the entry remains
+      // portable across platforms — resolution re-runs on each open.
       if (currentEntryIdRef.current) {
         await updateEntryRef.current.mutateAsync({
           id: currentEntryIdRef.current,
@@ -537,12 +620,34 @@ export function AIChatComposer({
       if (entry.agentId) {
         const agent = await agentsRepo.getById(entry.agentId);
         if (agent) {
-          setCurrentAgent(agent);
-          // Also set the model from the agent
-          if (agent.modelId) {
-            setSelectedModelId(agent.modelId);
+          const platformNow = getCurrentPlatform();
+          const agentUsable =
+            agent.modelId === null ||
+            isPersonaAvailableOnPlatform(
+              { modelId: agent.modelId },
+              ALL_LLM_MODELS,
+              platformNow,
+            );
+          if (!agentUsable) {
+            console.warn(
+              `[AIChatComposer] Entry persona "${agent.name}" uses model "${agent.modelId}" which is not available on ${platformNow}. Falling back to raw model.`,
+            );
+            // Fall through to generationModelId/default handling below.
+          } else {
+            setCurrentAgent(agent);
+            // Also set the model from the agent — resolve through family
+            // fallback so we use a platform-available sibling when needed.
+            if (agent.modelId) {
+              const resolvedId =
+                resolvePersonaModel(
+                  { modelId: agent.modelId },
+                  ALL_LLM_MODELS,
+                  platformNow,
+                ) ?? agent.modelId;
+              setSelectedModelId(resolvedId);
+            }
+            return; // Agent takes precedence
           }
-          return; // Agent takes precedence
         }
       }
 
@@ -558,20 +663,37 @@ export function AIChatComposer({
         agentsRepo.getDefault(),
         modelSettings.getSelectedModelId(),
       ]);
+      const currentPlatform = getCurrentPlatform();
+      const defaultAgentUsable =
+        defaultAgent &&
+        (defaultAgent.modelId === null ||
+          isPersonaAvailableOnPlatform(
+            { modelId: defaultAgent.modelId },
+            ALL_LLM_MODELS,
+            currentPlatform,
+          ));
       if (defaultModelId) {
         setSelectedModelId(defaultModelId);
         // Only set agent if default model is NOT a platform model
         // Platform models don't support agents/personas
-        if (defaultAgent && !isPlatformModelId(defaultModelId)) {
+        // AND the default persona's model is available on this platform.
+        if (defaultAgentUsable && !isPlatformModelId(defaultModelId)) {
           setCurrentAgent(defaultAgent);
         } else {
           setCurrentAgent(null);
         }
-      } else if (defaultAgent) {
-        // No default model but have default agent
+      } else if (defaultAgentUsable && defaultAgent) {
+        // No default model but have default agent — resolve through family
+        // fallback so the persona runs via a platform-available sibling.
         setCurrentAgent(defaultAgent);
         if (defaultAgent.modelId) {
-          setSelectedModelId(defaultAgent.modelId);
+          const resolvedId =
+            resolvePersonaModel(
+              { modelId: defaultAgent.modelId },
+              ALL_LLM_MODELS,
+              currentPlatform,
+            ) ?? defaultAgent.modelId;
+          setSelectedModelId(resolvedId);
         }
       }
     };
@@ -1150,6 +1272,43 @@ export function AIChatComposer({
         hideBackButton={hideBackButton}
       />
 
+      {/* Warning banner when selected persona's model is unavailable here */}
+      {currentAgentUnavailable && currentAgent && (
+        <View style={styles.personaWarningBanner}>
+          <Ionicons name="warning-outline" size={14} color="#a65d00" />
+          <Text
+            variant="caption"
+            style={styles.personaWarningText}
+            numberOfLines={2}
+          >
+            {`"${currentAgent.name}" uses a model that isn't available on this platform. Pick a different persona or model.`}
+          </Text>
+        </View>
+      )}
+
+      {/* Info banner when persona is running via a family-fallback sibling */}
+      {!currentAgentUnavailable &&
+        currentAgentUsingFallback &&
+        currentAgentResolution?.displayName && (
+          <View style={styles.personaInfoBanner}>
+            <Ionicons
+              name="information-circle-outline"
+              size={14}
+              color={seasonalTheme.textSecondary}
+            />
+            <Text
+              variant="caption"
+              style={[
+                styles.personaInfoText,
+                { color: seasonalTheme.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
+              {`Using ${currentAgentResolution.displayName} on this platform`}
+            </Text>
+          </View>
+        )}
+
       {/* Model Selector - floating glass pill (mobile only, desktop uses header) */}
       {!hideBackButton &&
         (downloadedModels.length > 1 ||
@@ -1274,7 +1433,7 @@ export function AIChatComposer({
             showsVerticalScrollIndicator={false}
           >
             {/* Agents Section */}
-            {agents.length > 0 && (
+            {availableAgents.length > 0 && (
               <>
                 <Text
                   variant="caption"
@@ -1286,7 +1445,7 @@ export function AIChatComposer({
                 >
                   PERSONAS
                 </Text>
-                {agents.map((agent) => {
+                {availableAgents.map((agent) => {
                   const isSelected = currentAgent?.id === agent.id;
                   const agentModel = agent.modelId
                     ? getModelById(agent.modelId)
@@ -1864,6 +2023,40 @@ export function AIChatComposer({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  personaWarningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.xs,
+    marginHorizontal: spacingPatterns.md,
+    marginTop: spacingPatterns.xs,
+    paddingVertical: spacingPatterns.xs,
+    paddingHorizontal: spacingPatterns.sm,
+    backgroundColor: "rgba(255, 193, 7, 0.15)",
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: "rgba(166, 93, 0, 0.3)",
+  },
+  personaWarningText: {
+    flex: 1,
+    color: "#a65d00",
+    fontSize: 11,
+  },
+  personaInfoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingPatterns.xs,
+    marginHorizontal: spacingPatterns.md,
+    marginTop: spacingPatterns.xs,
+    paddingVertical: spacingPatterns.xs,
+    paddingHorizontal: spacingPatterns.sm,
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderRadius: borderRadius.sm,
+  },
+  personaInfoText: {
+    flex: 1,
+    fontSize: 11,
+    fontStyle: "italic",
   },
   chatMessages: {
     flex: 1,

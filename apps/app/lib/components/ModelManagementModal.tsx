@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -25,6 +25,8 @@ import {
   ensureCustomModelPresent,
   deleteCustomModel,
 } from "../ai/modelManager";
+import { getAvailablePersonas } from "../ai/personaAvailability";
+import { getCurrentPlatform } from "../ai/platformFilter";
 import { ALL_STT_MODELS } from "../ai/sttConfig";
 import { useUnifiedModel } from "../ai/UnifiedModelProvider";
 import {
@@ -147,6 +149,28 @@ export function ModelManagementModal({
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [showAgentEditor, setShowAgentEditor] = useState(false);
   const [savingAgent, setSavingAgent] = useState(false);
+
+  // Filter agents to those whose referenced model runs on this platform.
+  // Agents without a modelId (legacy rows) are shown unconditionally so users
+  // can still edit them and assign a model.
+  const visibleAgents = useMemo(() => {
+    const platform = getCurrentPlatform();
+    const withModel = agents.filter(
+      (a): a is Agent & { modelId: string } => a.modelId !== null,
+    );
+    const availableWithModel = getAvailablePersonas(
+      withModel,
+      ALL_LLM_MODELS,
+      platform,
+    );
+    const withoutModel = agents.filter((a) => a.modelId === null);
+    // Preserve the original ordering by filtering the source array.
+    const allowed = new Set<number>([
+      ...availableWithModel.map((a) => a.id),
+      ...withoutModel.map((a) => a.id),
+    ]);
+    return agents.filter((a) => allowed.has(a.id));
+  }, [agents]);
 
   // Remote models state (LLM)
   const [remoteModels, setRemoteModels] = useState<CustomModelConfig[]>([]);
@@ -1823,7 +1847,7 @@ export function ModelManagementModal({
                     </View>
 
                     <View style={styles.agentsList}>
-                      {agents.map((agent) => {
+                      {visibleAgents.map((agent) => {
                         const agentModel = agent.modelId
                           ? ALL_LLM_MODELS.find(
                               (m) => m.modelId === agent.modelId,

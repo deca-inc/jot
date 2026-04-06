@@ -3,6 +3,10 @@ import {
   isRemoteModelId,
   isCustomLocalModelId,
   isPlatformModelId,
+  isWebLLMModelId,
+  isDesktopLLMModelId,
+  isLocalModel,
+  requiresNetworkForInference,
   getModelCategory,
   generateCustomLocalModelId,
   generateRemoteModelId,
@@ -72,6 +76,52 @@ describe("modelTypeGuards", () => {
     });
   });
 
+  describe("isWebLLMModelId", () => {
+    it("returns true for web-llm model IDs", () => {
+      expect(isWebLLMModelId("web-qwen-2.5-1.5b")).toBe(true);
+      expect(isWebLLMModelId("web-llama-3.2-3b")).toBe(true);
+    });
+
+    it("returns false for non-web model IDs", () => {
+      expect(isWebLLMModelId("qwen-3-1.7b")).toBe(false);
+      expect(isWebLLMModelId("desktop-llama-3.2-3b")).toBe(false);
+      expect(isWebLLMModelId("remote-openai-gpt-4")).toBe(false);
+    });
+  });
+
+  describe("isDesktopLLMModelId", () => {
+    it("returns true for desktop-llm model IDs", () => {
+      expect(isDesktopLLMModelId("desktop-llama-3.2-3b")).toBe(true);
+      expect(isDesktopLLMModelId("desktop-qwen-2.5-1.5b")).toBe(true);
+    });
+
+    it("returns false for non-desktop model IDs", () => {
+      expect(isDesktopLLMModelId("qwen-3-1.7b")).toBe(false);
+      expect(isDesktopLLMModelId("web-qwen-2.5-1.5b")).toBe(false);
+      expect(isDesktopLLMModelId("remote-openai-gpt-4")).toBe(false);
+    });
+  });
+
+  describe("isLocalModel (web/desktop additions)", () => {
+    it("returns true for web-llm models", () => {
+      expect(isLocalModel("web-qwen-2.5-1.5b")).toBe(true);
+    });
+
+    it("returns true for desktop-llm models", () => {
+      expect(isLocalModel("desktop-llama-3.2-3b")).toBe(true);
+    });
+  });
+
+  describe("requiresNetworkForInference (web/desktop additions)", () => {
+    it("returns false for web-llm models (local inference)", () => {
+      expect(requiresNetworkForInference("web-qwen-2.5-1.5b")).toBe(false);
+    });
+
+    it("returns false for desktop-llm models (local inference)", () => {
+      expect(requiresNetworkForInference("desktop-llama-3.2-3b")).toBe(false);
+    });
+  });
+
   describe("getModelCategory", () => {
     it("returns 'built-in' for built-in LLM models", () => {
       expect(getModelCategory("qwen-3-1.7b")).toBe("built-in" as ModelCategory);
@@ -99,6 +149,18 @@ describe("modelTypeGuards", () => {
     it("returns 'custom-local' for custom local models", () => {
       expect(getModelCategory("custom-my-model")).toBe(
         "custom-local" as ModelCategory,
+      );
+    });
+
+    it("returns 'web-llm' for web-llm models", () => {
+      expect(getModelCategory("web-qwen-2.5-1.5b")).toBe(
+        "web-llm" as ModelCategory,
+      );
+    });
+
+    it("returns 'desktop-llm' for desktop-llm models", () => {
+      expect(getModelCategory("desktop-llama-3.2-3b")).toBe(
+        "desktop-llm" as ModelCategory,
       );
     });
 
