@@ -1,5 +1,10 @@
 import * as Device from "expo-device";
 import { Platform } from "react-native";
+import { ALL_LLM_MODELS } from "../ai/modelConfig";
+import {
+  getCurrentPlatform,
+  getAvailableModelsForPlatform,
+} from "../ai/platformFilter";
 
 /**
  * Device performance tiers for model selection
@@ -115,9 +120,17 @@ export async function getDeviceTier(): Promise<DeviceTier> {
 }
 
 /**
- * Get all compatible models for the device based on tier
+ * Get all compatible models for the device based on tier.
+ * On desktop/web, all platform-available models are compatible
+ * (tier checks are only meaningful for mobile RAM constraints).
  */
 export async function getCompatibleModels(): Promise<string[]> {
+  const platform = getCurrentPlatform();
+  if (platform === "web" || platform === "tauri" || platform === "macos") {
+    return getAvailableModelsForPlatform(ALL_LLM_MODELS, platform).map(
+      (m) => m.modelId,
+    );
+  }
   const tier = await getDeviceTier();
   return TIER_CONFIGS[tier].compatibleModels;
 }

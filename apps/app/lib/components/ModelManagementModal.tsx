@@ -15,7 +15,6 @@ import {
   ALL_LLM_MODELS,
   SpeechToTextModelConfig,
 } from "../ai/modelConfig";
-import { getAvailableModelsForPlatform } from "../ai/platformFilter";
 import {
   ensureModelPresent,
   deleteModel,
@@ -27,6 +26,7 @@ import {
   deleteCustomModel,
 } from "../ai/modelManager";
 import { getAvailablePersonas } from "../ai/personaAvailability";
+import { getAvailableModelsForPlatform } from "../ai/platformFilter";
 import { getCurrentPlatform } from "../ai/platformFilter";
 import { ALL_STT_MODELS } from "../ai/sttConfig";
 import { useUnifiedModel } from "../ai/UnifiedModelProvider";
@@ -64,7 +64,7 @@ export interface ModelManagementModalProps {
 
 // Estimated file sizes in MB
 const MODEL_SIZES: Record<string, number> = {
-  // LLM models
+  // LLM models (mobile .pte)
   "llama-3.2-1b-instruct": 1083,
   "llama-3.2-3b-instruct": 2435,
   "qwen-3-0.6b": 900,
@@ -73,6 +73,19 @@ const MODEL_SIZES: Record<string, number> = {
   "smollm2-135m": 535,
   "smollm2-360m": 1360,
   "smollm2-1.7b": 1220,
+  // Web MLC models
+  "web-qwen-2.5-1.5b": 900,
+  "web-llama-3.2-3b": 1800,
+  // Desktop GGUF models
+  "desktop-qwen-2.5-1.5b": 900,
+  "desktop-llama-3.2-3b": 2000,
+  "desktop-llama-3.2-1b": 700,
+  "desktop-qwen-3-1.7b": 1000,
+  "desktop-llama-3.1-8b-instruct": 4900,
+  "desktop-qwen-2.5-7b-instruct": 4700,
+  "desktop-qwen-2.5-14b-instruct": 8800,
+  "desktop-qwen-2.5-32b-instruct": 19000,
+  "desktop-llama-3.3-70b-instruct": 42000,
   // STT models
   "whisper-tiny-en": 233,
   "whisper-tiny-multi": 233,
