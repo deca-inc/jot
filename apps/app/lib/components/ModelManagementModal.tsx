@@ -15,6 +15,7 @@ import {
   ALL_LLM_MODELS,
   SpeechToTextModelConfig,
 } from "../ai/modelConfig";
+import { getAvailableModelsForPlatform } from "../ai/platformFilter";
 import {
   ensureModelPresent,
   deleteModel,
@@ -267,8 +268,13 @@ export function ModelManagementModal({
     }
   };
 
-  // Sort models by predefined order
-  const sortedLLMs = [...ALL_LLM_MODELS].sort((a, b) => {
+  // Filter to models available on current platform, then sort
+  const currentPlatform = getCurrentPlatform();
+  const availableLLMs = getAvailableModelsForPlatform(
+    ALL_LLM_MODELS,
+    currentPlatform,
+  );
+  const sortedLLMs = [...availableLLMs].sort((a, b) => {
     const indexA = LLM_ORDER.indexOf(a.modelId);
     const indexB = LLM_ORDER.indexOf(b.modelId);
     return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
