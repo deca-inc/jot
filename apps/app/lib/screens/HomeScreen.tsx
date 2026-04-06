@@ -61,6 +61,10 @@ export interface HomeScreenProps {
   selectedEntryId?: number;
   /** Called when entries are loaded, with the first entry ID (for auto-select) */
   onFirstEntryAvailable?: (entryId: number, entryType: string) => void;
+  /** Called when initial load completes with no entries */
+  onNoEntries?: () => void;
+  /** Called when an entry is deleted from the list */
+  onDeleteEntry?: (entryId: number) => void;
   /** Compact mode for sidebar — tighter spacing, slim entry rows */
   compact?: boolean;
 }
@@ -76,6 +80,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     isVisible = true,
     selectedEntryId,
     onFirstEntryAvailable,
+    onNoEntries,
+    onDeleteEntry,
     compact = false,
   } = props;
   const theme = useTheme();
@@ -225,18 +231,20 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     return entriesQuery.data?.pages.flatMap((page) => page.entries) ?? [];
   }, [entriesQuery.data]);
 
-  // Notify parent of first entry (for sidebar auto-select)
+  // Notify parent of first entry (for sidebar auto-select) or no entries
   const hasNotifiedFirstEntryRef = useRef(false);
   const onFirstEntryAvailableRef = useRef(onFirstEntryAvailable);
   onFirstEntryAvailableRef.current = onFirstEntryAvailable;
-  if (
-    !hasNotifiedFirstEntryRef.current &&
-    entries.length > 0 &&
-    onFirstEntryAvailableRef.current
-  ) {
+  const onNoEntriesRef = useRef(onNoEntries);
+  onNoEntriesRef.current = onNoEntries;
+  if (!hasNotifiedFirstEntryRef.current && entriesQuery.data) {
     hasNotifiedFirstEntryRef.current = true;
-    const first = entries[0];
-    onFirstEntryAvailableRef.current(first.id, first.type);
+    if (entries.length > 0 && onFirstEntryAvailableRef.current) {
+      const first = entries[0];
+      onFirstEntryAvailableRef.current(first.id, first.type);
+    } else if (entries.length === 0) {
+      onNoEntriesRef.current?.();
+    }
   }
 
   // React Query mutations
@@ -279,6 +287,13 @@ export function HomeScreen(props: HomeScreenProps = {}) {
 
   const onEditCountdownRef = useRef(onEditCountdown);
   onEditCountdownRef.current = onEditCountdown;
+
+  const onDeleteEntryRef = useRef(onDeleteEntry);
+  onDeleteEntryRef.current = onDeleteEntry;
+
+  const handleDeleteEntry = useCallback((entryId: number) => {
+    onDeleteEntryRef.current?.(entryId);
+  }, []);
 
   const handleToggleFavorite = useCallback((entry: Entry) => {
     toggleFavoriteMutationRef.current.mutate(entry.id);
@@ -540,6 +555,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           onEdit={handleEditEntry}
           onToggleFavorite={handleToggleFavorite}
           onResetCountup={handleResetCountup}
+          onDeleteEntry={handleDeleteEntry}
           seasonalTheme={seasonalTheme}
           isSelected={selectedEntryId === item.entry.id}
           compact={compact}
@@ -553,6 +569,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       handleEditEntry,
       handleToggleFavorite,
       handleResetCountup,
+      handleDeleteEntry,
       selectedEntryId,
       compact,
     ],
@@ -625,101 +642,9 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       );
     }
 
-    // Welcome state for new users
-    return (
-      <View style={styles.emptyState}>
-        <Text
-          variant="h2"
-          style={{
-            color: seasonalTheme.textPrimary,
-            marginBottom: spacingPatterns.md,
-            textAlign: "center",
-          }}
-        >
-          Welcome!
-        </Text>
-        <Text
-          variant="body"
-          style={{
-            color: seasonalTheme.textSecondary,
-            marginBottom: spacingPatterns.lg,
-            textAlign: "center",
-            lineHeight: 24,
-          }}
-        >
-          Tap the + button to get started
-        </Text>
-        <View style={styles.welcomeHints}>
-          <TouchableOpacity
-            style={styles.welcomeHint}
-            onPress={handleCreateJournalEntry}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="create-outline"
-              size={24}
-              color={theme.colors.accent}
-            />
-            <View style={styles.welcomeHintText}>
-              <Text
-                variant="body"
-                style={{
-                  color: seasonalTheme.textPrimary,
-                  fontWeight: "600",
-                  marginBottom: spacingPatterns.xxs,
-                }}
-              >
-                New Note
-              </Text>
-              <Text
-                variant="caption"
-                style={{ color: seasonalTheme.textSecondary }}
-              >
-                Write your thoughts, track your day
-              </Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.welcomeHint}
-            onPress={handleCreateAIChat}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="chatbubbles-outline"
-              size={24}
-              color={theme.colors.accent}
-            />
-            <View style={styles.welcomeHintText}>
-              <Text
-                variant="body"
-                style={{
-                  color: seasonalTheme.textPrimary,
-                  fontWeight: "600",
-                  marginBottom: spacingPatterns.xxs,
-                }}
-              >
-                New AI Chat
-              </Text>
-              <Text
-                variant="caption"
-                style={{ color: seasonalTheme.textSecondary }}
-              >
-                Get help, brainstorm, or just chat
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }, [
-    entriesQuery.isLoading,
-    seasonalTheme,
-    favoritesOnly,
-    isSearching,
-    theme,
-    handleCreateJournalEntry,
-    handleCreateAIChat,
-  ]);
+    // No entries — content panel handles the empty state
+    return null;
+  }, [entriesQuery.isLoading, seasonalTheme, favoritesOnly, isSearching]);
 
   const ListFooterComponent = useMemo(() => {
     if (entriesQuery.isFetchingNextPage) {
@@ -853,19 +778,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacingPatterns.xl * 2,
-  },
-  welcomeHints: {
-    gap: spacingPatterns.md,
-    width: "100%",
-    maxWidth: 400,
-  },
-  welcomeHint: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingPatterns.md,
-    paddingVertical: spacingPatterns.sm,
-  },
-  welcomeHintText: {
-    flex: 1,
   },
 });

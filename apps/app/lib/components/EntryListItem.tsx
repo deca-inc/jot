@@ -3,7 +3,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { marked } from "marked";
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, {
+  useCallback,
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+} from "react";
 import {
   View,
   StyleSheet,
@@ -29,11 +35,7 @@ import {
   useArchiveEntry,
   useUnarchiveEntry,
 } from "../db/useEntries";
-import {
-  renameEntry,
-  deleteEntryWithConfirmation,
-  type EntryActionContext,
-} from "../screens/entryActions";
+import { renameEntry, type EntryActionContext } from "../screens/entryActions";
 import { spacingPatterns, borderRadius } from "../theme";
 import { type SeasonalTheme } from "../theme/seasonalTheme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -58,6 +60,7 @@ export interface EntryListItemProps {
   onTogglePinned?: (entry: Entry) => void;
   onArchive?: (entry: Entry) => void;
   onResetCountup?: (entry: Entry) => void;
+  onDeleteEntry?: (entryId: number) => void;
   seasonalTheme?: SeasonalTheme;
   /** Whether this entry is currently selected (highlighted in sidebar layout) */
   isSelected?: boolean;
@@ -73,6 +76,7 @@ function EntryListItemComponent({
   onTogglePinned,
   onArchive,
   onResetCountup,
+  onDeleteEntry,
   seasonalTheme: seasonalThemeProp,
   isSelected = false,
   compact = false,
@@ -113,6 +117,7 @@ function EntryListItemComponent({
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [showDismissDialog, setShowDismissDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [renameText, setRenameText] = useState("");
   const confettiRef = useRef<PIConfettiMethods>(null);
@@ -596,35 +601,23 @@ function EntryListItemComponent({
     return extractCountdownData(entry.blocks);
   }, [entry.type, entry.blocks]);
 
-  // Trigger confetti when dismiss dialog opens (if confetti is enabled)
-  useEffect(() => {
-    if (showDismissDialog && countdownData?.confettiEnabled) {
-      // Small delay to ensure dialog is visible first
-      const timer = setTimeout(() => {
-        setShowConfetti(true);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [showDismissDialog, countdownData?.confettiEnabled]);
-
-  // Start confetti animation after component mounts
-  useEffect(() => {
-    if (showConfetti) {
-      // Small delay to ensure PIConfetti ref is populated after render
-      const timer = setTimeout(() => {
-        confettiRef.current?.restart();
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [showConfetti]);
+  // Start confetti after dismiss dialog render settles
+  const triggerConfetti = useCallback(() => {
+    // Small delay to ensure PIConfetti ref is populated after render
+    const timer = setTimeout(() => {
+      confettiRef.current?.restart();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Mutations for pinning and archiving
   const togglePinnedMutation = useTogglePinned();
   const archiveEntryMutation = useArchiveEntry();
   const unarchiveEntryMutation = useUnarchiveEntry();
 
-  // Event handler: Delete entry
-  const handleDelete = async () => {
+  // Event handler: Delete entry (shows confirmation dialog)
+  const handleDeleteConfirm = async () => {
+    setShowDeleteDialog(false);
     try {
       // Cancel notification before deleting if this is a countdown with a notification
       if (entry.type === "countdown") {
@@ -633,13 +626,11 @@ function EntryListItemComponent({
           await cancelNotification(data.notificationId);
         }
       }
-      await deleteEntryWithConfirmation(entry.id, actionContext);
+      await actionContext.deleteEntry.mutateAsync(entry.id);
+      onDeleteEntry?.(entry.id);
       trackEvent("Delete Entry", { entryType: entry.type });
     } catch (error) {
-      // Error already handled in action (logged and shown to user)
-      if (error instanceof Error && error.message !== "Deletion cancelled") {
-        Alert.alert("Error", "Failed to delete entry");
-      }
+      console.error("[EntryListItem] Error deleting entry:", error);
     }
   };
 
@@ -829,10 +820,69 @@ function EntryListItemComponent({
             variant="destructive"
             onPress={() => {
               setShowMenu(false);
-              handleDelete();
+              setShowDeleteDialog(true);
             }}
           />
         </PopoverMenu>
+
+        {/* Delete Confirmation Dialog (compact) */}
+        <Dialog
+          visible={showDeleteDialog}
+          onRequestClose={() => setShowDeleteDialog(false)}
+          containerStyle={styles.resetDialog}
+        >
+          <Text
+            variant="h3"
+            style={{
+              color: itemTheme.textPrimary,
+              marginBottom: spacingPatterns.sm,
+              textAlign: "center",
+            }}
+          >
+            Delete Entry
+          </Text>
+          <Text
+            variant="caption"
+            style={{
+              color: itemTheme.textSecondary,
+              marginBottom: spacingPatterns.md,
+              textAlign: "center",
+            }}
+          >
+            Are you sure? This action cannot be undone.
+          </Text>
+          <View style={styles.renameButtons}>
+            <TouchableOpacity
+              style={[
+                styles.renameButton,
+                {
+                  backgroundColor: itemTheme.textSecondary + "20",
+                },
+              ]}
+              onPress={() => setShowDeleteDialog(false)}
+            >
+              <Text style={{ color: itemTheme.textPrimary }}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.renameButton,
+                {
+                  backgroundColor: "#E53935",
+                },
+              ]}
+              onPress={handleDeleteConfirm}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontWeight: "600",
+                }}
+              >
+                Delete
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Dialog>
       </TouchableOpacity>
     );
   }
@@ -1016,6 +1066,10 @@ function EntryListItemComponent({
                           countdownData.confettiEnabled
                         ) {
                           setShowDismissDialog(true);
+                          if (countdownData.confettiEnabled) {
+                            setShowConfetti(true);
+                            triggerConfetti();
+                          }
                         } else {
                           handleArchiveCountdown();
                         }
@@ -1195,7 +1249,7 @@ function EntryListItemComponent({
           variant="destructive"
           onPress={() => {
             setShowMenu(false);
-            handleDelete();
+            setShowDeleteDialog(true);
           }}
         />
       </Dialog>
@@ -1431,7 +1485,11 @@ function EntryListItemComponent({
               onPress={() => {
                 setShowDismissDialog(false);
                 setShowConfetti(false);
-                handleArchiveCountdown();
+                // Delay archive until after modal close animation finishes,
+                // otherwise the list removes this item mid-animation causing a native crash
+                setTimeout(() => {
+                  handleArchiveCountdown();
+                }, 350);
               }}
             >
               <Text
@@ -1462,6 +1520,65 @@ function EntryListItemComponent({
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        visible={showDeleteDialog}
+        onRequestClose={() => setShowDeleteDialog(false)}
+        containerStyle={styles.resetDialog}
+      >
+        <Text
+          variant="h3"
+          style={{
+            color: itemTheme.textPrimary,
+            marginBottom: spacingPatterns.sm,
+            textAlign: "center",
+          }}
+        >
+          Delete Entry
+        </Text>
+        <Text
+          variant="caption"
+          style={{
+            color: itemTheme.textSecondary,
+            marginBottom: spacingPatterns.md,
+            textAlign: "center",
+          }}
+        >
+          Are you sure? This action cannot be undone.
+        </Text>
+        <View style={styles.renameButtons}>
+          <TouchableOpacity
+            style={[
+              styles.renameButton,
+              {
+                backgroundColor: itemTheme.textSecondary + "20",
+              },
+            ]}
+            onPress={() => setShowDeleteDialog(false)}
+          >
+            <Text style={{ color: itemTheme.textPrimary }}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.renameButton,
+              {
+                backgroundColor: "#E53935",
+              },
+            ]}
+            onPress={handleDeleteConfirm}
+          >
+            <Text
+              style={{
+                color: "#fff",
+                fontWeight: "600",
+              }}
+            >
+              Delete
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Dialog>
     </TouchableOpacity>
   );
 }

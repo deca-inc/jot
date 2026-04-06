@@ -17,7 +17,13 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { Text, SearchModal, MenuItem, PopoverMenu } from "../components";
+import {
+  Text,
+  SearchModal,
+  MenuItem,
+  PopoverMenu,
+  Dialog,
+} from "../components";
 import { DrawerIcon } from "../components/icons/DrawerIcon";
 import { useCreateEntry, useEntry, useDeleteEntry } from "../db/useEntries";
 import { useIsWideScreen } from "../hooks/useIsWideScreen";
@@ -89,6 +95,7 @@ export function SimpleNavigation() {
     undefined,
   );
   const [_homeRefreshKey, _setHomeRefreshKey] = useState(0);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const createEntry = useCreateEntry();
   const screenWidth = useRef(0);
 
@@ -407,10 +414,12 @@ export function SimpleNavigation() {
     setCountdownEntryId(undefined);
   }, [countdownViewerEntryId]);
 
-  // Countdown viewer handlers (for notification deep linking)
+  // Countdown viewer handlers (for notification/widget deep linking)
   const handleNavigateToCountdownViewer = useCallback((entryId: number) => {
     setCountdownViewerEntryId(entryId);
     setCurrentScreen("countdownViewer");
+    // Close drawer so the user lands directly on the entry (mobile)
+    closeDrawerRef.current();
   }, []);
 
   const handleCountdownViewerClose = useCallback(() => {
@@ -468,6 +477,8 @@ export function SimpleNavigation() {
       );
       if (createMatch) {
         const type = createMatch[1];
+        // Close drawer so the user lands directly on the content (mobile)
+        closeDrawerRef.current();
         switch (type) {
           case "journal":
             handleOpenFullEditor();
@@ -753,6 +764,44 @@ export function SimpleNavigation() {
     [currentScreen, handleOpenEntryEditor],
   );
 
+  // On mobile, close drawer if initial load has no entries so empty state is visible
+  const handleNoEntries = useCallback(() => {
+    if (!isWideScreen) {
+      closeDrawerRef.current();
+    }
+  }, [isWideScreen]);
+
+  // When an entry is deleted from the sidebar, navigate to empty state if it was active
+  const handleSidebarDeleteEntry = useCallback(
+    (entryId: number) => {
+      if (
+        entryId === editingEntryId ||
+        entryId === fullEditorEntryId ||
+        entryId === countdownViewerEntryId
+      ) {
+        setCurrentScreen("home");
+        setEditingEntryId(undefined);
+        setFullEditorEntryId(undefined);
+        setCountdownViewerEntryId(undefined);
+      }
+    },
+    [editingEntryId, fullEditorEntryId, countdownViewerEntryId],
+  );
+
+  // Delete active entry from content header menu (with confirmation)
+  const handleDeleteActiveEntry = useCallback(() => {
+    if (!activeEntryId) return;
+    deleteEntryMutation.mutate(activeEntryId, {
+      onSuccess: () => {
+        setShowDeleteConfirm(false);
+        setCurrentScreen("home");
+        setEditingEntryId(undefined);
+        setFullEditorEntryId(undefined);
+        setCountdownViewerEntryId(undefined);
+      },
+    });
+  }, [activeEntryId, deleteEntryMutation]);
+
   // Check if current screen is an entry-level screen (shown in content panel on wide)
   const isEntryScreen =
     currentScreen === "entryEditor" ||
@@ -998,6 +1047,8 @@ export function SimpleNavigation() {
                 onCreateCountdown={handleCreateCountdown}
                 selectedEntryId={activeEntryId}
                 onFirstEntryAvailable={handleFirstEntryAvailable}
+                onNoEntries={handleNoEntries}
+                onDeleteEntry={handleSidebarDeleteEntry}
                 compact
               />
             </Animated.View>
@@ -1205,13 +1256,7 @@ export function SimpleNavigation() {
                     compact
                     onPress={() => {
                       setShowContentMenu(false);
-                      deleteEntryMutation.mutate(activeEntryId, {
-                        onSuccess: () => {
-                          setCurrentScreen("home");
-                          setEditingEntryId(undefined);
-                          setFullEditorEntryId(undefined);
-                        },
-                      });
+                      setShowDeleteConfirm(true);
                     }}
                   />
                 </PopoverMenu>
@@ -1241,30 +1286,16 @@ export function SimpleNavigation() {
                     { backgroundColor: seasonalTheme.gradient.middle },
                   ]}
                 >
-                  <Ionicons
-                    name="journal-outline"
-                    size={48}
-                    color={seasonalTheme.textSecondary + "60"}
-                  />
                   <Text
                     variant="h3"
                     style={{
-                      color: seasonalTheme.textSecondary,
+                      color: seasonalTheme.textPrimary,
                       marginTop: spacingPatterns.md,
                       textAlign: "center",
+                      fontWeight: "600",
                     }}
                   >
-                    Select an entry
-                  </Text>
-                  <Text
-                    variant="body"
-                    style={{
-                      color: seasonalTheme.textSecondary + "80",
-                      marginTop: spacingPatterns.xs,
-                      textAlign: "center",
-                    }}
-                  >
-                    Or create a new note, AI chat, or countdown
+                    What would you like to create?
                   </Text>
                   <View style={styles.emptyActions}>
                     <TouchableOpacity
@@ -1272,8 +1303,8 @@ export function SimpleNavigation() {
                         styles.emptyActionButton,
                         {
                           backgroundColor: seasonalTheme.isDark
-                            ? "rgba(255,255,255,0.08)"
-                            : "rgba(0,0,0,0.05)",
+                            ? "rgba(255,255,255,0.06)"
+                            : "rgba(0,0,0,0.04)",
                         },
                       ]}
                       onPress={() => handleOpenFullEditor()}
@@ -1281,7 +1312,7 @@ export function SimpleNavigation() {
                     >
                       <Ionicons
                         name="create-outline"
-                        size={20}
+                        size={16}
                         color={theme.colors.accent}
                       />
                       <Text
@@ -1289,10 +1320,11 @@ export function SimpleNavigation() {
                         style={{
                           color: seasonalTheme.textPrimary,
                           fontWeight: "500",
-                          marginLeft: spacingPatterns.xs,
+                          fontSize: 14,
+                          marginLeft: 6,
                         }}
                       >
-                        New Note
+                        Note
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -1300,8 +1332,8 @@ export function SimpleNavigation() {
                         styles.emptyActionButton,
                         {
                           backgroundColor: seasonalTheme.isDark
-                            ? "rgba(255,255,255,0.08)"
-                            : "rgba(0,0,0,0.05)",
+                            ? "rgba(255,255,255,0.06)"
+                            : "rgba(0,0,0,0.04)",
                         },
                       ]}
                       onPress={handleCreateNewAIChat}
@@ -1309,7 +1341,7 @@ export function SimpleNavigation() {
                     >
                       <Ionicons
                         name="chatbubbles-outline"
-                        size={20}
+                        size={16}
                         color={theme.colors.accent}
                       />
                       <Text
@@ -1317,10 +1349,40 @@ export function SimpleNavigation() {
                         style={{
                           color: seasonalTheme.textPrimary,
                           fontWeight: "500",
-                          marginLeft: spacingPatterns.xs,
+                          fontSize: 14,
+                          marginLeft: 6,
                         }}
                       >
                         AI Chat
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.emptyActionButton,
+                        {
+                          backgroundColor: seasonalTheme.isDark
+                            ? "rgba(255,255,255,0.06)"
+                            : "rgba(0,0,0,0.04)",
+                        },
+                      ]}
+                      onPress={handleCreateCountdown}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="timer-outline"
+                        size={16}
+                        color={theme.colors.accent}
+                      />
+                      <Text
+                        variant="body"
+                        style={{
+                          color: seasonalTheme.textPrimary,
+                          fontWeight: "500",
+                          fontSize: 14,
+                          marginLeft: 6,
+                        }}
+                      >
+                        Countdown
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1335,6 +1397,58 @@ export function SimpleNavigation() {
           onClose={() => setShowSearchModal(false)}
           onSelectEntry={handleSearchSelect}
         />
+
+        <Dialog
+          visible={showDeleteConfirm}
+          onRequestClose={() => setShowDeleteConfirm(false)}
+        >
+          <Text
+            variant="h3"
+            style={{
+              color: seasonalTheme.textPrimary,
+              marginBottom: spacingPatterns.sm,
+              textAlign: "center",
+            }}
+          >
+            Delete Entry
+          </Text>
+          <Text
+            variant="caption"
+            style={{
+              color: seasonalTheme.textSecondary,
+              marginBottom: spacingPatterns.md,
+              textAlign: "center",
+            }}
+          >
+            Are you sure? This action cannot be undone.
+          </Text>
+          <View style={{ flexDirection: "row", gap: spacingPatterns.sm }}>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                alignItems: "center",
+                paddingVertical: 10,
+                borderRadius: borderRadius.md,
+                backgroundColor: seasonalTheme.textSecondary + "20",
+              }}
+              onPress={() => setShowDeleteConfirm(false)}
+            >
+              <Text style={{ color: seasonalTheme.textPrimary }}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                alignItems: "center",
+                paddingVertical: 10,
+                borderRadius: borderRadius.md,
+                backgroundColor: "#E53935",
+              }}
+              onPress={handleDeleteActiveEntry}
+            >
+              <Text style={{ color: "#fff", fontWeight: "600" }}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </Dialog>
       </SafeAreaView>
     );
   }
@@ -1517,6 +1631,7 @@ export function SimpleNavigation() {
                         setCurrentScreen("home");
                         setEditingEntryId(undefined);
                         setFullEditorEntryId(undefined);
+                        setCountdownViewerEntryId(undefined);
                       },
                     });
                   }}
@@ -1548,30 +1663,16 @@ export function SimpleNavigation() {
                   { backgroundColor: seasonalTheme.gradient.middle },
                 ]}
               >
-                <Ionicons
-                  name="journal-outline"
-                  size={48}
-                  color={seasonalTheme.textSecondary + "60"}
-                />
                 <Text
                   variant="h3"
                   style={{
-                    color: seasonalTheme.textSecondary,
+                    color: seasonalTheme.textPrimary,
                     marginTop: spacingPatterns.md,
                     textAlign: "center",
+                    fontWeight: "600",
                   }}
                 >
-                  Select an entry
-                </Text>
-                <Text
-                  variant="body"
-                  style={{
-                    color: seasonalTheme.textSecondary + "80",
-                    marginTop: spacingPatterns.xs,
-                    textAlign: "center",
-                  }}
-                >
-                  Or create a new note, AI chat, or countdown
+                  What would you like to create?
                 </Text>
                 <View style={styles.emptyActions}>
                   <TouchableOpacity
@@ -1579,8 +1680,8 @@ export function SimpleNavigation() {
                       styles.emptyActionButton,
                       {
                         backgroundColor: seasonalTheme.isDark
-                          ? "rgba(255,255,255,0.08)"
-                          : "rgba(0,0,0,0.05)",
+                          ? "rgba(255,255,255,0.06)"
+                          : "rgba(0,0,0,0.04)",
                       },
                     ]}
                     onPress={() => handleOpenFullEditor()}
@@ -1588,7 +1689,7 @@ export function SimpleNavigation() {
                   >
                     <Ionicons
                       name="create-outline"
-                      size={20}
+                      size={16}
                       color={theme.colors.accent}
                     />
                     <Text
@@ -1596,10 +1697,11 @@ export function SimpleNavigation() {
                       style={{
                         color: seasonalTheme.textPrimary,
                         fontWeight: "500",
-                        marginLeft: spacingPatterns.xs,
+                        fontSize: 14,
+                        marginLeft: 6,
                       }}
                     >
-                      New Note
+                      Note
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -1607,8 +1709,8 @@ export function SimpleNavigation() {
                       styles.emptyActionButton,
                       {
                         backgroundColor: seasonalTheme.isDark
-                          ? "rgba(255,255,255,0.08)"
-                          : "rgba(0,0,0,0.05)",
+                          ? "rgba(255,255,255,0.06)"
+                          : "rgba(0,0,0,0.04)",
                       },
                     ]}
                     onPress={handleCreateNewAIChat}
@@ -1616,7 +1718,7 @@ export function SimpleNavigation() {
                   >
                     <Ionicons
                       name="chatbubbles-outline"
-                      size={20}
+                      size={16}
                       color={theme.colors.accent}
                     />
                     <Text
@@ -1624,10 +1726,40 @@ export function SimpleNavigation() {
                       style={{
                         color: seasonalTheme.textPrimary,
                         fontWeight: "500",
-                        marginLeft: spacingPatterns.xs,
+                        fontSize: 14,
+                        marginLeft: 6,
                       }}
                     >
                       AI Chat
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.emptyActionButton,
+                      {
+                        backgroundColor: seasonalTheme.isDark
+                          ? "rgba(255,255,255,0.06)"
+                          : "rgba(0,0,0,0.04)",
+                      },
+                    ]}
+                    onPress={handleCreateCountdown}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="timer-outline"
+                      size={16}
+                      color={theme.colors.accent}
+                    />
+                    <Text
+                      variant="body"
+                      style={{
+                        color: seasonalTheme.textPrimary,
+                        fontWeight: "500",
+                        fontSize: 14,
+                        marginLeft: 6,
+                      }}
+                    >
+                      Countdown
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1803,6 +1935,8 @@ export function SimpleNavigation() {
                 onCreateCountdown={handleSidebarCreateCountdown}
                 selectedEntryId={activeEntryId}
                 onFirstEntryAvailable={handleFirstEntryAvailable}
+                onNoEntries={handleNoEntries}
+                onDeleteEntry={handleSidebarDeleteEntry}
                 compact
               />
             </View>
@@ -1851,6 +1985,58 @@ export function SimpleNavigation() {
         onClose={() => setShowSearchModal(false)}
         onSelectEntry={handleSidebarSearchSelect}
       />
+
+      <Dialog
+        visible={showDeleteConfirm}
+        onRequestClose={() => setShowDeleteConfirm(false)}
+      >
+        <Text
+          variant="h3"
+          style={{
+            color: seasonalTheme.textPrimary,
+            marginBottom: spacingPatterns.sm,
+            textAlign: "center",
+          }}
+        >
+          Delete Entry
+        </Text>
+        <Text
+          variant="caption"
+          style={{
+            color: seasonalTheme.textSecondary,
+            marginBottom: spacingPatterns.md,
+            textAlign: "center",
+          }}
+        >
+          Are you sure? This action cannot be undone.
+        </Text>
+        <View style={{ flexDirection: "row", gap: spacingPatterns.sm }}>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              alignItems: "center",
+              paddingVertical: 10,
+              borderRadius: borderRadius.md,
+              backgroundColor: seasonalTheme.textSecondary + "20",
+            }}
+            onPress={() => setShowDeleteConfirm(false)}
+          >
+            <Text style={{ color: seasonalTheme.textPrimary }}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              alignItems: "center",
+              paddingVertical: 10,
+              borderRadius: borderRadius.md,
+              backgroundColor: "#E53935",
+            }}
+            onPress={handleDeleteActiveEntry}
+          >
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      </Dialog>
     </SafeAreaView>
   );
 }
@@ -1974,14 +2160,17 @@ const styles = StyleSheet.create({
     padding: spacingPatterns.xl,
   },
   emptyActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
     marginTop: spacingPatterns.lg,
-    gap: spacingPatterns.sm,
+    gap: spacingPatterns.xs,
   },
   emptyActionButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: spacingPatterns.sm,
+    paddingVertical: 10,
     paddingHorizontal: spacingPatterns.md,
-    borderRadius: 8,
+    borderRadius: 20,
   },
 });
