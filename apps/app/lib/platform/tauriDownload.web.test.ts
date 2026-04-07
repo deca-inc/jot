@@ -12,13 +12,6 @@ jest.mock(
   "@tauri-apps/api/core",
   () => ({
     invoke: jest.fn(),
-  }),
-  { virtual: true },
-);
-
-jest.mock(
-  "@tauri-apps/api",
-  () => ({
     Channel: jest.fn().mockImplementation(function MockChannel(this: {
       onmessage: ((message: unknown) => void) | null;
     }) {
@@ -52,10 +45,8 @@ import {
   isDesktopModelDownloaded,
 } from "./tauriDownload.web";
 
-const { invoke } = jest.requireMock("@tauri-apps/api/core") as {
+const { invoke, Channel } = jest.requireMock("@tauri-apps/api/core") as {
   invoke: jest.Mock;
-};
-const { Channel } = jest.requireMock("@tauri-apps/api") as {
   Channel: jest.Mock;
 };
 const { appDataDir } = jest.requireMock("@tauri-apps/api/path") as {

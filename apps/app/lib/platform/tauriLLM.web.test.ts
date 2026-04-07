@@ -24,13 +24,6 @@ jest.mock(
   "@tauri-apps/api/core",
   () => ({
     invoke: jest.fn(),
-  }),
-  { virtual: true },
-);
-
-jest.mock(
-  "@tauri-apps/api",
-  () => ({
     Channel: jest.fn().mockImplementation(function MockChannel(this: {
       onmessage: ((message: unknown) => void) | null;
     }) {
@@ -45,10 +38,8 @@ import { createTauriLLMEngine, type TauriLLMMessage } from "./tauriLLM.web";
 // @tauri-apps/api is not installed in the app package — these modules are
 // provided via the virtual jest.mock calls above. We resolve them through
 // jest.requireMock to avoid TS module resolution errors.
-const { invoke } = jest.requireMock("@tauri-apps/api/core") as {
+const { invoke, Channel } = jest.requireMock("@tauri-apps/api/core") as {
   invoke: jest.Mock;
-};
-const { Channel } = jest.requireMock("@tauri-apps/api") as {
   Channel: jest.Mock;
 };
 

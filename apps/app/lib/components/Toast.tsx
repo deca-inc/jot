@@ -161,7 +161,11 @@ export function Toast({
     return seasonalTheme.gradient.middle;
   };
 
-  // Wrap in Modal to ensure toast appears above all other modals
+  // Wrap in Modal to ensure toast appears above all other modals.
+  // On web, Modal is a fixed-position div whose z-index depends on DOM order.
+  // Force a very high z-index so it always renders above other modals.
+  const webModalStyle = Platform.OS === "web" ? { zIndex: 99999 } : undefined;
+
   return (
     <Modal
       visible={visible}
@@ -169,6 +173,7 @@ export function Toast({
       animationType="none"
       statusBarTranslucent
       onRequestClose={handleHide}
+      style={webModalStyle}
     >
       <View style={styles.modalOverlay} pointerEvents="box-none">
         <Animated.View

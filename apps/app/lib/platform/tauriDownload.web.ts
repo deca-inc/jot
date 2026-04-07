@@ -17,14 +17,7 @@
  * behind `isTauri()` at runtime.
  */
 
-// `Channel` lives in `@tauri-apps/api/core` at the type level, but Tauri's
-// runtime also exposes the `core` module's members on the root package.
-// We import it from the root to keep the mock surface minimal at test time.
-// @ts-expect-error -- `@tauri-apps/api` root does not publish Channel in its
-// type surface, but it is reachable at runtime via the re-exported `core`
-// module. Tests mock it at this path via a virtual jest.mock.
-import { Channel } from "@tauri-apps/api";
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 // `@tauri-apps/api/path` and `@tauri-apps/plugin-fs` are resolvable in
 // the workspace (they ship with the Tauri webview and are present in
 // node_modules). Tests mock both virtually.
