@@ -39,6 +39,7 @@ export const PLATFORM_MODEL_IDS = [
   "apple-foundation",
   "android-speech",
   "apple-speech",
+  "web-speech",
 ] as const;
 
 // =============================================================================

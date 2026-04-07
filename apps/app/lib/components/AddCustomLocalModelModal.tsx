@@ -1,13 +1,16 @@
 /**
  * Add Custom Local Model Modal
  *
- * Modal for adding user-provided ExecuTorch (.pte) models from HuggingFace.
- * Users provide direct URLs to model files.
+ * Modal for adding user-provided models. Platform-aware:
+ * - Mobile (iOS/Android): ExecuTorch (.pte) models from HuggingFace
+ * - Desktop (Tauri/macOS): GGUF models from HuggingFace
+ * - Web: MLC model IDs for web-llm
  */
 
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useCallback } from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
+import { getCurrentPlatform } from "../ai/platformFilter";
 import { useCustomModels } from "../db/useCustomModels";
 import { borderRadius, spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -65,6 +68,11 @@ export function AddCustomLocalModelModal({
 
   const isEditMode = !!editModel;
 
+  // Platform detection
+  const platform = getCurrentPlatform();
+  const isDesktop = platform === "tauri" || platform === "macos";
+  const isWeb = platform === "web";
+
   // Form state
   const [displayName, setDisplayName] = useState("");
   const [pteUrl, setPteUrl] = useState("");
@@ -109,10 +117,17 @@ export function AddCustomLocalModelModal({
     }
 
     if (!pteUrl.trim()) {
-      showToast("Please enter the model file URL", "error");
+      const fieldLabel = isWeb
+        ? "MLC Model ID"
+        : isDesktop
+          ? "model file URL"
+          : "model file URL";
+      showToast(`Please enter the ${fieldLabel}`, "error");
       return;
     }
-    if (!pteUrl.includes("huggingface.co")) {
+
+    // URL validation (web uses model IDs, not URLs)
+    if (!isWeb && !pteUrl.includes("huggingface.co")) {
       showToast("Please use a HuggingFace URL", "error");
       return;
     }
@@ -121,20 +136,22 @@ export function AddCustomLocalModelModal({
 
     try {
       if (isEditMode && editModel) {
-        // Extract new filenames if URLs changed
-        const newTokenizerFileName = tokenizerUrl.trim()
-          ? getFilenameFromUrl(tokenizerUrl)
-          : null;
-        const newTokenizerConfigFileName = tokenizerConfigUrl.trim()
-          ? getFilenameFromUrl(tokenizerConfigUrl)
-          : null;
+        // Extract new filenames if URLs changed (not applicable for web MLC IDs)
+        const newTokenizerFileName =
+          !isWeb && tokenizerUrl.trim()
+            ? getFilenameFromUrl(tokenizerUrl)
+            : null;
+        const newTokenizerConfigFileName =
+          !isWeb && tokenizerConfigUrl.trim()
+            ? getFilenameFromUrl(tokenizerConfigUrl)
+            : null;
 
         // Update existing model
         await customModels.update(editModel.modelId, {
           displayName: displayName.trim(),
           huggingFaceUrl: pteUrl.trim(),
-          tokenizerUrl: tokenizerUrl.trim() || null,
-          tokenizerConfigUrl: tokenizerConfigUrl.trim() || null,
+          tokenizerUrl: isWeb ? null : tokenizerUrl.trim() || null,
+          tokenizerConfigUrl: isWeb ? null : tokenizerConfigUrl.trim() || null,
           tokenizerFileName: newTokenizerFileName,
           tokenizerConfigFileName: newTokenizerConfigFileName,
           // Mark as not downloaded if URLs changed
@@ -149,38 +166,64 @@ export function AddCustomLocalModelModal({
         );
         await onModelAdded?.(editModel.modelId);
       } else {
-        // Extract filenames from URLs
-        const pteFileName = getFilenameFromUrl(pteUrl);
-        const tokenizerFileName = tokenizerUrl.trim()
-          ? getFilenameFromUrl(tokenizerUrl)
-          : undefined;
-        const tokenizerConfigFileName = tokenizerConfigUrl.trim()
-          ? getFilenameFromUrl(tokenizerConfigUrl)
-          : undefined;
+        // Platform-specific file validation
+        if (isWeb) {
+          // Web: pteUrl is actually an MLC model ID, no file extension validation
+          const folderName = generateFolderName(displayName);
 
-        if (!pteFileName.endsWith(".pte")) {
-          showToast("Model file must be a .pte file", "error");
-          setIsSubmitting(false);
-          return;
+          const createdModel = await customModels.createCustomLocalModel({
+            displayName: displayName.trim(),
+            modelCategory,
+            huggingFaceUrl: pteUrl.trim(), // Stores the MLC model ID
+            folderName,
+            pteFileName: pteUrl.trim(), // Use the model ID as the file identifier
+          });
+
+          showToast(`${displayName} added successfully`, "success");
+          await onModelAdded?.(createdModel.modelId);
+        } else {
+          // Desktop or mobile: extract filenames from URLs
+          const pteFileName = getFilenameFromUrl(pteUrl);
+          const tokenizerFileName = tokenizerUrl.trim()
+            ? getFilenameFromUrl(tokenizerUrl)
+            : undefined;
+          const tokenizerConfigFileName = tokenizerConfigUrl.trim()
+            ? getFilenameFromUrl(tokenizerConfigUrl)
+            : undefined;
+
+          // Validate file extension
+          if (isDesktop) {
+            if (!pteFileName.endsWith(".gguf")) {
+              showToast("Model file must be a .gguf file", "error");
+              setIsSubmitting(false);
+              return;
+            }
+          } else {
+            // Mobile
+            if (!pteFileName.endsWith(".pte")) {
+              showToast("Model file must be a .pte file", "error");
+              setIsSubmitting(false);
+              return;
+            }
+          }
+
+          const folderName = generateFolderName(displayName);
+
+          const createdModel = await customModels.createCustomLocalModel({
+            displayName: displayName.trim(),
+            modelCategory,
+            huggingFaceUrl: pteUrl.trim(),
+            tokenizerUrl: tokenizerUrl.trim() || undefined,
+            tokenizerConfigUrl: tokenizerConfigUrl.trim() || undefined,
+            folderName,
+            pteFileName,
+            tokenizerFileName,
+            tokenizerConfigFileName,
+          });
+
+          showToast(`${displayName} added successfully`, "success");
+          await onModelAdded?.(createdModel.modelId);
         }
-
-        // Generate folder name from display name
-        const folderName = generateFolderName(displayName);
-
-        const createdModel = await customModels.createCustomLocalModel({
-          displayName: displayName.trim(),
-          modelCategory,
-          huggingFaceUrl: pteUrl.trim(),
-          tokenizerUrl: tokenizerUrl.trim() || undefined,
-          tokenizerConfigUrl: tokenizerConfigUrl.trim() || undefined,
-          folderName,
-          pteFileName,
-          tokenizerFileName,
-          tokenizerConfigFileName,
-        });
-
-        showToast(`${displayName} added successfully`, "success");
-        await onModelAdded?.(createdModel.modelId);
       }
       handleClose();
     } catch (error) {
@@ -206,6 +249,8 @@ export function AddCustomLocalModelModal({
     isEditMode,
     editModel,
     urlsChanged,
+    isWeb,
+    isDesktop,
   ]);
 
   const modalTitle = isEditMode
@@ -276,10 +321,18 @@ export function AddCustomLocalModelModal({
           style={{ color: seasonalTheme.textSecondary, flex: 1 }}
         >
           {isEditMode
-            ? "Edit model details. Changing URLs will require re-downloading the model."
-            : modelCategory === "stt"
-              ? "Add ExecuTorch (.pte) speech-to-text models from HuggingFace."
-              : "Add ExecuTorch (.pte) models from HuggingFace. Paste the direct file URLs."}
+            ? isWeb
+              ? "Edit model details. Changing the Model ID will require re-loading."
+              : "Edit model details. Changing URLs will require re-downloading the model."
+            : isWeb
+              ? "Add MLC-compiled models for web-llm. Enter the model ID from the web-llm model list."
+              : isDesktop
+                ? modelCategory === "stt"
+                  ? "Add GGUF speech-to-text models from HuggingFace."
+                  : "Add GGUF models from HuggingFace. Paste the direct file URL."
+                : modelCategory === "stt"
+                  ? "Add ExecuTorch (.pte) speech-to-text models from HuggingFace."
+                  : "Add ExecuTorch (.pte) models from HuggingFace. Paste the direct file URLs."}
         </Text>
       </View>
 
@@ -292,41 +345,70 @@ export function AddCustomLocalModelModal({
         />
       </FormField>
 
-      {/* Model File URL */}
-      <FormField label="Model File URL (.pte)">
-        <Input
-          placeholder="https://huggingface.co/.../model.pte"
-          value={pteUrl}
-          onChangeText={setPteUrl}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-        />
-      </FormField>
+      {/* Model identifier field — varies by platform */}
+      {isWeb ? (
+        <FormField label="MLC Model ID" marginBottom={false}>
+          <Input
+            placeholder="e.g., Llama-3.2-3B-Instruct-q4f16_1-MLC"
+            value={pteUrl}
+            onChangeText={setPteUrl}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </FormField>
+      ) : (
+        <>
+          {/* Model File URL */}
+          <FormField
+            label={
+              isDesktop ? "Model File URL (.gguf)" : "Model File URL (.pte)"
+            }
+          >
+            <Input
+              placeholder={
+                isDesktop
+                  ? "https://huggingface.co/.../model.gguf"
+                  : "https://huggingface.co/.../model.pte"
+              }
+              value={pteUrl}
+              onChangeText={setPteUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+          </FormField>
 
-      {/* Tokenizer File URL */}
-      <FormField label="Tokenizer File URL (optional)">
-        <Input
-          placeholder="https://huggingface.co/.../tokenizer.json"
-          value={tokenizerUrl}
-          onChangeText={setTokenizerUrl}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-        />
-      </FormField>
+          {/* Tokenizer fields — only for mobile (desktop GGUF doesn't need separate tokenizer) */}
+          {!isDesktop && (
+            <>
+              <FormField label="Tokenizer File URL (optional)">
+                <Input
+                  placeholder="https://huggingface.co/.../tokenizer.json"
+                  value={tokenizerUrl}
+                  onChangeText={setTokenizerUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </FormField>
 
-      {/* Tokenizer Config File URL */}
-      <FormField label="Tokenizer Config URL (optional)" marginBottom={false}>
-        <Input
-          placeholder="https://huggingface.co/.../tokenizer_config.json"
-          value={tokenizerConfigUrl}
-          onChangeText={setTokenizerConfigUrl}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-        />
-      </FormField>
+              <FormField
+                label="Tokenizer Config URL (optional)"
+                marginBottom={false}
+              >
+                <Input
+                  placeholder="https://huggingface.co/.../tokenizer_config.json"
+                  value={tokenizerConfigUrl}
+                  onChangeText={setTokenizerConfigUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </FormField>
+            </>
+          )}
+        </>
+      )}
 
       {/* Privacy note */}
       <View style={styles.privacyNote}>

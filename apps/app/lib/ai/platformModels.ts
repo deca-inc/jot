@@ -13,6 +13,7 @@ import {
   getGeminiNanoStatus,
   type GeminiNanoStatus,
 } from "../../modules/platform-ai/src";
+import { isWebSpeechAvailable } from "../platform/webSpeechRecognition";
 
 // =============================================================================
 // PLATFORM MODEL IDS
@@ -26,6 +27,7 @@ export enum PLATFORM_LLM_IDS {
 export enum PLATFORM_STT_IDS {
   "android-speech" = "android-speech",
   "apple-speech" = "apple-speech",
+  "web-speech" = "web-speech",
 }
 
 // =============================================================================
@@ -49,7 +51,7 @@ export interface PlatformSttConfig {
   modelType: "speech-to-text";
   displayName: string;
   description: string;
-  platform: "android" | "ios";
+  platform: "android" | "ios" | "web";
   isPlatformModel: true;
   available: boolean;
 }
@@ -100,6 +102,17 @@ export const AppleSpeech: PlatformSttConfig = {
   displayName: "Apple Speech",
   description: "Built-in speech recognition. No download required.",
   platform: "ios",
+  isPlatformModel: true,
+  available: false, // Set dynamically
+};
+
+// Browser Web Speech API - Available in Chrome, Edge, Safari (partial)
+export const WebSpeech: PlatformSttConfig = {
+  modelId: PLATFORM_STT_IDS["web-speech"],
+  modelType: "speech-to-text",
+  displayName: "Browser Speech Recognition",
+  description: "Built-in browser speech recognition. No download required.",
+  platform: "web",
   isPlatformModel: true,
   available: false, // Set dynamically
 };
@@ -190,6 +203,22 @@ export async function checkAppleSpeechAvailable(): Promise<boolean> {
   }
 }
 
+/**
+ * Check if Web Speech API (browser SpeechRecognition) is available
+ * Available in Chrome, Edge, Safari (partial). Not available in Firefox.
+ */
+export async function checkWebSpeechAvailable(): Promise<boolean> {
+  if (Platform.OS !== "web") {
+    return false;
+  }
+
+  try {
+    return isWebSpeechAvailable();
+  } catch {
+    return false;
+  }
+}
+
 // =============================================================================
 // PLATFORM AVAILABILITY STATE
 // =============================================================================
@@ -203,6 +232,7 @@ export interface PlatformModelAvailability {
   stt: {
     androidSpeech: boolean;
     appleSpeech: boolean;
+    webSpeech: boolean;
   };
 }
 
@@ -217,12 +247,14 @@ export async function checkPlatformModelsAvailability(): Promise<PlatformModelAv
     appleFoundation,
     androidSpeech,
     appleSpeech,
+    webSpeech,
   ] = await Promise.all([
     checkGeminiNanoAvailable(),
     getGeminiNanoDownloadStatus(),
     checkAppleFoundationAvailable(),
     checkAndroidSpeechAvailable(),
     checkAppleSpeechAvailable(),
+    checkWebSpeechAvailable(),
   ]);
 
   console.log("[PlatformModels] Availability check results:", {
@@ -231,6 +263,7 @@ export async function checkPlatformModelsAvailability(): Promise<PlatformModelAv
     appleFoundation,
     androidSpeech,
     appleSpeech,
+    webSpeech,
     platform: Platform.OS,
   });
 
@@ -243,6 +276,7 @@ export async function checkPlatformModelsAvailability(): Promise<PlatformModelAv
     stt: {
       androidSpeech,
       appleSpeech,
+      webSpeech,
     },
   };
 }
@@ -287,6 +321,10 @@ export function getAvailablePlatformSTTs(
     availability.stt.appleSpeech
   ) {
     models.push({ ...AppleSpeech, available: true });
+  }
+
+  if (Platform.OS === "web" && availability.stt.webSpeech) {
+    models.push({ ...WebSpeech, available: true });
   }
 
   return models;

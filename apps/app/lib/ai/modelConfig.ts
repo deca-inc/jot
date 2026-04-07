@@ -5,9 +5,6 @@
 // (platformFilter imports LlmModelConfig from this module)
 export type AppPlatform = "ios" | "android" | "macos" | "web" | "tauri";
 
-// Import STT_MODEL_IDS type (defined in sttConfig to avoid circular dependency)
-import type { STT_MODEL_IDS } from "./sttConfig";
-
 // =============================================================================
 // MODEL SOURCE TYPES
 // =============================================================================
@@ -81,15 +78,27 @@ export interface LlmModelConfig extends BaseModelConfig {
 
 export interface SpeechToTextModelConfig extends BaseModelConfig {
   modelType: "speech-to-text";
-  modelId: STT_MODEL_IDS;
+  // Widened to `string` (was `STT_MODEL_IDS`) so desktop whisper-rs model
+  // IDs can coexist with the built-in mobile enum without bloating it.
+  modelId: string;
   isMultilingual: boolean;
-  // Whisper models have encoder, decoder, and tokenizer
+  // Whisper models have encoder, decoder, and tokenizer.
+  // For whisper.cpp (desktop), only encoderFileName is used as the single
+  // model file; decoder and tokenizer are built into whisper.cpp.
   encoderFileName: string;
   decoderFileName: string;
   tokenizerFileName: string;
   encoderSource: ModelSource;
   decoderSource: ModelSource;
   tokenizerSource: ModelSource;
+  // Which platforms this model runs on. Legacy models without this field
+  // are treated as mobile-only (ios/android) — see platformFilter.ts.
+  supportedPlatforms?: AppPlatform[];
+  /**
+   * Logical model family identifier, groups platform variants of the same
+   * base model. Used for cross-platform resolution.
+   */
+  modelFamily?: string;
 }
 
 // =============================================================================

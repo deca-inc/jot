@@ -1,9 +1,10 @@
 /**
  * usePlatformSpeechToText - Hook for platform-native speech-to-text
  *
- * Uses Apple Speech Recognition on iOS or Android SpeechRecognizer on Android.
+ * Uses Apple Speech Recognition on iOS, Android SpeechRecognizer on Android,
+ * or the Web Speech API on web browsers.
  * No model download required - uses built-in system speech recognition.
- * Also records audio in parallel for saving voice notes.
+ * Also records audio in parallel for saving voice notes (iOS only).
  */
 
 import {
@@ -25,6 +26,11 @@ import {
   stopPlatformSpeechRecognition,
   cancelPlatformSpeechRecognition,
 } from "../../modules/platform-ai/src";
+import {
+  isWebSpeechAvailable,
+  createWebSpeechRecognition,
+  type WebSpeechRecognitionHandle,
+} from "../platform/webSpeechRecognition";
 
 // Audio recording settings (16kHz mono WAV for consistency with Whisper)
 const RECORDING_OPTIONS: RecordingOptions = {
@@ -112,6 +118,8 @@ export function usePlatformSpeechToText(
   );
   const startTimeRef = useRef<number>(0);
   const isRecordingRef = useRef(false);
+  const webSpeechRef = useRef<WebSpeechRecognitionHandle | null>(null);
+  const webSpeechTextRef = useRef<string>("");
 
   // Callback refs to avoid stale closures
   const onTranscriptionCompleteRef = useRef(onTranscriptionComplete);
@@ -167,6 +175,65 @@ export function usePlatformSpeechToText(
     try {
       setError(null);
       setCurrentText("");
+
+      // --- Web Speech API path ---
+      if (Platform.OS === "web") {
+        if (!isWebSpeechAvailable()) {
+          setIsAvailable(false);
+          throw new Error("Web Speech API is not available in this browser");
+        }
+        setIsAvailable(true);
+
+        const handle = createWebSpeechRecognition({
+          lang: locale,
+          continuous: true,
+          interimResults: true,
+        });
+
+        webSpeechTextRef.current = "";
+
+        handle.onResult = (result) => {
+          webSpeechTextRef.current = result.transcript;
+          setCurrentText(result.transcript);
+        };
+
+        handle.onError = (errorMsg) => {
+          console.error(
+            "[usePlatformSpeechToText] Web Speech error:",
+            errorMsg,
+          );
+          setError(errorMsg);
+          onErrorRef.current?.(errorMsg);
+        };
+
+        handle.onEnd = () => {
+          // Recognition ended (browser may stop automatically on silence)
+          if (isRecordingRef.current) {
+            // Auto-stopped by browser — finalize
+            setIsRecording(false);
+            isRecordingRef.current = false;
+            const duration = (Date.now() - startTimeRef.current) / 1000;
+            const result = {
+              text: webSpeechTextRef.current,
+              audioUri: null,
+              duration,
+            };
+            onTranscriptionCompleteRef.current?.(result);
+          }
+        };
+
+        webSpeechRef.current = handle;
+        handle.start();
+
+        startTimeRef.current = Date.now();
+        setIsRecording(true);
+        isRecordingRef.current = true;
+
+        console.log("[usePlatformSpeechToText] Web Speech recording started");
+        return;
+      }
+
+      // --- Native platform path (iOS / Android) ---
 
       // Check if platform STT is available
       const available = await isPlatformSTTAvailable();
@@ -253,6 +320,32 @@ export function usePlatformSpeechToText(
       setIsProcessing(true);
 
       try {
+        // --- Web Speech API path ---
+        if (Platform.OS === "web" && webSpeechRef.current) {
+          webSpeechRef.current.stop();
+          const duration = (Date.now() - startTimeRef.current) / 1000;
+          const finalText = webSpeechTextRef.current;
+          setCurrentText(finalText);
+
+          const result: PlatformTranscriptionResult = {
+            text: finalText,
+            audioUri: null, // Web Speech API doesn't provide audio files
+            duration,
+          };
+
+          setIsProcessing(false);
+          webSpeechRef.current = null;
+
+          console.log(
+            "[usePlatformSpeechToText] Web Speech transcription complete",
+          );
+          onTranscriptionCompleteRef.current?.(result);
+
+          return result;
+        }
+
+        // --- Native platform path ---
+
         // Stop audio recording first (iOS only - Android doesn't record audio)
         let tempAudioUri: string | null = null;
         if (Platform.OS === "ios") {
@@ -327,26 +420,33 @@ export function usePlatformSpeechToText(
     isRecordingRef.current = false;
 
     if (isRecording) {
-      // Stop audio recording (iOS only - Android doesn't record audio)
-      if (Platform.OS === "ios") {
-        try {
-          await iosAudioRecorder.stop();
-          // Delete the temp file
-          if (iosAudioRecorder.uri) {
-            await FileSystem.deleteAsync(iosAudioRecorder.uri, {
-              idempotent: true,
-            });
+      // --- Web Speech API path ---
+      if (Platform.OS === "web" && webSpeechRef.current) {
+        webSpeechRef.current.abort();
+        webSpeechRef.current = null;
+        webSpeechTextRef.current = "";
+      } else {
+        // Stop audio recording (iOS only - Android doesn't record audio)
+        if (Platform.OS === "ios") {
+          try {
+            await iosAudioRecorder.stop();
+            // Delete the temp file
+            if (iosAudioRecorder.uri) {
+              await FileSystem.deleteAsync(iosAudioRecorder.uri, {
+                idempotent: true,
+              });
+            }
+          } catch {
+            // Ignore errors during cancel
           }
+        }
+
+        // Cancel speech recognition
+        try {
+          await cancelPlatformSpeechRecognition();
         } catch {
           // Ignore errors during cancel
         }
-      }
-
-      // Cancel speech recognition
-      try {
-        await cancelPlatformSpeechRecognition();
-      } catch {
-        // Ignore errors during cancel
       }
     }
 
@@ -354,13 +454,15 @@ export function usePlatformSpeechToText(
     setIsRecording(false);
     setCurrentText("");
 
-    // Reset audio mode
-    try {
-      await setAudioModeAsync({
-        allowsRecording: false,
-      });
-    } catch {
-      // Ignore
+    // Reset audio mode (not needed for web, but harmless)
+    if (Platform.OS !== "web") {
+      try {
+        await setAudioModeAsync({
+          allowsRecording: false,
+        });
+      } catch {
+        // Ignore
+      }
     }
 
     console.log("[usePlatformSpeechToText] Recording cancelled");

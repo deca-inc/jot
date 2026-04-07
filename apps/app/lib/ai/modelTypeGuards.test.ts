@@ -67,6 +67,7 @@ describe("modelTypeGuards", () => {
       expect(isPlatformModelId("apple-foundation")).toBe(true);
       expect(isPlatformModelId("android-speech")).toBe(true);
       expect(isPlatformModelId("apple-speech")).toBe(true);
+      expect(isPlatformModelId("web-speech")).toBe(true);
     });
 
     it("returns false for non-platform model IDs", () => {

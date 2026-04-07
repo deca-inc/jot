@@ -29,6 +29,7 @@ import {
   resolvePersonaModel,
   type PersonaModelRef,
 } from "./personaAvailability";
+import type { AppPlatform } from "./platformFilter";
 import type {
   TauriLLMConfig,
   TauriLLMEngine,
@@ -41,7 +42,6 @@ import type {
   WebLLMGenerateOptions,
   WebLLMMessage,
 } from "../platform/webLLM";
-import type { AppPlatform } from "./platformFilter";
 import type { Message } from "react-native-executorch";
 
 const ALL_PLATFORMS: AppPlatform[] = [
