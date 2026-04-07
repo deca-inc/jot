@@ -305,7 +305,7 @@ export function ModelCard({
                         styles.progressFill,
                         {
                           backgroundColor: theme.colors.accent,
-                          width: `${downloadProgress}%`,
+                          width: `${Math.round(downloadProgress)}%`,
                         },
                       ]}
                     />
@@ -317,7 +317,7 @@ export function ModelCard({
                       { color: seasonalTheme.textSecondary },
                     ]}
                   >
-                    {downloadProgress}%
+                    {Math.round(downloadProgress)}%
                   </Text>
                 </View>
               )}
