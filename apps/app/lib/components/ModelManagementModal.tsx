@@ -25,8 +25,11 @@ import {
   ensureCustomModelPresent,
   deleteCustomModel,
 } from "../ai/modelManager";
+import { isDesktopLLMModelId } from "../ai/modelTypeGuards";
 import { getAvailablePersonas } from "../ai/personaAvailability";
 import { getAvailableModelsForPlatform } from "../ai/platformFilter";
+import { isTauri } from "../platform/isTauri";
+import { ensureDesktopModelDownloaded } from "../platform/tauriDownload";
 import { getCurrentPlatform } from "../ai/platformFilter";
 import { ALL_STT_MODELS } from "../ai/sttConfig";
 import { useUnifiedModel } from "../ai/UnifiedModelProvider";
@@ -314,34 +317,73 @@ export function ModelManagementModal({
       setDownloadProgress((prev) => new Map(prev).set(model.modelId, 0));
 
       try {
-        const progressInterval = setInterval(() => {
-          setDownloadProgress((prev) => {
-            const current = prev.get(model.modelId) || 0;
-            if (current >= 95) {
-              clearInterval(progressInterval);
-              return prev;
-            }
-            const next = new Map(prev);
-            next.set(model.modelId, Math.min(95, current + Math.random() * 10));
-            return next;
+        // Desktop GGUF models use the Tauri download path
+        if (isTauri() && isDesktopLLMModelId(model.modelId)) {
+          const destPath = await ensureDesktopModelDownloaded(
+            {
+              folderName: model.folderName,
+              fileName: model.pteFileName,
+              url: model.pteSource.kind === "remote" ? model.pteSource.url : "",
+            },
+            (progress) => {
+              const pct =
+                progress.total > 0
+                  ? (progress.loaded / progress.total) * 100
+                  : 0;
+              setDownloadProgress((prev) =>
+                new Map(prev).set(
+                  model.modelId,
+                  progress.done ? 100 : Math.min(99, pct),
+                ),
+              );
+            },
+          );
+
+          setDownloadProgress((prev) => new Map(prev).set(model.modelId, 100));
+
+          await modelSettings.addDownloadedModel({
+            modelId: model.modelId,
+            modelType: "llm",
+            downloadedAt: Date.now(),
+            ptePath: destPath,
+            tokenizerPath: undefined,
+            tokenizerConfigPath: undefined,
+            size: MODEL_SIZES[model.modelId] || 0,
           });
-        }, 500);
+        } else {
+          // Mobile .pte models use expo-file-system download
+          const progressInterval = setInterval(() => {
+            setDownloadProgress((prev) => {
+              const current = prev.get(model.modelId) || 0;
+              if (current >= 95) {
+                clearInterval(progressInterval);
+                return prev;
+              }
+              const next = new Map(prev);
+              next.set(
+                model.modelId,
+                Math.min(95, current + Math.random() * 10),
+              );
+              return next;
+            });
+          }, 500);
 
-        const result = await ensureModelPresent(model);
-        clearInterval(progressInterval);
-        setDownloadProgress((prev) => new Map(prev).set(model.modelId, 100));
+          const result = await ensureModelPresent(model);
+          clearInterval(progressInterval);
+          setDownloadProgress((prev) => new Map(prev).set(model.modelId, 100));
 
-        const size = await getModelSize(model);
+          const size = await getModelSize(model);
 
-        await modelSettings.addDownloadedModel({
-          modelId: model.modelId,
-          modelType: "llm",
-          downloadedAt: Date.now(),
-          ptePath: result.ptePath,
-          tokenizerPath: result.tokenizerPath,
-          tokenizerConfigPath: result.tokenizerConfigPath,
-          size,
-        });
+          await modelSettings.addDownloadedModel({
+            modelId: model.modelId,
+            modelType: "llm",
+            downloadedAt: Date.now(),
+            ptePath: result.ptePath,
+            tokenizerPath: result.tokenizerPath,
+            tokenizerConfigPath: result.tokenizerConfigPath,
+            size,
+          });
+        }
 
         showToast(`${model.displayName} downloaded successfully`, "success");
         await loadSettings();
