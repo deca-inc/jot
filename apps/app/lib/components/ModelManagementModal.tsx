@@ -1412,8 +1412,7 @@ export function ModelManagementModal({
                             flex: 1,
                           }}
                         >
-                          Add custom ExecuTorch (.pte) models from HuggingFace
-                          to run on-device.
+                          Add custom models from HuggingFace to run locally.
                         </Text>
                       </View>
                     ) : (
@@ -1737,8 +1736,8 @@ export function ModelManagementModal({
                             flex: 1,
                           }}
                         >
-                          Add custom ExecuTorch (.pte) speech-to-text models
-                          from HuggingFace to run on-device.
+                          Add custom speech-to-text models from HuggingFace to
+                          run locally.
                         </Text>
                       </View>
                     ) : (
