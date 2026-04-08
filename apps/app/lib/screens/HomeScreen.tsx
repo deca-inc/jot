@@ -237,15 +237,17 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   onFirstEntryAvailableRef.current = onFirstEntryAvailable;
   const onNoEntriesRef = useRef(onNoEntries);
   onNoEntriesRef.current = onNoEntries;
-  if (!hasNotifiedFirstEntryRef.current && entriesQuery.data) {
-    hasNotifiedFirstEntryRef.current = true;
-    if (entries.length > 0 && onFirstEntryAvailableRef.current) {
-      const first = entries[0];
-      onFirstEntryAvailableRef.current(first.id, first.type);
-    } else if (entries.length === 0) {
-      onNoEntriesRef.current?.();
+  useEffect(() => {
+    if (!hasNotifiedFirstEntryRef.current && entriesQuery.data) {
+      hasNotifiedFirstEntryRef.current = true;
+      if (entries.length > 0 && onFirstEntryAvailableRef.current) {
+        const first = entries[0];
+        onFirstEntryAvailableRef.current(first.id, first.type);
+      } else if (entries.length === 0) {
+        onNoEntriesRef.current?.();
+      }
     }
-  }
+  }, [entriesQuery.data, entries]);
 
   // React Query mutations
   const createEntry = useCreateEntry();

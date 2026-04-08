@@ -1096,7 +1096,7 @@ function MainLayout() {
           styles.safeAreaContainer,
           { backgroundColor: seasonalTheme.gradient.middle },
         ]}
-        edges={["top"]}
+        edges={["top", "bottom"]}
         onLayout={(event) => {
           screenWidth.current = event.nativeEvent.layout.width;
         }}
