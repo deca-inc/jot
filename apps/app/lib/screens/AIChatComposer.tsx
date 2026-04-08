@@ -469,7 +469,9 @@ export function AIChatComposer({
       }
     };
     loadSettings();
-  }, []);
+    // Re-run when the model manager closes so newly downloaded/selected
+    // models are picked up without a full remount.
+  }, [showModelManager]);
 
   // Get display name for selector button
   const selectorDisplayName = useMemo(() => {
