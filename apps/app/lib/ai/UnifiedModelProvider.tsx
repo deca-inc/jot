@@ -96,6 +96,8 @@ interface UnifiedModelContextValue {
 
   // LLM operations
   isLLMLoaded: boolean;
+  isLoadingModel: boolean;
+  loadingModelName: string | null;
   isGenerating: boolean;
   sendMessage: (
     messages: Message[],
@@ -568,6 +570,8 @@ export function UnifiedModelProvider({
 
   // LLM state
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingModel, setIsLoadingModel] = useState(false);
+  const [loadingModelName, setLoadingModelName] = useState<string | null>(null);
   const [currentLLMConfig, setCurrentLLMConfig] =
     useState<LlmModelConfig>(DEFAULT_MODEL);
 
@@ -786,18 +790,29 @@ export function UnifiedModelProvider({
             throw new Error(`${label} model not found: ${selectedModelId}`);
           }
 
-          if (category === "web-llm") {
-            return await llmRouter.sendWebLLMMessage(
-              selectedModelId,
+          // Show "Loading model..." state if the model isn't loaded yet
+          if (!llmRouter.isAnyLoaded()) {
+            setIsLoadingModel(true);
+            setLoadingModelName(targetConfig.displayName);
+          }
+
+          try {
+            if (category === "web-llm") {
+              return await llmRouter.sendWebLLMMessage(
+                selectedModelId,
+                messages,
+                options,
+              );
+            }
+            return await llmRouter.sendTauriLLMMessage(
+              targetConfig,
               messages,
               options,
             );
+          } finally {
+            setIsLoadingModel(false);
+            setLoadingModelName(null);
           }
-          return await llmRouter.sendTauriLLMMessage(
-            targetConfig,
-            messages,
-            options,
-          );
         }
 
         // Check if this is a remote API model
@@ -888,9 +903,50 @@ export function UnifiedModelProvider({
 
   const reloadModel = useCallback(
     async (config: LlmModelConfig) => {
+      console.log("[UnifiedModelProvider] reloadModel:", config.modelId);
       await modelSettings.setSelectedModelId(config.modelId);
+      // Verify the write persisted
+      const check = await modelSettings.getSelectedModelId();
+      console.log("[UnifiedModelProvider] reloadModel verified:", check);
       setCurrentLLMConfig(config);
-      // The model will be loaded on next message send
+
+      // Eagerly pre-load desktop/web models so the user doesn't wait
+      // on first message send. The load runs in the background.
+      const category = getModelCategory(config.modelId);
+      if (category === "desktop-llm" || category === "web-llm") {
+        setIsLoadingModel(true);
+        setLoadingModelName(config.displayName);
+
+        // Fire and forget — don't block the selection UI.
+        // The router handles idempotent loading internally.
+        (async () => {
+          try {
+            if (category === "desktop-llm") {
+              const { ensureDesktopModelDownloaded } =
+                await import("../platform/tauriDownload");
+              const modelPath = await ensureDesktopModelDownloaded({
+                folderName: config.folderName,
+                fileName: config.pteFileName,
+                url:
+                  config.pteSource.kind === "remote"
+                    ? config.pteSource.url
+                    : "",
+              });
+              const engine = createTauriLLMEngine();
+              await engine.load({ modelPath, modelId: config.modelId });
+            }
+            // web-llm models are pre-loaded by web-llm's cache, no eager load needed
+          } catch (err) {
+            console.warn(
+              "[UnifiedModelProvider] Eager model pre-load failed:",
+              err,
+            );
+          } finally {
+            setIsLoadingModel(false);
+            setLoadingModelName(null);
+          }
+        })();
+      }
     },
     [modelSettings],
   );
@@ -910,6 +966,8 @@ export function UnifiedModelProvider({
 
       // LLM operations
       isLLMLoaded,
+      isLoadingModel,
+      loadingModelName,
       isGenerating,
       sendMessage,
       interruptLLM,
@@ -936,6 +994,8 @@ export function UnifiedModelProvider({
     [
       isInitialized,
       isLLMLoaded,
+      isLoadingModel,
+      loadingModelName,
       isGenerating,
       sendMessage,
       interruptLLM,
