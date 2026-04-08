@@ -22,7 +22,9 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 // the workspace (they ship with the Tauri webview and are present in
 // node_modules). Tests mock both virtually.
 import { appDataDir } from "@tauri-apps/api/path";
-import { exists } from "@tauri-apps/plugin-fs";
+// @tauri-apps/plugin-fs `exists()` is not used — scoped permissions may block
+// access to the app data directory. We use the Rust `llm_model_exists` command
+// instead (see isDesktopModelDownloaded).
 
 /**
  * Streaming progress event emitted by the Rust side while downloading.
@@ -93,14 +95,15 @@ export async function getDesktopModelPath(
 /**
  * Check whether a previously downloaded desktop model exists on disk.
  *
- * Uses `@tauri-apps/plugin-fs`'s `exists()`. Returns `false` on any error
- * (permission denied, path traversal, etc.) so the caller can re-download.
+ * Uses the Rust `llm_model_exists` command which bypasses the Tauri fs plugin's
+ * scoped permissions. The plugin scope may not include the app data directory
+ * where models are stored, but Rust has direct filesystem access.
  */
 export async function isDesktopModelDownloaded(
   destPath: string,
 ): Promise<boolean> {
   try {
-    return await exists(destPath);
+    return await invoke<boolean>("llm_model_exists", { path: destPath });
   } catch {
     return false;
   }

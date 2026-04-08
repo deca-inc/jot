@@ -4,7 +4,7 @@ mod llm;
 mod stt;
 
 use llm::inference::InferenceEngine;
-use llm::{llm_download_model, llm_generate, llm_interrupt, llm_load, llm_unload, LlmState};
+use llm::{llm_download_model, llm_generate, llm_interrupt, llm_load, llm_model_exists, llm_unload, LlmState};
 use stt::engine::WhisperEngine;
 use stt::{stt_load, stt_transcribe, stt_unload, SttState};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -85,6 +85,7 @@ fn main() {
             llm_interrupt,
             llm_unload,
             llm_download_model,
+            llm_model_exists,
             stt_load,
             stt_transcribe,
             stt_unload,

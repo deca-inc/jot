@@ -143,6 +143,16 @@ pub async fn llm_unload(state: State<'_, LlmState>) -> Result<(), String> {
     Ok(())
 }
 
+/// Check whether a model file exists at the given path.
+///
+/// Uses `std::path::Path::exists()` directly, bypassing the Tauri fs plugin's
+/// scoped permissions. This is necessary because the plugin scope may not
+/// include the app data directory where models are stored.
+#[tauri::command]
+pub fn llm_model_exists(path: String) -> bool {
+    Path::new(&path).exists()
+}
+
 /// Throttle progress events to at most one per ~64KiB or 100ms, whichever
 /// comes first. Sending one event per chunk would flood the IPC channel.
 const PROGRESS_BYTES_THRESHOLD: u64 = 64 * 1024;

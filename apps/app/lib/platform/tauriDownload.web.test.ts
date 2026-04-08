@@ -52,9 +52,8 @@ const { invoke, Channel } = jest.requireMock("@tauri-apps/api/core") as {
 const { appDataDir } = jest.requireMock("@tauri-apps/api/path") as {
   appDataDir: jest.Mock;
 };
-const { exists } = jest.requireMock("@tauri-apps/plugin-fs") as {
-  exists: jest.Mock;
-};
+// exists() from @tauri-apps/plugin-fs is no longer used — isDesktopModelDownloaded
+// now calls invoke("llm_model_exists") which bypasses scoped permissions.
 
 type InvokeMock = jest.Mock<
   Promise<unknown>,
@@ -80,7 +79,6 @@ describe("tauriDownload.web", () => {
     mockInvoke.mockReset();
     (Channel as unknown as jest.Mock).mockClear();
     appDataDir.mockReset();
-    exists.mockReset();
   });
 
   describe("getDesktopModelPath", () => {
@@ -117,25 +115,27 @@ describe("tauriDownload.web", () => {
   });
 
   describe("isDesktopModelDownloaded", () => {
-    it("returns true when fs exists() resolves true", async () => {
-      exists.mockResolvedValue(true);
+    it("returns true when llm_model_exists returns true", async () => {
+      mockInvoke.mockResolvedValueOnce(true);
 
       const result = await isDesktopModelDownloaded("/tmp/model.gguf");
 
       expect(result).toBe(true);
-      expect(exists).toHaveBeenCalledWith("/tmp/model.gguf");
+      expect(mockInvoke).toHaveBeenCalledWith("llm_model_exists", {
+        path: "/tmp/model.gguf",
+      });
     });
 
-    it("returns false when fs exists() resolves false", async () => {
-      exists.mockResolvedValue(false);
+    it("returns false when llm_model_exists returns false", async () => {
+      mockInvoke.mockResolvedValueOnce(false);
 
       const result = await isDesktopModelDownloaded("/missing.gguf");
 
       expect(result).toBe(false);
     });
 
-    it("returns false when fs exists() rejects (best-effort)", async () => {
-      exists.mockRejectedValue(new Error("permission denied"));
+    it("returns false when invoke rejects (best-effort)", async () => {
+      mockInvoke.mockRejectedValueOnce(new Error("command failed"));
 
       const result = await isDesktopModelDownloaded("/denied.gguf");
 
@@ -230,17 +230,20 @@ describe("tauriDownload.web", () => {
 
     it("skips download and returns path when model already exists", async () => {
       appDataDir.mockResolvedValue("/app/");
-      exists.mockResolvedValue(true);
+      // llm_model_exists returns true → skip download
+      mockInvoke.mockResolvedValueOnce(true);
 
       const onProgress = jest.fn();
       const result = await ensureDesktopModelDownloaded(descriptor, onProgress);
 
       expect(result).toBe("/app/models/desktop-llama-3.2-3b/llama.gguf");
+      expect(mockInvoke).toHaveBeenCalledWith("llm_model_exists", {
+        path: "/app/models/desktop-llama-3.2-3b/llama.gguf",
+      });
       expect(mockInvoke).not.toHaveBeenCalledWith(
         "llm_download_model",
         expect.any(Object),
       );
-      // Should synthesize a final "done" progress event so callers update UI.
       expect(onProgress).toHaveBeenCalledWith({
         loaded: 1,
         total: 1,
@@ -250,8 +253,10 @@ describe("tauriDownload.web", () => {
 
     it("downloads and returns path when model is missing", async () => {
       appDataDir.mockResolvedValue("/app/");
-      exists.mockResolvedValue(false);
-      mockInvoke.mockResolvedValue(undefined);
+      // llm_model_exists returns false → proceed to download
+      mockInvoke
+        .mockResolvedValueOnce(false) // llm_model_exists
+        .mockResolvedValueOnce(undefined); // llm_download_model
 
       const result = await ensureDesktopModelDownloaded(descriptor);
 
@@ -267,16 +272,15 @@ describe("tauriDownload.web", () => {
 
     it("forwards onProgress when downloading", async () => {
       appDataDir.mockResolvedValue("/app/");
-      exists.mockResolvedValue(false);
-      mockInvoke.mockResolvedValue(undefined);
+      mockInvoke
+        .mockResolvedValueOnce(false) // llm_model_exists
+        .mockResolvedValueOnce(undefined); // llm_download_model
       const onProgress = jest.fn();
 
       const promise = ensureDesktopModelDownloaded(descriptor, onProgress);
       const safe = promise.catch(() => {
         /* handled below */
       });
-      // Let async path resolution + exists() check run so the Channel is
-      // constructed before we poke at it.
       await new Promise((r) => setImmediate(r));
       const channel = getLatestChannelInstance();
       channel.onmessage?.({ loaded: 500, total: 1000, done: false });
@@ -293,8 +297,9 @@ describe("tauriDownload.web", () => {
 
     it("propagates download errors", async () => {
       appDataDir.mockResolvedValue("/app/");
-      exists.mockResolvedValue(false);
-      mockInvoke.mockRejectedValue(new Error("connection reset"));
+      mockInvoke
+        .mockResolvedValueOnce(false) // llm_model_exists
+        .mockRejectedValueOnce(new Error("connection reset")); // llm_download_model
 
       await expect(ensureDesktopModelDownloaded(descriptor)).rejects.toThrow(
         /connection reset/,
