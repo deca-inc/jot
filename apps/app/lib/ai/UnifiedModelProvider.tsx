@@ -905,48 +905,9 @@ export function UnifiedModelProvider({
     async (config: LlmModelConfig) => {
       console.log("[UnifiedModelProvider] reloadModel:", config.modelId);
       await modelSettings.setSelectedModelId(config.modelId);
-      // Verify the write persisted
-      const check = await modelSettings.getSelectedModelId();
-      console.log("[UnifiedModelProvider] reloadModel verified:", check);
       setCurrentLLMConfig(config);
-
-      // Eagerly pre-load desktop/web models so the user doesn't wait
-      // on first message send. The load runs in the background.
-      const category = getModelCategory(config.modelId);
-      if (category === "desktop-llm" || category === "web-llm") {
-        setIsLoadingModel(true);
-        setLoadingModelName(config.displayName);
-
-        // Fire and forget — don't block the selection UI.
-        // The router handles idempotent loading internally.
-        (async () => {
-          try {
-            if (category === "desktop-llm") {
-              const { ensureDesktopModelDownloaded } =
-                await import("../platform/tauriDownload");
-              const modelPath = await ensureDesktopModelDownloaded({
-                folderName: config.folderName,
-                fileName: config.pteFileName,
-                url:
-                  config.pteSource.kind === "remote"
-                    ? config.pteSource.url
-                    : "",
-              });
-              const engine = createTauriLLMEngine();
-              await engine.load({ modelPath, modelId: config.modelId });
-            }
-            // web-llm models are pre-loaded by web-llm's cache, no eager load needed
-          } catch (err) {
-            console.warn(
-              "[UnifiedModelProvider] Eager model pre-load failed:",
-              err,
-            );
-          } finally {
-            setIsLoadingModel(false);
-            setLoadingModelName(null);
-          }
-        })();
-      }
+      // Model loads on first sendMessage — the isLoadingModel state
+      // shows a "Loading..." indicator during the load phase.
     },
     [modelSettings],
   );
