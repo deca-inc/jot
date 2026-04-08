@@ -53,8 +53,6 @@ import { ensureModelPresent, ensureCustomModelPresent } from "./modelManager";
 import {
   isRemoteModelId,
   isCustomLocalModelId,
-  isDesktopLLMModelId,
-  isWebLLMModelId,
   getModelCategory,
 } from "./modelTypeGuards";
 import { logStorageDebugInfo, verifyAllModels } from "./modelVerification";
@@ -601,12 +599,11 @@ export function UnifiedModelProvider({
         // Verify all downloaded models still exist
         const downloadedModels = await modelSettings.getDownloadedModels();
         if (downloadedModels.length > 0) {
-          // Filter to mobile .pte models only — desktop/web models use different
-          // storage (Tauri fs / OPFS) that expo-file-system can't verify.
+          // Verify all LLM models — verifyAllModels dispatches to the
+          // correct platform-specific check (expo-fs, Tauri fs, or web-llm cache).
           const llmModelIds = downloadedModels
             .filter((m) => !m.modelType || m.modelType === "llm")
-            .map((m) => m.modelId)
-            .filter((id) => !isDesktopLLMModelId(id) && !isWebLLMModelId(id));
+            .map((m) => m.modelId);
 
           if (llmModelIds.length > 0) {
             const verification = await verifyAllModels(

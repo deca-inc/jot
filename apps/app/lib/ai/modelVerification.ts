@@ -1,11 +1,22 @@
 /**
  * Model file verification utilities
  * Helps diagnose and prevent issues with disappearing models on Android
+ *
+ * Supports platform-specific verification:
+ * - Mobile (.pte): expo-file-system
+ * - Desktop (GGUF): Tauri fs plugin via isDesktopModelDownloaded
+ * - Web (MLC): web-llm manages its own cache, always considered verified
  */
 
 import { Paths } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 import { LlmModelConfig } from "./modelConfig";
+import { isDesktopLLMModelId, isWebLLMModelId } from "./modelTypeGuards";
+import { isTauri } from "../platform/isTauri";
+import {
+  isDesktopModelDownloaded,
+  getDesktopModelPath,
+} from "../platform/tauriDownload";
 
 function getBaseDir(): string {
   try {
@@ -31,18 +42,55 @@ function joinPaths(...segments: string[]): string {
     .join("/");
 }
 
-/**
- * Verify that a model's files still exist on disk
- * Returns detailed information about each file
- */
-export async function verifyModelFiles(config: LlmModelConfig): Promise<{
+export interface ModelVerificationResult {
   exists: boolean;
   details: {
     modelFile: { exists: boolean; size?: number; path: string };
     tokenizerFile?: { exists: boolean; size?: number; path: string };
     configFile?: { exists: boolean; size?: number; path: string };
   };
-}> {
+}
+
+/**
+ * Verify that a desktop GGUF model exists on disk via Tauri fs plugin.
+ * Desktop models are single-file (GGUF) — no tokenizer/config to check.
+ */
+async function verifyDesktopModelFiles(
+  config: LlmModelConfig,
+): Promise<ModelVerificationResult> {
+  const destPath = await getDesktopModelPath(
+    config.folderName,
+    config.pteFileName,
+  );
+  const fileExists = await isDesktopModelDownloaded(destPath);
+  return {
+    exists: fileExists,
+    details: {
+      modelFile: { exists: fileExists, path: destPath },
+    },
+  };
+}
+
+/**
+ * Web MLC models are managed by web-llm's internal cache (Cache API / OPFS).
+ * We can't easily verify them from outside, so treat downloaded web models
+ * as verified — web-llm will re-download if the cache was evicted.
+ */
+function verifyWebModelFiles(config: LlmModelConfig): ModelVerificationResult {
+  return {
+    exists: true,
+    details: {
+      modelFile: { exists: true, path: config.modelId },
+    },
+  };
+}
+
+/**
+ * Verify a mobile .pte model exists via expo-file-system.
+ */
+async function verifyMobileModelFiles(
+  config: LlmModelConfig,
+): Promise<ModelVerificationResult> {
   const baseDir = getBaseDir();
   const modelsDir = joinPaths(baseDir, "models");
   const modelDir = joinPaths(modelsDir, config.folderName);
@@ -55,7 +103,6 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
     ? joinPaths(modelDir, config.tokenizerConfigFileName)
     : undefined;
 
-  // Check model file
   const modelInfo = await FileSystem.getInfoAsync(modelPath);
   const modelFileResult = {
     exists:
@@ -65,7 +112,6 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
     path: modelPath,
   };
 
-  // Check tokenizer file
   let tokenizerFileResult;
   if (tokenizerPath) {
     const tokenizerInfo = await FileSystem.getInfoAsync(tokenizerPath);
@@ -78,7 +124,6 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
     };
   }
 
-  // Check config file
   let configFileResult;
   if (configPath) {
     const configInfo = await FileSystem.getInfoAsync(configPath);
@@ -104,6 +149,25 @@ export async function verifyModelFiles(config: LlmModelConfig): Promise<{
       configFile: configFileResult,
     },
   };
+}
+
+/**
+ * Verify that a model's files still exist on disk.
+ * Dispatches to the correct platform-specific verification:
+ * - Desktop (GGUF): Tauri fs plugin
+ * - Web (MLC): always verified (web-llm manages cache)
+ * - Mobile (.pte): expo-file-system
+ */
+export async function verifyModelFiles(
+  config: LlmModelConfig,
+): Promise<ModelVerificationResult> {
+  if (isDesktopLLMModelId(config.modelId) && isTauri()) {
+    return verifyDesktopModelFiles(config);
+  }
+  if (isWebLLMModelId(config.modelId)) {
+    return verifyWebModelFiles(config);
+  }
+  return verifyMobileModelFiles(config);
 }
 
 /**
