@@ -1,4 +1,4 @@
-// Metro configuration for Expo with ExecuTorch model assets
+// Metro configuration for Expo with ExecuTorch model assets and expo-router
 // Note: Large model files (.pte) are loaded at runtime from filesystem, not bundled by Metro
 const { getDefaultConfig } = require("expo/metro-config");
 const path = require("path");
@@ -25,9 +25,12 @@ config.resolver.blockList = [
 
 // Redirect native module imports to web shims when bundling for web
 const platformDir = path.resolve(projectRoot, "lib/platform");
+const emptyShim = path.resolve(platformDir, "empty.web.ts");
+
 const originalResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (platform === "web") {
+    // Web shims that redirect to platform-specific implementations
     const webShims = {
       "react-native-quick-crypto": path.resolve(
         platformDir,
@@ -40,7 +43,57 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       "expo-blur": path.resolve(platformDir, "blur.web.tsx"),
       "expo-file-system": path.resolve(platformDir, "fileSystem.web.ts"),
       "expo-file-system/legacy": path.resolve(platformDir, "fileSystem.web.ts"),
+      "@react-native-async-storage/async-storage": path.resolve(
+        platformDir,
+        "asyncStorage.web.ts",
+      ),
+      "expo-sqlite": path.resolve(platformDir, "expoSqlite.web.ts"),
+      "@dr.pogodin/react-native-fs": path.resolve(
+        platformDir,
+        "reactNativeFs.web.ts",
+      ),
+      "@dr.pogodin/react-native-static-server": path.resolve(
+        platformDir,
+        "staticServer.web.ts",
+      ),
+      "expo-notifications": path.resolve(platformDir, "notifications.web.ts"),
+      "expo-crypto": path.resolve(platformDir, "cryptoExpo.web.ts"),
+      "expo-glass-effect": path.resolve(platformDir, "glassEffect.web.ts"),
+      "expo-asset": path.resolve(platformDir, "asset.web.ts"),
+      "expo-audio": path.resolve(platformDir, "audio.web.ts"),
+      "expo-device": path.resolve(platformDir, "device.web.ts"),
+      "react-native-fast-confetti": path.resolve(
+        platformDir,
+        "confetti.web.ts",
+      ),
+      "react-native-render-html": path.resolve(
+        platformDir,
+        "renderHtml.web.tsx",
+      ),
+      "expo-background-fetch": path.resolve(
+        platformDir,
+        "backgroundFetch.web.ts",
+      ),
+      "expo-task-manager": path.resolve(platformDir, "taskManager.web.ts"),
+      "expo-background-task": path.resolve(
+        platformDir,
+        "backgroundTask.web.ts",
+      ),
+      "@react-native-community/datetimepicker": path.resolve(
+        platformDir,
+        "datetimepicker.web.tsx",
+      ),
+      "@react-native-community/netinfo": path.resolve(
+        platformDir,
+        "netinfo.web.ts",
+      ),
+      // Suppress posthog optional dependency warnings
+      "react-native-device-info": emptyShim,
+      "react-native-localize": emptyShim,
+      "react-native-navigation": emptyShim,
+      "posthog-react-native-session-replay": emptyShim,
     };
+
     if (webShims[moduleName]) {
       return {
         filePath: webShims[moduleName],

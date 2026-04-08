@@ -44,7 +44,7 @@ export async function readAsStringAsync(
 
 export async function writeAsStringAsync(
   fileUri: string,
-  contents: string,
+  _contents: string,
   _options?: { encoding?: EncodingType },
 ): Promise<void> {
   console.warn("[fileSystem.web] writeAsStringAsync is a stub:", fileUri);

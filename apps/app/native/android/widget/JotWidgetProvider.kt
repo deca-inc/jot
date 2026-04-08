@@ -56,7 +56,7 @@ class JotWidgetProvider : AppWidgetProvider() {
             ACTION_LIST_CLICK -> {
                 val entryId = intent.getIntExtra("entry_id", -1)
                 if (entryId >= 0) {
-                    val viewIntent = Intent(Intent.ACTION_VIEW, Uri.parse("jot://countdown/$entryId"))
+                    val viewIntent = Intent(Intent.ACTION_VIEW, Uri.parse("jot:///entry/$entryId"))
                     viewIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     context.startActivity(viewIntent)
                 }
@@ -152,7 +152,7 @@ class JotWidgetProvider : AppWidgetProvider() {
                 views.setTextColor(getId(context, "widget_status"), statusColor)
 
                 // Click on main content opens the countdown
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("jot://countdown/${countdown.entryId}"))
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("jot:///entry/${countdown.entryId}"))
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 val pi = PendingIntent.getActivity(context, appWidgetId, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                 views.setOnClickPendingIntent(getId(context, "widget_container"), pi)
@@ -229,9 +229,9 @@ class JotWidgetProvider : AppWidgetProvider() {
             }
 
             // Quick create buttons
-            setupButton(context, views, "btn_journal", "jot://create/journal", 1000 + appWidgetId)
-            setupButton(context, views, "btn_chat", "jot://create/chat", 2000 + appWidgetId)
-            setupButton(context, views, "btn_countdown", "jot://create/countdown", 3000 + appWidgetId)
+            setupButton(context, views, "btn_journal", "jot:///compose/journal", 1000 + appWidgetId)
+            setupButton(context, views, "btn_chat", "jot:///compose/chat", 2000 + appWidgetId)
+            setupButton(context, views, "btn_countdown", "jot:///compose/countdown", 3000 + appWidgetId)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
 

@@ -65,6 +65,7 @@ module.exports = ({ config }) => {
     },
     web: {
       favicon: "./assets/favicon.png",
+      bundler: "metro",
     },
     macos: {
       bundleIdentifier: isDev ? "com.betazeta.jot.dev" : "com.betazeta.jot",
@@ -72,6 +73,7 @@ module.exports = ({ config }) => {
       category: "public.app-category.productivity",
     },
     plugins: [
+      "expo-router",
       [
         "expo-sqlite",
         {

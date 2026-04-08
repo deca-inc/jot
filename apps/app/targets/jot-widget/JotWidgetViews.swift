@@ -86,7 +86,7 @@ struct SmallWidgetView: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .widgetURL(URL(string: "jot://countdown/\(countdown.entryId)"))
+        .widgetURL(URL(string: "jot:///entry/\(countdown.entryId)"))
     }
 }
 
@@ -145,7 +145,7 @@ struct MediumRowView: View {
     let countdown: WidgetCountdownData
 
     var body: some View {
-        Link(destination: URL(string: "jot://countdown/\(countdown.entryId)")!) {
+        Link(destination: URL(string: "jot:///entry/\(countdown.entryId)")!) {
             HStack(spacing: 8) {
                 // Type icon
                 Image(systemName: countdown.isCountUp ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
@@ -206,7 +206,7 @@ struct CircularWidgetView: View {
                     .font(.system(size: 18, weight: .bold, design: .rounded))
             }
         }
-        .widgetURL(URL(string: "jot://countdown/\(countdown.entryId)"))
+        .widgetURL(URL(string: "jot:///entry/\(countdown.entryId)"))
     }
 }
 
@@ -229,7 +229,7 @@ struct RectangularWidgetView: View {
             Text(formattedTime)
                 .font(.system(size: 22, weight: .bold, design: .rounded))
         }
-        .widgetURL(URL(string: "jot://countdown/\(countdown.entryId)"))
+        .widgetURL(URL(string: "jot:///entry/\(countdown.entryId)"))
     }
 }
 
@@ -273,7 +273,7 @@ struct CountdownRowView: View {
             isCountUp: countdown.isCountUp
         )
 
-        Link(destination: URL(string: "jot://countdown/\(countdown.entryId)")!) {
+        Link(destination: URL(string: "jot:///entry/\(countdown.entryId)")!) {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     // Type icon - differentiate countup vs countdown
@@ -353,7 +353,7 @@ struct QuickCreateButtonsView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Journal button
-            Link(destination: URL(string: "jot://create/journal")!) {
+            Link(destination: URL(string: "jot:///compose/journal")!) {
                 VStack(spacing: 2) {
                     Image(systemName: "square.and.pencil")
                         .font(.system(size: 18))
@@ -366,7 +366,7 @@ struct QuickCreateButtonsView: View {
             }
 
             // Chat button
-            Link(destination: URL(string: "jot://create/chat")!) {
+            Link(destination: URL(string: "jot:///compose/chat")!) {
                 VStack(spacing: 2) {
                     Image(systemName: "bubble.left.fill")
                         .font(.system(size: 18))
@@ -379,7 +379,7 @@ struct QuickCreateButtonsView: View {
             }
 
             // Countdown button
-            Link(destination: URL(string: "jot://create/countdown")!) {
+            Link(destination: URL(string: "jot:///compose/countdown")!) {
                 VStack(spacing: 2) {
                     Image(systemName: "timer")
                         .font(.system(size: 18))

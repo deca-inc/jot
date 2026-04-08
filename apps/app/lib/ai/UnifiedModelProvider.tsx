@@ -598,6 +598,11 @@ export function UnifiedModelProvider({
 
         // Verify all downloaded models still exist
         const downloadedModels = await modelSettings.getDownloadedModels();
+        console.log("[UnifiedModelProvider] Downloaded models at startup:", {
+          count: downloadedModels.length,
+          ids: downloadedModels.map((m) => m.modelId),
+        });
+
         if (downloadedModels.length > 0) {
           // Verify all LLM models — verifyAllModels dispatches to the
           // correct platform-specific check (expo-fs, Tauri fs, or web-llm cache).
@@ -611,9 +616,14 @@ export function UnifiedModelProvider({
               ALL_LLM_MODELS,
             );
 
+            console.log("[UnifiedModelProvider] Verification result:", {
+              verified: verification.verified,
+              missing: verification.missing,
+            });
+
             if (verification.missing.length > 0) {
               console.warn(
-                `[UnifiedModelProvider] ${verification.missing.length} model(s) missing from disk`,
+                `[UnifiedModelProvider] ${verification.missing.length} model(s) missing from disk — removing`,
               );
 
               for (const missingModelId of verification.missing) {
@@ -628,6 +638,10 @@ export function UnifiedModelProvider({
 
         // Load current selected LLM model config
         const selectedId = await modelSettings.getSelectedModelId();
+        console.log(
+          "[UnifiedModelProvider] Selected model at startup:",
+          selectedId,
+        );
         if (selectedId && isMounted) {
           const config = ALL_LLM_MODELS.find((m) => m.modelId === selectedId);
           if (config) {

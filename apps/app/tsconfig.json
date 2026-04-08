@@ -4,5 +4,6 @@
     "strict": true,
     "skipLibCheck": true,
     "types": ["react", "react-native", "jest"]
-  }
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
 }

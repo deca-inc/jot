@@ -358,7 +358,7 @@ export function CountdownComposer({
     try {
       // Build check-in recurrence config (notifications will be scheduled by the refresh)
       let checkinRecurrence: CheckinRecurrence | undefined;
-      if (!isCountUp && recurrenceType !== "none") {
+      if (recurrenceType !== "none") {
         checkinRecurrence = {
           type: recurrenceType,
           interval: recurrenceInterval,
@@ -786,137 +786,229 @@ export function CountdownComposer({
           </View>
         )}
 
-        {/* Check-in Reminders - only for countdowns, not Time Since */}
-        {!isCountUp && (
-          <View style={compact ? styles.formGroupCompact : styles.formGroup}>
-            <Text
-              variant="caption"
-              style={[styles.label, { color: seasonalTheme.textSecondary }]}
-            >
-              Check-in Reminders
-            </Text>
+        {/* Check-in Reminders */}
+        <View style={compact ? styles.formGroupCompact : styles.formGroup}>
+          <Text
+            variant="caption"
+            style={[styles.label, { color: seasonalTheme.textSecondary }]}
+          >
+            Check-in Reminders
+          </Text>
 
-            {/* Recurrence Type Selector */}
-            <View
-              style={[
-                styles.recurrenceTypeContainer,
-                styles.recurrenceTypeContent,
-                {
-                  backgroundColor: seasonalTheme.isDark
-                    ? "rgba(255, 255, 255, 0.08)"
-                    : "rgba(0, 0, 0, 0.06)",
-                },
-              ]}
-            >
-              {(["none", "daily", "weekly", "monthly"] as const).map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.recurrenceTypeButton,
-                    recurrenceType === type && {
-                      backgroundColor: seasonalTheme.isDark
-                        ? "rgba(255, 255, 255, 0.15)"
-                        : "rgba(255, 255, 255, 0.95)",
-                    },
-                  ]}
-                  onPress={() => handleRecurrenceTypeChange(type)}
-                  activeOpacity={0.7}
+          {/* Recurrence Type Selector */}
+          <View
+            style={[
+              styles.recurrenceTypeContainer,
+              styles.recurrenceTypeContent,
+              {
+                backgroundColor: seasonalTheme.isDark
+                  ? "rgba(255, 255, 255, 0.08)"
+                  : "rgba(0, 0, 0, 0.06)",
+              },
+            ]}
+          >
+            {(["none", "daily", "weekly", "monthly"] as const).map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.recurrenceTypeButton,
+                  recurrenceType === type && {
+                    backgroundColor: seasonalTheme.isDark
+                      ? "rgba(255, 255, 255, 0.15)"
+                      : "rgba(255, 255, 255, 0.95)",
+                  },
+                ]}
+                onPress={() => handleRecurrenceTypeChange(type)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  variant="caption"
+                  style={{
+                    color:
+                      recurrenceType === type
+                        ? seasonalTheme.textPrimary
+                        : seasonalTheme.textSecondary,
+                    fontWeight: recurrenceType === type ? "600" : "400",
+                  }}
                 >
-                  <Text
-                    variant="caption"
-                    style={{
-                      color:
-                        recurrenceType === type
-                          ? seasonalTheme.textPrimary
-                          : seasonalTheme.textSecondary,
-                      fontWeight: recurrenceType === type ? "600" : "400",
-                    }}
-                  >
-                    {RECURRENCE_LABELS[type]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                  {RECURRENCE_LABELS[type]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-            {/* Interval Selector - for any non-none recurrence */}
-            {recurrenceType !== "none" && (
+          {/* Interval Selector - for any non-none recurrence */}
+          {recurrenceType !== "none" && (
+            <View style={styles.recurrenceOptionsRow}>
+              <Text
+                variant="caption"
+                style={{ color: seasonalTheme.textSecondary }}
+              >
+                Every:
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.intervalSelector}
+              >
+                {INTERVAL_OPTIONS.map((interval) => (
+                  <TouchableOpacity
+                    key={interval}
+                    style={[
+                      styles.intervalButton,
+                      {
+                        backgroundColor:
+                          recurrenceInterval === interval
+                            ? seasonalTheme.chipText
+                            : seasonalTheme.isDark
+                              ? "rgba(255, 255, 255, 0.08)"
+                              : "rgba(0, 0, 0, 0.06)",
+                      },
+                    ]}
+                    onPress={() => setRecurrenceInterval(interval)}
+                  >
+                    <Text
+                      variant="caption"
+                      style={{
+                        color:
+                          recurrenceInterval === interval
+                            ? seasonalTheme.isDark
+                              ? "#000"
+                              : "#fff"
+                            : seasonalTheme.textSecondary,
+                        fontWeight:
+                          recurrenceInterval === interval ? "600" : "400",
+                      }}
+                    >
+                      {interval}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <Text
+                variant="caption"
+                style={{
+                  color: seasonalTheme.textSecondary,
+                  marginLeft: spacingPatterns.xs,
+                }}
+              >
+                {recurrenceType === "daily"
+                  ? recurrenceInterval === 1
+                    ? "day"
+                    : "days"
+                  : recurrenceType === "weekly"
+                    ? recurrenceInterval === 1
+                      ? "week"
+                      : "weeks"
+                    : recurrenceInterval === 1
+                      ? "month"
+                      : "months"}
+              </Text>
+            </View>
+          )}
+
+          {/* Day of Week Selector - for weekly */}
+          {recurrenceType === "weekly" && (
+            <View style={styles.recurrenceOptionsRow}>
+              <Text
+                variant="caption"
+                style={{ color: seasonalTheme.textSecondary }}
+              >
+                On:
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.daySelector}
+              >
+                {DAYS_OF_WEEK.map((day, index) => (
+                  <TouchableOpacity
+                    key={day}
+                    style={[
+                      styles.dayButton,
+                      {
+                        backgroundColor:
+                          recurrenceDayOfWeek === index
+                            ? seasonalTheme.chipText
+                            : seasonalTheme.isDark
+                              ? "rgba(255, 255, 255, 0.08)"
+                              : "rgba(0, 0, 0, 0.06)",
+                      },
+                    ]}
+                    onPress={() => setRecurrenceDayOfWeek(index)}
+                  >
+                    <Text
+                      variant="caption"
+                      style={{
+                        color:
+                          recurrenceDayOfWeek === index
+                            ? seasonalTheme.isDark
+                              ? "#000"
+                              : "#fff"
+                            : seasonalTheme.textSecondary,
+                        fontWeight:
+                          recurrenceDayOfWeek === index ? "600" : "400",
+                      }}
+                    >
+                      {day}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Week of Month + Day of Week Selector - for monthly */}
+          {recurrenceType === "monthly" && (
+            <>
               <View style={styles.recurrenceOptionsRow}>
                 <Text
                   variant="caption"
                   style={{ color: seasonalTheme.textSecondary }}
                 >
-                  Every:
+                  On the:
                 </Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.intervalSelector}
+                  contentContainerStyle={styles.weekOfMonthSelector}
                 >
-                  {INTERVAL_OPTIONS.map((interval) => (
+                  {([1, 2, 3, 4, 5] as WeekOfMonth[]).map((week) => (
                     <TouchableOpacity
-                      key={interval}
+                      key={week}
                       style={[
-                        styles.intervalButton,
+                        styles.weekOfMonthButton,
                         {
                           backgroundColor:
-                            recurrenceInterval === interval
+                            recurrenceWeekOfMonth === week
                               ? seasonalTheme.chipText
                               : seasonalTheme.isDark
                                 ? "rgba(255, 255, 255, 0.08)"
                                 : "rgba(0, 0, 0, 0.06)",
                         },
                       ]}
-                      onPress={() => setRecurrenceInterval(interval)}
+                      onPress={() => setRecurrenceWeekOfMonth(week)}
                     >
                       <Text
                         variant="caption"
                         style={{
                           color:
-                            recurrenceInterval === interval
+                            recurrenceWeekOfMonth === week
                               ? seasonalTheme.isDark
                                 ? "#000"
                                 : "#fff"
                               : seasonalTheme.textSecondary,
                           fontWeight:
-                            recurrenceInterval === interval ? "600" : "400",
+                            recurrenceWeekOfMonth === week ? "600" : "400",
                         }}
                       >
-                        {interval}
+                        {WEEK_OF_MONTH_LABELS[week]}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-                <Text
-                  variant="caption"
-                  style={{
-                    color: seasonalTheme.textSecondary,
-                    marginLeft: spacingPatterns.xs,
-                  }}
-                >
-                  {recurrenceType === "daily"
-                    ? recurrenceInterval === 1
-                      ? "day"
-                      : "days"
-                    : recurrenceType === "weekly"
-                      ? recurrenceInterval === 1
-                        ? "week"
-                        : "weeks"
-                      : recurrenceInterval === 1
-                        ? "month"
-                        : "months"}
-                </Text>
               </View>
-            )}
-
-            {/* Day of Week Selector - for weekly */}
-            {recurrenceType === "weekly" && (
               <View style={styles.recurrenceOptionsRow}>
-                <Text
-                  variant="caption"
-                  style={{ color: seasonalTheme.textSecondary }}
-                >
-                  On:
-                </Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -957,174 +1049,80 @@ export function CountdownComposer({
                   ))}
                 </ScrollView>
               </View>
-            )}
+            </>
+          )}
 
-            {/* Week of Month + Day of Week Selector - for monthly */}
-            {recurrenceType === "monthly" && (
-              <>
-                <View style={styles.recurrenceOptionsRow}>
-                  <Text
-                    variant="caption"
-                    style={{ color: seasonalTheme.textSecondary }}
+          {/* Time Picker - for any non-none recurrence */}
+          {recurrenceType !== "none" && (
+            <View style={styles.recurrenceOptionsRow}>
+              <Text
+                variant="caption"
+                style={{ color: seasonalTheme.textSecondary }}
+              >
+                At:
+              </Text>
+              {Platform.OS === "ios" ? (
+                <DateTimePicker
+                  value={recurrenceTimeAsDate}
+                  mode="time"
+                  display="compact"
+                  onChange={handleRecurrenceTimeChange}
+                  accentColor={seasonalTheme.chipText}
+                  themeVariant={seasonalTheme.isDark ? "dark" : "light"}
+                  style={styles.iosPicker}
+                />
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[
+                      styles.timePickerButton,
+                      {
+                        backgroundColor: seasonalTheme.isDark
+                          ? "rgba(255, 255, 255, 0.08)"
+                          : "rgba(255, 255, 255, 0.9)",
+                        borderColor: seasonalTheme.textSecondary + "40",
+                      },
+                    ]}
+                    onPress={() => setShowRecurrenceTimePicker(true)}
                   >
-                    On the:
-                  </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.weekOfMonthSelector}
-                  >
-                    {([1, 2, 3, 4, 5] as WeekOfMonth[]).map((week) => (
-                      <TouchableOpacity
-                        key={week}
-                        style={[
-                          styles.weekOfMonthButton,
-                          {
-                            backgroundColor:
-                              recurrenceWeekOfMonth === week
-                                ? seasonalTheme.chipText
-                                : seasonalTheme.isDark
-                                  ? "rgba(255, 255, 255, 0.08)"
-                                  : "rgba(0, 0, 0, 0.06)",
-                          },
-                        ]}
-                        onPress={() => setRecurrenceWeekOfMonth(week)}
-                      >
-                        <Text
-                          variant="caption"
-                          style={{
-                            color:
-                              recurrenceWeekOfMonth === week
-                                ? seasonalTheme.isDark
-                                  ? "#000"
-                                  : "#fff"
-                                : seasonalTheme.textSecondary,
-                            fontWeight:
-                              recurrenceWeekOfMonth === week ? "600" : "400",
-                          }}
-                        >
-                          {WEEK_OF_MONTH_LABELS[week]}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-                <View style={styles.recurrenceOptionsRow}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.daySelector}
-                  >
-                    {DAYS_OF_WEEK.map((day, index) => (
-                      <TouchableOpacity
-                        key={day}
-                        style={[
-                          styles.dayButton,
-                          {
-                            backgroundColor:
-                              recurrenceDayOfWeek === index
-                                ? seasonalTheme.chipText
-                                : seasonalTheme.isDark
-                                  ? "rgba(255, 255, 255, 0.08)"
-                                  : "rgba(0, 0, 0, 0.06)",
-                          },
-                        ]}
-                        onPress={() => setRecurrenceDayOfWeek(index)}
-                      >
-                        <Text
-                          variant="caption"
-                          style={{
-                            color:
-                              recurrenceDayOfWeek === index
-                                ? seasonalTheme.isDark
-                                  ? "#000"
-                                  : "#fff"
-                                : seasonalTheme.textSecondary,
-                            fontWeight:
-                              recurrenceDayOfWeek === index ? "600" : "400",
-                          }}
-                        >
-                          {day}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              </>
-            )}
-
-            {/* Time Picker - for any non-none recurrence */}
-            {recurrenceType !== "none" && (
-              <View style={styles.recurrenceOptionsRow}>
-                <Text
-                  variant="caption"
-                  style={{ color: seasonalTheme.textSecondary }}
-                >
-                  At:
-                </Text>
-                {Platform.OS === "ios" ? (
-                  <DateTimePicker
-                    value={recurrenceTimeAsDate}
-                    mode="time"
-                    display="compact"
-                    onChange={handleRecurrenceTimeChange}
-                    accentColor={seasonalTheme.chipText}
-                    themeVariant={seasonalTheme.isDark ? "dark" : "light"}
-                    style={styles.iosPicker}
-                  />
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      style={[
-                        styles.timePickerButton,
-                        {
-                          backgroundColor: seasonalTheme.isDark
-                            ? "rgba(255, 255, 255, 0.08)"
-                            : "rgba(255, 255, 255, 0.9)",
-                          borderColor: seasonalTheme.textSecondary + "40",
-                        },
-                      ]}
-                      onPress={() => setShowRecurrenceTimePicker(true)}
+                    <Ionicons
+                      name="time-outline"
+                      size={16}
+                      color={seasonalTheme.textSecondary}
+                    />
+                    <Text
+                      variant="body"
+                      style={{
+                        color: seasonalTheme.textPrimary,
+                        marginLeft: 6,
+                      }}
                     >
-                      <Ionicons
-                        name="time-outline"
-                        size={16}
-                        color={seasonalTheme.textSecondary}
-                      />
-                      <Text
-                        variant="body"
-                        style={{
-                          color: seasonalTheme.textPrimary,
-                          marginLeft: 6,
-                        }}
-                      >
-                        {formatTimeForDisplay(recurrenceTimeAsDate)}
-                      </Text>
-                    </TouchableOpacity>
-                    {showRecurrenceTimePicker && (
-                      <DateTimePicker
-                        value={recurrenceTimeAsDate}
-                        mode="time"
-                        display="default"
-                        onChange={handleRecurrenceTimeChange}
-                        themeVariant={seasonalTheme.isDark ? "dark" : "light"}
-                      />
-                    )}
-                  </>
-                )}
-              </View>
-            )}
+                      {formatTimeForDisplay(recurrenceTimeAsDate)}
+                    </Text>
+                  </TouchableOpacity>
+                  {showRecurrenceTimePicker && (
+                    <DateTimePicker
+                      value={recurrenceTimeAsDate}
+                      mode="time"
+                      display="default"
+                      onChange={handleRecurrenceTimeChange}
+                      themeVariant={seasonalTheme.isDark ? "dark" : "light"}
+                    />
+                  )}
+                </>
+              )}
+            </View>
+          )}
 
-            <Text
-              variant="caption"
-              style={{ color: seasonalTheme.textSecondary, marginTop: 8 }}
-            >
-              {recurrenceType === "none"
-                ? "No reminders will be scheduled"
-                : "Receive reminders to check in on your progress"}
-            </Text>
-          </View>
-        )}
+          <Text
+            variant="caption"
+            style={{ color: seasonalTheme.textSecondary, marginTop: 8 }}
+          >
+            {recurrenceType === "none"
+              ? "No reminders will be scheduled"
+              : "Receive reminders to check in on your progress"}
+          </Text>
+        </View>
 
         {/* Advanced Section Toggle */}
         <TouchableOpacity

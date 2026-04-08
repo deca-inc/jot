@@ -63,7 +63,7 @@ class CountdownWidgetProvider : AppWidgetProvider() {
                 val statusColor = if (countdown.isCountUp) 0xFF64B5F6.toInt() else 0xFFFFB74D.toInt()
                 views.setTextColor(getId(context, "widget_status"), statusColor)
 
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("jot://countdown/${countdown.entryId}"))
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("jot:///entry/${countdown.entryId}"))
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 val pendingIntent = PendingIntent.getActivity(
                     context, appWidgetId, intent,

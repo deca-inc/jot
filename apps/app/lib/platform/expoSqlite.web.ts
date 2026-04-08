@@ -5,8 +5,6 @@
  * so code importing directly from expo-sqlite works on web.
  */
 
-import React from "react";
-
 // Import useDatabase from the web provider (webpack resolves .web.tsx)
 import { useDatabase } from "../db/DatabaseProvider.web";
 

@@ -442,6 +442,15 @@ export function AIChatComposer({
         );
       }
 
+      // Debug: trace model selection on desktop/web
+      console.log("[AIChatComposer] loadSettings:", {
+        selectedModelId: selected,
+        downloadedCount: downloaded.length,
+        downloadedIds: downloaded.map((m) => m.modelId),
+        isAvailable: selected ? isModelAvailable(selected) : "no-selection",
+        platform: currentPlatform,
+      });
+
       // Determine default: saved selection > persona
       // Note: Platform models don't use personas (no system prompt support)
       if (selected && isModelAvailable(selected)) {

@@ -1,5 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useState, useEffect, useRef } from "react";
+import React, {
+  useCallback,
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+} from "react";
 import {
   View,
   StyleSheet,
@@ -125,8 +131,11 @@ export function CountdownViewer({
     undefined,
   );
 
-  // Extract countdown data
-  const countdownData = entry ? extractCountdownData(entry.blocks) : null;
+  // Extract countdown data (memoized to stabilize timer effect dependency)
+  const countdownData = useMemo(
+    () => (entry ? extractCountdownData(entry.blocks) : null),
+    [entry?.blocks],
+  );
 
   // Set up timer for live countdown updates
   useEffect(() => {
