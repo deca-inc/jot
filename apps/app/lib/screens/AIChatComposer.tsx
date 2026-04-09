@@ -326,6 +326,10 @@ export function AIChatComposer({
   >([]);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  // Tracks whether the user made a manual model/persona selection in the quick
+  // selector during this session. When true, the entry-load effect skips
+  // overwriting selectedModelId from the (possibly stale) entry cache.
+  const userOverrodeModelRef = useRef(false);
   const customModels = useCustomModels();
   const [currentResponse, setCurrentResponse] = useThrottle<string | null>(
     null,
@@ -578,6 +582,7 @@ export function AIChatComposer({
       }
 
       // Update LOCAL state only — don't change the global default.
+      userOverrodeModelRef.current = true;
       setCurrentAgent(agent);
       if (resolvedId) {
         setSelectedModelId(resolvedId);
@@ -634,10 +639,13 @@ export function AIChatComposer({
     }
   }, [currentEntryId, syncOnOpen, disconnectOnClose]);
 
-  // Load entry's saved model/agent when opening existing conversation
+  // Load entry's saved model/agent when opening existing conversation.
+  // Skip if the user already made a manual selection in the quick selector —
+  // the entry cache may be stale and would overwrite their choice.
   useEffect(() => {
     const loadEntrySettings = async () => {
       if (!entry) return;
+      if (userOverrodeModelRef.current) return;
 
       // Load agent if saved on entry
       if (entry.agentId) {
@@ -780,6 +788,7 @@ export function AIChatComposer({
   // Handle model selection - updates setting and tells LLM to refresh
   const handleSelectModel = useCallback(async (modelId: string) => {
     // Update all local state synchronously so React batches the render.
+    userOverrodeModelRef.current = true;
     setSelectedModelId(modelId);
     setCurrentAgent(null);
     setShowModelSelector(false);
