@@ -555,11 +555,9 @@ export function AIChatComposer({
   // Handle agent selection
   const handleSelectAgent = useCallback(
     async (agent: Agent) => {
+      // Update all local state synchronously so React batches the render.
+      // The async persist to DB happens after the UI has already updated.
       setCurrentAgent(agent);
-      // If agent has a specific model, switch to it — but resolve through
-      // family fallback so we use a platform-available sibling when the
-      // persona's configured mobile .pte (or web/desktop variant) isn't
-      // runnable here.
       if (agent.modelId) {
         const resolvedId =
           resolvePersonaModel(
@@ -568,9 +566,19 @@ export function AIChatComposer({
             getCurrentPlatform(),
           ) ?? agent.modelId;
         setSelectedModelId(resolvedId);
-        await modelSettings.setSelectedModelId(resolvedId);
       }
       setShowModelSelector(false);
+
+      // Persist after UI update (non-blocking)
+      if (agent.modelId) {
+        const resolvedId =
+          resolvePersonaModel(
+            { modelId: agent.modelId },
+            ALL_LLM_MODELS,
+            getCurrentPlatform(),
+          ) ?? agent.modelId;
+        await modelSettings.setSelectedModelId(resolvedId);
+      }
 
       // Save to entry if we have one. We persist the persona's *original*
       // modelId (agent.modelId) as `generationModelId` so the entry remains
@@ -767,12 +775,13 @@ export function AIChatComposer({
   // Handle model selection - updates setting and tells LLM to refresh
   const handleSelectModel = useCallback(
     async (modelId: string) => {
+      // Update all local state synchronously so React batches the render.
       setSelectedModelId(modelId);
-      // Clear current agent when selecting a raw model directly
-      // This ensures the selector shows the model name, not the agent name
       setCurrentAgent(null);
-      await modelSettings.setSelectedModelId(modelId);
       setShowModelSelector(false);
+
+      // Persist after UI update (non-blocking)
+      await modelSettings.setSelectedModelId(modelId);
 
       // Save to entry if we have one (clear agent since raw model was selected)
       if (currentEntryIdRef.current) {
