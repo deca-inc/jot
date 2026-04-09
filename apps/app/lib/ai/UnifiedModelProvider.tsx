@@ -595,7 +595,11 @@ export function UnifiedModelProvider({
     async function initialize() {
       try {
         // Log storage debug info (helps diagnose Android issues)
-        await logStorageDebugInfo();
+        try {
+          await logStorageDebugInfo();
+        } catch (e) {
+          console.warn("[UnifiedModelProvider] logStorageDebugInfo failed:", e);
+        }
 
         // Initialize download status manager
         await modelDownloadStatus.initialize();
@@ -638,7 +642,11 @@ export function UnifiedModelProvider({
         }
 
         // Clean up old/stale downloads
-        await persistentDownloadManager.cleanupOldDownloads();
+        try {
+          await persistentDownloadManager.cleanupOldDownloads();
+        } catch (e) {
+          console.warn("[UnifiedModelProvider] cleanupOldDownloads failed:", e);
+        }
 
         // Load current selected LLM model config
         const selectedId = await modelSettings.getSelectedModelId();
