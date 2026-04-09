@@ -499,6 +499,11 @@ export function AIChatComposer({
 
     // For non-platform models, show agent name if set
     if (currentAgent) {
+      // Show "AgentName · ModelName" so user knows which model is active
+      const modelName = getModelById(selectedModelId)?.displayName;
+      if (modelName) {
+        return `${currentAgent.name} · ${modelName}`;
+      }
       return currentAgent.name;
     }
 
@@ -555,28 +560,24 @@ export function AIChatComposer({
   // Handle agent selection
   const handleSelectAgent = useCallback(
     async (agent: Agent) => {
-      // Update all local state synchronously so React batches the render.
-      // The async persist to DB happens after the UI has already updated.
-      setCurrentAgent(agent);
-      if (agent.modelId) {
-        const resolvedId =
-          resolvePersonaModel(
+      // Resolve the model ID for this persona (family fallback if needed)
+      const resolvedId = agent.modelId
+        ? (resolvePersonaModel(
             { modelId: agent.modelId },
             ALL_LLM_MODELS,
             getCurrentPlatform(),
-          ) ?? agent.modelId;
+          ) ?? agent.modelId)
+        : selectedModelId; // Keep current model if agent has no model preference
+
+      // Update all local state synchronously so React batches the render.
+      setCurrentAgent(agent);
+      if (resolvedId) {
         setSelectedModelId(resolvedId);
       }
       setShowModelSelector(false);
 
       // Persist after UI update (non-blocking)
-      if (agent.modelId) {
-        const resolvedId =
-          resolvePersonaModel(
-            { modelId: agent.modelId },
-            ALL_LLM_MODELS,
-            getCurrentPlatform(),
-          ) ?? agent.modelId;
+      if (resolvedId) {
         await modelSettings.setSelectedModelId(resolvedId);
       }
 
