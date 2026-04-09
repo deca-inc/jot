@@ -22,6 +22,8 @@ export interface UseAIChatOptions {
   systemPrompt?: string;
   /** Think mode (from agent) */
   thinkMode?: "no-think" | "think" | "none";
+  /** Per-chat model override (doesn't change global default) */
+  modelId?: string;
 }
 
 /**
@@ -41,6 +43,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     onError,
     systemPrompt,
     thinkMode,
+    modelId,
   } = options;
 
   // Get shared LLM from context
@@ -51,6 +54,8 @@ export function useAIChat(options: UseAIChatOptions = {}) {
   systemPromptRef.current = systemPrompt;
   const thinkModeRef = useRef(thinkMode);
   thinkModeRef.current = thinkMode;
+  const modelIdRef = useRef(modelId);
+  modelIdRef.current = modelId;
 
   // Track message history for this conversation
   const messageHistoryRef = useRef<Message[]>([]);
@@ -85,6 +90,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
           responseCallback: onResponseUpdateRef.current,
           systemPrompt: systemPromptRef.current,
           thinkMode: thinkModeRef.current,
+          modelId: modelIdRef.current,
         });
         const cleanResponse = stripThinkTags(response);
 

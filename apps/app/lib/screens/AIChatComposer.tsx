@@ -569,17 +569,13 @@ export function AIChatComposer({
           ) ?? agent.modelId)
         : selectedModelId; // Keep current model if agent has no model preference
 
-      // Update all local state synchronously so React batches the render.
+      // Update LOCAL state only — don't change the global default.
+      // The per-chat model is passed to sendMessage via options.modelId.
       setCurrentAgent(agent);
       if (resolvedId) {
         setSelectedModelId(resolvedId);
       }
       setShowModelSelector(false);
-
-      // Persist after UI update (non-blocking)
-      if (resolvedId) {
-        await modelSettings.setSelectedModelId(resolvedId);
-      }
 
       // Save to entry if we have one. We persist the persona's *original*
       // modelId (agent.modelId) as `generationModelId` so the entry remains
@@ -594,7 +590,7 @@ export function AIChatComposer({
         });
       }
     },
-    [modelSettings],
+    [selectedModelId],
   );
 
   // Track current entry ID (can change when new entry is created)
@@ -736,6 +732,7 @@ export function AIChatComposer({
   } = useAIChat({
     systemPrompt: currentAgent?.systemPrompt,
     thinkMode: currentAgent?.thinkMode,
+    modelId: selectedModelId ?? undefined,
     onResponseComplete: async (response) => {
       // Save completed response to database
       const entryId = currentEntryIdRef.current;
@@ -774,29 +771,26 @@ export function AIChatComposer({
   });
 
   // Handle model selection - updates setting and tells LLM to refresh
-  const handleSelectModel = useCallback(
-    async (modelId: string) => {
-      // Update all local state synchronously so React batches the render.
-      setSelectedModelId(modelId);
-      setCurrentAgent(null);
-      setShowModelSelector(false);
+  const handleSelectModel = useCallback(async (modelId: string) => {
+    // Update all local state synchronously so React batches the render.
+    setSelectedModelId(modelId);
+    setCurrentAgent(null);
+    setShowModelSelector(false);
 
-      // Persist after UI update (non-blocking)
-      await modelSettings.setSelectedModelId(modelId);
+    // Don't update global default — this is a per-chat selection.
+    // The model is passed to sendMessage via options.modelId.
 
-      // Save to entry if we have one (clear agent since raw model was selected)
-      if (currentEntryIdRef.current) {
-        await updateEntryRef.current.mutateAsync({
-          id: currentEntryIdRef.current,
-          input: {
-            agentId: null,
-            generationModelId: modelId,
-          },
-        });
-      }
-    },
-    [modelSettings],
-  );
+    // Save to entry if we have one (clear agent since raw model was selected)
+    if (currentEntryIdRef.current) {
+      await updateEntryRef.current.mutateAsync({
+        id: currentEntryIdRef.current,
+        input: {
+          agentId: null,
+          generationModelId: modelId,
+        },
+      });
+    }
+  }, []);
 
   // Initialize message history from existing entry
   useEffect(() => {

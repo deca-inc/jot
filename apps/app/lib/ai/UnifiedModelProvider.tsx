@@ -88,6 +88,8 @@ interface SendMessageOptions {
   completeCallback?: (result: string) => void;
   systemPrompt?: string;
   thinkMode?: "no-think" | "think" | "none";
+  /** Override the model to use for this message. If not set, reads from global settings. */
+  modelId?: string;
 }
 
 interface UnifiedModelContextValue {
@@ -769,7 +771,9 @@ export function UnifiedModelProvider({
       messages: Message[],
       options?: SendMessageOptions,
     ): Promise<string> => {
-      const selectedModelId = await modelSettings.getSelectedModelId();
+      // Use per-chat override if provided, otherwise fall back to global default.
+      const selectedModelId =
+        options?.modelId || (await modelSettings.getSelectedModelId());
       if (!selectedModelId) {
         throw new Error("No model selected");
       }
