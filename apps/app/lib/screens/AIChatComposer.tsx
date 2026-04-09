@@ -1562,8 +1562,7 @@ export function AIChatComposer({
                   BUILT-IN
                 </Text>
                 {platformLLMs.map((platformModel) => {
-                  const isSelected =
-                    !currentAgent && selectedModelId === platformModel.modelId;
+                  const isSelected = selectedModelId === platformModel.modelId;
                   return (
                     <TouchableOpacity
                       key={platformModel.modelId}
@@ -1642,8 +1641,7 @@ export function AIChatComposer({
                   (m) => m.modelId === downloaded.modelId,
                 );
                 if (!model) return null;
-                const isSelected =
-                  !currentAgent && selectedModelId === model.modelId;
+                const isSelected = selectedModelId === model.modelId;
                 return (
                   <TouchableOpacity
                     key={model.modelId}
@@ -1708,8 +1706,7 @@ export function AIChatComposer({
                 {remoteModels
                   .filter((m) => m.isEnabled && m.privacyAcknowledged)
                   .map((remoteModel) => {
-                    const isSelected =
-                      !currentAgent && selectedModelId === remoteModel.modelId;
+                    const isSelected = selectedModelId === remoteModel.modelId;
                     return (
                       <TouchableOpacity
                         key={remoteModel.modelId}
@@ -1782,8 +1779,7 @@ export function AIChatComposer({
                   CUSTOM
                 </Text>
                 {customLocalModels.map((customModel) => {
-                  const isSelected =
-                    !currentAgent && selectedModelId === customModel.modelId;
+                  const isSelected = selectedModelId === customModel.modelId;
                   return (
                     <TouchableOpacity
                       key={customModel.modelId}
