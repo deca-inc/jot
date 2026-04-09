@@ -240,12 +240,17 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   useEffect(() => {
     if (!hasNotifiedFirstEntryRef.current && entriesQuery.data) {
       hasNotifiedFirstEntryRef.current = true;
-      if (entries.length > 0 && onFirstEntryAvailableRef.current) {
-        const first = entries[0];
-        onFirstEntryAvailableRef.current(first.id, first.type);
-      } else if (entries.length === 0) {
-        onNoEntriesRef.current?.();
-      }
+      // Defer navigation to the next frame so we don't trigger setState
+      // during the Expo Router Stack's render cycle (causes infinite loop).
+      const id = requestAnimationFrame(() => {
+        if (entries.length > 0 && onFirstEntryAvailableRef.current) {
+          const first = entries[0];
+          onFirstEntryAvailableRef.current(first.id, first.type);
+        } else if (entries.length === 0) {
+          onNoEntriesRef.current?.();
+        }
+      });
+      return () => cancelAnimationFrame(id);
     }
   }, [entriesQuery.data, entries]);
 
