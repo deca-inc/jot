@@ -560,17 +560,24 @@ export function AIChatComposer({
   // Handle agent selection
   const handleSelectAgent = useCallback(
     async (agent: Agent) => {
-      // Resolve the model ID for this persona (family fallback if needed)
-      const resolvedId = agent.modelId
-        ? (resolvePersonaModel(
+      // Resolve the model ID for this persona.
+      // If the persona specifies a model, resolve it (with family fallback).
+      // If no model specified, use the GLOBAL default (not the per-chat override,
+      // which might be a one-off selection like Apple Intelligence).
+      let resolvedId: string | null = null;
+      if (agent.modelId) {
+        resolvedId =
+          resolvePersonaModel(
             { modelId: agent.modelId },
             ALL_LLM_MODELS,
             getCurrentPlatform(),
-          ) ?? agent.modelId)
-        : selectedModelId; // Keep current model if agent has no model preference
+          ) ?? agent.modelId;
+      } else {
+        // Fall back to global default for personas without a model preference
+        resolvedId = await modelSettings.getSelectedModelId();
+      }
 
       // Update LOCAL state only — don't change the global default.
-      // The per-chat model is passed to sendMessage via options.modelId.
       setCurrentAgent(agent);
       if (resolvedId) {
         setSelectedModelId(resolvedId);
@@ -590,7 +597,7 @@ export function AIChatComposer({
         });
       }
     },
-    [selectedModelId],
+    [modelSettings],
   );
 
   // Track current entry ID (can change when new entry is created)
