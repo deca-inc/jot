@@ -331,6 +331,15 @@ export const QuillRichEditor = forwardRef<
       formatState.list === "unchecked" || formatState.list === "checked";
     editorRef.current?.format("list", isChecklist ? false : "unchecked");
   }, [formatState.list]);
+  const increaseIndent = useCallback(
+    // Quill accepts "+1" / "-1" to adjust the indent level relative to current
+    () => editorRef.current?.format("indent", "+1"),
+    [],
+  );
+  const decreaseIndent = useCallback(
+    () => editorRef.current?.format("indent", "-1"),
+    [],
+  );
 
   // PanResponder for toolbar swipe-down to dismiss keyboard
   // Allows horizontal scrolling but detects vertical swipe to dismiss
@@ -444,6 +453,24 @@ export const QuillRichEditor = forwardRef<
       padding-left: 28px !important;
       position: relative;
     }
+    /* Indentation for nested list items (Quill adds ql-indent-N classes) */
+    .ql-editor li.ql-indent-1 { margin-left: 1.5em !important; }
+    .ql-editor li.ql-indent-2 { margin-left: 3em !important; }
+    .ql-editor li.ql-indent-3 { margin-left: 4.5em !important; }
+    .ql-editor li.ql-indent-4 { margin-left: 6em !important; }
+    .ql-editor li.ql-indent-5 { margin-left: 7.5em !important; }
+    .ql-editor li.ql-indent-6 { margin-left: 9em !important; }
+    .ql-editor li.ql-indent-7 { margin-left: 10.5em !important; }
+    .ql-editor li.ql-indent-8 { margin-left: 12em !important; }
+    /* Indentation for non-list block elements (paragraphs, headings, etc.) */
+    .ql-editor .ql-indent-1:not(li) { padding-left: 3em !important; }
+    .ql-editor .ql-indent-2:not(li) { padding-left: 6em !important; }
+    .ql-editor .ql-indent-3:not(li) { padding-left: 9em !important; }
+    .ql-editor .ql-indent-4:not(li) { padding-left: 12em !important; }
+    .ql-editor .ql-indent-5:not(li) { padding-left: 15em !important; }
+    .ql-editor .ql-indent-6:not(li) { padding-left: 18em !important; }
+    .ql-editor .ql-indent-7:not(li) { padding-left: 21em !important; }
+    .ql-editor .ql-indent-8:not(li) { padding-left: 24em !important; }
     .ql-editor li::before {
       position: absolute !important;
       left: 0 !important;
@@ -914,6 +941,21 @@ export const QuillRichEditor = forwardRef<
           color={seasonalTheme.textPrimary}
         />
       </TouchableOpacity>
+      <View style={styles.toolbarSeparator} />
+      <TouchableOpacity onPress={decreaseIndent} style={styles.toolbarButton}>
+        <Ionicons
+          name="chevron-back"
+          size={iconSize}
+          color={seasonalTheme.textPrimary}
+        />
+      </TouchableOpacity>
+      <TouchableOpacity onPress={increaseIndent} style={styles.toolbarButton}>
+        <Ionicons
+          name="chevron-forward"
+          size={iconSize}
+          color={seasonalTheme.textPrimary}
+        />
+      </TouchableOpacity>
     </>
   );
 
@@ -944,6 +986,26 @@ export const QuillRichEditor = forwardRef<
               // before lists when loading HTML (GitHub issue #2905)
               // Note: Must be a string as react-native-cn-quill injects it directly into JS
               clipboard: "{ matchVisual: false }",
+              // Override Quill's default Tab bindings so they indent any block
+              // type (paragraphs, headings, lists, blockquotes) regardless of
+              // cursor position. No format filter — works on all block types.
+              keyboard: `{
+                bindings: {
+                  indent: {
+                    key: 9,
+                    handler: function(range, context) {
+                      this.quill.format('indent', '+1', 'user');
+                    }
+                  },
+                  outdent: {
+                    key: 9,
+                    shiftKey: true,
+                    handler: function(range, context) {
+                      this.quill.format('indent', '-1', 'user');
+                    }
+                  }
+                }
+              }`,
             },
           }}
           webview={{
@@ -1401,7 +1463,10 @@ export const QuillRichEditor = forwardRef<
                 '<div class="bubble-sep"></div>' +
                 '<button class="bubble-btn" data-format="list" data-value="bullet" title="Bullet List"><svg viewBox="0 0 24 24"><circle cx="4" cy="7" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="4" cy="17" r="2"/><rect x="9" y="6" width="12" height="2" rx="1"/><rect x="9" y="11" width="12" height="2" rx="1"/><rect x="9" y="16" width="12" height="2" rx="1"/></svg></button>' +
                 '<button class="bubble-btn" data-format="list" data-value="ordered" title="Numbered List"><svg viewBox="0 0 24 24"><text x="2" y="9" font-size="7" font-weight="bold" fill="currentColor">1</text><text x="2" y="14.5" font-size="7" font-weight="bold" fill="currentColor">2</text><text x="2" y="20" font-size="7" font-weight="bold" fill="currentColor">3</text><rect x="10" y="6" width="11" height="2" rx="1"/><rect x="10" y="11" width="11" height="2" rx="1"/><rect x="10" y="16" width="11" height="2" rx="1"/></svg></button>' +
-                '<button class="bubble-btn" data-format="list" data-value="unchecked" title="Checklist"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="7 12 10 15 17 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+                '<button class="bubble-btn" data-format="list" data-value="unchecked" title="Checklist"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="7 12 10 15 17 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+                '<div class="bubble-sep"></div>' +
+                '<button class="bubble-btn" data-format="indent" data-value="-1" title="Decrease indent"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="2" rx="1"/><rect x="11" y="9" width="10" height="2" rx="1"/><rect x="11" y="14" width="10" height="2" rx="1"/><rect x="3" y="19" width="18" height="2" rx="1"/><path d="M7 9 L3 12.5 L7 16 Z"/></svg></button>' +
+                '<button class="bubble-btn" data-format="indent" data-value="+1" title="Increase indent"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="2" rx="1"/><rect x="11" y="9" width="10" height="2" rx="1"/><rect x="11" y="14" width="10" height="2" rx="1"/><rect x="3" y="19" width="18" height="2" rx="1"/><path d="M3 9 L7 12.5 L3 16 Z"/></svg></button>';
 
               document.body.appendChild(toolbar);
 
@@ -1428,6 +1493,9 @@ export const QuillRichEditor = forwardRef<
                   var currentFormat = quill.getFormat();
                   // Toggle: if already this list type, remove it
                   quill.format('list', currentFormat.list === value ? false : value);
+                } else if (format === 'indent') {
+                  // value is '+1' or '-1' — Quill clamps at 0 and 8
+                  quill.format('indent', value);
                 } else {
                   // Toggle inline format (bold, italic, etc)
                   var currentFormat = quill.getFormat();
@@ -1454,6 +1522,9 @@ export const QuillRichEditor = forwardRef<
                     isActive = formats.header === parseInt(val);
                   } else if (fmt === 'list') {
                     isActive = formats.list === val;
+                  } else if (fmt === 'indent') {
+                    // Indent buttons are actions, not toggles
+                    isActive = false;
                   } else {
                     isActive = !!formats[fmt];
                   }

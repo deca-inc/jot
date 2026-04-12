@@ -10,13 +10,13 @@
 
 import { Paths } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
-import { LlmModelConfig } from "./modelConfig";
-import { isDesktopLLMModelId, isWebLLMModelId } from "./modelTypeGuards";
 import { isTauri } from "../platform/isTauri";
 import {
   isDesktopModelDownloaded,
   getDesktopModelPath,
 } from "../platform/tauriDownload";
+import { LlmModelConfig } from "./modelConfig";
+import { isDesktopLLMModelId, isWebLLMModelId } from "./modelTypeGuards";
 
 function getBaseDir(): string {
   try {

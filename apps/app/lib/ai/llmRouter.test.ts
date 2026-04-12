@@ -236,13 +236,17 @@ describe("llmRouter", () => {
       const router: LLMRouter = createLLMRouter(deps);
 
       const result = await router.sendWebLLMMessage(
-        webQwenConfig.modelId,
+        webQwenConfig,
         sampleMessages,
       );
 
       expect(result).toBe("hello from web-llm");
       expect(deps.webEngine.loadCalls).toHaveLength(1);
       expect(deps.webEngine.loadCalls[0].modelId).toBe(webQwenConfig.modelId);
+      // MLC artifact id extracted from pteSource.url
+      expect(deps.webEngine.loadCalls[0].mlcModelId).toBe(
+        "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+      );
       expect(deps.webEngine.generateCalls).toHaveLength(1);
       expect(deps.tauriEngine.loadCalls).toHaveLength(0);
     });
@@ -252,7 +256,7 @@ describe("llmRouter", () => {
       const router = createLLMRouter(deps);
 
       const chunks: string[] = [];
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages, {
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages, {
         responseCallback: (soFar) => {
           chunks.push(soFar);
         },
@@ -271,7 +275,7 @@ describe("llmRouter", () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages, {
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages, {
         systemPrompt: "You are a helpful assistant.",
         thinkMode: "think",
       });
@@ -286,7 +290,7 @@ describe("llmRouter", () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages, {
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages, {
         systemPrompt: "You are a helpful assistant.",
         thinkMode: "no-think",
       });
@@ -300,7 +304,7 @@ describe("llmRouter", () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      await router.sendWebLLMMessage(webLlamaConfig.modelId, sampleMessages, {
+      await router.sendWebLLMMessage(webLlamaConfig, sampleMessages, {
         systemPrompt: "You are a helpful assistant.",
         thinkMode: "no-think",
       });
@@ -314,7 +318,7 @@ describe("llmRouter", () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages, {
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages, {
         systemPrompt: "ignored",
         thinkMode: "none",
       });
@@ -328,7 +332,7 @@ describe("llmRouter", () => {
       const router = createLLMRouter(deps);
 
       await expect(
-        router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages),
+        router.sendWebLLMMessage(webQwenConfig, sampleMessages),
       ).rejects.toThrow("Web LLM is only available in web browsers");
     });
   });
@@ -396,7 +400,7 @@ describe("llmRouter", () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages);
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages);
       expect(deps.webEngine.unloadCalls).toBe(0);
 
       await router.sendTauriLLMMessage(desktopLlamaConfig, sampleMessages);
@@ -412,7 +416,7 @@ describe("llmRouter", () => {
       await router.sendTauriLLMMessage(desktopLlamaConfig, sampleMessages);
       expect(deps.tauriEngine.unloadCalls).toBe(0);
 
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages);
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages);
 
       expect(deps.tauriEngine.unloadCalls).toBeGreaterThanOrEqual(1);
       expect(deps.webEngine.loadCalls).toHaveLength(1);
@@ -422,8 +426,8 @@ describe("llmRouter", () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages);
-      await router.sendWebLLMMessage(webLlamaConfig.modelId, sampleMessages);
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages);
+      await router.sendWebLLMMessage(webLlamaConfig, sampleMessages);
 
       // Two loads, one unload (old -> new)
       expect(deps.webEngine.loadCalls).toHaveLength(2);
@@ -434,8 +438,8 @@ describe("llmRouter", () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages);
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages);
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages);
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages);
 
       // Second call should not reload
       expect(deps.webEngine.loadCalls).toHaveLength(1);
@@ -448,7 +452,7 @@ describe("llmRouter", () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages);
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages);
       router.interruptAll();
 
       expect(deps.webEngine.interruptCalls).toBeGreaterThanOrEqual(1);
@@ -468,7 +472,7 @@ describe("llmRouter", () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages);
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages);
       await router.unloadAll();
 
       expect(deps.webEngine.unloadCalls).toBeGreaterThanOrEqual(1);
@@ -480,27 +484,27 @@ describe("llmRouter", () => {
       const router = createLLMRouter(deps);
 
       expect(router.isAnyLoaded()).toBe(false);
-      await router.sendWebLLMMessage(webQwenConfig.modelId, sampleMessages);
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages);
       expect(router.isAnyLoaded()).toBe(true);
     });
   });
 
   describe("Integration: resolved modelId routing", () => {
-    // These tests verify the router does NOT remap the modelId internally —
-    // whatever modelId the caller passes (which is the output of
-    // `resolvePersonaModel`) is exactly what the engine sees in its
-    // load() call. This is the contract between persona resolution and
-    // engine routing.
+    // These tests verify the router preserves the modelId from the
+    // config for identity tracking, while extracting the MLC artifact
+    // id from pteSource.url for the engine load.
 
-    it("loadWebLLM uses the exact modelId passed (no remapping inside router)", async () => {
+    it("loadWebLLM uses the app modelId for identity and MLC id for engine", async () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      // Simulate a caller passing a resolved web-* id directly.
-      await router.sendWebLLMMessage("web-llama-3.2-3b", sampleMessages);
+      await router.sendWebLLMMessage(webLlamaConfig, sampleMessages);
 
       expect(deps.webEngine.loadCalls).toHaveLength(1);
       expect(deps.webEngine.loadCalls[0].modelId).toBe("web-llama-3.2-3b");
+      expect(deps.webEngine.loadCalls[0].mlcModelId).toBe(
+        "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+      );
     });
 
     it("loadTauriLLM uses the exact modelId from the passed config", async () => {
@@ -520,21 +524,19 @@ describe("llmRouter", () => {
     });
 
     it("passes the resolved modelId through to the generate() call's prepared messages", async () => {
-      // The system prompt's /no_think handling keys off the modelId the
-      // caller passes. If the router remapped mid-flight, the Qwen check
-      // would break. Verify the check uses the id the caller sent.
+      // The system prompt's /no_think handling keys off the modelId from
+      // the config. Verify the check uses the app-level id.
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      // Simulate persona resolved to web-qwen (caller passes web-qwen id).
-      await router.sendWebLLMMessage("web-qwen-2.5-1.5b", sampleMessages, {
+      await router.sendWebLLMMessage(webQwenConfig, sampleMessages, {
         systemPrompt: "Be helpful.",
         thinkMode: "no-think",
       });
 
       const [{ messages }] = deps.webEngine.generateCalls;
       expect(messages[0].role).toBe("system");
-      // Qwen detection runs on the id caller passed.
+      // Qwen detection runs on the app-level modelId from the config.
       expect(messages[0].content.startsWith("/no_think ")).toBe(true);
     });
 
@@ -544,7 +546,7 @@ describe("llmRouter", () => {
       const deps = buildDeps();
       const router = createLLMRouter(deps);
 
-      await router.sendWebLLMMessage("web-llama-3.2-3b", sampleMessages, {
+      await router.sendWebLLMMessage(webLlamaConfig, sampleMessages, {
         systemPrompt: "Be helpful.",
         thinkMode: "no-think",
       });

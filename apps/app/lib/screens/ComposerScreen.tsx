@@ -20,6 +20,8 @@ export interface ComposerScreenProps {
     displayName: string;
     openSelector: () => void;
   }) => void;
+  /** Called by AI chat when its active entry id changes (new-chat creation) */
+  onComposerEntryId?: (id: number | undefined) => void;
 }
 
 export function ComposerScreen({
@@ -32,6 +34,7 @@ export function ComposerScreen({
   fullScreen = false,
   hideBackButton = false,
   onModelInfo,
+  onComposerEntryId,
 }: ComposerScreenProps) {
   const theme = useTheme();
   const entryRepository = useEntryRepository();
@@ -173,6 +176,7 @@ export function ComposerScreen({
         onCancel={onCancel}
         hideBackButton={hideBackButton}
         onModelInfo={onModelInfo}
+        onComposerEntryId={onComposerEntryId}
       />
     );
   }

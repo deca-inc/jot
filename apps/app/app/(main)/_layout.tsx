@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   Image,
   Platform,
+  TextInput,
   useWindowDimensions,
 } from "react-native";
 import {
@@ -29,6 +30,7 @@ import {
   useCreateEntry,
   useEntry,
   useDeleteEntry,
+  useUpdateEntry,
 } from "../../lib/db/useEntries";
 import { useIsWideScreen } from "../../lib/hooks/useIsWideScreen";
 import {
@@ -66,9 +68,17 @@ function MainLayout() {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showContentMenu, setShowContentMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const { modelInfo } = useModelInfo();
+  const { modelInfo, composerEntryId } = useModelInfo();
   const deleteEntryMutation = useDeleteEntry();
+  const updateEntryMutation = useUpdateEntry();
+  const updateEntryRef = useRef(updateEntryMutation);
+  updateEntryRef.current = updateEntryMutation;
   const screenWidth = useRef(0);
+
+  // Inline title editing state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editingTitleText, setEditingTitleText] = useState("");
+  const titleInputRef = useRef<TextInput>(null);
 
   // Derive active entry ID from the current route
   const activeEntryId = (() => {
@@ -90,6 +100,12 @@ function MainLayout() {
   const activeEntryTitle = activeEntryQuery.data?.title || "";
   const activeEntryParentId = activeEntryQuery.data?.parentId ?? undefined;
   const activeEntryType = activeEntryQuery.data?.type;
+
+  // While the user is on /compose/chat and the composer has created a new
+  // entry in-place (no URL change), fetch that entry so the header can show
+  // its live title instead of the static "New Chat" placeholder.
+  const composerEntryQuery = useEntry(composerEntryId);
+  const composerEntryTitle = composerEntryQuery.data?.title || "";
 
   // Fetch parent entry for breadcrumb
   const parentEntryQuery = useEntry(activeEntryParentId);
@@ -426,9 +442,48 @@ function MainLayout() {
       const editMatch = pathname.match(/editId=(\d+)/);
       return editMatch ? "Edit Timer" : "New Timer";
     }
-    if (pathname === "/compose/chat") return "New Chat";
+    if (pathname === "/compose/chat") {
+      return composerEntryTitle || "New Chat";
+    }
     return activeEntryTitle || "";
   };
+
+  // The entry whose title is displayed in the header.
+  const editableEntryId =
+    pathname === "/compose/chat" ? composerEntryId : activeEntryId;
+
+  // Whether the current header title is editable (entries and composer).
+  const isTitleEditable = isEntryScreen && editableEntryId !== undefined;
+
+  const handleTitleTap = useCallback(() => {
+    if (!isTitleEditable) return;
+    const currentTitle =
+      pathname === "/compose/chat" ? composerEntryTitle : activeEntryTitle;
+    setEditingTitleText(currentTitle);
+    setIsEditingTitle(true);
+    // Focus the TextInput after state update
+    setTimeout(() => titleInputRef.current?.focus(), 50);
+  }, [isTitleEditable, pathname, composerEntryTitle, activeEntryTitle]);
+
+  // Dismiss editing when navigating to a different entry
+  const prevEditableEntryIdRef = useRef(editableEntryId);
+  if (prevEditableEntryIdRef.current !== editableEntryId) {
+    prevEditableEntryIdRef.current = editableEntryId;
+    if (isEditingTitle) {
+      setIsEditingTitle(false);
+    }
+  }
+
+  const handleTitleSubmit = useCallback(() => {
+    const trimmed = editingTitleText.trim();
+    setIsEditingTitle(false);
+    if (!editableEntryId || !trimmed) return;
+
+    updateEntryRef.current.mutate({
+      id: editableEntryId,
+      input: { title: trimmed, titlePinned: true },
+    });
+  }, [editingTitleText, editableEntryId]);
 
   // Render the content header (shared between desktop and mobile)
   const renderContentHeader = (showDrawerToggle: boolean) => (
@@ -488,31 +543,100 @@ function MainLayout() {
               color={seasonalTheme.textSecondary + "80"}
               style={{ marginHorizontal: 4 }}
             />
+            {isEditingTitle ? (
+              <TextInput
+                ref={titleInputRef}
+                value={editingTitleText}
+                onChangeText={setEditingTitleText}
+                onSubmitEditing={handleTitleSubmit}
+                onBlur={handleTitleSubmit}
+                style={[
+                  {
+                    color: seasonalTheme.textPrimary,
+                    fontWeight: "600",
+                    fontSize: 14,
+                    padding: 0,
+                    margin: 0,
+                    borderWidth: 0,
+                    flexShrink: 1,
+                    minWidth: 40,
+                    height: 32,
+                  },
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-only CSS
+                  {
+                    outlineStyle: "none",
+                    background: "transparent",
+                    verticalAlign: "middle",
+                  } as any,
+                ]}
+                returnKeyType="done"
+              />
+            ) : (
+              <TouchableOpacity
+                onPress={handleTitleTap}
+                activeOpacity={0.7}
+                style={{ flexShrink: 1 }}
+              >
+                <Text
+                  variant="body"
+                  numberOfLines={1}
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontWeight: "600",
+                    fontSize: 14,
+                  }}
+                >
+                  {activeEntryTitle || ""}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        ) : isEditingTitle && isTitleEditable ? (
+          <TextInput
+            ref={titleInputRef}
+            value={editingTitleText}
+            onChangeText={setEditingTitleText}
+            onSubmitEditing={handleTitleSubmit}
+            onBlur={handleTitleSubmit}
+            style={[
+              {
+                color: seasonalTheme.textPrimary,
+                fontWeight: "600",
+                fontSize: 15,
+                padding: 0,
+                margin: 0,
+                borderWidth: 0,
+                flexShrink: 1,
+                minWidth: 40,
+                height: 32,
+              },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-only CSS
+              {
+                outlineStyle: "none",
+                background: "transparent",
+                verticalAlign: "middle",
+              } as any,
+            ]}
+            returnKeyType="done"
+          />
+        ) : (
+          <TouchableOpacity
+            onPress={isTitleEditable ? handleTitleTap : undefined}
+            activeOpacity={isTitleEditable ? 0.7 : 1}
+            disabled={!isTitleEditable}
+          >
             <Text
               variant="body"
               numberOfLines={1}
               style={{
                 color: seasonalTheme.textPrimary,
                 fontWeight: "600",
-                fontSize: 14,
-                flexShrink: 1,
+                fontSize: 15,
               }}
             >
-              {activeEntryTitle || ""}
+              {getHeaderTitle()}
             </Text>
-          </>
-        ) : (
-          <Text
-            variant="body"
-            numberOfLines={1}
-            style={{
-              color: seasonalTheme.textPrimary,
-              fontWeight: "600",
-              fontSize: 15,
-            }}
-          >
-            {getHeaderTitle()}
-          </Text>
+          </TouchableOpacity>
         )}
         {/* Model selector in header for AI chats */}
         {(activeEntryType === "ai_chat" || pathname === "/compose/chat") &&
@@ -667,7 +791,7 @@ function MainLayout() {
           >
             <Ionicons
               name="create-outline"
-              size={16}
+              size={18}
               color={seasonalTheme.textPrimary}
             />
             {isMobile ? (
@@ -675,7 +799,7 @@ function MainLayout() {
                 variant="body"
                 style={{
                   color: seasonalTheme.textPrimary,
-                  fontSize: 13,
+                  fontSize: 14,
                   marginLeft: 8,
                 }}
               >
@@ -686,7 +810,7 @@ function MainLayout() {
                 numberOfLines={1}
                 style={{
                   color: seasonalTheme.textPrimary,
-                  fontSize: 13,
+                  fontSize: 14,
                   marginLeft: 8,
                   opacity: sidebarContentOpacity,
                 }}
@@ -702,7 +826,7 @@ function MainLayout() {
           >
             <Ionicons
               name="chatbubbles-outline"
-              size={16}
+              size={18}
               color={seasonalTheme.textPrimary}
             />
             {isMobile ? (
@@ -710,7 +834,7 @@ function MainLayout() {
                 variant="body"
                 style={{
                   color: seasonalTheme.textPrimary,
-                  fontSize: 13,
+                  fontSize: 14,
                   marginLeft: 8,
                 }}
               >
@@ -721,7 +845,7 @@ function MainLayout() {
                 numberOfLines={1}
                 style={{
                   color: seasonalTheme.textPrimary,
-                  fontSize: 13,
+                  fontSize: 14,
                   marginLeft: 8,
                   opacity: sidebarContentOpacity,
                 }}
@@ -737,7 +861,7 @@ function MainLayout() {
           >
             <Ionicons
               name="timer-outline"
-              size={16}
+              size={18}
               color={seasonalTheme.textPrimary}
             />
             {isMobile ? (
@@ -745,7 +869,7 @@ function MainLayout() {
                 variant="body"
                 style={{
                   color: seasonalTheme.textPrimary,
-                  fontSize: 13,
+                  fontSize: 14,
                   marginLeft: 8,
                 }}
               >
@@ -756,7 +880,7 @@ function MainLayout() {
                 numberOfLines={1}
                 style={{
                   color: seasonalTheme.textPrimary,
-                  fontSize: 13,
+                  fontSize: 14,
                   marginLeft: 8,
                   opacity: sidebarContentOpacity,
                 }}
@@ -772,7 +896,7 @@ function MainLayout() {
           >
             <Ionicons
               name="search-outline"
-              size={16}
+              size={18}
               color={seasonalTheme.textPrimary}
             />
             {isMobile ? (
@@ -780,7 +904,7 @@ function MainLayout() {
                 variant="body"
                 style={{
                   color: seasonalTheme.textPrimary,
-                  fontSize: 13,
+                  fontSize: 14,
                   marginLeft: 8,
                   flex: 1,
                 }}
@@ -793,7 +917,7 @@ function MainLayout() {
                   numberOfLines={1}
                   style={{
                     color: seasonalTheme.textPrimary,
-                    fontSize: 13,
+                    fontSize: 14,
                     marginLeft: 8,
                     flex: 1,
                     opacity: sidebarContentOpacity,

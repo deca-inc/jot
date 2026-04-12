@@ -50,7 +50,7 @@ export interface LLMRouterDependencies {
 
 export interface LLMRouter {
   sendWebLLMMessage: (
-    modelId: string,
+    config: LlmModelConfig,
     messages: Message[],
     options?: LLMRouterSendOptions,
   ) => Promise<string>;
@@ -150,11 +150,15 @@ export function createLLMRouter(deps: LLMRouterDependencies): LLMRouter {
     delete state.webLLM;
   }
 
-  async function ensureWebLoaded(modelId: string): Promise<WebLLMEngine> {
+  async function ensureWebLoaded(
+    config: LlmModelConfig,
+  ): Promise<WebLLMEngine> {
     // If tauri is loaded, unload it first.
     if (state.tauriLLM) {
       await unloadTauri();
     }
+
+    const modelId = config.modelId;
 
     // Same model already loaded — no-op.
     if (state.webLLM && state.webLLM.modelId === modelId) {
@@ -166,8 +170,14 @@ export function createLLMRouter(deps: LLMRouterDependencies): LLMRouter {
       await unloadWeb();
     }
 
+    // Extract the MLC artifact id from the model config — web-llm needs
+    // its own id (e.g. `"Qwen2.5-1.5B-Instruct-q4f16_1-MLC"`), which is
+    // stored in `pteSource.url` for web models.
+    const mlcModelId =
+      config.pteSource.kind === "remote" ? config.pteSource.url : undefined;
+
     const engine = deps.createWebLLMEngine();
-    await engine.load({ modelId });
+    await engine.load({ modelId, mlcModelId });
     state.webLLM = { modelId, engine };
     return engine;
   }
@@ -198,7 +208,7 @@ export function createLLMRouter(deps: LLMRouterDependencies): LLMRouter {
   }
 
   async function sendWebLLMMessage(
-    modelId: string,
+    config: LlmModelConfig,
     messages: Message[],
     options?: LLMRouterSendOptions,
   ): Promise<string> {
@@ -206,8 +216,8 @@ export function createLLMRouter(deps: LLMRouterDependencies): LLMRouter {
       throw new Error("Web LLM is only available in web browsers");
     }
 
-    const engine = await ensureWebLoaded(modelId);
-    const prepared = prepareMessages(modelId, messages, options);
+    const engine = await ensureWebLoaded(config);
+    const prepared = prepareMessages(config.modelId, messages, options);
     const webMessages = toWebLLMMessages(prepared);
 
     let accumulated = "";

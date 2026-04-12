@@ -42,7 +42,19 @@ function getCreateMLCEngine(): CreateMLCEngineFn {
  * Configuration for loading a Web LLM model.
  */
 export interface WebLLMConfig {
+  /**
+   * App-level model identifier used for tracking/identity
+   * (e.g. `"web-qwen-2.5-1.5b"`).
+   */
   modelId: string;
+  /**
+   * MLC artifact id that `@mlc-ai/web-llm` understands
+   * (e.g. `"Qwen2.5-1.5B-Instruct-q4f16_1-MLC"`).
+   *
+   * When omitted, `modelId` is used directly — this keeps older callers
+   * that already pass the MLC id as `modelId` working unchanged.
+   */
+  mlcModelId?: string;
   onProgress?: (progress: {
     loaded: number;
     total: number;
@@ -299,6 +311,10 @@ class WebLLMEngineImpl implements WebLLMEngine {
   private isGenerating: boolean = false;
 
   async load(config: WebLLMConfig): Promise<void> {
+    // The MLC runtime wants its own artifact id — fall back to the app
+    // model id for callers that already pass an MLC id directly.
+    const mlcId = config.mlcModelId ?? config.modelId;
+
     // Idempotent: same model already loaded
     if (this.engine !== null && this.loadedModelId === config.modelId) {
       return;
@@ -313,12 +329,13 @@ class WebLLMEngineImpl implements WebLLMEngine {
       throw new Error("WebGPU is not available");
     }
 
-    // Pre-flight storage quota check
+    // Pre-flight storage quota check — keyed on the MLC id, which is what
+    // WEB_LLM_MODEL_SIZES uses.
     if (config.skipQuotaCheck !== true) {
-      const estimatedSize = getEstimatedModelSize(config.modelId);
+      const estimatedSize = getEstimatedModelSize(mlcId);
       if (estimatedSize == null) {
         console.warn(
-          `[webLLM] No size estimate for model "${config.modelId}" — ` +
+          `[webLLM] No size estimate for model "${mlcId}" — ` +
             "skipping storage quota check.",
         );
       } else {
@@ -345,7 +362,7 @@ class WebLLMEngineImpl implements WebLLMEngine {
 
     try {
       const createEngine = getCreateMLCEngine();
-      const engine = await createEngine(config.modelId, {
+      const engine = await createEngine(mlcId, {
         initProgressCallback: (report: InitProgressReport) => {
           config.onProgress?.({
             loaded: report.progress,

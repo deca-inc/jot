@@ -524,12 +524,18 @@ describe("Integration: resolvePersonaModel -> llmRouter end-to-end", () => {
     const resolvedId = resolvePersonaModel(persona, ALL_LLM_MODELS, "web");
     expect(resolvedId).toBe("web-llama-3.2-3b");
 
-    // Simulate the app flow: caller takes resolvedId and hands it to the router.
+    // Simulate the app flow: caller looks up the resolved config.
+    const resolvedConfig = getModelById(resolvedId as string);
+    expect(resolvedConfig).toBeDefined();
+
     const deps = buildDeps();
     const router = createLLMRouter(deps);
-    await router.sendWebLLMMessage(resolvedId as string, sampleMessages);
+    await router.sendWebLLMMessage(
+      resolvedConfig as LlmModelConfig,
+      sampleMessages,
+    );
 
-    // Router forwards the EXACT resolvedId to the engine (no remapping).
+    // Router forwards the app modelId to the engine for identity tracking.
     expect(deps.webEngine.loadCalls).toHaveLength(1);
     expect(deps.webEngine.loadCalls[0].modelId).toBe("web-llama-3.2-3b");
     // And critically, NOT the original mobile modelId.
@@ -568,9 +574,15 @@ describe("Integration: resolvePersonaModel -> llmRouter end-to-end", () => {
     const resolvedId = resolvePersonaModel(persona, ALL_LLM_MODELS, "web");
     expect(resolvedId).toBe("web-llama-3.2-3b");
 
+    const resolvedConfig = getModelById(resolvedId as string);
+    expect(resolvedConfig).toBeDefined();
+
     const deps = buildDeps();
     const router = createLLMRouter(deps);
-    await router.sendWebLLMMessage(resolvedId as string, sampleMessages);
+    await router.sendWebLLMMessage(
+      resolvedConfig as LlmModelConfig,
+      sampleMessages,
+    );
 
     expect(deps.webEngine.loadCalls[0].modelId).toBe("web-llama-3.2-3b");
   });

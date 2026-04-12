@@ -1,6 +1,6 @@
 import { useLocalSearchParams, router } from "expo-router";
 import { useCallback } from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { View, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import { useEntry } from "../../../lib/db/useEntries";
 import { useModelInfo } from "../../../lib/navigation/ModelInfoContext";
 import { ComposerScreen } from "../../../lib/screens";
@@ -14,6 +14,16 @@ export default function EntryRoute() {
     parentId?: string;
   }>();
   const entryId = Number(id);
+
+  // Clean up redundant ?id= query param that Expo Router adds on web
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    const url = new URL(window.location.href);
+    if (url.pathname.match(/\/entry\/\d+/) && url.searchParams.has("id")) {
+      url.searchParams.delete("id");
+      window.history.replaceState(null, "", url.pathname + (url.search || ""));
+    }
+  }
+
   const seasonalTheme = useSeasonalTheme();
   const entryQuery = useEntry(entryId);
   const { setModelInfo } = useModelInfo();

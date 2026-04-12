@@ -93,6 +93,7 @@ export interface Entry {
   uuid: string | null;
   type: EntryType;
   title: string;
+  titlePinned: boolean;
   blocks: Block[];
   tags: string[];
   attachments: string[];
@@ -128,6 +129,7 @@ export interface CreateEntryInput {
 
 export interface UpdateEntryInput {
   title?: string;
+  titlePinned?: boolean;
   blocks?: Block[];
   tags?: string[];
   attachments?: string[];
@@ -458,6 +460,11 @@ export class EntryRepository {
       params.push(input.title);
     }
 
+    if (input.titlePinned !== undefined) {
+      updates.push("title_pinned = ?");
+      params.push(input.titlePinned ? 1 : 0);
+    }
+
     if (input.blocks !== undefined) {
       updates.push("blocks = ?");
       params.push(JSON.stringify(input.blocks));
@@ -707,6 +714,7 @@ export class EntryRepository {
       uuid: row.uuid ?? null,
       type: row.type,
       title: row.title,
+      titlePinned: (row.title_pinned ?? 0) === 1,
       blocks: parsedBlocks,
       tags: JSON.parse(row.tags) as string[],
       attachments: JSON.parse(row.attachments) as string[],
@@ -738,6 +746,7 @@ interface EntryRow {
   uuid?: string | null;
   type: EntryType;
   title: string;
+  title_pinned?: number | null;
   blocks: string;
   tags: string;
   attachments: string;

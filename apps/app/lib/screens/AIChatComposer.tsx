@@ -9,6 +9,9 @@ import React, {
   useRef,
   useMemo,
   useEffect,
+  forwardRef,
+  useImperativeHandle,
+  memo,
 } from "react";
 import {
   View,
@@ -57,6 +60,7 @@ import type {
   RemoteModelConfig,
   CustomLocalModelConfig,
 } from "../ai/customModels";
+import type { SeasonalTheme } from "../theme/seasonalTheme";
 
 // Configure marked for simple rendering
 marked.setOptions({
@@ -88,6 +92,12 @@ export interface AIChatComposerProps {
     displayName: string;
     openSelector: () => void;
   }) => void;
+  /**
+   * Called whenever the composer's active entry id changes, including
+   * when a brand-new entry is created mid-session. Used by the route
+   * to update the header title without triggering navigation/unmount.
+   */
+  onComposerEntryId?: (id: number | undefined) => void;
 }
 
 // Stable empty arrays to avoid re-renders
@@ -154,11 +164,18 @@ const MarkdownRenderer = React.memo(
     content,
     htmlContentWidth,
     htmlTagsStyles,
+    htmlBaseStyle,
     customRenderers,
   }: {
     content: string;
     htmlContentWidth: number;
     htmlTagsStyles: any;
+    htmlBaseStyle: {
+      color: string;
+      fontFamily: string;
+      fontSize: number;
+      lineHeight: number;
+    };
     customRenderers: any;
   }) => {
     const htmlContent = React.useMemo(() => {
@@ -179,12 +196,15 @@ const MarkdownRenderer = React.memo(
         contentWidth={htmlContentWidth}
         source={{ html: htmlContent }}
         tagsStyles={htmlTagsStyles}
+        baseStyle={htmlBaseStyle}
         renderers={customRenderers}
         ignoredDomTags={["think", "audio", "button"]}
       />
     );
   },
-  (prevProps, nextProps) => prevProps.content === nextProps.content,
+  (prevProps, nextProps) =>
+    prevProps.content === nextProps.content &&
+    prevProps.htmlBaseStyle === nextProps.htmlBaseStyle,
 );
 
 /**
@@ -201,6 +221,7 @@ const AssistantMessage = React.memo(
     textSecondary,
     htmlContentWidth,
     htmlTagsStyles,
+    htmlBaseStyle,
     customRenderers,
   }: {
     block: Block;
@@ -209,6 +230,12 @@ const AssistantMessage = React.memo(
     textSecondary: string;
     htmlContentWidth: number;
     htmlTagsStyles: any;
+    htmlBaseStyle: {
+      color: string;
+      fontFamily: string;
+      fontSize: number;
+      lineHeight: number;
+    };
     customRenderers: any;
   }) => {
     const blockContent = block.type === "markdown" ? block.content : "";
@@ -282,6 +309,7 @@ const AssistantMessage = React.memo(
             content={parsed.contentAfterThink}
             htmlContentWidth={htmlContentWidth}
             htmlTagsStyles={htmlTagsStyles}
+            htmlBaseStyle={htmlBaseStyle}
             customRenderers={customRenderers}
           />
         ) : null}
@@ -292,10 +320,193 @@ const AssistantMessage = React.memo(
     return (
       prevProps.isGenerating === nextProps.isGenerating &&
       prevProps.currentResponse === nextProps.currentResponse &&
+      prevProps.htmlBaseStyle === nextProps.htmlBaseStyle &&
       prevProps.textSecondary === nextProps.textSecondary &&
       prevProps.htmlContentWidth === nextProps.htmlContentWidth
     );
   },
+);
+
+// ---------------------------------------------------------------------------
+// ChatInputBar
+// ---------------------------------------------------------------------------
+// Extracted so that keystrokes are fully local state and never cause the
+// parent (AIChatComposer) to re-render. The parent passes a *stable*
+// onSubmit callback (see handleSendMessageStable in AIChatComposer) and a
+// few props that only change on meaningful state transitions (generation
+// started/finished, mutation pending, etc). The input text itself is
+// owned by this component.
+
+export interface ChatInputBarHandle {
+  setText: (text: string) => void;
+  focus: () => void;
+}
+
+interface ChatInputBarProps {
+  onSubmit: (text: string) => void;
+  isGenerating: boolean;
+  isSubmitting: boolean;
+  createPending: boolean;
+  updatePending: boolean;
+  seasonalTheme: SeasonalTheme;
+  keyboardHeight: number;
+  insetsBottom: number;
+}
+
+const ChatInputBar = memo(
+  forwardRef<ChatInputBarHandle, ChatInputBarProps>(function ChatInputBar(
+    {
+      onSubmit,
+      isGenerating,
+      isSubmitting,
+      createPending,
+      updatePending,
+      seasonalTheme,
+      keyboardHeight,
+      insetsBottom,
+    },
+    ref,
+  ) {
+    const [text, setText] = useState("");
+    const inputRef = useRef<TextInput>(null);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        setText: (t: string) => {
+          setText(t);
+          inputRef.current?.focus();
+        },
+        focus: () => inputRef.current?.focus(),
+      }),
+      [],
+    );
+
+    const handleSend = useCallback(() => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      setText("");
+      onSubmit(trimmed);
+    }, [text, onSubmit]);
+
+    // On web, Enter submits and Shift+Enter inserts a newline.
+    const handleKeyPress = useCallback(
+      (e: { nativeEvent: { key: string; shiftKey?: boolean } }) => {
+        if (
+          Platform.OS === "web" &&
+          e.nativeEvent.key === "Enter" &&
+          !e.nativeEvent.shiftKey
+        ) {
+          // Prevent the default newline insertion
+          (e as unknown as { preventDefault: () => void }).preventDefault();
+          handleSend();
+        }
+      },
+      [handleSend],
+    );
+
+    const canSend =
+      text.trim().length > 0 &&
+      !createPending &&
+      !updatePending &&
+      !isGenerating &&
+      !isSubmitting;
+
+    const isDesktop = Platform.OS === "web" || Platform.OS === "macos";
+
+    return (
+      <View
+        style={[
+          styles.chatInputContainer,
+          {
+            backgroundColor: seasonalTheme.gradient.middle,
+            paddingBottom:
+              keyboardHeight > 0
+                ? spacingPatterns.sm
+                : insetsBottom || spacingPatterns.sm,
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: keyboardHeight,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-only CSS property
+            marginLeft: "auto" as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-only CSS property
+            marginRight: "auto" as any,
+          },
+        ]}
+      >
+        {Platform.OS === "ios" && (
+          <View
+            style={{
+              position: "absolute",
+              bottom: -200,
+              left: 0,
+              right: 0,
+              height: 200,
+              backgroundColor: seasonalTheme.gradient.middle,
+            }}
+          />
+        )}
+
+        <View style={{ flex: 1, position: "relative" }}>
+          <TextInput
+            ref={inputRef}
+            style={[
+              styles.chatInput,
+              {
+                color: seasonalTheme.textPrimary,
+                borderColor: seasonalTheme.textSecondary + "20",
+                backgroundColor: seasonalTheme.isDark
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(0,0,0,0.04)",
+                // Extra right padding on mobile to make room for the send button
+                paddingRight: isDesktop
+                  ? spacingPatterns.md
+                  : spacingPatterns.md + 36,
+              },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-only CSS property
+              { outlineStyle: "none" } as any,
+            ]}
+            placeholder="Reply..."
+            placeholderTextColor={seasonalTheme.textSecondary + "80"}
+            value={text}
+            onChangeText={setText}
+            multiline
+            editable={!isGenerating}
+            onSubmitEditing={handleSend}
+            onKeyPress={handleKeyPress}
+            returnKeyType="send"
+            blurOnSubmit={false}
+          />
+          {/* Mobile-only send button inside the input */}
+          {!isDesktop && (
+            <TouchableOpacity
+              onPress={handleSend}
+              disabled={!canSend}
+              style={[
+                styles.sendButtonInline,
+                {
+                  backgroundColor: canSend
+                    ? seasonalTheme.textPrimary
+                    : seasonalTheme.textSecondary + "30",
+                },
+              ]}
+            >
+              <Ionicons
+                name="arrow-up"
+                size={18}
+                color={
+                  canSend
+                    ? seasonalTheme.gradient.middle
+                    : seasonalTheme.textSecondary + "60"
+                }
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  }),
 );
 
 export function AIChatComposer({
@@ -305,6 +516,7 @@ export function AIChatComposer({
   onCancel,
   hideBackButton = false,
   onModelInfo,
+  onComposerEntryId,
 }: AIChatComposerProps) {
   const seasonalTheme = useSeasonalTheme();
   const insets = useSafeAreaInsets();
@@ -614,6 +826,21 @@ export function AIChatComposer({
   const currentEntryIdRef = useRef<number | undefined>(currentEntryId);
   currentEntryIdRef.current = currentEntryId;
 
+  // Notify parent (router / layout) when our entry id changes so the
+  // header title can update. We intentionally don't call `onSave` for new
+  // AI chat entries (it would navigate and unmount mid-response), but we
+  // still want the layout to know about the entry so it can show its title.
+  const onComposerEntryIdRef = useRef(onComposerEntryId);
+  onComposerEntryIdRef.current = onComposerEntryId;
+  useEffect(() => {
+    onComposerEntryIdRef.current?.(currentEntryId);
+  }, [currentEntryId]);
+  useEffect(() => {
+    return () => {
+      onComposerEntryIdRef.current?.(undefined);
+    };
+  }, []);
+
   // React Query hooks - load entry first
   const { data: entry } = useEntry(currentEntryId);
 
@@ -826,13 +1053,13 @@ export function AIChatComposer({
     }
   }, [entry?.id]);
 
-  // Local state for input only
-  const [newMessage, setNewMessage] = useState("");
+  // Local state for submission only — input text is owned by ChatInputBar
+  // so keystrokes never re-render this component.
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Refs for UI only
   const flatListRef = useRef<FlatList<Block>>(null);
-  const chatInputRef = useRef<TextInput>(null);
+  const chatInputBarRef = useRef<ChatInputBarHandle>(null);
 
   // Keyboard state for proper input positioning
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -903,22 +1130,37 @@ export function AIChatComposer({
   }, []);
 
   // HTML rendering styles - memoized for performance
+  // Serif font for content readability; sans-serif stays for UI/nav elsewhere.
+  const contentFont = "Georgia, 'Iowan Old Style', 'Palatino Linotype', serif";
+
+  // Vertical rhythm: 4px baseline grid.
+  // Body 17px × 1.7 ≈ 28px line-height. All margins multiples of 4.
+  const htmlBaseStyle = useMemo(
+    () => ({
+      color: seasonalTheme.textPrimary,
+      fontFamily: contentFont,
+      fontSize: 17,
+      lineHeight: 1.7,
+    }),
+    [seasonalTheme.textPrimary],
+  );
+
   const htmlTagsStyles = useMemo(
     () => ({
       body: {
         color: seasonalTheme.textPrimary,
-        fontSize: 15,
-        lineHeight: 21,
+        fontFamily: contentFont,
+        fontSize: 17,
         margin: 0,
         padding: 0,
         backgroundColor: "transparent",
       },
       p: {
         color: seasonalTheme.textPrimary,
-        fontSize: 15,
-        lineHeight: 21,
+        fontFamily: contentFont,
+        fontSize: 17,
         marginTop: 0,
-        marginBottom: 8,
+        marginBottom: 16, // 4 × 4
       },
       b: { color: seasonalTheme.textPrimary, fontWeight: "bold" as const },
       strong: {
@@ -943,49 +1185,50 @@ export function AIChatComposer({
         color: seasonalTheme.textPrimary,
         textDecorationLine: "line-through" as const,
       },
+      // Heading scale: 24 / 20 / 17 — each step ~1.2x
       h1: {
         color: seasonalTheme.textPrimary,
-        fontSize: 20,
-        lineHeight: 26,
+        fontFamily: contentFont,
+        fontSize: 24,
         fontWeight: "bold" as const,
-        marginTop: 0,
-        marginBottom: 8,
+        marginTop: 8, // 2 × 4
+        marginBottom: 12, // 3 × 4
       },
       h2: {
         color: seasonalTheme.textPrimary,
-        fontSize: 18,
-        lineHeight: 24,
+        fontFamily: contentFont,
+        fontSize: 20,
         fontWeight: "bold" as const,
-        marginTop: 0,
-        marginBottom: 8,
+        marginTop: 8,
+        marginBottom: 8, // 2 × 4
       },
       h3: {
         color: seasonalTheme.textPrimary,
-        fontSize: 16,
-        lineHeight: 22,
-        fontWeight: "bold" as const,
-        marginTop: 0,
-        marginBottom: 8,
+        fontFamily: contentFont,
+        fontSize: 17,
+        fontWeight: "600" as const,
+        marginTop: 8,
+        marginBottom: 4, // 1 × 4
       },
       ul: {
         color: seasonalTheme.textPrimary,
         marginLeft: 0,
-        paddingLeft: 18,
+        paddingLeft: 20,
         marginTop: 0,
-        marginBottom: 8,
+        marginBottom: 16, // 4 × 4
       },
       ol: {
         color: seasonalTheme.textPrimary,
         marginLeft: 0,
-        paddingLeft: 18,
+        paddingLeft: 20,
         marginTop: 0,
-        marginBottom: 8,
+        marginBottom: 16,
       },
       li: {
         color: seasonalTheme.textPrimary,
-        fontSize: 15,
-        lineHeight: 21,
-        marginBottom: 4,
+        fontFamily: contentFont,
+        fontSize: 17,
+        marginBottom: 4, // 1 × 4
         paddingLeft: 4,
       },
       // Code element base styles (will be overridden by renderer for inline vs block)
@@ -1011,12 +1254,13 @@ export function AIChatComposer({
       },
       blockquote: {
         color: seasonalTheme.textSecondary,
+        fontFamily: contentFont,
         borderLeftWidth: 4,
         borderLeftColor: seasonalTheme.textSecondary + "40",
-        paddingLeft: 12,
+        paddingLeft: 14,
         marginLeft: 0,
         marginTop: 0,
-        marginBottom: 8,
+        marginBottom: 10,
         fontStyle: "italic" as const,
       },
       // Syntax highlighting colors - span elements
@@ -1074,11 +1318,12 @@ export function AIChatComposer({
   const aiSendMessageRef = useRef(aiSendMessage);
   aiSendMessageRef.current = aiSendMessage;
 
-  const handleSendMessage = useCallback(async () => {
-    if (!newMessage.trim() || isSubmitting || isGenerating) return;
+  // Latest submit implementation. We store it in a ref and expose a stable
+  // wrapper so ChatInputBar (a memoized child) never gets a new onSubmit
+  // prop and therefore never re-renders due to parent renders.
+  const handleSendMessageImpl = async (messageText: string) => {
+    if (!messageText || isSubmitting || isGenerating) return;
 
-    const messageText = newMessage.trim();
-    setNewMessage("");
     setIsSubmitting(true);
 
     try {
@@ -1134,16 +1379,14 @@ export function AIChatComposer({
       );
       setIsSubmitting(false);
     }
-  }, [
-    newMessage,
-    currentEntryId,
-    displayedBlocks,
-    createEntry,
-    updateEntry,
-    isGenerating,
-    scrollToBottom,
-    isSubmitting,
-  ]);
+  };
+  const handleSendMessageImplRef = useRef(handleSendMessageImpl);
+  handleSendMessageImplRef.current = handleSendMessageImpl;
+
+  // Stable wrapper — identity never changes so ChatInputBar stays memoized.
+  const handleSendMessage = useCallback((messageText: string) => {
+    void handleSendMessageImplRef.current(messageText);
+  }, []);
 
   // Render item for FlatList - memoized to prevent unnecessary re-renders
   // Parsing happens inside the memoized components so only changed messages are re-parsed
@@ -1176,6 +1419,7 @@ export function AIChatComposer({
           textSecondary={seasonalTheme.textSecondary}
           htmlContentWidth={htmlContentWidth}
           htmlTagsStyles={htmlTagsStyles}
+          htmlBaseStyle={htmlBaseStyle}
           customRenderers={customRenderers}
         />
       );
@@ -1217,8 +1461,7 @@ export function AIChatComposer({
   );
 
   const handlePromptSuggestionPress = useCallback((suggestion: string) => {
-    setNewMessage(suggestion);
-    chatInputRef.current?.focus();
+    chatInputBarRef.current?.setText(suggestion);
   }, []);
 
   const ListEmptyComponent = useCallback(() => {
@@ -1945,97 +2188,17 @@ export function AIChatComposer({
       />
 
       {/* Input - positioned at the bottom, moves up with keyboard */}
-      <View
-        style={[
-          styles.chatInputContainer,
-          {
-            backgroundColor: seasonalTheme.gradient.middle,
-            paddingBottom:
-              keyboardHeight > 0
-                ? spacingPatterns.sm
-                : insets.bottom || spacingPatterns.sm,
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: keyboardHeight,
-          },
-        ]}
-      >
-        {/* iOS: Filler element to cover gap between input and keyboard */}
-        {Platform.OS === "ios" && (
-          <View
-            style={{
-              position: "absolute",
-              bottom: -200, // Extend well below the input
-              left: 0,
-              right: 0,
-              height: 200,
-              backgroundColor: seasonalTheme.gradient.middle,
-            }}
-          />
-        )}
-
-        <TextInput
-          ref={chatInputRef}
-          style={[
-            styles.chatInput,
-            {
-              color: seasonalTheme.textPrimary,
-              borderColor: seasonalTheme.textSecondary + "20",
-              backgroundColor: seasonalTheme.isDark
-                ? "rgba(255,255,255,0.06)"
-                : "rgba(0,0,0,0.04)",
-            },
-            { outlineStyle: "none" } as any, // web-only: remove browser focus outline
-          ]}
-          placeholder="Type your message..."
-          placeholderTextColor={seasonalTheme.textSecondary}
-          value={newMessage}
-          onChangeText={setNewMessage}
-          multiline
-          editable={!isGenerating}
-          onSubmitEditing={handleSendMessage}
-          returnKeyType="send"
-          blurOnSubmit={false}
-        />
-        <TouchableOpacity
-          onPress={handleSendMessage}
-          disabled={
-            !newMessage.trim() ||
-            createEntry.isPending ||
-            updateEntry.isPending ||
-            isGenerating ||
-            isSubmitting
-          }
-          style={[
-            styles.sendButton,
-            {
-              backgroundColor:
-                newMessage.trim() &&
-                !createEntry.isPending &&
-                !updateEntry.isPending &&
-                !isGenerating &&
-                !isSubmitting
-                  ? seasonalTheme.chipBg
-                  : seasonalTheme.textSecondary + "20",
-            },
-          ]}
-        >
-          <Ionicons
-            name="send"
-            size={20}
-            color={
-              newMessage.trim() &&
-              !createEntry.isPending &&
-              !updateEntry.isPending &&
-              !isGenerating &&
-              !isSubmitting
-                ? seasonalTheme.chipText || seasonalTheme.textPrimary
-                : seasonalTheme.textSecondary + "80"
-            }
-          />
-        </TouchableOpacity>
-      </View>
+      <ChatInputBar
+        ref={chatInputBarRef}
+        onSubmit={handleSendMessage}
+        isGenerating={isGenerating}
+        isSubmitting={isSubmitting}
+        createPending={createEntry.isPending}
+        updatePending={updateEntry.isPending}
+        seasonalTheme={seasonalTheme}
+        keyboardHeight={keyboardHeight}
+        insetsBottom={insets.bottom}
+      />
 
       {/* Model Management Modal */}
       <ModelManagementModal
@@ -2090,6 +2253,9 @@ const styles = StyleSheet.create({
   },
   chatMessagesContent: {
     paddingHorizontal: spacingPatterns.screen,
+    maxWidth: 768,
+    width: "100%",
+    alignSelf: "center",
     // paddingTop and paddingBottom are dynamic based on safe area insets
   },
   emptyChat: {
@@ -2127,21 +2293,22 @@ const styles = StyleSheet.create({
   },
   assistantMessageFullWidth: {
     marginBottom: spacingPatterns.md,
+    paddingRight: 32,
     width: "100%",
   },
   messageContent: {
     maxWidth: "80%",
     padding: spacingPatterns.md,
     borderRadius: borderRadius.lg,
+    marginLeft: 32,
   },
   chatInputContainer: {
     flexDirection: "row",
-    alignItems: "center",
-    padding: spacingPatterns.md,
+    alignItems: "flex-end",
+    paddingHorizontal: spacingPatterns.md,
     paddingTop: spacingPatterns.sm,
-    gap: spacingPatterns.sm,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0, 0, 0, 0.1)",
+    maxWidth: 768,
+    width: "100%",
     // Note: position, left, right, bottom are applied dynamically
   },
   chatInput: {
@@ -2150,13 +2317,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingPatterns.md,
     paddingVertical: spacingPatterns.sm,
     fontSize: 16,
+    lineHeight: 22,
     borderWidth: 1,
-    maxHeight: 100,
+    maxHeight: 120,
+    minHeight: 44,
   },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.full,
+  sendButtonInline: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },

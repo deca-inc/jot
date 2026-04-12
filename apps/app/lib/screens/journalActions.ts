@@ -165,6 +165,7 @@ export function saveJournalContentFireAndForget(
   htmlContent: string,
   title: string,
   context: JournalActionContext,
+  options?: { titlePinned?: boolean },
 ): void {
   const { updateEntry, onEntryUpdated } = context;
 
@@ -174,7 +175,8 @@ export function saveJournalContentFireAndForget(
   }
 
   const input: UpdateEntryInput = {
-    title: prepared.finalTitle,
+    // When the user has pinned a custom title, don't overwrite it.
+    title: options?.titlePinned ? undefined : prepared.finalTitle,
     blocks: prepared.blocks,
   };
 
@@ -208,6 +210,8 @@ export interface SaveJournalContentOptions {
    * Default: false (skips cache update during editing to prevent editor issues)
    */
   updateCache?: boolean;
+  /** When true, the title was user-pinned and should not be overwritten. */
+  titlePinned?: boolean;
 }
 
 /**
@@ -226,7 +230,7 @@ export async function saveJournalContent(
   options?: SaveJournalContentOptions,
 ): Promise<void> {
   const { updateEntry, onEntryUpdated } = context;
-  const { updateCache = false } = options ?? {};
+  const { updateCache = false, titlePinned = false } = options ?? {};
 
   try {
     const prepared = prepareJournalContent(htmlContent, title);
@@ -235,7 +239,7 @@ export async function saveJournalContent(
     }
 
     const input: UpdateEntryInput = {
-      title: prepared.finalTitle,
+      title: titlePinned ? undefined : prepared.finalTitle,
       blocks: prepared.blocks,
     };
 

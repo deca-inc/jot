@@ -12,7 +12,10 @@
  * Configuration for loading a Web LLM model.
  */
 export interface WebLLMConfig {
+  /** App-level model identifier. */
   modelId: string;
+  /** MLC artifact id for @mlc-ai/web-llm. Falls back to modelId when omitted. */
+  mlcModelId?: string;
   onProgress?: (progress: {
     loaded: number;
     total: number;

@@ -811,7 +811,7 @@ export function UnifiedModelProvider({
           try {
             if (category === "web-llm") {
               return await llmRouter.sendWebLLMMessage(
-                selectedModelId,
+                targetConfig,
                 messages,
                 options,
               );

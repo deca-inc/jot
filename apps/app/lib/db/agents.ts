@@ -1,4 +1,5 @@
 import { SQLiteDatabase } from "expo-sqlite";
+import { useMemo } from "react";
 import { useDatabase } from "./DatabaseProvider";
 
 // =============================================================================
@@ -241,16 +242,18 @@ export class AgentRepository {
 
 export function useAgents() {
   const db = useDatabase();
-  const repo = new AgentRepository(db);
-
-  return {
-    create: (input: CreateAgentInput) => repo.create(input),
-    getById: (id: number) => repo.getById(id),
-    getAll: () => repo.getAll(),
-    getDefault: () => repo.getDefault(),
-    getByModelId: (modelId: string) => repo.getByModelId(modelId),
-    update: (id: number, input: UpdateAgentInput) => repo.update(id, input),
-    delete: (id: number) => repo.delete(id),
-    setDefault: (id: number) => repo.setDefault(id),
-  };
+  // Memoize keyed on `db` so the returned object is stable across renders.
+  return useMemo(() => {
+    const repo = new AgentRepository(db);
+    return {
+      create: (input: CreateAgentInput) => repo.create(input),
+      getById: (id: number) => repo.getById(id),
+      getAll: () => repo.getAll(),
+      getDefault: () => repo.getDefault(),
+      getByModelId: (modelId: string) => repo.getByModelId(modelId),
+      update: (id: number, input: UpdateAgentInput) => repo.update(id, input),
+      delete: (id: number) => repo.delete(id),
+      setDefault: (id: number) => repo.setDefault(id),
+    };
+  }, [db]);
 }

@@ -6,7 +6,7 @@ import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useState, useEffect, useRef } from "react";
-import { AppState, LogBox } from "react-native";
+import { AppState, LogBox, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { UnifiedModelProvider } from "../lib/ai/UnifiedModelProvider";
 import { ConditionalPostHogProvider } from "../lib/analytics/PostHogProvider";
@@ -52,6 +52,25 @@ LogBox.ignoreLogs([
 ]);
 
 SplashScreen.preventAutoHideAsync();
+
+// On web (including the Tauri desktop webview) the app doesn't ship a
+// custom font, so text falls back to the browser default — which in
+// WKWebView is a serif (Times). Inject a system-font stack once at
+// startup so everything renders in SF Pro / Segoe UI / Roboto depending
+// on OS. Native (iOS/Android) already picks a nice system font, so skip.
+if (Platform.OS === "web" && typeof document !== "undefined") {
+  const style = document.createElement("style");
+  style.setAttribute("data-jot-font-stack", "");
+  style.textContent = `
+    html, body, #root, button, input, textarea, select {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

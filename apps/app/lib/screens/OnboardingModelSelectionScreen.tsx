@@ -19,6 +19,7 @@ import { usePlatformModels } from "../ai/usePlatformModels";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
 import { Text } from "../components";
 import { useModelSettings } from "../db/modelSettings";
+import { useIsWideScreen } from "../hooks/useIsWideScreen";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -57,6 +58,7 @@ export function OnboardingModelSelectionScreen({
     hasPlatformLLM,
     isLoading: platformModelsLoading,
   } = usePlatformModels();
+  const isWide = useIsWideScreen();
 
   const [compatibleModelIds, setCompatibleModelIds] = useState<string[]>([]);
   const [recommendedModelId, setRecommendedModelId] = useState<string>("");
@@ -250,231 +252,241 @@ export function OnboardingModelSelectionScreen({
     >
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, isWide && styles.contentWide]}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text
-            variant="h1"
-            style={[styles.title, { color: seasonalTheme.textPrimary }]}
-          >
-            Choose your AI model
-          </Text>
-          <Text
-            variant="body"
-            style={[styles.subtitle, { color: seasonalTheme.textSecondary }]}
-          >
-            {hasPlatformLLM
-              ? isLowEndDevice
-                ? "Your device has built-in AI which works great without downloading anything."
-                : "Your device has built-in AI available. For best quality, we recommend downloading a model."
-              : "These models are compatible with your device. We recommend the one selected below."}
-          </Text>
-          <Text
-            variant="body"
-            style={[
-              styles.subtitle,
-              {
-                color: seasonalTheme.textSecondary,
-                marginTop: spacingPatterns.xs,
-              },
-            ]}
-          >
-            You can change this later in settings.
-          </Text>
-        </View>
-
-        {/* Model list */}
-        <View style={styles.modelList}>
-          {/* Platform models (built-in) */}
-          {platformLLMs.map((platformModel) => {
-            const isSelected = platformModel.modelId === selectedModelId;
-            // Only recommend platform model for low-end devices
-            const isPlatformRecommended = isLowEndDevice;
-
-            return (
-              <TouchableOpacity
-                key={platformModel.modelId}
-                onPress={() => {
-                  setSelectedModelId(platformModel.modelId);
-                }}
-                disabled={isDownloading}
-                style={[
-                  styles.modelCard,
-                  {
-                    backgroundColor: seasonalTheme.cardBg,
-                    borderColor: isSelected
-                      ? theme.colors.accent
-                      : seasonalTheme.textSecondary + "30",
-                    borderWidth: isSelected ? 2 : 1,
-                    opacity: isDownloading ? 0.6 : 1,
-                  },
-                ]}
-              >
-                <View style={styles.modelCardHeader}>
-                  <View style={styles.modelCardTitle}>
-                    <Text
-                      variant="h4"
-                      style={[
-                        styles.modelName,
-                        { color: seasonalTheme.textPrimary },
-                      ]}
-                    >
-                      {platformModel.displayName}
-                    </Text>
-                    {isPlatformRecommended && (
-                      <View
-                        style={[
-                          styles.recommendedBadge,
-                          { backgroundColor: theme.colors.accentLight },
-                        ]}
-                      >
-                        <Text
-                          variant="caption"
-                          style={[
-                            styles.recommendedText,
-                            { color: theme.colors.accent },
-                          ]}
-                        >
-                          Recommended
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  {isSelected && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={24}
-                      color={theme.colors.accent}
-                    />
-                  )}
-                </View>
-
-                <Text
-                  variant="caption"
-                  style={[
-                    styles.modelSize,
-                    { color: seasonalTheme.textSecondary },
-                  ]}
-                >
-                  Built-in • May require small download
-                </Text>
-                <Text
-                  variant="body"
-                  style={[
-                    styles.modelDescription,
-                    { color: seasonalTheme.textSecondary },
-                  ]}
-                >
-                  Uses your device's built-in AI. Fast and private.
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-
-          {/* Section header for downloadable models if platform models exist */}
-          {hasPlatformLLM && compatibleModels.length > 0 && (
+        <View style={isWide ? styles.innerWide : undefined}>
+          {/* Header */}
+          <View style={styles.header}>
             <Text
-              variant="caption"
+              variant={isWide ? "h2" : "h1"}
+              style={[styles.title, { color: seasonalTheme.textPrimary }]}
+            >
+              Choose your AI model
+            </Text>
+            <Text
+              variant={isWide ? "bodySmall" : "body"}
+              style={[styles.subtitle, { color: seasonalTheme.textSecondary }]}
+            >
+              {hasPlatformLLM
+                ? isLowEndDevice
+                  ? "Your device has built-in AI which works great without downloading anything."
+                  : "Your device has built-in AI available. For best quality, we recommend downloading a model."
+                : "These models are compatible with your device. We recommend the one selected below."}
+            </Text>
+            <Text
+              variant={isWide ? "bodySmall" : "body"}
               style={[
-                styles.sectionLabel,
-                { color: seasonalTheme.textSecondary },
+                styles.subtitle,
+                {
+                  color: seasonalTheme.textSecondary,
+                  marginTop: spacingPatterns.xs,
+                },
               ]}
             >
-              DOWNLOADABLE MODELS
+              You can change this later in settings.
             </Text>
-          )}
+          </View>
 
-          {/* Downloadable models */}
-          {compatibleModels.map((model) => {
-            const isSelected = model.modelId === selectedModelId;
-            // Recommend downloadable model if: no platform LLM, or device is not low-end
-            const isRecommended =
-              model.modelId === recommendedModelId &&
-              (!hasPlatformLLM || !isLowEndDevice);
-            const size = MODEL_SIZES[model.modelId] || 0;
+          {/* Model list */}
+          <View style={styles.modelList}>
+            {/* Platform models (built-in) */}
+            {platformLLMs.map((platformModel) => {
+              const isSelected = platformModel.modelId === selectedModelId;
+              // Only recommend platform model for low-end devices
+              const isPlatformRecommended = isLowEndDevice;
 
-            return (
-              <TouchableOpacity
-                key={model.modelId}
-                onPress={() => {
-                  setSelectedModelId(model.modelId);
-                }}
-                disabled={isDownloading}
-                style={[
-                  styles.modelCard,
-                  {
-                    backgroundColor: seasonalTheme.cardBg,
-                    borderColor: isSelected
-                      ? theme.colors.accent
-                      : seasonalTheme.textSecondary + "30",
-                    borderWidth: isSelected ? 2 : 1,
-                    opacity: isDownloading ? 0.6 : 1,
-                  },
-                ]}
-              >
-                {/* Selection indicator */}
-                <View style={styles.modelCardHeader}>
-                  <View style={styles.modelCardTitle}>
-                    <Text
-                      variant="h4"
-                      style={[
-                        styles.modelName,
-                        { color: seasonalTheme.textPrimary },
-                      ]}
-                    >
-                      {model.displayName}
-                    </Text>
-                    {isRecommended && (
-                      <View
+              return (
+                <TouchableOpacity
+                  key={platformModel.modelId}
+                  onPress={() => {
+                    setSelectedModelId(platformModel.modelId);
+                  }}
+                  disabled={isDownloading}
+                  style={[
+                    styles.modelCard,
+                    {
+                      backgroundColor: seasonalTheme.cardBg,
+                      borderColor: isSelected
+                        ? theme.colors.accent
+                        : seasonalTheme.textSecondary + "30",
+                      borderWidth: isSelected ? 2 : 1,
+                      opacity: isDownloading ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  <View style={styles.modelCardHeader}>
+                    <View style={styles.modelCardTitle}>
+                      <Text
+                        variant={isWide ? "body" : "h4"}
                         style={[
-                          styles.recommendedBadge,
-                          { backgroundColor: theme.colors.accentLight },
+                          styles.modelName,
+                          {
+                            color: seasonalTheme.textPrimary,
+                            fontWeight: "600",
+                          },
                         ]}
+                        numberOfLines={1}
                       >
-                        <Text
-                          variant="caption"
+                        {platformModel.displayName}
+                      </Text>
+                      {isPlatformRecommended && (
+                        <View
                           style={[
-                            styles.recommendedText,
-                            { color: theme.colors.accent },
+                            styles.recommendedBadge,
+                            { backgroundColor: theme.colors.accentLight },
                           ]}
                         >
-                          Recommended
-                        </Text>
-                      </View>
+                          <Text
+                            variant="caption"
+                            style={[
+                              styles.recommendedText,
+                              { color: theme.colors.accent },
+                            ]}
+                          >
+                            Recommended
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={isWide ? 20 : 24}
+                        color={theme.colors.accent}
+                      />
                     )}
                   </View>
-                  {isSelected && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={24}
-                      color={theme.colors.accent}
-                    />
-                  )}
-                </View>
 
-                {/* Model info */}
-                <Text
-                  variant="caption"
+                  <Text
+                    variant="caption"
+                    style={[
+                      styles.modelSize,
+                      { color: seasonalTheme.textSecondary },
+                    ]}
+                  >
+                    Built-in • May require small download
+                  </Text>
+                  <Text
+                    variant={isWide ? "bodySmall" : "body"}
+                    style={[
+                      styles.modelDescription,
+                      { color: seasonalTheme.textSecondary },
+                    ]}
+                  >
+                    Uses your device's built-in AI. Fast and private.
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Section header for downloadable models if platform models exist */}
+            {hasPlatformLLM && compatibleModels.length > 0 && (
+              <Text
+                variant="caption"
+                style={[
+                  styles.sectionLabel,
+                  { color: seasonalTheme.textSecondary },
+                ]}
+              >
+                DOWNLOADABLE MODELS
+              </Text>
+            )}
+
+            {/* Downloadable models */}
+            {compatibleModels.map((model) => {
+              const isSelected = model.modelId === selectedModelId;
+              // Recommend downloadable model if: no platform LLM, or device is not low-end
+              const isRecommended =
+                model.modelId === recommendedModelId &&
+                (!hasPlatformLLM || !isLowEndDevice);
+              const size = MODEL_SIZES[model.modelId] || 0;
+
+              return (
+                <TouchableOpacity
+                  key={model.modelId}
+                  onPress={() => {
+                    setSelectedModelId(model.modelId);
+                  }}
+                  disabled={isDownloading}
                   style={[
-                    styles.modelSize,
-                    { color: seasonalTheme.textSecondary },
+                    styles.modelCard,
+                    {
+                      backgroundColor: seasonalTheme.cardBg,
+                      borderColor: isSelected
+                        ? theme.colors.accent
+                        : seasonalTheme.textSecondary + "30",
+                      borderWidth: isSelected ? 2 : 1,
+                      opacity: isDownloading ? 0.6 : 1,
+                    },
                   ]}
                 >
-                  {model.size} • {formatSize(size)} download
-                </Text>
-                <Text
-                  variant="body"
-                  style={[
-                    styles.modelDescription,
-                    { color: seasonalTheme.textSecondary },
-                  ]}
-                >
-                  {model.description}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                  {/* Selection indicator */}
+                  <View style={styles.modelCardHeader}>
+                    <View style={styles.modelCardTitle}>
+                      <Text
+                        variant={isWide ? "body" : "h4"}
+                        style={[
+                          styles.modelName,
+                          {
+                            color: seasonalTheme.textPrimary,
+                            fontWeight: "600",
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {model.displayName}
+                      </Text>
+                      {isRecommended && (
+                        <View
+                          style={[
+                            styles.recommendedBadge,
+                            { backgroundColor: theme.colors.accentLight },
+                          ]}
+                        >
+                          <Text
+                            variant="caption"
+                            style={[
+                              styles.recommendedText,
+                              { color: theme.colors.accent },
+                            ]}
+                          >
+                            Recommended
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={isWide ? 20 : 24}
+                        color={theme.colors.accent}
+                      />
+                    )}
+                  </View>
+
+                  {/* Model info */}
+                  <Text
+                    variant="caption"
+                    style={[
+                      styles.modelSize,
+                      { color: seasonalTheme.textSecondary },
+                    ]}
+                  >
+                    {model.size} • {formatSize(size)} download
+                  </Text>
+                  <Text
+                    variant={isWide ? "bodySmall" : "body"}
+                    style={[
+                      styles.modelDescription,
+                      { color: seasonalTheme.textSecondary },
+                    ]}
+                  >
+                    {model.description}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
 
@@ -489,49 +501,60 @@ export function OnboardingModelSelectionScreen({
           },
         ]}
       >
-        <TouchableOpacity
-          onPress={handleContinue}
-          disabled={!hasSelection || isDownloading}
-          style={[
-            styles.downloadButton,
-            {
-              backgroundColor: isDownloading
-                ? seasonalTheme.textSecondary + "40"
-                : theme.colors.accent,
-              opacity: !hasSelection || isDownloading ? 0.6 : 1,
-            },
-          ]}
-          activeOpacity={0.8}
-        >
-          {isDownloading ? (
-            <ActivityIndicator size="small" color={seasonalTheme.textPrimary} />
-          ) : (
+        <View style={isWide ? styles.footerWide : undefined}>
+          <TouchableOpacity
+            onPress={handleContinue}
+            disabled={!hasSelection || isDownloading}
+            style={[
+              styles.downloadButton,
+              isWide && styles.downloadButtonWide,
+              {
+                backgroundColor: isDownloading
+                  ? seasonalTheme.textSecondary + "40"
+                  : theme.colors.accent,
+                opacity: !hasSelection || isDownloading ? 0.6 : 1,
+              },
+            ]}
+            activeOpacity={0.8}
+          >
+            {isDownloading ? (
+              <ActivityIndicator
+                size="small"
+                color={seasonalTheme.textPrimary}
+              />
+            ) : (
+              <Text
+                variant="body"
+                style={[
+                  styles.buttonText,
+                  isWide && styles.buttonTextWide,
+                  { color: seasonalTheme.textPrimary },
+                ]}
+              >
+                {isPlatformModelSelected ? "Continue" : "Start Download"}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Skip button - always available */}
+          <TouchableOpacity
+            onPress={onContinue}
+            disabled={isDownloading}
+            style={styles.skipButton}
+            activeOpacity={0.7}
+          >
             <Text
               variant="body"
-              style={[styles.buttonText, { color: seasonalTheme.textPrimary }]}
+              style={[
+                styles.skipButtonText,
+                isWide && styles.skipButtonTextWide,
+                { color: seasonalTheme.textSecondary },
+              ]}
             >
-              {isPlatformModelSelected ? "Continue" : "Start Download"}
+              Skip for now
             </Text>
-          )}
-        </TouchableOpacity>
-
-        {/* Skip button - always available */}
-        <TouchableOpacity
-          onPress={onContinue}
-          disabled={isDownloading}
-          style={styles.skipButton}
-          activeOpacity={0.7}
-        >
-          <Text
-            variant="body"
-            style={[
-              styles.skipButtonText,
-              { color: seasonalTheme.textSecondary },
-            ]}
-          >
-            Skip for now
-          </Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -553,6 +576,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingPatterns.screen,
     paddingTop: spacingPatterns.xl,
     paddingBottom: spacingPatterns.md,
+  },
+  contentWide: {
+    alignItems: "center",
+  },
+  innerWide: {
+    maxWidth: 520,
+    width: "100%",
   },
   header: {
     marginBottom: spacingPatterns.xl,
@@ -588,7 +618,7 @@ const styles = StyleSheet.create({
   modelCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
     marginBottom: spacingPatterns.xs,
   },
   modelCardTitle: {
@@ -596,14 +626,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacingPatterns.sm,
+    minWidth: 0,
   },
   modelName: {
-    flex: 0,
+    flexShrink: 1,
   },
   recommendedBadge: {
     paddingHorizontal: spacingPatterns.sm,
     paddingVertical: spacingPatterns.xxs,
     borderRadius: borderRadius.sm,
+    flexShrink: 0,
   },
   recommendedText: {
     fontWeight: "600",
@@ -620,6 +652,11 @@ const styles = StyleSheet.create({
     paddingTop: spacingPatterns.md,
     borderTopWidth: 1,
   },
+  footerWide: {
+    maxWidth: 520,
+    alignSelf: "center",
+    width: "100%",
+  },
   downloadButton: {
     width: "100%",
     paddingVertical: spacingPatterns.md,
@@ -628,10 +665,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  downloadButtonWide: {
+    paddingVertical: spacingPatterns.sm,
+  },
   buttonText: {
     fontSize: 17,
     fontWeight: "600",
     letterSpacing: 0.2,
+  },
+  buttonTextWide: {
+    fontSize: 15,
   },
   skipButton: {
     marginTop: spacingPatterns.xs,
@@ -641,5 +684,8 @@ const styles = StyleSheet.create({
   skipButtonText: {
     fontSize: 15,
     fontWeight: "500",
+  },
+  skipButtonTextWide: {
+    fontSize: 14,
   },
 });

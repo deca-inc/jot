@@ -40,7 +40,7 @@ export async function renameEntry(
   try {
     await context.updateEntry.mutateAsync({
       id: entryId,
-      input: { title: newTitle.trim() },
+      input: { title: newTitle.trim(), titlePinned: true },
     });
   } catch (error) {
     console.error("[entryActions] Error renaming entry:", error);

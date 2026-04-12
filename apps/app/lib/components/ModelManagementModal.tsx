@@ -25,11 +25,9 @@ import {
   ensureCustomModelPresent,
   deleteCustomModel,
 } from "../ai/modelManager";
-import { isDesktopLLMModelId } from "../ai/modelTypeGuards";
+import { isDesktopLLMModelId, isWebLLMModelId } from "../ai/modelTypeGuards";
 import { getAvailablePersonas } from "../ai/personaAvailability";
 import { getAvailableModelsForPlatform } from "../ai/platformFilter";
-import { isTauri } from "../platform/isTauri";
-import { ensureDesktopModelDownloaded } from "../platform/tauriDownload";
 import { getCurrentPlatform } from "../ai/platformFilter";
 import { ALL_STT_MODELS } from "../ai/sttConfig";
 import { useUnifiedModel } from "../ai/UnifiedModelProvider";
@@ -41,6 +39,9 @@ import {
 import { type Agent, type ThinkMode, useAgents } from "../db/agents";
 import { useModelSettings } from "../db/modelSettings";
 import { useCustomModels } from "../db/useCustomModels";
+import { isTauri } from "../platform/isTauri";
+import { ensureDesktopModelDownloaded } from "../platform/tauriDownload";
+import { createWebLLMEngine } from "../platform/webLLM";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -346,6 +347,40 @@ export function ModelManagementModal({
             modelType: "llm",
             downloadedAt: Date.now(),
             ptePath: destPath,
+            tokenizerPath: undefined,
+            tokenizerConfigPath: undefined,
+            size: MODEL_SIZES[model.modelId] || 0,
+          });
+        } else if (isWebLLMModelId(model.modelId)) {
+          // Web MLC models download through web-llm's own Cache API / OPFS.
+          // CreateMLCEngine fetches shards on first load and caches them.
+          const mlcModelId =
+            model.pteSource.kind === "remote" ? model.pteSource.url : undefined;
+
+          const engine = createWebLLMEngine();
+          await engine.load({
+            modelId: model.modelId,
+            mlcModelId,
+            onProgress: (progress) => {
+              setDownloadProgress((prev) =>
+                new Map(prev).set(
+                  model.modelId,
+                  Math.min(99, Math.round(progress.loaded * 100)),
+                ),
+              );
+            },
+          });
+          // Unload the engine — we only needed to trigger the download.
+          // The model stays in the browser cache for later use.
+          await engine.unload();
+
+          setDownloadProgress((prev) => new Map(prev).set(model.modelId, 100));
+
+          await modelSettings.addDownloadedModel({
+            modelId: model.modelId,
+            modelType: "llm",
+            downloadedAt: Date.now(),
+            ptePath: model.modelId,
             tokenizerPath: undefined,
             tokenizerConfigPath: undefined,
             size: MODEL_SIZES[model.modelId] || 0,

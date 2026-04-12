@@ -4,7 +4,7 @@ import { useModelInfo } from "../../../lib/navigation/ModelInfoContext";
 import { ComposerScreen } from "../../../lib/screens";
 
 export default function ComposeChatRoute() {
-  const { setModelInfo } = useModelInfo();
+  const { setModelInfo, setComposerEntryId } = useModelInfo();
 
   const handleSave = useCallback((entryId: number) => {
     router.replace(`/(main)/entry/${entryId}`);
@@ -20,6 +20,7 @@ export default function ComposeChatRoute() {
       onSave={handleSave}
       onCancel={handleCancel}
       onModelInfo={setModelInfo}
+      onComposerEntryId={setComposerEntryId}
       hideBackButton
     />
   );

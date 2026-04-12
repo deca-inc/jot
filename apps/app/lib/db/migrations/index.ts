@@ -18,6 +18,7 @@ import * as add_sync_columns from "./2026_02_07_04_15_41_add_sync_columns";
 import * as add_sync_settings_columns from "./2026_02_07_04_15_48_add_sync_settings_columns";
 import * as add_sync_queue_table from "./2026_02_08_05_23_01_add_sync_queue_table";
 import * as initialSeed from "./seeds/2025_01_13_16_25_00_initial_seed";
+import * as add_title_pinned from "./2026_04_12_02_25_54_add_title_pinned";
 
 /**
  * All migrations in order. Add new migrations to the end of this array.
@@ -72,6 +73,7 @@ export const allMigrations: Array<{ name: string; module: MigrationModule }> = [
     name: "2026_02_08_05_23_01_add_sync_queue_table.ts",
     module: add_sync_queue_table,
   },
+  { name: "2026_04_12_02_25_54_add_title_pinned.ts", module: add_title_pinned },
   // Seeds (optional - only run when --seeds flag is enabled)
   { name: "seeds/2025_01_13_16_25_00_initial_seed.ts", module: initialSeed },
 ];

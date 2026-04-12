@@ -1153,6 +1153,7 @@ export class SyncManager {
     uuid?: string | null;
     type: string;
     title: string;
+    title_pinned?: number | null;
     blocks: string;
     tags: string;
     attachments: string;
@@ -1178,6 +1179,7 @@ export class SyncManager {
       uuid: row.uuid ?? null,
       type: row.type as Entry["type"],
       title: row.title,
+      titlePinned: (row.title_pinned ?? 0) === 1,
       blocks: JSON.parse(row.blocks) as Block[],
       tags: JSON.parse(row.tags) as string[],
       attachments: JSON.parse(row.attachments) as string[],

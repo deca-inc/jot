@@ -1,4 +1,5 @@
 import { SQLiteDatabase } from "expo-sqlite";
+import { useMemo } from "react";
 import { MODEL_IDS, ModelType } from "../ai/modelConfig";
 import { useDatabase } from "./DatabaseProvider";
 
@@ -161,27 +162,32 @@ export function useModelSettings(): {
   ) => Promise<ModelDownloadInfo[]>;
 } {
   const db = useDatabase();
-  const repo = new ModelSettingsRepository(db);
-
-  return {
-    getSettings: () => repo.get(),
-    setSettings: (settings: ModelSettings) => repo.set(settings),
-    getSelectedModelId: () =>
-      repo.getSelectedModelId() as Promise<MODEL_IDS | null>,
-    setSelectedModelId: (modelId: string) => repo.setSelectedModelId(modelId),
-    addDownloadedModel: (info: ModelDownloadInfo) =>
-      repo.addDownloadedModel(info),
-    removeDownloadedModel: (modelId: string) =>
-      repo.removeDownloadedModel(modelId),
-    getDownloadedModels: () => repo.getDownloadedModels(),
-    isModelDownloaded: (modelId: string) => repo.isModelDownloaded(modelId),
-    getModelDownloadInfo: (modelId: string) =>
-      repo.getModelDownloadInfo(modelId),
-    // STT methods
-    getSelectedSttModelId: () => repo.getSelectedSttModelId(),
-    setSelectedSttModelId: (modelId: string) =>
-      repo.setSelectedSttModelId(modelId),
-    getDownloadedModelsByType: (modelType: ModelType) =>
-      repo.getDownloadedModelsByType(modelType),
-  };
+  // Memoize keyed on `db` so the returned object is stable across renders.
+  // Without this, every render produces a new object literal, which breaks
+  // any caller that lists the result in a useEffect / useMemo / useCallback
+  // dep array (infinite re-render loops).
+  return useMemo(() => {
+    const repo = new ModelSettingsRepository(db);
+    return {
+      getSettings: () => repo.get(),
+      setSettings: (settings: ModelSettings) => repo.set(settings),
+      getSelectedModelId: () =>
+        repo.getSelectedModelId() as Promise<MODEL_IDS | null>,
+      setSelectedModelId: (modelId: string) => repo.setSelectedModelId(modelId),
+      addDownloadedModel: (info: ModelDownloadInfo) =>
+        repo.addDownloadedModel(info),
+      removeDownloadedModel: (modelId: string) =>
+        repo.removeDownloadedModel(modelId),
+      getDownloadedModels: () => repo.getDownloadedModels(),
+      isModelDownloaded: (modelId: string) => repo.isModelDownloaded(modelId),
+      getModelDownloadInfo: (modelId: string) =>
+        repo.getModelDownloadInfo(modelId),
+      // STT methods
+      getSelectedSttModelId: () => repo.getSelectedSttModelId(),
+      setSelectedSttModelId: (modelId: string) =>
+        repo.setSelectedSttModelId(modelId),
+      getDownloadedModelsByType: (modelType: ModelType) =>
+        repo.getDownloadedModelsByType(modelType),
+    };
+  }, [db]);
 }

@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "../components";
+import { useIsWideScreen } from "../hooks/useIsWideScreen";
 import { spacingPatterns, borderRadius } from "../theme";
 
 interface WelcomeScreenProps {
@@ -15,57 +16,63 @@ interface WelcomeScreenProps {
 }
 
 export function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
+  const isWide = useIsWideScreen();
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <View style={styles.content}>
+      <View style={[styles.content, isWide && styles.contentWide]}>
         {/* Logo */}
         <View style={styles.logoContainer}>
           <Image
             source={require("../../assets/icon.png")}
-            style={styles.logo}
+            style={isWide ? styles.logoWide : styles.logo}
             resizeMode="contain"
           />
         </View>
 
         {/* Tagline */}
         <View style={styles.textContainer}>
-          <Text variant="h1" style={styles.title}>
+          <Text variant={isWide ? "h2" : "h1"} style={styles.title}>
             Your personal journal
           </Text>
-          <Text variant="h1" style={styles.title}>
+          <Text variant={isWide ? "h2" : "h1"} style={styles.title}>
             and AI assistant
           </Text>
 
           <View style={styles.featuresContainer}>
-            <Text variant="h3" style={styles.feature}>
+            <Text variant={isWide ? "body" : "h3"} style={styles.feature}>
               offline
             </Text>
-            <Text variant="h3" style={styles.featureDot}>
+            <Text variant={isWide ? "body" : "h3"} style={styles.featureDot}>
               •
             </Text>
-            <Text variant="h3" style={styles.feature}>
+            <Text variant={isWide ? "body" : "h3"} style={styles.feature}>
               encrypted
             </Text>
-            <Text variant="h3" style={styles.featureDot}>
+            <Text variant={isWide ? "body" : "h3"} style={styles.featureDot}>
               •
             </Text>
-            <Text variant="h3" style={styles.feature}>
+            <Text variant={isWide ? "body" : "h3"} style={styles.feature}>
               private
             </Text>
           </View>
         </View>
 
-        {/* Spacer to push button to bottom */}
-        <View style={styles.spacer} />
+        {/* Spacer to push button to bottom on mobile */}
+        {!isWide && <View style={styles.spacer} />}
+        {isWide && <View style={styles.spacerWide} />}
 
         {/* Continue button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             onPress={onContinue}
-            style={styles.button}
+            style={[styles.button, isWide && styles.buttonWide]}
             activeOpacity={0.8}
           >
-            <Text variant="body" style={styles.buttonText}>
+            <Text
+              variant="body"
+              style={[styles.buttonText, isWide && styles.buttonTextWide]}
+            >
               Get Started
             </Text>
           </TouchableOpacity>
@@ -107,6 +114,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  contentWide: {
+    justifyContent: "center",
+    maxWidth: 520,
+    alignSelf: "center",
+    width: "100%",
+  },
   logoContainer: {
     alignItems: "center",
     marginBottom: spacingPatterns.xl * 2,
@@ -114,6 +127,10 @@ const styles = StyleSheet.create({
   logo: {
     width: 160,
     height: 160,
+  },
+  logoWide: {
+    width: 180,
+    height: 180,
   },
   textContainer: {
     alignItems: "center",
@@ -142,6 +159,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: spacingPatterns.xl * 2,
   },
+  spacerWide: {
+    height: spacingPatterns.xl * 2,
+  },
   buttonContainer: {
     width: "100%",
     maxWidth: 400,
@@ -156,11 +176,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  buttonWide: {
+    paddingVertical: spacingPatterns.sm,
+  },
   buttonText: {
     color: "#FFFFFF",
     fontSize: 17,
     fontWeight: "600",
     letterSpacing: 0.2,
+  },
+  buttonTextWide: {
+    fontSize: 15,
   },
   legalText: {
     marginTop: spacingPatterns.md,
