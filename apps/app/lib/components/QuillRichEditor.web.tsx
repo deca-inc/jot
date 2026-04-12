@@ -382,16 +382,20 @@ function generateEditorCSS(
       user-select: text;
     }
     .ql-container {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 18px;
+      font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+      font-size: 17px;
       background-color: ${theme.gradient.middle};
+      flex: 1;
+      overflow: hidden;
     }
     .ql-editor {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 18px;
-      line-height: 1.5;
+      font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+      font-size: 17px;
+      line-height: 1.75;
       color: ${theme.textPrimary};
       padding: ${editorPadding}px;
+      padding-left: max(${editorPadding}px, calc((100% - 768px) / 2 + ${editorPadding}px));
+      padding-right: max(${editorPadding}px, calc((100% - 768px) / 2 + ${editorPadding}px));
       padding-bottom: 120px;
       background-color: ${theme.gradient.middle};
       min-height: 100%;
@@ -400,6 +404,8 @@ function generateEditorCSS(
       color: ${theme.textSecondary} !important;
       font-style: normal !important;
       opacity: 0.7 !important;
+      left: max(${editorPadding}px, calc((100% - 768px) / 2 + ${editorPadding}px)) !important;
+      right: max(${editorPadding}px, calc((100% - 768px) / 2 + ${editorPadding}px)) !important;
     }
 
     /* Paragraphs & headings */
@@ -441,6 +447,24 @@ function generateEditorCSS(
       padding-left: 28px !important;
       position: relative;
     }
+    /* Indentation for nested list items (Quill adds ql-indent-N classes) */
+    .ql-editor li.ql-indent-1 { margin-left: 1.5em !important; }
+    .ql-editor li.ql-indent-2 { margin-left: 3em !important; }
+    .ql-editor li.ql-indent-3 { margin-left: 4.5em !important; }
+    .ql-editor li.ql-indent-4 { margin-left: 6em !important; }
+    .ql-editor li.ql-indent-5 { margin-left: 7.5em !important; }
+    .ql-editor li.ql-indent-6 { margin-left: 9em !important; }
+    .ql-editor li.ql-indent-7 { margin-left: 10.5em !important; }
+    .ql-editor li.ql-indent-8 { margin-left: 12em !important; }
+    /* Indentation for non-list block elements (paragraphs, headings, etc.) */
+    .ql-editor .ql-indent-1:not(li) { padding-left: 3em !important; }
+    .ql-editor .ql-indent-2:not(li) { padding-left: 6em !important; }
+    .ql-editor .ql-indent-3:not(li) { padding-left: 9em !important; }
+    .ql-editor .ql-indent-4:not(li) { padding-left: 12em !important; }
+    .ql-editor .ql-indent-5:not(li) { padding-left: 15em !important; }
+    .ql-editor .ql-indent-6:not(li) { padding-left: 18em !important; }
+    .ql-editor .ql-indent-7:not(li) { padding-left: 21em !important; }
+    .ql-editor .ql-indent-8:not(li) { padding-left: 24em !important; }
     .ql-editor li::before {
       position: absolute !important;
       left: 0 !important;
@@ -480,8 +504,10 @@ function generateEditorCSS(
       padding-left: 28px !important;
       min-height: 27px !important;
       line-height: 27px !important;
-      margin: 0 !important;
+      margin-top: 0 !important;
+      margin-right: 0 !important;
       margin-bottom: 4px !important;
+      /* margin-left intentionally omitted — set by ql-indent-N classes */
       position: relative !important;
     }
     .ql-editor ul[data-checked=false] > li {
@@ -626,6 +652,57 @@ function generateEditorCSS(
       font-variant-numeric: tabular-nums;
     }
 
+    /* Fixed toolbar (always-visible header row) */
+    .fixed-toolbar {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 2px;
+      padding: 6px 12px;
+      border-bottom: 1px solid ${theme.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"};
+      background: ${theme.gradient.middle};
+      flex-shrink: 0;
+      z-index: 10;
+      justify-content: center;
+    }
+    .fixed-toolbar .ftb-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: ${theme.textSecondary};
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .fixed-toolbar .ftb-btn:hover {
+      background: ${theme.isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)"};
+      color: ${theme.textPrimary};
+    }
+    .fixed-toolbar .ftb-btn.active {
+      background: ${theme.isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.1)"};
+      color: ${theme.textPrimary};
+    }
+    .fixed-toolbar .ftb-sep {
+      width: 1px;
+      height: 20px;
+      background: ${theme.isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"};
+      margin: 0 4px;
+      flex-shrink: 0;
+    }
+    .fixed-toolbar .ftb-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
     /* Bubble toolbar (selection-based, desktop) */
     .bubble-toolbar {
       position: absolute;
@@ -688,6 +765,147 @@ function generateEditorCSS(
 }
 
 // ---------------------------------------------------------------------------
+// Fixed toolbar (always-visible header row for desktop/web)
+// ---------------------------------------------------------------------------
+
+// Shared button HTML for both toolbars
+const TOOLBAR_BUTTONS_HTML =
+  '<button class="{btn}" data-format="bold" title="Bold (⌘B)"><strong>B</strong></button>' +
+  '<button class="{btn}" data-format="italic" title="Italic (⌘I)"><em>I</em></button>' +
+  '<button class="{btn}" data-format="underline" title="Underline (⌘U)"><u>U</u></button>' +
+  '<button class="{btn}" data-format="strike" title="Strikethrough"><s>S</s></button>' +
+  '<div class="{sep}"></div>' +
+  '<button class="{btn}" data-format="header" data-value="1" title="Heading 1" style="font-size:16px">H1</button>' +
+  '<button class="{btn}" data-format="header" data-value="2" title="Heading 2" style="font-size:14px">H2</button>' +
+  '<button class="{btn}" data-format="header" data-value="3" title="Heading 3" style="font-size:13px">H3</button>' +
+  '<div class="{sep}"></div>' +
+  '<button class="{btn}" data-format="list" data-value="bullet" title="Bullet List"><svg viewBox="0 0 24 24"><circle cx="4" cy="7" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="4" cy="17" r="2"/><rect x="9" y="6" width="12" height="2" rx="1"/><rect x="9" y="11" width="12" height="2" rx="1"/><rect x="9" y="16" width="12" height="2" rx="1"/></svg></button>' +
+  '<button class="{btn}" data-format="list" data-value="ordered" title="Numbered List"><svg viewBox="0 0 24 24"><text x="2" y="9" font-size="7" font-weight="bold" fill="currentColor">1</text><text x="2" y="14.5" font-size="7" font-weight="bold" fill="currentColor">2</text><text x="2" y="20" font-size="7" font-weight="bold" fill="currentColor">3</text><rect x="10" y="6" width="11" height="2" rx="1"/><rect x="10" y="11" width="11" height="2" rx="1"/><rect x="10" y="16" width="11" height="2" rx="1"/></svg></button>' +
+  '<button class="{btn}" data-format="list" data-value="unchecked" title="Checklist"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="7 12 10 15 17 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+  '<div class="{sep}"></div>' +
+  '<button class="{btn}" data-format="indent" data-value="-1" title="Decrease Indent"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="2" rx="1"/><rect x="11" y="9" width="10" height="2" rx="1"/><rect x="11" y="14" width="10" height="2" rx="1"/><rect x="3" y="19" width="18" height="2" rx="1"/><path d="M7 9 L3 12.5 L7 16 Z"/></svg></button>' +
+  '<button class="{btn}" data-format="indent" data-value="+1" title="Increase Indent"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="2" rx="1"/><rect x="11" y="9" width="10" height="2" rx="1"/><rect x="11" y="14" width="10" height="2" rx="1"/><rect x="3" y="19" width="18" height="2" rx="1"/><path d="M3 9 L7 12.5 L3 16 Z"/></svg></button>' +
+  '<div class="{sep}"></div>' +
+  '<button class="{btn}" data-format="blockquote" title="Quote"><svg viewBox="0 0 24 24"><path d="M5 17h3l2-4V7H4v6h3l-2 4zm10 0h3l2-4V7h-6v6h3l-2 4z"/></svg></button>' +
+  '<button class="{btn}" data-format="code-block" title="Code Block"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="8 6 2 12 8 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+
+function toolbarButtonsHtml(btnClass: string, sepClass: string): string {
+  return TOOLBAR_BUTTONS_HTML.replace(/\{btn\}/g, btnClass).replace(
+    /\{sep\}/g,
+    sepClass,
+  );
+}
+
+/** Shared click handler for toolbar format buttons */
+function handleFormatClick(
+  quill: InstanceType<typeof Quill>,
+  btn: HTMLElement,
+) {
+  const format = btn.getAttribute("data-format");
+  const value = btn.getAttribute("data-value");
+  if (!format) return;
+
+  const currentFormat = quill.getFormat() as QuillFormats;
+
+  if (format === "header") {
+    const headerVal = parseInt(value || "0", 10);
+    quill.format(
+      "header",
+      currentFormat.header === headerVal ? false : headerVal,
+    );
+  } else if (format === "list") {
+    quill.format(
+      "list",
+      currentFormat.list === value ? false : (value as string),
+    );
+  } else if (format === "indent") {
+    quill.format("indent", value as string);
+  } else if (format === "blockquote") {
+    quill.format("blockquote", !currentFormat.blockquote);
+  } else if (format === "code-block") {
+    quill.format("code-block", !currentFormat["code-block"]);
+  } else {
+    quill.format(format, !currentFormat[format]);
+  }
+}
+
+/** Shared active-state updater for toolbar buttons */
+function updateToolbarActiveStates(
+  quill: InstanceType<typeof Quill>,
+  toolbar: HTMLElement,
+  btnSelector: string,
+) {
+  const range = quill.getSelection() as QuillRange | null;
+  const formats = range
+    ? (quill.getFormat(range) as QuillFormats)
+    : ({} as QuillFormats);
+  const buttons = toolbar.querySelectorAll(btnSelector);
+  buttons.forEach((btn) => {
+    const fmt = btn.getAttribute("data-format");
+    const val = btn.getAttribute("data-value");
+    let isActive = false;
+
+    if (fmt === "header") {
+      isActive = formats.header === parseInt(val || "0", 10);
+    } else if (fmt === "list") {
+      isActive = formats.list === val;
+    } else if (fmt === "indent") {
+      isActive = false; // Indent buttons are actions, not toggles
+    } else if (fmt) {
+      isActive = !!formats[fmt];
+    }
+
+    if (isActive) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+}
+
+function createFixedToolbar(
+  quill: InstanceType<typeof Quill>,
+  containerEl: HTMLElement,
+  editorDiv: HTMLElement,
+) {
+  const toolbar = document.createElement("div");
+  toolbar.className = "fixed-toolbar";
+  toolbar.innerHTML = toolbarButtonsHtml("ftb-btn", "ftb-sep");
+
+  // Insert before the editor so it sits at the top of the flex container
+  containerEl.insertBefore(toolbar, editorDiv);
+
+  // Prevent clicks from stealing editor focus/selection
+  toolbar.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+  });
+
+  // Handle format button clicks
+  toolbar.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest(
+      ".ftb-btn",
+    ) as HTMLElement | null;
+    if (!btn) return;
+    handleFormatClick(quill, btn);
+    updateToolbarActiveStates(quill, toolbar, ".ftb-btn");
+  });
+
+  // Update active states on cursor movement
+  quill.on("selection-change", () => {
+    updateToolbarActiveStates(quill, toolbar, ".ftb-btn");
+  });
+
+  // Update on text change (format may change after typing)
+  quill.on("text-change", () => {
+    updateToolbarActiveStates(quill, toolbar, ".ftb-btn");
+  });
+
+  return () => {
+    toolbar.remove();
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Bubble toolbar (shown on text selection)
 // ---------------------------------------------------------------------------
 
@@ -697,19 +915,7 @@ function createBubbleToolbar(
 ) {
   const toolbar = document.createElement("div");
   toolbar.className = "bubble-toolbar";
-  toolbar.innerHTML =
-    '<button class="bubble-btn" data-format="bold" title="Bold"><strong>B</strong></button>' +
-    '<button class="bubble-btn" data-format="italic" title="Italic"><em>I</em></button>' +
-    '<button class="bubble-btn" data-format="underline" title="Underline"><u>U</u></button>' +
-    '<button class="bubble-btn" data-format="strike" title="Strikethrough"><s>S</s></button>' +
-    '<div class="bubble-sep"></div>' +
-    '<button class="bubble-btn" data-format="header" data-value="1" title="Heading 1" style="font-size:16px">H1</button>' +
-    '<button class="bubble-btn" data-format="header" data-value="2" title="Heading 2" style="font-size:14px">H2</button>' +
-    '<button class="bubble-btn" data-format="header" data-value="3" title="Heading 3" style="font-size:13px">H3</button>' +
-    '<div class="bubble-sep"></div>' +
-    '<button class="bubble-btn" data-format="list" data-value="bullet" title="Bullet List"><svg viewBox="0 0 24 24"><circle cx="4" cy="7" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="4" cy="17" r="2"/><rect x="9" y="6" width="12" height="2" rx="1"/><rect x="9" y="11" width="12" height="2" rx="1"/><rect x="9" y="16" width="12" height="2" rx="1"/></svg></button>' +
-    '<button class="bubble-btn" data-format="list" data-value="ordered" title="Numbered List"><svg viewBox="0 0 24 24"><text x="2" y="9" font-size="7" font-weight="bold" fill="currentColor">1</text><text x="2" y="14.5" font-size="7" font-weight="bold" fill="currentColor">2</text><text x="2" y="20" font-size="7" font-weight="bold" fill="currentColor">3</text><rect x="10" y="6" width="11" height="2" rx="1"/><rect x="10" y="11" width="11" height="2" rx="1"/><rect x="10" y="16" width="11" height="2" rx="1"/></svg></button>' +
-    '<button class="bubble-btn" data-format="list" data-value="unchecked" title="Checklist"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="7 12 10 15 17 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+  toolbar.innerHTML = toolbarButtonsHtml("bubble-btn", "bubble-sep");
 
   containerEl.appendChild(toolbar);
 
@@ -724,57 +930,9 @@ function createBubbleToolbar(
       ".bubble-btn",
     ) as HTMLElement | null;
     if (!btn) return;
-
-    const format = btn.getAttribute("data-format");
-    const value = btn.getAttribute("data-value");
-    if (!format) return;
-
-    const currentFormat = quill.getFormat() as QuillFormats;
-
-    if (format === "header") {
-      const headerVal = parseInt(value || "0", 10);
-      quill.format(
-        "header",
-        currentFormat.header === headerVal ? false : headerVal,
-      );
-    } else if (format === "list") {
-      quill.format(
-        "list",
-        currentFormat.list === value ? false : (value as string),
-      );
-    } else {
-      quill.format(format, !currentFormat[format]);
-    }
-
-    updateActiveStates();
+    handleFormatClick(quill, btn);
+    updateToolbarActiveStates(quill, toolbar, ".bubble-btn");
   });
-
-  function updateActiveStates() {
-    const range = quill.getSelection() as QuillRange | null;
-    if (!range || range.length === 0) return;
-
-    const formats = quill.getFormat(range) as QuillFormats;
-    const buttons = toolbar.querySelectorAll(".bubble-btn");
-    buttons.forEach((btn) => {
-      const fmt = btn.getAttribute("data-format");
-      const val = btn.getAttribute("data-value");
-      let isActive = false;
-
-      if (fmt === "header") {
-        isActive = formats.header === parseInt(val || "0", 10);
-      } else if (fmt === "list") {
-        isActive = formats.list === val;
-      } else if (fmt) {
-        isActive = !!formats[fmt];
-      }
-
-      if (isActive) {
-        btn.classList.add("active");
-      } else {
-        btn.classList.remove("active");
-      }
-    });
-  }
 
   function positionToolbar(range: QuillRange) {
     const bounds = quill.getBounds(range.index, range.length);
@@ -812,7 +970,7 @@ function createBubbleToolbar(
   // Wire up Quill events
   quill.on("selection-change", (range: QuillRange | null) => {
     if (range && range.length > 0) {
-      updateActiveStates();
+      updateToolbarActiveStates(quill, toolbar, ".bubble-btn");
       positionToolbar(range);
     } else {
       toolbar.classList.remove("visible");
@@ -830,11 +988,13 @@ function createBubbleToolbar(
     });
   }
 
-  // Update on text change
+  // Update on text change — hide if selection collapsed (e.g. deleted selected text)
   quill.on("text-change", () => {
     const range = quill.getSelection() as QuillRange | null;
     if (range && range.length > 0) {
-      updateActiveStates();
+      updateToolbarActiveStates(quill, toolbar, ".bubble-btn");
+    } else {
+      toolbar.classList.remove("visible");
     }
   });
 
@@ -1087,6 +1247,39 @@ export const QuillRichEditor = forwardRef<
       modules: {
         toolbar: false, // We use the bubble toolbar instead
         clipboard: { matchVisual: false },
+        keyboard: {
+          // Override Quill's default Tab bindings so they indent any block
+          // type (paragraphs, headings, lists, blockquotes) regardless of
+          // cursor position. No format filter — works on all block types.
+          bindings: {
+            indent: {
+              key: 9, // Tab
+              // Quill's default indent binding has format:['blockquote','indent','list']
+              // which restricts it to those block types only. Override with {} so
+              // Tab indents ANY block (paragraphs, headings, etc.).
+              format: {},
+              handler(
+                this: { quill: InstanceType<typeof Quill> },
+                _range: QuillRange,
+              ) {
+                this.quill.format("indent", "+1", "user");
+                return false;
+              },
+            },
+            outdent: {
+              key: 9, // Tab
+              shiftKey: true,
+              format: {},
+              handler(
+                this: { quill: InstanceType<typeof Quill> },
+                _range: QuillRange,
+              ) {
+                this.quill.format("indent", "-1", "user");
+                return false;
+              },
+            },
+          },
+        },
       },
     });
 
@@ -1117,6 +1310,9 @@ export const QuillRichEditor = forwardRef<
 
     // Checkbox fix
     attachCheckboxFix(quill, container);
+
+    // Fixed toolbar (always-visible header row)
+    createFixedToolbar(quill, container, editorDiv);
 
     // Bubble toolbar (selection-based formatting)
     createBubbleToolbar(quill, container);
@@ -1179,9 +1375,12 @@ export const QuillRichEditor = forwardRef<
   // Render
   // -------------------------------------------------------------------------
 
-  // Container style with the matching background
+  // Container style with the matching background — flex column so the fixed
+  // toolbar sits above the Quill editor which takes remaining space.
   const containerStyle = {
     flex: 1,
+    display: "flex" as const,
+    flexDirection: "column" as const,
     backgroundColor: seasonalTheme.gradient.middle,
     position: "relative" as const,
     overflow: "hidden" as const,

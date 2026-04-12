@@ -260,6 +260,10 @@ export function JournalComposer({
     [], // Now stable!
   );
 
+  // Track whether the user has pinned a custom title (via ref so debounce sees latest)
+  const titlePinnedRef = useRef(entry?.titlePinned ?? false);
+  titlePinnedRef.current = entry?.titlePinned ?? false;
+
   // Create debounced save function that calls journalActions
   const debouncedSave = useMemo(
     () =>
@@ -271,7 +275,9 @@ export function JournalComposer({
         const sanitizedHtml = stripBase64FromAttachments(htmlToSave);
 
         try {
-          await saveJournalContent(entryId, sanitizedHtml, "", actionContext);
+          await saveJournalContent(entryId, sanitizedHtml, "", actionContext, {
+            titlePinned: titlePinnedRef.current,
+          });
 
           // Sync attachments - diff HTML against database and cleanup orphans
           await attachmentsRepoRef.current.syncForEntry(entryId, sanitizedHtml);
@@ -294,6 +300,7 @@ export function JournalComposer({
         const sanitizedContent = stripBase64FromAttachments(currentContent);
         saveJournalContent(entryId, sanitizedContent, "", actionContext, {
           updateCache: true,
+          titlePinned: titlePinnedRef.current,
         }).catch((error) => {
           console.error("[JournalComposer] Error saving on unmount:", error);
         });
@@ -371,6 +378,7 @@ export function JournalComposer({
         // waiting for an async refetch (fixes stale data on back navigation)
         await saveJournalContent(entryId, sanitizedContent, "", actionContext, {
           updateCache: true,
+          titlePinned: titlePinnedRef.current,
         });
 
         // Sync attachments on back press too
@@ -494,9 +502,10 @@ export function JournalComposer({
           styles.editorContainer,
           {
             // Ensure content clears the floating header (4px offset + 44px button + 8px gap)
-            // When back button is hidden (desktop sidebar), use minimal padding
+            // When back button is hidden (desktop sidebar), no padding needed —
+            // the fixed toolbar provides the top edge.
             paddingTop: hideBackButton
-              ? spacingPatterns.sm
+              ? 0
               : Math.max(
                   insets.top,
                   spacingPatterns.xxs + 44 + spacingPatterns.xs,
