@@ -27,6 +27,7 @@ import QuillEditor from "react-native-cn-quill";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showKeyboard } from "../../modules/keyboard-module/src";
 import { spacingPatterns } from "../theme";
+import { blurEditors } from "../utils/blur-editors";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import {
   VoiceRecordButton,
@@ -114,6 +115,11 @@ export const QuillRichEditor = forwardRef<
     header: 0,
     list: null as string | null,
   });
+
+  // Track last known cursor position for mobile toolbar focus restoration
+  const lastSelectionRef = useRef<{ index: number; length: number } | null>(
+    null,
+  );
 
   // Track voice recording state and transcript for overlay
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
@@ -214,6 +220,11 @@ export const QuillRichEditor = forwardRef<
       return () => clearTimeout(timer);
     }
   }, [autoFocus]);
+
+  // Listen for external blur requests (e.g. drawer open)
+  useEffect(() => {
+    return blurEditors.listen(() => editorRef.current?.blur());
+  }, []);
 
   // Keyboard listeners
   useEffect(() => {
@@ -331,15 +342,23 @@ export const QuillRichEditor = forwardRef<
       formatState.list === "unchecked" || formatState.list === "checked";
     editorRef.current?.format("list", isChecklist ? false : "unchecked");
   }, [formatState.list]);
-  const increaseIndent = useCallback(
-    // Quill accepts "+1" / "-1" to adjust the indent level relative to current
-    () => editorRef.current?.format("indent", "+1"),
-    [],
-  );
-  const decreaseIndent = useCallback(
-    () => editorRef.current?.format("indent", "-1"),
-    [],
-  );
+  const increaseIndent = useCallback(() => {
+    // Restore selection first — on mobile, tapping the native toolbar causes
+    // the WebView to lose focus, so Quill's cursor position is lost.
+    // setSelection and format are processed sequentially in the WebView.
+    const sel = lastSelectionRef.current;
+    if (sel) {
+      editorRef.current?.setSelection(sel.index, sel.length, "silent");
+    }
+    editorRef.current?.format("indent", "+1");
+  }, []);
+  const decreaseIndent = useCallback(() => {
+    const sel = lastSelectionRef.current;
+    if (sel) {
+      editorRef.current?.setSelection(sel.index, sel.length, "silent");
+    }
+    editorRef.current?.format("indent", "-1");
+  }, []);
 
   // PanResponder for toolbar swipe-down to dismiss keyboard
   // Allows horizontal scrolling but detects vertical swipe to dismiss
@@ -1014,6 +1033,10 @@ export const QuillRichEditor = forwardRef<
           }}
           onSelectionChange={(data) => {
             if (data.range) {
+              lastSelectionRef.current = {
+                index: data.range.index,
+                length: data.range.length,
+              };
               editorRef.current
                 ?.getFormat(data.range)
                 .then((format: Record<string, unknown>) => {

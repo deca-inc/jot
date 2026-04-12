@@ -66,6 +66,8 @@ export interface EntryListItemProps {
   isSelected?: boolean;
   /** Compact mode for sidebar — renders slim row instead of full card */
   compact?: boolean;
+  /** href for compact mode — makes the entry a real link on web */
+  href?: string;
 }
 
 function EntryListItemComponent({
@@ -80,6 +82,7 @@ function EntryListItemComponent({
   seasonalTheme: seasonalThemeProp,
   isSelected = false,
   compact = false,
+  href,
 }: EntryListItemProps) {
   const seasonalThemeFromContext = useSeasonalTheme();
   const { width, height } = useWindowDimensions();
@@ -678,19 +681,56 @@ function EntryListItemComponent({
         ? entry.title || "AI Chat"
         : entry.title || previewText || "Untitled";
 
+    const compactContainerStyle = [
+      compactStyles.container,
+      {
+        backgroundColor: isSelected
+          ? itemTheme.textPrimary + "15"
+          : "transparent",
+      },
+    ];
+
+    // On web, render as <a> via Pressable+href so entries are real links
+    // (cmd+click opens new tab) while preserving RN styles
+    const CompactWrapper =
+      Platform.OS === "web" && href
+        ? ({ children }: { children: React.ReactNode }) => (
+            <Pressable
+              // @ts-expect-error -- web-only: RNW Pressable supports href to render as <a>
+              href={href}
+              onPress={(e: { preventDefault?: () => void }) => {
+                const nativeEvent = (
+                  e as unknown as { nativeEvent?: MouseEvent }
+                ).nativeEvent;
+                if (
+                  nativeEvent &&
+                  (nativeEvent.metaKey ||
+                    nativeEvent.ctrlKey ||
+                    nativeEvent.shiftKey ||
+                    nativeEvent.button === 1)
+                )
+                  return;
+                e.preventDefault?.();
+                onPress?.(entry);
+              }}
+              accessibilityRole="link"
+              style={compactContainerStyle}
+            >
+              {children}
+            </Pressable>
+          )
+        : ({ children }: { children: React.ReactNode }) => (
+            <TouchableOpacity
+              onPress={() => onPress?.(entry)}
+              activeOpacity={0.7}
+              style={compactContainerStyle}
+            >
+              {children}
+            </TouchableOpacity>
+          );
+
     return (
-      <TouchableOpacity
-        onPress={() => onPress?.(entry)}
-        activeOpacity={0.7}
-        style={[
-          compactStyles.container,
-          {
-            backgroundColor: isSelected
-              ? itemTheme.textPrimary + "15"
-              : "transparent",
-          },
-        ]}
-      >
+      <CompactWrapper>
         <Ionicons
           name={
             entry.type === "journal"
@@ -883,7 +923,7 @@ function EntryListItemComponent({
             </TouchableOpacity>
           </View>
         </Dialog>
-      </TouchableOpacity>
+      </CompactWrapper>
     );
   }
 

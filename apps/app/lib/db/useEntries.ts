@@ -115,8 +115,8 @@ export function useEntry(id: number | undefined) {
     // Always refetch on mount to get latest saved version when navigating back to entry
     // Use 'always' instead of true because we skip cache updates during editing
     refetchOnMount: "always",
-    // Don't refetch on window focus if entry might be deleted
-    refetchOnWindowFocus: false,
+    // Refetch when the tab regains focus so content stays fresh after switching tabs
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -142,6 +142,8 @@ export function useEntries(options?: {
     },
     // Always refetch on mount to get latest entries when navigating back to list
     refetchOnMount: "always",
+    // Refetch when the tab regains focus
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -178,6 +180,8 @@ export function useInfiniteEntries(options?: {
     initialPageParam: 0,
     // Always refetch on mount to get latest entries when navigating back to list
     refetchOnMount: "always",
+    // Refetch when the tab regains focus so the sidebar stays fresh
+    refetchOnWindowFocus: true,
   });
 }
 

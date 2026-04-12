@@ -140,7 +140,12 @@ export default function RootLayout() {
                       <SyncInitializer />
                       <StatusBarController />
                       <OnboardingGate />
-                      <Stack screenOptions={{ headerShown: false }}>
+                      <Stack
+                        screenOptions={{
+                          headerShown: false,
+                          gestureEnabled: false,
+                        }}
+                      >
                         <Stack.Screen name="(onboarding)" />
                         <Stack.Screen name="(main)" />
                       </Stack>

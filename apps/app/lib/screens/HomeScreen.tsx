@@ -566,6 +566,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           seasonalTheme={seasonalTheme}
           isSelected={selectedEntryId === item.entry.id}
           compact={compact}
+          href={compact ? `/(main)/entry/${item.entry.id}` : undefined}
         />
       );
     },

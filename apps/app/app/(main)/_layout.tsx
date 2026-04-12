@@ -9,6 +9,7 @@ import {
   BackHandler,
   Keyboard,
   TouchableOpacity,
+  Pressable,
   Image,
   Platform,
   TextInput,
@@ -42,9 +43,61 @@ import { useSyncAuthContext } from "../../lib/sync/SyncAuthProvider";
 import { borderRadius, spacingPatterns } from "../../lib/theme";
 import { springPresets } from "../../lib/theme";
 import { useSeasonalTheme } from "../../lib/theme/SeasonalThemeProvider";
+import { blurEditors } from "../../lib/utils/blur-editors";
 import { useTheme } from "../../lib/theme/ThemeProvider";
 
 const appIcon = require("../../assets/icon.png") as number;
+
+/**
+ * Renders a Pressable that is a real <a> link on web (supports ctrl/cmd+click
+ * for new tab) or a TouchableOpacity on native. Normal clicks use router.push
+ * via onPress; modifier-clicks pass through as native link navigations.
+ */
+function SidebarLink({
+  href,
+  onPress,
+  style,
+  children,
+}: {
+  href: string;
+  onPress: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- StyleSheet types vary across platforms
+  style?: any;
+  children: React.ReactNode;
+}) {
+  if (Platform.OS === "web") {
+    return (
+      <Pressable
+        // @ts-expect-error -- web-only: RNW Pressable supports href to render as <a>
+        href={href}
+        onPress={(e: { preventDefault?: () => void }) => {
+          // Access the native event to check modifier keys
+          const nativeEvent = (e as unknown as { nativeEvent?: MouseEvent })
+            .nativeEvent;
+          if (
+            nativeEvent &&
+            (nativeEvent.metaKey ||
+              nativeEvent.ctrlKey ||
+              nativeEvent.shiftKey ||
+              nativeEvent.button === 1)
+          )
+            return;
+          e.preventDefault?.();
+          onPress();
+        }}
+        accessibilityRole="link"
+        style={style}
+      >
+        {children}
+      </Pressable>
+    );
+  }
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={style}>
+      {children}
+    </TouchableOpacity>
+  );
+}
 
 export default function MainLayoutWrapper() {
   return (
@@ -111,11 +164,16 @@ function MainLayout() {
   const parentEntryQuery = useEntry(activeEntryParentId);
   const parentEntryTitle = parentEntryQuery.data?.title || "";
 
-  // Mobile drawer state
-  const [drawerOpen, setDrawerOpen] = useState(true);
-  const drawerTranslateX = useRef(new Animated.Value(0)).current;
-  const backdropOpacity = useRef(new Animated.Value(1)).current;
+  // Mobile drawer state — start closed when deep-linking into a specific screen
   const { width: windowWidth } = useWindowDimensions();
+  const isDeepLink = pathname !== "/" && pathname !== "";
+  const [drawerOpen, setDrawerOpen] = useState(!isDeepLink);
+  const drawerTranslateX = useRef(
+    new Animated.Value(isDeepLink ? -Math.min(windowWidth * 0.85, 320) : 0),
+  ).current;
+  const backdropOpacity = useRef(
+    new Animated.Value(isDeepLink ? 0 : 1),
+  ).current;
   const drawerWidth = Math.min(windowWidth * 0.85, 320);
   const drawerWidthRef = useRef(drawerWidth);
   drawerWidthRef.current = drawerWidth;
@@ -148,6 +206,7 @@ function MainLayout() {
   // Drawer open/close helpers
   const openDrawer = useCallback(() => {
     Keyboard.dismiss();
+    blurEditors.emit();
     if (
       Platform.OS === "web" &&
       document.activeElement instanceof HTMLElement
@@ -247,6 +306,79 @@ function MainLayout() {
     });
   }, [drawerTranslateX, backdropOpacity]);
 
+  // Drawer open gesture (swipe from left edge of content panel)
+  const drawerOpenPanRef = useRef<ReturnType<
+    typeof PanResponder.create
+  > | null>(null);
+  const drawerOpenActiveRef = useRef(false);
+
+  useEffect(() => {
+    drawerOpenPanRef.current = PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Only capture right-swipes starting near the left edge
+        const startX = evt.nativeEvent.pageX - gestureState.dx;
+        if (startX > 30) return false;
+        const isHorizontal =
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2;
+        if (!isHorizontal) return false;
+        if (gestureState.dx < 10) return false;
+        return true;
+      },
+      onPanResponderGrant: () => {
+        drawerOpenActiveRef.current = true;
+        setDrawerOpen(true);
+        Keyboard.dismiss();
+        blurEditors.emit();
+        if (
+          Platform.OS === "web" &&
+          document.activeElement instanceof HTMLElement
+        ) {
+          document.activeElement.blur();
+        }
+      },
+      onPanResponderMove: (_evt, gestureState) => {
+        const dx = Math.min(gestureState.dx, drawerWidthRef.current);
+        const progress = dx / drawerWidthRef.current;
+        drawerTranslateX.setValue(-drawerWidthRef.current + dx);
+        backdropOpacity.setValue(progress);
+      },
+      onPanResponderRelease: (_evt, gestureState) => {
+        drawerOpenActiveRef.current = false;
+        const threshold = drawerWidthRef.current * 0.3;
+        if (gestureState.dx > threshold || gestureState.vx > 0.3) {
+          // Complete the open
+          Animated.parallel([
+            Animated.spring(drawerTranslateX, {
+              toValue: 0,
+              ...springPresets.modal,
+              useNativeDriver: false,
+            }),
+            Animated.timing(backdropOpacity, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: false,
+            }),
+          ]).start();
+        } else {
+          // Snap back closed
+          Animated.parallel([
+            Animated.spring(drawerTranslateX, {
+              toValue: -drawerWidthRef.current,
+              ...springPresets.modal,
+              useNativeDriver: false,
+            }),
+            Animated.timing(backdropOpacity, {
+              toValue: 0,
+              duration: 150,
+              useNativeDriver: false,
+            }),
+          ]).start(() => setDrawerOpen(false));
+        }
+      },
+    });
+  }, [drawerTranslateX, backdropOpacity]);
+
   // Handle hardware back button (Android)
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -264,26 +396,6 @@ function MainLayout() {
 
     return () => backHandler.remove();
   }, []);
-
-  // Suppress keyboard while drawer is open
-  useEffect(() => {
-    if (!drawerOpen || isWideScreen) return;
-
-    if (Platform.OS === "web") {
-      const handler = () => {
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
-      };
-      document.addEventListener("focusin", handler);
-      return () => document.removeEventListener("focusin", handler);
-    } else {
-      const sub = Keyboard.addListener("keyboardDidShow", () => {
-        Keyboard.dismiss();
-      });
-      return () => sub.remove();
-    }
-  }, [drawerOpen, isWideScreen]);
 
   // Cmd+K / Ctrl+K to open search
   useEffect(() => {
@@ -784,10 +896,10 @@ function MainLayout() {
 
         {/* Action buttons */}
         <View style={styles.sidebarActions}>
-          <TouchableOpacity
-            style={styles.sidebarActionButton}
+          <SidebarLink
+            href="/(main)/compose/journal"
             onPress={() => fullEditorHandler()}
-            activeOpacity={0.7}
+            style={styles.sidebarActionButton}
           >
             <Ionicons
               name="create-outline"
@@ -818,11 +930,11 @@ function MainLayout() {
                 New Note
               </Animated.Text>
             )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.sidebarActionButton}
+          </SidebarLink>
+          <SidebarLink
+            href="/(main)/compose/chat"
             onPress={newAIChatHandler}
-            activeOpacity={0.7}
+            style={styles.sidebarActionButton}
           >
             <Ionicons
               name="chatbubbles-outline"
@@ -853,11 +965,11 @@ function MainLayout() {
                 New AI Chat
               </Animated.Text>
             )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.sidebarActionButton}
+          </SidebarLink>
+          <SidebarLink
+            href="/(main)/compose/countdown"
             onPress={countdownHandler}
-            activeOpacity={0.7}
+            style={styles.sidebarActionButton}
           >
             <Ionicons
               name="timer-outline"
@@ -888,7 +1000,7 @@ function MainLayout() {
                 New Countdown
               </Animated.Text>
             )}
-          </TouchableOpacity>
+          </SidebarLink>
           <TouchableOpacity
             style={styles.sidebarActionButton}
             onPress={searchHandler}
@@ -981,7 +1093,9 @@ function MainLayout() {
         )}
 
         {/* Settings footer */}
-        <TouchableOpacity
+        <SidebarLink
+          href="/(main)/settings"
+          onPress={settingsHandler}
           style={[
             styles.sidebarFooter,
             {
@@ -991,8 +1105,6 @@ function MainLayout() {
                 : "rgba(0,0,0,0.08)",
             },
           ]}
-          onPress={settingsHandler}
-          activeOpacity={0.7}
         >
           <Ionicons
             name="settings-outline"
@@ -1038,7 +1150,7 @@ function MainLayout() {
               </Text>
             </Animated.View>
           )}
-        </TouchableOpacity>
+        </SidebarLink>
       </>
     );
   };
@@ -1276,8 +1388,11 @@ function MainLayout() {
       }}
     >
       <View style={styles.container}>
-        {/* Content panel (full width) */}
-        <View style={styles.mobileContentPanel}>
+        {/* Content panel (full width) — swipe from left edge opens drawer */}
+        <View
+          style={styles.mobileContentPanel}
+          {...(drawerOpenPanRef.current?.panHandlers || {})}
+        >
           {renderContentHeader(true)}
           <View style={styles.contentBody}>
             {showEmptyState ? renderEmptyState() : <Slot />}
