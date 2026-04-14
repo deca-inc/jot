@@ -27,8 +27,10 @@ import {
   Dialog,
 } from "../../lib/components";
 import { DrawerIcon } from "../../lib/components/icons/DrawerIcon";
+import { extractPreviewText } from "../../lib/db/entries";
 import {
   useEntry,
+  useEntries,
   useDeleteEntry,
   useUpdateEntry,
 } from "../../lib/db/useEntries";
@@ -156,20 +158,21 @@ function MainLayout() {
   const composerEntryQuery = useEntry(composerEntryId);
   const composerEntryTitle = composerEntryQuery.data?.title || "";
 
+  // Fetch recent entries for mobile empty state
+  const recentEntriesQuery = useEntries({ limit: 5 });
+  const recentEntries = recentEntriesQuery.data ?? [];
+
   // Fetch parent entry for breadcrumb
   const parentEntryQuery = useEntry(activeEntryParentId);
   const parentEntryTitle = parentEntryQuery.data?.title || "";
 
-  // Mobile drawer state — start closed when deep-linking into a specific screen
+  // Mobile drawer state — always start closed for a clean launch experience
   const { width: windowWidth } = useWindowDimensions();
-  const isDeepLink = pathname !== "/" && pathname !== "";
-  const [drawerOpen, setDrawerOpen] = useState(!isDeepLink);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerTranslateX = useRef(
-    new Animated.Value(isDeepLink ? -Math.min(windowWidth * 0.85, 320) : 0),
+    new Animated.Value(-Math.min(windowWidth * 0.85, 320)),
   ).current;
-  const backdropOpacity = useRef(
-    new Animated.Value(isDeepLink ? 0 : 1),
-  ).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
   const drawerWidth = Math.min(windowWidth * 0.85, 320);
   const drawerWidthRef = useRef(drawerWidth);
   drawerWidthRef.current = drawerWidth;
@@ -490,17 +493,17 @@ function MainLayout() {
     [navigateToEntry],
   );
 
-  // Auto-select first entry
+  // Auto-select first entry (desktop only — mobile shows empty state)
   const handleFirstEntryAvailable = useCallback(
     (entryId: number, entryType: string) => {
-      if (pathname === "/" || pathname === "") {
+      if (isWideScreen && (pathname === "/" || pathname === "")) {
         navigateToEntry(
           entryId,
           entryType as "journal" | "ai_chat" | "countdown",
         );
       }
     },
-    [pathname, navigateToEntry],
+    [isWideScreen, pathname, navigateToEntry],
   );
 
   const handleNoEntries = useCallback(() => {
@@ -1247,6 +1250,68 @@ function MainLayout() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Recent entries */}
+      {recentEntries.length > 0 && (
+        <View style={styles.recentSection}>
+          <Text
+            variant="caption"
+            style={{
+              color: seasonalTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: "600",
+              marginBottom: spacingPatterns.xs,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+            }}
+          >
+            Recents
+          </Text>
+          {recentEntries.map((entry) => {
+            const preview =
+              entry.title ||
+              extractPreviewText(entry.blocks) ||
+              (entry.type === "ai_chat" ? "AI Chat" : "Untitled");
+            const icon =
+              entry.type === "ai_chat"
+                ? "chatbubbles-outline"
+                : entry.type === "countdown"
+                  ? "timer-outline"
+                  : "document-text-outline";
+            return (
+              <TouchableOpacity
+                key={entry.id}
+                style={styles.recentItem}
+                onPress={() => {
+                  navigateToEntry(
+                    entry.id,
+                    entry.type as "journal" | "ai_chat" | "countdown",
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={icon as "chatbubbles-outline"}
+                  size={14}
+                  color={seasonalTheme.textSecondary}
+                />
+                <Text
+                  variant="body"
+                  numberOfLines={1}
+                  style={{
+                    color: seasonalTheme.textPrimary,
+                    fontSize: 14,
+                    marginLeft: spacingPatterns.xs,
+                    flex: 1,
+                  }}
+                >
+                  {preview}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 
@@ -1562,5 +1627,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: spacingPatterns.md,
     borderRadius: 20,
+  },
+  recentSection: {
+    marginTop: spacingPatterns.xl * 1.5,
+    width: "100%",
+    maxWidth: 360,
+  },
+  recentItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacingPatterns.xs,
+    paddingHorizontal: spacingPatterns.sm,
+    borderRadius: borderRadius.md,
   },
 });
