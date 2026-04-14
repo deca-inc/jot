@@ -58,17 +58,25 @@ export default function EntryRoute() {
     router.back();
   }, []);
 
-  // Show loading while entry data loads
-  if (!entryQuery.data && entryQuery.isLoading) {
+  // Show loading while entry data loads, or render nothing if entry was deleted
+  if (!entryQuery.data) {
+    if (entryQuery.isLoading) {
+      return (
+        <View
+          style={[
+            styles.loading,
+            { backgroundColor: seasonalTheme.gradient.middle },
+          ]}
+        >
+          <ActivityIndicator color={seasonalTheme.textSecondary} />
+        </View>
+      );
+    }
+    // Entry was deleted — render empty so the cache update doesn't cascade
     return (
       <View
-        style={[
-          styles.loading,
-          { backgroundColor: seasonalTheme.gradient.middle },
-        ]}
-      >
-        <ActivityIndicator color={seasonalTheme.textSecondary} />
-      </View>
+        style={{ flex: 1, backgroundColor: seasonalTheme.gradient.middle }}
+      />
     );
   }
 

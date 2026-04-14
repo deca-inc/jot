@@ -49,6 +49,7 @@ LogBox.ignoreLogs([
   "You seem to update the renderers prop",
   "expo-background-fetch: This library is deprecated",
   "[React Native ExecuTorch] No content-length header",
+  "asmCrypto",
 ]);
 
 SplashScreen.preventAutoHideAsync();

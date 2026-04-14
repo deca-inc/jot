@@ -28,7 +28,6 @@ import {
 } from "../../lib/components";
 import { DrawerIcon } from "../../lib/components/icons/DrawerIcon";
 import {
-  useCreateEntry,
   useEntry,
   useDeleteEntry,
   useUpdateEntry,
@@ -114,9 +113,6 @@ function MainLayout() {
   const insets = useSafeAreaInsets();
   const syncAuth = useSyncAuthContext();
   const pathname = usePathname();
-  const createEntry = useCreateEntry();
-  const createEntryRef = useRef(createEntry);
-  createEntryRef.current = createEntry;
 
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showContentMenu, setShowContentMenu] = useState(false);
@@ -424,22 +420,13 @@ function MainLayout() {
     [],
   );
 
-  const handleOpenFullEditor = useCallback(async (initialText?: string) => {
+  const handleOpenFullEditor = useCallback((initialText?: string) => {
     const content = (initialText || "").trim();
-    const htmlContent = content.length > 0 ? `<h1>${content}</h1>` : "<p></p>";
-    const blocks = [{ type: "html" as const, content: htmlContent }];
-
-    try {
-      const entry = await createEntryRef.current.mutateAsync({
-        type: "journal",
-        title: content.slice(0, 50) || "Untitled",
-        blocks,
-        tags: [],
-        attachments: [],
-        isFavorite: false,
-      });
-      router.push(`/(main)/entry/${entry.id}`);
-    } catch (_error) {
+    if (content) {
+      router.push(
+        `/(main)/compose/journal?initialText=${encodeURIComponent(content)}`,
+      );
+    } else {
       router.push("/(main)/compose/journal");
     }
   }, []);
@@ -538,12 +525,9 @@ function MainLayout() {
   // Delete active entry
   const handleDeleteActiveEntry = useCallback(() => {
     if (!activeEntryId) return;
-    deleteEntryMutation.mutate(activeEntryId, {
-      onSuccess: () => {
-        setShowDeleteConfirm(false);
-        router.replace("/(main)");
-      },
-    });
+    setShowDeleteConfirm(false);
+    router.replace("/(main)");
+    deleteEntryMutation.mutate(activeEntryId);
   }, [activeEntryId, deleteEntryMutation]);
 
   // Determine content header title

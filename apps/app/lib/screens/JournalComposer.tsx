@@ -16,6 +16,7 @@ import {
   QuillRichEditor,
 } from "../components";
 import { useAttachmentsRepository } from "../db/attachmentsRepository";
+import { useEntryRepository } from "../db/entries";
 import { useEntry, useUpdateEntry } from "../db/useEntries";
 import { useSyncEngine } from "../sync";
 import { spacingPatterns } from "../theme";
@@ -33,17 +34,26 @@ import { saveJournalContent } from "./journalActions";
 import type { QuillRichEditorRef } from "../components";
 
 export interface JournalComposerProps {
-  entryId: number;
+  entryId?: number;
+  /** Initial text content for new entries (before DB entry exists) */
+  initialContent?: string;
+  /** Parent entry ID for check-ins */
+  parentId?: number;
   onSave?: (entryId: number) => void;
   onCancel?: () => void;
+  /** Called when a new entry is created in the database (on first edit) */
+  onCreated?: (entryId: number) => void;
   /** Hide the back button (e.g., in sidebar layout) */
   hideBackButton?: boolean;
 }
 
 export function JournalComposer({
-  entryId,
+  entryId: entryIdProp,
+  initialContent: initialContentProp = "",
+  parentId,
   onSave,
   onCancel,
+  onCreated,
   hideBackButton = false,
 }: JournalComposerProps) {
   const seasonalTheme = useSeasonalTheme();
@@ -54,6 +64,13 @@ export function JournalComposer({
 
   // Model management modal state
   const [showModelModal, setShowModelModal] = useState(false);
+
+  // Lazy entry creation: entryId may be undefined for new notes (created on first edit)
+  const [entryId, setEntryId] = useState(entryIdProp);
+  const entryRepository = useEntryRepository();
+  const isCreatingRef = useRef(false);
+  const onCreatedRef = useRef(onCreated);
+  onCreatedRef.current = onCreated;
 
   // Use react-query hooks
   const { data: entry, isLoading: _isLoadingEntry } = useEntry(entryId);
@@ -107,7 +124,10 @@ export function JournalComposer({
   // Derive base content from entry (before hydration)
   const baseContent = useMemo(() => {
     if (!entry) {
-      console.log("[JournalComposer] baseContent: entry is null/undefined");
+      // New note: use initial content prop if provided
+      if (initialContentProp.trim()) {
+        return `<h1>${initialContentProp}</h1>`;
+      }
       return "<p></p>";
     }
     console.log(
@@ -152,7 +172,7 @@ export function JournalComposer({
 
     // Empty or no content
     return "<p></p>";
-  }, [entry]);
+  }, [entry, initialContentProp]);
 
   // Hydrated content state - includes audio/image data URIs loaded from encrypted storage
   // null means hydration is in progress, string means ready to render
@@ -195,7 +215,7 @@ export function JournalComposer({
       for (const attachment of attachments) {
         if (cancelled) return;
         try {
-          const url = await getAudioAttachmentUrl(entryId, attachment.id);
+          const url = await getAudioAttachmentUrl(entryId!, attachment.id);
           urls.set(attachment.id, url);
         } catch (error) {
           console.warn(`Failed to prepare attachment ${attachment.id}:`, error);
@@ -296,7 +316,7 @@ export function JournalComposer({
       debouncedSave.cancel();
 
       const currentContent = htmlContentRef.current;
-      if (currentContent.trim() && !isDeletingRef.current) {
+      if (entryId && currentContent.trim() && !isDeletingRef.current) {
         const sanitizedContent = stripBase64FromAttachments(currentContent);
         saveJournalContent(entryId, sanitizedContent, "", actionContext, {
           updateCache: true,
@@ -353,9 +373,11 @@ export function JournalComposer({
     }
   }, [initialContent]);
 
+  const [isDeleting, setIsDeleting] = useState(false);
   const handleBeforeDelete = useCallback(() => {
-    // Mark as deleting to prevent save operations
+    // Mark as deleting to prevent save operations and unmount editor immediately
     isDeletingRef.current = true;
+    setIsDeleting(true);
 
     // Cancel any pending debounced saves
     debouncedSave.cancel();
@@ -368,7 +390,7 @@ export function JournalComposer({
 
     // Save content and wait for it to complete before navigating
     const currentContent = htmlContentRef.current;
-    if (currentContent.trim() && !isDeletingRef.current) {
+    if (entryId && currentContent.trim() && !isDeletingRef.current) {
       // Strip base64 data from attachments before saving
       const sanitizedContent = stripBase64FromAttachments(currentContent);
 
@@ -395,6 +417,32 @@ export function JournalComposer({
     onCancelRef.current?.();
   }, [entryId, actionContext, debouncedSave]);
 
+  // Create entry in DB on first edit (lazy creation for new notes)
+  const createEntryOnFirstEdit = useCallback(
+    async (html: string) => {
+      if (entryId || isCreatingRef.current) return;
+      isCreatingRef.current = true;
+
+      try {
+        const entry = await entryRepository.create({
+          type: "journal",
+          title: parentId ? "Check-in" : "Untitled",
+          blocks: [{ type: "html" as const, content: html }],
+          tags: [],
+          attachments: [],
+          isFavorite: false,
+          parentId,
+        });
+        setEntryId(entry.id);
+        onCreatedRef.current?.(entry.id);
+      } catch (error) {
+        console.error("Error creating entry on first edit:", error);
+        isCreatingRef.current = false;
+      }
+    },
+    [entryId, entryRepository, parentId],
+  );
+
   // Handle content changes from editor
   const handleChangeHtml = useCallback(
     (newHtml: string) => {
@@ -410,10 +458,17 @@ export function JournalComposer({
 
       // Store in ref instead of state to avoid re-renders
       htmlContentRef.current = newHtml;
+
+      // Lazy creation: if no entry yet, create it first
+      if (!entryId) {
+        createEntryOnFirstEdit(newHtml);
+        return;
+      }
+
       // Event-based auto-save: directly call debounced function
       debouncedSave(newHtml);
     },
-    [debouncedSave],
+    [entryId, debouncedSave, createEntryOnFirstEdit],
   );
 
   // Handle voice transcription completion - insert audio + text into editor
@@ -423,7 +478,7 @@ export function JournalComposer({
       audioUri: string | null;
       duration: number;
     }) => {
-      if (!editorRef.current) return;
+      if (!editorRef.current || !entryId) return;
 
       // Save audio as encrypted attachment and insert audio player
       if (result.audioUri) {
@@ -513,7 +568,7 @@ export function JournalComposer({
           },
         ]}
       >
-        {entry && initialContent !== null && (
+        {!isDeleting && (entry || !entryId) && initialContent !== null && (
           <QuillRichEditor
             key={`editor-${entryId}-${seasonalTheme.isDark ? "dark" : "light"}-v${contentVersion}`}
             ref={editorRef}

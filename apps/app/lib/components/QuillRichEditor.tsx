@@ -27,8 +27,8 @@ import QuillEditor from "react-native-cn-quill";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showKeyboard } from "../../modules/keyboard-module/src";
 import { spacingPatterns } from "../theme";
-import { blurEditors } from "../utils/blur-editors";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { blurEditors } from "../utils/blur-editors";
 import {
   VoiceRecordButton,
   type VoiceRecordButtonResult,

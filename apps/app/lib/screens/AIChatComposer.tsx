@@ -965,6 +965,12 @@ export function AIChatComposer({
   const updateEntryRef = useRef(updateEntry);
   updateEntryRef.current = updateEntry;
 
+  // Track the latest blocks we've saved to the database. This is the
+  // authoritative source for onResponseComplete because entryRef.current
+  // may be stale — React Query cache updates trigger a re-render, but
+  // the render may not have happened yet when the LLM finishes generating.
+  const latestSavedBlocksRef = useRef<Block[] | null>(null);
+
   // Use the simplified AI chat hook with agent settings
   const {
     isGenerating,
@@ -978,10 +984,13 @@ export function AIChatComposer({
     onResponseComplete: async (response) => {
       // Save completed response to database
       const entryId = currentEntryIdRef.current;
-      const currentEntry = entryRef.current;
 
       if (entryId) {
-        const currentBlocks = currentEntry?.blocks || [];
+        // Use latestSavedBlocksRef (set synchronously in handleSendMessageImpl)
+        // instead of entryRef.current.blocks which may be stale due to React
+        // re-render timing after query cache updates.
+        const currentBlocks =
+          latestSavedBlocksRef.current ?? entryRef.current?.blocks ?? [];
         // Filter out empty assistant markdown blocks, keep all others
         const filteredBlocks = currentBlocks.filter((b) => {
           if (b.role === "assistant" && b.type === "markdown") {
@@ -994,6 +1003,8 @@ export function AIChatComposer({
           ...filteredBlocks,
           { type: "markdown", content: response, role: "assistant" },
         ];
+
+        latestSavedBlocksRef.current = updatedBlocks;
 
         await updateEntryRef.current.mutateAsync({
           id: entryId,
@@ -1140,7 +1151,7 @@ export function AIChatComposer({
       color: seasonalTheme.textPrimary,
       fontFamily: contentFont,
       fontSize: 17,
-      lineHeight: 1.7,
+      lineHeight: 29,
     }),
     [seasonalTheme.textPrimary],
   );
@@ -1337,10 +1348,15 @@ export function AIChatComposer({
             ? messageText.substring(0, 57) + "..."
             : messageText;
 
+        const newBlocks: Block[] = [
+          { type: "markdown", content: messageText, role: "user" },
+        ];
+        latestSavedBlocksRef.current = newBlocks;
+
         const newEntry = await createEntry.mutateAsync({
           type: "ai_chat",
           title,
-          blocks: [{ type: "markdown", content: messageText, role: "user" }],
+          blocks: newBlocks,
           agentId: currentAgent?.id,
         });
 
@@ -1349,9 +1365,10 @@ export function AIChatComposer({
       } else {
         // Add user message to existing entry
         const updatedBlocks: Block[] = [
-          ...displayedBlocks,
+          ...(latestSavedBlocksRef.current ?? displayedBlocks),
           { type: "markdown", content: messageText, role: "user" },
         ];
+        latestSavedBlocksRef.current = updatedBlocks;
 
         await updateEntry.mutateAsync({
           id: entryIdToUse,

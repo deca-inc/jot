@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { View, StyleSheet } from "react-native";
 import { useEntryRepository, EntryType } from "../db/entries";
-import { useTheme } from "../theme/ThemeProvider";
 import { AIChatComposer } from "./AIChatComposer";
 import { JournalComposer } from "./JournalComposer";
 
@@ -36,7 +34,6 @@ export function ComposerScreen({
   onModelInfo,
   onComposerEntryId,
 }: ComposerScreenProps) {
-  const theme = useTheme();
   const entryRepository = useEntryRepository();
   // Use initialType if provided (navigation knows the type), otherwise undefined until loaded
   const [entryType, setEntryType] = useState<EntryType | undefined>(
@@ -51,56 +48,6 @@ export function ComposerScreen({
   useEffect(() => {
     if (!entryId) {
       hasLoadedEntryRef.current = null;
-
-      // If no entryId and we need one, create it for journal entries
-      if (initialType === "journal" && !actualEntryId) {
-        const createEntry = async () => {
-          try {
-            const blocks = initialContent.trim()
-              ? initialContent
-                  .split("\n\n")
-                  .filter((p) => p.trim())
-                  .map((p) => ({
-                    type: "paragraph" as const,
-                    content: p.trim(),
-                  }))
-              : [
-                  {
-                    type: "paragraph" as const,
-                    content: "",
-                  },
-                ];
-
-            const entry = await entryRepository.create({
-              type: "journal",
-              title: initialContent.trim()
-                ? initialContent.trim().slice(0, 50) +
-                  (initialContent.length > 50 ? "..." : "")
-                : parentId
-                  ? "Check-in"
-                  : "Untitled",
-              blocks,
-              tags: [],
-              attachments: [],
-              isFavorite: false,
-              parentId,
-            });
-
-            console.log(
-              "Created entry",
-              entry.id,
-              "with",
-              blocks.length,
-              "blocks",
-            );
-            setActualEntryId(entry.id);
-          } catch (error) {
-            console.error("Error creating entry:", error);
-          }
-        };
-
-        createEntry();
-      }
       return;
     }
 
@@ -113,14 +60,6 @@ export function ComposerScreen({
       try {
         const entry = await entryRepository.getById(entryId);
         if (entry) {
-          console.log(
-            "Loaded entry",
-            entryId,
-            "type:",
-            entry.type,
-            "blocks:",
-            entry.blocks.length,
-          );
           hasLoadedEntryRef.current = entryId;
           setEntryType(entry.type);
           setActualEntryId(entryId);
@@ -183,36 +122,25 @@ export function ComposerScreen({
 
   // Journal composer - show if type is journal OR if we're creating a new journal entry
   if (shouldUseFullScreen) {
-    // If we have an entryId (even if still creating), show the composer
-    // The composer will handle loading state internally
-    if (actualEntryId) {
-      return (
-        <JournalComposer
-          key={`journal-${actualEntryId}`}
-          entryId={actualEntryId}
-          onSave={onSave}
-          onCancel={handleJournalCancel}
-          hideBackButton={hideBackButton}
-        />
-      );
-    }
-    // While creating entry, show empty state - entry will be created quickly
-    // This shouldn't normally be visible as entry creation is fast
+    const handleJournalCreated = (newEntryId: number) => {
+      setActualEntryId(newEntryId);
+      onSave?.(newEntryId);
+    };
+
     return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        {/* Empty state - entry creating in background */}
-      </View>
+      <JournalComposer
+        key={`journal-${actualEntryId || "new"}`}
+        entryId={actualEntryId}
+        initialContent={initialContent}
+        parentId={parentId}
+        onSave={onSave}
+        onCancel={handleJournalCancel}
+        onCreated={handleJournalCreated}
+        hideBackButton={hideBackButton}
+      />
     );
   }
 
   // Default composer view (should not be reached in normal flow)
   return null;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});

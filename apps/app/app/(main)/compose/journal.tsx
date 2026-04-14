@@ -3,7 +3,10 @@ import { useCallback } from "react";
 import { ComposerScreen } from "../../../lib/screens";
 
 export default function ComposeJournalRoute() {
-  const { parentId } = useLocalSearchParams<{ parentId?: string }>();
+  const { parentId, initialText } = useLocalSearchParams<{
+    parentId?: string;
+    initialText?: string;
+  }>();
 
   const handleSave = useCallback((entryId: number) => {
     router.replace(`/(main)/entry/${entryId}`);
@@ -16,6 +19,7 @@ export default function ComposeJournalRoute() {
   return (
     <ComposerScreen
       initialType="journal"
+      initialContent={initialText}
       parentId={parentId ? Number(parentId) : undefined}
       onSave={handleSave}
       onCancel={handleCancel}

@@ -621,6 +621,9 @@ function EntryListItemComponent({
   // Event handler: Delete entry (shows confirmation dialog)
   const handleDeleteConfirm = async () => {
     setShowDeleteDialog(false);
+    // Navigate away from the active entry first so the entry screen unmounts
+    // before the cache update cascade hits the Stack navigator.
+    onDeleteEntry?.(entry.id);
     try {
       // Cancel notification before deleting if this is a countdown with a notification
       if (entry.type === "countdown") {
@@ -630,7 +633,6 @@ function EntryListItemComponent({
         }
       }
       await actionContext.deleteEntry.mutateAsync(entry.id);
-      onDeleteEntry?.(entry.id);
       trackEvent("Delete Entry", { entryType: entry.type });
     } catch (error) {
       console.error("[EntryListItem] Error deleting entry:", error);
