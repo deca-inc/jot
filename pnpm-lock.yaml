@@ -86,8 +86,8 @@ importers:
         specifier: ^1.0.10
         version: 1.0.10(expo@54.0.33)
       expo-constants:
-        specifier: 18.0.13
-        version: 18.0.13(expo@54.0.33)(react-native@0.81.5)
+        specifier: 18.0.10
+        version: 18.0.10(expo@54.0.33)(react-native@0.81.5)
       expo-crypto:
         specifier: ~15.0.8
         version: 15.0.8(expo@54.0.33)
@@ -114,7 +114,7 @@ importers:
         version: 0.32.16(expo@54.0.33)(react-native@0.81.5)(react@19.1.0)
       expo-router:
         specifier: ^6.0.23
-        version: 6.0.23(@expo/metro-runtime@6.1.2)(@testing-library/react-native@13.3.3)(@types/react@19.1.17)(expo-constants@18.0.13)(expo-linking@8.0.11)(expo@54.0.33)(react-dom@19.1.0)(react-native-reanimated@4.1.6)(react-native-safe-area-context@5.6.2)(react-native-screens@4.16.0)(react-native-web@0.21.2)(react-native@0.81.5)(react@19.1.0)
+        version: 6.0.23(@expo/metro-runtime@6.1.2)(@testing-library/react-native@13.3.3)(@types/react@19.1.17)(expo-constants@18.0.10)(expo-linking@8.0.11)(expo@54.0.33)(react-dom@19.1.0)(react-native-reanimated@4.1.6)(react-native-safe-area-context@5.6.2)(react-native-screens@4.16.0)(react-native-web@0.21.2)(react-native@0.81.5)(react@19.1.0)
       expo-secure-store:
         specifier: ~15.0.8
         version: 15.0.8(expo@54.0.33)
@@ -2146,7 +2146,7 @@ packages:
       debug: 4.4.3
       env-editor: 0.4.2
       expo: 54.0.33(@babel/core@7.28.5)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native-webview@13.15.0)(react-native@0.81.5)(react@19.1.0)
-      expo-router: 6.0.23(@expo/metro-runtime@6.1.2)(@testing-library/react-native@13.3.3)(@types/react@19.1.17)(expo-constants@18.0.13)(expo-linking@8.0.11)(expo@54.0.33)(react-dom@19.1.0)(react-native-reanimated@4.1.6)(react-native-safe-area-context@5.6.2)(react-native-screens@4.16.0)(react-native-web@0.21.2)(react-native@0.81.5)(react@19.1.0)
+      expo-router: 6.0.23(@expo/metro-runtime@6.1.2)(@testing-library/react-native@13.3.3)(@types/react@19.1.17)(expo-constants@18.0.10)(expo-linking@8.0.11)(expo@54.0.33)(react-dom@19.1.0)(react-native-reanimated@4.1.6)(react-native-safe-area-context@5.6.2)(react-native-screens@4.16.0)(react-native-web@0.21.2)(react-native@0.81.5)(react@19.1.0)
       expo-server: 1.0.5
       freeport-async: 2.0.0
       getenv: 2.0.0
@@ -6711,19 +6711,6 @@ packages:
     transitivePeerDependencies:
       - supports-color
 
-  /expo-constants@18.0.13(expo@54.0.33)(react-native@0.81.5):
-    resolution: {integrity: sha512-FnZn12E1dRYKDHlAdIyNFhBurKTS3F9CrfrBDJI5m3D7U17KBHMQ6JEfYlSj7LG7t+Ulr+IKaj58L1k5gBwTcQ==}
-    peerDependencies:
-      expo: ~54.0.25
-      react-native: '*'
-    dependencies:
-      '@expo/config': 12.0.13
-      '@expo/env': 2.0.11
-      expo: 54.0.33(@babel/core@7.28.5)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native-webview@13.15.0)(react-native@0.81.5)(react@19.1.0)
-      react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
-    transitivePeerDependencies:
-      - supports-color
-
   /expo-crypto@15.0.8(expo@54.0.33):
     resolution: {integrity: sha512-aF7A914TB66WIlTJvl5J6/itejfY78O7dq3ibvFltL9vnTALJ/7LYHvLT4fwmx9yUNS6ekLBtDGWivFWnj2Fcw==}
     peerDependencies:
@@ -6922,7 +6909,7 @@ packages:
     dev: false
     optional: true
 
-  /expo-router@6.0.23(@expo/metro-runtime@6.1.2)(@testing-library/react-native@13.3.3)(@types/react@19.1.17)(expo-constants@18.0.13)(expo-linking@8.0.11)(expo@54.0.33)(react-dom@19.1.0)(react-native-reanimated@4.1.6)(react-native-safe-area-context@5.6.2)(react-native-screens@4.16.0)(react-native-web@0.21.2)(react-native@0.81.5)(react@19.1.0):
+  /expo-router@6.0.23(@expo/metro-runtime@6.1.2)(@testing-library/react-native@13.3.3)(@types/react@19.1.17)(expo-constants@18.0.10)(expo-linking@8.0.11)(expo@54.0.33)(react-dom@19.1.0)(react-native-reanimated@4.1.6)(react-native-safe-area-context@5.6.2)(react-native-screens@4.16.0)(react-native-web@0.21.2)(react-native@0.81.5)(react@19.1.0):
     resolution: {integrity: sha512-qCxVAiCrCyu0npky6azEZ6dJDMt77OmCzEbpF6RbUTlfkaCA417LvY14SBkk0xyGruSxy/7pvJOI6tuThaUVCA==}
     peerDependencies:
       '@expo/metro-runtime': ^6.1.2
@@ -6968,7 +6955,7 @@ packages:
       debug: 4.4.3
       escape-string-regexp: 4.0.0
       expo: 54.0.33(@babel/core@7.28.5)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native-webview@13.15.0)(react-native@0.81.5)(react@19.1.0)
-      expo-constants: 18.0.13(expo@54.0.33)(react-native@0.81.5)
+      expo-constants: 18.0.10(expo@54.0.33)(react-native@0.81.5)
       expo-linking: 8.0.11(expo@54.0.33)(react-native@0.81.5)(react@19.1.0)
       expo-server: 1.0.5
       fast-deep-equal: 3.1.3
