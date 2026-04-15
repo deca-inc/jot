@@ -1,0 +1,22 @@
+{
+  "name": "jotweb",
+  "compatibility_date": "2025-10-08",
+  "main": "./server.ts",
+  "assets": {
+    "directory": "./build/client"
+  },
+  "routes": [
+    {
+      "pattern": "jot-ai.app",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.jot-ai.app",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "upload_source_maps": true
+}

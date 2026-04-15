@@ -1,0 +1,57 @@
+{
+  "name": "@jot/web",
+  "description": "Jot marketing website and blog.",
+  "private": true,
+  "dependencies": {
+    "@remix-run/cloudflare": "2.16.5",
+    "@remix-run/react": "2.16.5",
+    "@remix-run/server-runtime": "2.16.5",
+    "@tailwindcss/typography": "^0.5.19",
+    "gray-matter": "^4.0.3",
+    "isbot": "5.1.26",
+    "marked": "^17.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "vite-plugin-markdown": "^2.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250425.0",
+    "@remix-run/dev": "2.16.5",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@typescript-eslint/eslint-plugin": "8.35.0",
+    "@typescript-eslint/parser": "8.35.0",
+    "autoprefixer": "10.4.21",
+    "eslint": "9.27.0",
+    "eslint-import-resolver-typescript": "4.4.4",
+    "eslint-plugin-import": "2.32.0",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "5.2.0",
+    "postcss": "8.5.3",
+    "tailwindcss": "^3.4.0",
+    "typescript": "5.8.3",
+    "vite": "5.4.14",
+    "vite-tsconfig-paths": "5.1.4",
+    "wrangler": "^3.114.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "new-post": "node scripts/new-post.js",
+    "build": "remix vite:build",
+    "cf-typegen": "wrangler types",
+    "check": "tsc && remix vite:build && wrangler deploy --dry-run",
+    "deploy": "remix vite:build && wrangler deploy",
+    "dev": "remix vite:dev",
+    "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
+    "preview": "pnpm build && wrangler dev",
+    "start": "wrangler dev",
+    "typecheck": "tsc",
+    "typegen": "wrangler types"
+  },
+  "sideEffects": false,
+  "type": "module"
+}
