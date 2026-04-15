@@ -180,9 +180,8 @@ function OnboardingGate() {
 
         if (!hasCompleted) {
           router.replace("/(onboarding)/welcome");
-        } else {
-          router.replace("/(main)");
         }
+        // If onboarding is complete, no redirect needed — app already starts on /(main)
       } catch (error) {
         console.error("Error checking onboarding status:", error);
         if (!hasNavigatedRef.current) {
