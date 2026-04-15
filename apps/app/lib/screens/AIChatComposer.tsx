@@ -429,9 +429,9 @@ const ChatInputBar = memo(
             right: 0,
             bottom: keyboardHeight,
 
-            marginLeft: "auto" as any,
+            marginLeft: "auto" as unknown as number,
 
-            marginRight: "auto" as any,
+            marginRight: "auto" as unknown as number,
           },
         ]}
       >
@@ -465,7 +465,7 @@ const ChatInputBar = memo(
                   : spacingPatterns.md + 36,
               },
 
-              { outlineStyle: "none" } as any,
+              { outlineStyle: "none" } as unknown as Record<string, string>,
             ]}
             placeholder="Reply..."
             placeholderTextColor={seasonalTheme.textSecondary + "80"}

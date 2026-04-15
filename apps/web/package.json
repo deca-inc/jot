@@ -46,7 +46,7 @@
     "check": "tsc && remix vite:build && wrangler deploy --dry-run",
     "deploy": "remix vite:build && wrangler deploy",
     "dev": "remix vite:dev",
-    "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
+    "lint": "eslint --cache --cache-location ./node_modules/.cache/eslint .",
     "preview": "pnpm build && wrangler dev",
     "start": "wrangler dev",
     "typecheck": "tsc",

@@ -688,7 +688,7 @@ function MainLayout() {
                     outlineStyle: "none",
                     background: "transparent",
                     verticalAlign: "middle",
-                  } as any,
+                  } as unknown as Record<string, string>,
                 ]}
                 returnKeyType="done"
               />
@@ -738,7 +738,7 @@ function MainLayout() {
                 outlineStyle: "none",
                 background: "transparent",
                 verticalAlign: "middle",
-              } as any,
+              } as unknown as Record<string, string>,
             ]}
             returnKeyType="done"
           />

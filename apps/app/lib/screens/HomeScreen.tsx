@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import React, {
   useState,
@@ -11,7 +10,6 @@ import {
   View,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   ListRenderItem,
   Alert,
 } from "react-native";
@@ -39,7 +37,6 @@ import {
 } from "../db/useEntries";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
-import { useTheme } from "../theme/ThemeProvider";
 import { extractCountdownData, createCountdownBlock } from "../utils/countdown";
 import { useDebounce } from "../utils/debounce";
 
@@ -84,7 +81,6 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     onDeleteEntry,
     compact = false,
   } = props;
-  const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
 
   // Track screen view
