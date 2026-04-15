@@ -6,6 +6,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Switch,
   TouchableOpacity,
   Alert,
   Platform,
@@ -27,8 +28,11 @@ import {
 } from "../ai/modelManager";
 import { isDesktopLLMModelId, isWebLLMModelId } from "../ai/modelTypeGuards";
 import { getAvailablePersonas } from "../ai/personaAvailability";
-import { getAvailableModelsForPlatform } from "../ai/platformFilter";
-import { getCurrentPlatform } from "../ai/platformFilter";
+import {
+  getAvailableModelsForPlatform,
+  getAvailableSTTModelsForPlatform,
+  getCurrentPlatform,
+} from "../ai/platformFilter";
 import { ALL_STT_MODELS } from "../ai/sttConfig";
 import { useUnifiedModel } from "../ai/UnifiedModelProvider";
 import {
@@ -90,7 +94,12 @@ const MODEL_SIZES: Record<string, number> = {
   "desktop-qwen-2.5-14b-instruct": 8800,
   "desktop-qwen-2.5-32b-instruct": 19000,
   "desktop-llama-3.3-70b-instruct": 42000,
-  // STT models
+  // STT models - Moonshine (sherpa-onnx)
+  "moonshine-base-en": 274,
+  "moonshine-tiny-en": 118,
+  // STT models - Whisper (ExecuTorch)
+  "whisper-small-en": 900,
+  "whisper-base-en": 400,
   "whisper-tiny-en": 233,
   "whisper-tiny-multi": 233,
 };
@@ -153,6 +162,7 @@ export function ModelManagementModal({
   // STT state
   const [selectedSTTId, setSelectedSTTId] = useState<string | null>(null);
   const [downloadedSTTs, setDownloadedSTTs] = useState<string[]>([]);
+  const [sttPostProcess, setSttPostProcess] = useState(true);
 
   // Platform model state
   const [selectedPlatformLLMId, setSelectedPlatformLLMId] = useState<
@@ -237,6 +247,7 @@ export function ModelManagementModal({
       const [
         selectedLlmId,
         selectedSttId,
+        sttPostProcessEnabled,
         downloaded,
         compatible,
         tier,
@@ -248,6 +259,7 @@ export function ModelManagementModal({
       ] = await Promise.all([
         modelSettings.getSelectedModelId(),
         modelSettings.getSelectedSttModelId(),
+        modelSettings.getSttPostProcess(),
         modelSettings.getDownloadedModels(),
         getCompatibleModels(),
         getDeviceTier(),
@@ -260,6 +272,7 @@ export function ModelManagementModal({
 
       setSelectedLLMId(selectedLlmId);
       setSelectedSTTId(selectedSttId);
+      setSttPostProcess(sttPostProcessEnabled);
       setCompatibleModels(compatible);
       setDeviceTier(tier);
       setAgents(agentsList);
@@ -297,7 +310,14 @@ export function ModelManagementModal({
     return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
   });
 
-  const sortedSTTs = [...ALL_STT_MODELS].sort((a, b) => {
+  const availableSTTs = getAvailableSTTModelsForPlatform(
+    ALL_STT_MODELS,
+    currentPlatform,
+  ).filter(
+    // Hide deprecated models unless the user already has them downloaded
+    (m) => !m.deprecated || downloadedSTTs.includes(m.modelId),
+  );
+  const sortedSTTs = [...availableSTTs].sort((a, b) => {
     const indexA = STT_ORDER.indexOf(a.modelId);
     const indexB = STT_ORDER.indexOf(b.modelId);
     return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
@@ -1594,6 +1614,44 @@ export function ModelManagementModal({
                       Voice models for speech-to-text transcription.
                     </Text>
 
+                    {/* Post-process toggle */}
+                    <View style={styles.postProcessRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          variant="body"
+                          style={{
+                            color: seasonalTheme.textPrimary,
+                            fontWeight: "500",
+                          }}
+                        >
+                          Post-process transcripts
+                        </Text>
+                        <Text
+                          variant="caption"
+                          style={{ color: seasonalTheme.textSecondary }}
+                        >
+                          Use LLM to fix grammar and format lists, headings,
+                          etc.
+                        </Text>
+                      </View>
+                      <Switch
+                        value={sttPostProcess}
+                        onValueChange={(value) => {
+                          setSttPostProcess(value);
+                          modelSettings.setSttPostProcess(value);
+                        }}
+                        trackColor={{
+                          false: seasonalTheme.textSecondary + "40",
+                          true: theme.colors.accent + "80",
+                        }}
+                        thumbColor={
+                          sttPostProcess
+                            ? theme.colors.accent
+                            : seasonalTheme.textSecondary
+                        }
+                      />
+                    </View>
+
                     {/* Platform STT Models Section */}
                     {hasPlatformSTT && (
                       <View style={styles.platformSection}>
@@ -2321,6 +2379,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
+  },
+  postProcessRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacingPatterns.sm,
+    marginBottom: spacingPatterns.sm,
+    gap: spacingPatterns.md,
   },
   platformSection: {
     gap: spacingPatterns.xs,

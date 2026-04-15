@@ -72,10 +72,15 @@ export function PopoverMenu({
   const windowHeight = Dimensions.get("window").height;
   const windowWidth = Dimensions.get("window").width;
   const gap = 4;
+  const hasLayout = triggerLayout.width > 0 && triggerLayout.height > 0;
   const spaceBelow =
     windowHeight - (triggerLayout.y + triggerLayout.height + gap);
+  // Only place above if there's not enough room below AND enough room above
   const placeAbove =
-    menuHeight > 0 && spaceBelow < menuHeight && triggerLayout.y > spaceBelow;
+    hasLayout &&
+    menuHeight > 0 &&
+    spaceBelow < menuHeight &&
+    triggerLayout.y > menuHeight;
 
   const verticalStyle = placeAbove
     ? { bottom: windowHeight - triggerLayout.y + gap }
@@ -85,6 +90,9 @@ export function PopoverMenu({
     anchor === "right"
       ? { right: windowWidth - (triggerLayout.x + triggerLayout.width) }
       : { left: triggerLayout.x };
+
+  // Hide menu until trigger is measured to prevent flash at wrong position
+  const menuOpacity = hasLayout ? 1 : 0;
 
   return (
     <View ref={triggerRef} collapsable={false}>
@@ -103,6 +111,7 @@ export function PopoverMenu({
               verticalStyle,
               horizontalStyle,
               {
+                opacity: menuOpacity,
                 backgroundColor: seasonalTheme.gradient.middle,
                 borderColor: seasonalTheme.isDark
                   ? "rgba(255,255,255,0.12)"

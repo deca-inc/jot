@@ -48,6 +48,8 @@ class PlatformAIModule : Module() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var currentTranscription: String = ""
     private var isRecognitionActive: Boolean = false
+    // Accumulated text from finalized segments (recognizer can reset between segments)
+    private var finalizedTranscription: String = ""
 
     // Gemini Nano generative model
     private var generativeModel: GenerativeModel? = null
@@ -334,6 +336,7 @@ class PlatformAIModule : Module() {
 
                     // Reset state
                     currentTranscription = ""
+                    finalizedTranscription = ""
                     isRecognitionActive = true
 
                     // Set up recognition listener
@@ -378,7 +381,14 @@ class PlatformAIModule : Module() {
                         override fun onResults(results: Bundle?) {
                             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             if (!matches.isNullOrEmpty()) {
-                                currentTranscription = matches[0]
+                                val segmentText = matches[0]
+                                // Accumulate finalized segment text
+                                finalizedTranscription = if (finalizedTranscription.isEmpty()) {
+                                    segmentText
+                                } else {
+                                    "$finalizedTranscription $segmentText"
+                                }
+                                currentTranscription = finalizedTranscription
                                 Log.d(TAG, "Final result received")
                             }
                             isRecognitionActive = false
@@ -387,7 +397,13 @@ class PlatformAIModule : Module() {
                         override fun onPartialResults(partialResults: Bundle?) {
                             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             if (!matches.isNullOrEmpty()) {
-                                currentTranscription = matches[0]
+                                val partialText = matches[0]
+                                // Combine finalized segments with current partial
+                                currentTranscription = if (finalizedTranscription.isEmpty()) {
+                                    partialText
+                                } else {
+                                    "$finalizedTranscription $partialText"
+                                }
                                 Log.d(TAG, "Partial result received")
                             }
                         }
@@ -439,11 +455,14 @@ class PlatformAIModule : Module() {
                 try {
                     speechRecognizer?.stopListening()
 
-                    // Give it a moment to finalize
+                    // Give it a moment to finalize, then capture and clear all state
                     mainHandler.postDelayed({
                         val finalText = currentTranscription
                         speechRecognizer?.destroy()
                         speechRecognizer = null
+                        // Clear all state so nothing leaks into the next session
+                        currentTranscription = ""
+                        finalizedTranscription = ""
                         isRecognitionActive = false
                         promise.resolve(finalText)
                     }, 200)
@@ -463,6 +482,7 @@ class PlatformAIModule : Module() {
                     speechRecognizer?.destroy()
                     speechRecognizer = null
                     currentTranscription = ""
+                    finalizedTranscription = ""
                     isRecognitionActive = false
                     promise.resolve(null)
                 } catch (e: Exception) {

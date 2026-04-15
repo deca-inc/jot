@@ -9,7 +9,7 @@
 
 import { Platform } from "react-native";
 import { isTauri } from "../platform/isTauri";
-import type { LlmModelConfig } from "./modelConfig";
+import type { LlmModelConfig, SpeechToTextModelConfig } from "./modelConfig";
 
 export type AppPlatform = "ios" | "android" | "macos" | "web" | "tauri";
 
@@ -54,5 +54,16 @@ export function getAvailableModelsForPlatform(
   models: LlmModelConfig[],
   platform: AppPlatform,
 ): LlmModelConfig[] {
+  return models.filter((m) => isModelAvailableOnPlatform(m, platform));
+}
+
+/**
+ * Filter a list of STT model configs to only those available on the given platform.
+ * Preserves the original array order.
+ */
+export function getAvailableSTTModelsForPlatform(
+  models: SpeechToTextModelConfig[],
+  platform: AppPlatform,
+): SpeechToTextModelConfig[] {
   return models.filter((m) => isModelAvailableOnPlatform(m, platform));
 }

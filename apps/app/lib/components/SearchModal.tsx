@@ -556,6 +556,7 @@ const styles = StyleSheet.create({
     width: "90%",
     maxWidth: 560,
     maxHeight: "70%",
+    flex: 1,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     overflow: "hidden",

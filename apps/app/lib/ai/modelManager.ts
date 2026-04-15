@@ -399,25 +399,50 @@ export async function ensureSTTModelPresent(
 
   // Check if all files already exist
   const encoderPath = joinPaths(modelDir, config.encoderFileName);
-  const decoderPath = joinPaths(modelDir, config.decoderFileName);
-  const tokenizerPath = joinPaths(modelDir, config.tokenizerFileName);
+  const decoderPath = config.decoderFileName
+    ? joinPaths(modelDir, config.decoderFileName)
+    : "";
+  const tokenizerPath = config.tokenizerFileName
+    ? joinPaths(modelDir, config.tokenizerFileName)
+    : "";
 
-  const [encoderInfo, decoderInfo, tokenizerInfo] = await Promise.all([
-    FileSystem.getInfoAsync(encoderPath),
-    FileSystem.getInfoAsync(decoderPath),
-    FileSystem.getInfoAsync(tokenizerPath),
-  ]);
+  // Build list of all files that need to exist
+  const fileChecks: Promise<{ path: string; exists: boolean }>[] = [];
+  fileChecks.push(
+    FileSystem.getInfoAsync(encoderPath).then((info) => ({
+      path: encoderPath,
+      exists: !!(info.exists && info.size && info.size > 0),
+    })),
+  );
+  if (decoderPath && config.decoderSource.kind !== "unavailable") {
+    fileChecks.push(
+      FileSystem.getInfoAsync(decoderPath).then((info) => ({
+        path: decoderPath,
+        exists: !!(info.exists && info.size && info.size > 0),
+      })),
+    );
+  }
+  if (tokenizerPath && config.tokenizerSource.kind !== "unavailable") {
+    fileChecks.push(
+      FileSystem.getInfoAsync(tokenizerPath).then((info) => ({
+        path: tokenizerPath,
+        exists: !!(info.exists && info.size && info.size > 0),
+      })),
+    );
+  }
+  // Check extraFiles (sherpa-onnx models)
+  for (const extra of config.extraFiles ?? []) {
+    const extraPath = joinPaths(modelDir, extra.fileName);
+    fileChecks.push(
+      FileSystem.getInfoAsync(extraPath).then((info) => ({
+        path: extraPath,
+        exists: !!(info.exists && info.size && info.size > 0),
+      })),
+    );
+  }
 
-  const allExist =
-    encoderInfo.exists &&
-    encoderInfo.size &&
-    encoderInfo.size > 0 &&
-    decoderInfo.exists &&
-    decoderInfo.size &&
-    decoderInfo.size > 0 &&
-    tokenizerInfo.exists &&
-    tokenizerInfo.size &&
-    tokenizerInfo.size > 0;
+  const fileResults = await Promise.all(fileChecks);
+  const allExist = fileResults.every((f) => f.exists);
 
   if (allExist) {
     console.log(
@@ -426,6 +451,18 @@ export async function ensureSTTModelPresent(
     onProgress?.(1.0);
     return { encoderPath, decoderPath, tokenizerPath };
   }
+
+  // For models that are encoder-only + extraFiles (sherpa-onnx),
+  // check each file individually for download
+  const [encoderInfo] = await Promise.all([
+    FileSystem.getInfoAsync(encoderPath),
+  ]);
+  const decoderInfo = decoderPath
+    ? await FileSystem.getInfoAsync(decoderPath)
+    : { exists: true, size: 1 };
+  const tokenizerInfo = tokenizerPath
+    ? await FileSystem.getInfoAsync(tokenizerPath)
+    : { exists: true, size: 1 };
 
   // Need to download - start tracking
   modelDownloadStatus.startDownload(config.modelId, config.displayName);
@@ -468,12 +505,12 @@ export async function ensureSTTModelPresent(
 
     // Download decoder (50% of progress, starting from 40%)
     let finalDecoderPath = decoderPath;
-    if (!decoderInfo.exists || !decoderInfo.size) {
-      if (config.decoderSource.kind === "unavailable") {
-        throw new Error(
-          `Decoder not available: ${config.decoderSource.reason}`,
-        );
-      } else if (config.decoderSource.kind === "remote") {
+    if (config.decoderSource.kind === "unavailable") {
+      // No decoder needed (sherpa-onnx models use extraFiles)
+      onProgress?.(0.9);
+      modelDownloadStatus.updateProgress(config.modelId, 90);
+    } else if (!decoderInfo.exists || !decoderInfo.size) {
+      if (config.decoderSource.kind === "remote") {
         console.log(
           `[ensureSTTModelPresent] Downloading decoder: ${config.decoderSource.url}`,
         );
@@ -503,12 +540,10 @@ export async function ensureSTTModelPresent(
 
     // Download tokenizer (10% of progress, starting from 90%)
     let finalTokenizerPath = tokenizerPath;
-    if (!tokenizerInfo.exists || !tokenizerInfo.size) {
-      if (config.tokenizerSource.kind === "unavailable") {
-        throw new Error(
-          `Tokenizer not available: ${config.tokenizerSource.reason}`,
-        );
-      } else if (config.tokenizerSource.kind === "remote") {
+    if (config.tokenizerSource.kind === "unavailable") {
+      // No tokenizer needed (sherpa-onnx models use extraFiles)
+    } else if (!tokenizerInfo.exists || !tokenizerInfo.size) {
+      if (config.tokenizerSource.kind === "remote") {
         console.log(
           `[ensureSTTModelPresent] Downloading tokenizer: ${config.tokenizerSource.url}`,
         );
@@ -530,6 +565,48 @@ export async function ensureSTTModelPresent(
         );
       } else {
         throw new Error("Bundled STT assets not yet supported");
+      }
+    }
+
+    // Download extra files (sherpa-onnx models: encode, cached_decode, uncached_decode, tokens)
+    const extras = config.extraFiles ?? [];
+    if (extras.length > 0) {
+      // Distribute remaining progress evenly across extra files
+      // Encoder already took 40%, so we have 60% left for extras
+      const progressPerFile = 0.6 / extras.length;
+      for (let i = 0; i < extras.length; i++) {
+        const extra = extras[i];
+        if (extra.source.kind !== "remote") continue;
+        const extraPath = joinPaths(modelDir, extra.fileName);
+        const extraInfo = await FileSystem.getInfoAsync(extraPath);
+        if (extraInfo.exists && extraInfo.size && extraInfo.size > 0) {
+          const overallProgress = 0.4 + (i + 1) * progressPerFile;
+          onProgress?.(overallProgress);
+          modelDownloadStatus.updateProgress(
+            config.modelId,
+            Math.round(overallProgress * 100),
+          );
+          continue;
+        }
+        console.log(
+          `[ensureSTTModelPresent] Downloading extra file: ${extra.fileName}`,
+        );
+        await ensureFromRemoteToFolder(
+          extra.source.url,
+          config.folderName,
+          extra.fileName,
+          config.modelId,
+          config.displayName,
+          "model",
+          (progress) => {
+            const overallProgress = 0.4 + (i + progress) * progressPerFile;
+            onProgress?.(overallProgress);
+            modelDownloadStatus.updateProgress(
+              config.modelId,
+              Math.round(overallProgress * 100),
+            );
+          },
+        );
       }
     }
 

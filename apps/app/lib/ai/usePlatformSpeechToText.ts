@@ -333,8 +333,11 @@ export function usePlatformSpeechToText(
             duration,
           };
 
+          // Clear all state so nothing leaks into the next session
           setIsProcessing(false);
           webSpeechRef.current = null;
+          webSpeechTextRef.current = "";
+          setCurrentText("");
 
           console.log(
             "[usePlatformSpeechToText] Web Speech transcription complete",
@@ -391,8 +394,9 @@ export function usePlatformSpeechToText(
           duration,
         };
 
-        // Done processing
+        // Clear state so nothing leaks into the next session
         setIsProcessing(false);
+        setCurrentText("");
 
         console.log("[usePlatformSpeechToText] Transcription complete");
         onTranscriptionCompleteRef.current?.(result);

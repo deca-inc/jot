@@ -20,6 +20,8 @@ public class PlatformAIModule: Module {
   // Track current transcription
   private var currentTranscription: String = ""
   private var isRecognitionActive: Bool = false
+  // Accumulated text from finalized segments (on-device recognition can reset between segments)
+  private var finalizedTranscription: String = ""
 
   public func definition() -> ModuleDefinition {
     Name("PlatformAI")
@@ -219,6 +221,7 @@ public class PlatformAIModule: Module {
 
       // Reset transcription
       self.currentTranscription = ""
+      self.finalizedTranscription = ""
       self.isRecognitionActive = true
 
       // Start recognition task
@@ -226,10 +229,34 @@ public class PlatformAIModule: Module {
         guard let self = self else { return }
 
         if let result = result {
-          self.currentTranscription = result.bestTranscription.formattedString
+          let newText = result.bestTranscription.formattedString
+
+          if result.isFinal {
+            // Segment finalized — accumulate it
+            if self.finalizedTranscription.isEmpty {
+              self.finalizedTranscription = newText
+            } else {
+              self.finalizedTranscription = self.finalizedTranscription + " " + newText
+            }
+            self.currentTranscription = self.finalizedTranscription
+          } else if newText.count >= self.currentTranscription.count {
+            // Normal cumulative partial result
+            if self.finalizedTranscription.isEmpty {
+              self.currentTranscription = newText
+            } else {
+              self.currentTranscription = self.finalizedTranscription + " " + newText
+            }
+          } else {
+            // Text got shorter — new segment started, append partial to finalized
+            if self.finalizedTranscription.isEmpty {
+              self.currentTranscription = newText
+            } else {
+              self.currentTranscription = self.finalizedTranscription + " " + newText
+            }
+          }
         }
 
-        if error != nil || (result?.isFinal ?? false) {
+        if error != nil {
           self.isRecognitionActive = false
         }
       }
@@ -268,7 +295,9 @@ public class PlatformAIModule: Module {
       // Get final transcription
       let finalText = self.currentTranscription
 
-      // Clean up
+      // Clean up — clear all state so nothing leaks into the next session
+      self.currentTranscription = ""
+      self.finalizedTranscription = ""
       self.recognitionRequest = nil
       self.recognitionTask = nil
       self.audioEngine = nil
@@ -295,6 +324,7 @@ public class PlatformAIModule: Module {
       self.recognitionTask = nil
       self.audioEngine = nil
       self.currentTranscription = ""
+      self.finalizedTranscription = ""
       self.isRecognitionActive = false
     }
 

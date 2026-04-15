@@ -420,22 +420,43 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     setFabMenuOpen((prev) => !prev);
   }, []);
 
-  // Group entries by day for section headers, with pinned items at the top
+  // Group entries by period for section headers, with pinned items at the top
   const groupedData = useMemo(() => {
     // Separate pinned and non-pinned entries
     const pinnedEntries = showPinned ? entries.filter((e) => e.isPinned) : [];
     const nonPinnedEntries = entries.filter((e) => !e.isPinned);
 
+    // Compute period boundaries once
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayDow = today.getDay(); // 0=Sun
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - (todayDow === 0 ? 6 : todayDow - 1)); // Monday
+    const startOfLastWeek = new Date(startOfWeek);
+    startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+    const startOfLastMonth = new Date(
+      today.getFullYear(),
+      today.getMonth() - 1,
+      1,
+    );
+
+    const getDateBucket = (date: Date): string => {
+      const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const diffDays = Math.floor(
+        (today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      if (diffDays <= 0) return "0:Today";
+      if (diffDays === 1) return "1:Yesterday";
+      if (d >= startOfWeek) return "2:This Week";
+      if (d >= startOfLastWeek) return "3:Last Week";
+      if (d >= startOfLastMonth) return "4:Last Month";
+      return "5:Before";
+    };
+
     const grouped = new Map<string, Entry[]>();
 
     nonPinnedEntries.forEach((entry) => {
-      const date = new Date(entry.updatedAt);
-      const dateKey = new Date(
-        date.getFullYear(),
-        date.getMonth(),
-        date.getDate(),
-      ).toISOString();
-
+      const dateKey = getDateBucket(new Date(entry.updatedAt));
       if (!grouped.has(dateKey)) {
         grouped.set(dateKey, []);
       }
@@ -457,12 +478,12 @@ export function HomeScreen(props: HomeScreenProps = {}) {
       });
     }
 
-    // Add date-grouped entries
+    // Add period-grouped entries (sorted by bucket order)
     Array.from(grouped.entries())
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .forEach(([dateKey, dayEntries]) => {
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .forEach(([dateKey, bucketEntries]) => {
         flatData.push({ type: "header", dateKey });
-        dayEntries.forEach((entry) => {
+        bucketEntries.forEach((entry) => {
           flatData.push({ type: "entry", entry });
         });
       });
@@ -471,38 +492,8 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   }, [entries, showPinned]);
 
   const formatDateHeader = useCallback((dateKey: string): string => {
-    const date = new Date(dateKey);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const entryDate = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-    );
-
-    if (entryDate.getTime() === today.getTime()) {
-      return "Today";
-    }
-
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (entryDate.getTime() === yesterday.getTime()) {
-      return "Yesterday";
-    }
-
-    const daysDiff = Math.floor(
-      (today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    if (daysDiff < 7) {
-      return date.toLocaleDateString([], { weekday: "long" });
-    }
-
-    return date.toLocaleDateString([], {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
-    });
+    const colonIndex = dateKey.indexOf(":");
+    return colonIndex >= 0 ? dateKey.slice(colonIndex + 1) : dateKey;
   }, []);
 
   // Render item for FlatList

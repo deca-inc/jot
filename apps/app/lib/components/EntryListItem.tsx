@@ -678,10 +678,13 @@ function EntryListItemComponent({
 
   // Compact mode: slim row for sidebar
   if (compact) {
+    const isDefaultTitle = !entry.title || entry.title === "Untitled";
     const compactPreview =
       entry.type === "ai_chat"
         ? entry.title || "AI Chat"
-        : entry.title || previewText || "Untitled";
+        : isDefaultTitle
+          ? previewText || "Untitled"
+          : entry.title;
 
     const compactContainerStyle = [
       compactStyles.container,

@@ -41,6 +41,7 @@ export interface BaseModelConfig {
   huggingFaceUrl?: string; // Link to model card
   available: boolean; // Whether model files are available for download
   isDefault?: boolean; // If true, recommended as the default model for new users
+  deprecated?: boolean; // If true, hidden from UI unless already downloaded
 }
 
 // =============================================================================
@@ -76,13 +77,28 @@ export interface LlmModelConfig extends BaseModelConfig {
 // SPEECH-TO-TEXT MODEL CONFIG
 // =============================================================================
 
+export type SttRuntime = "executorch" | "sherpa-onnx" | "whisper-cpp";
+
+/**
+ * A file to download for a model. Used by sherpa-onnx models that need
+ * multiple files in a single directory (preprocess, encode, decode, tokens).
+ */
+export interface ModelFile {
+  fileName: string;
+  source: ModelSource;
+}
+
 export interface SpeechToTextModelConfig extends BaseModelConfig {
   modelType: "speech-to-text";
   // Widened to `string` (was `STT_MODEL_IDS`) so desktop whisper-rs model
   // IDs can coexist with the built-in mobile enum without bloating it.
   modelId: string;
   isMultilingual: boolean;
-  // Whisper models have encoder, decoder, and tokenizer.
+  /** Which STT runtime this model uses. Defaults to "executorch" for backward compat. */
+  runtime?: SttRuntime;
+  /** sherpa-onnx model type hint (e.g. "moonshine", "whisper", "auto") */
+  sttModelType?: string;
+  // Whisper/ExecuTorch models have encoder, decoder, and tokenizer.
   // For whisper.cpp (desktop), only encoderFileName is used as the single
   // model file; decoder and tokenizer are built into whisper.cpp.
   encoderFileName: string;
@@ -91,6 +107,8 @@ export interface SpeechToTextModelConfig extends BaseModelConfig {
   encoderSource: ModelSource;
   decoderSource: ModelSource;
   tokenizerSource: ModelSource;
+  /** Additional files to download (used by sherpa-onnx models). */
+  extraFiles?: ModelFile[];
   // Which platforms this model runs on. Legacy models without this field
   // are treated as mobile-only (ios/android) — see platformFilter.ts.
   supportedPlatforms?: AppPlatform[];

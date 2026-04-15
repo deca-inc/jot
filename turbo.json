@@ -3,7 +3,11 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".expo/**"]
+      "outputs": ["dist/**", ".expo/**", "build/**"]
+    },
+    "deploy": {
+      "dependsOn": ["build"],
+      "cache": false
     },
     "lint": {
       "outputs": []

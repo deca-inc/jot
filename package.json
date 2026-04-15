@@ -31,5 +31,8 @@
       "expo-modules-core": "3.0.23"
     },
     "patchedDependencies": {}
+  },
+  "dependencies": {
+    "react-native-sherpa-onnx": "0.4.2"
   }
 }

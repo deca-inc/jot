@@ -44,8 +44,8 @@ import { useSyncAuthContext } from "../../lib/sync/SyncAuthProvider";
 import { borderRadius, spacingPatterns } from "../../lib/theme";
 import { springPresets } from "../../lib/theme";
 import { useSeasonalTheme } from "../../lib/theme/SeasonalThemeProvider";
-import { blurEditors } from "../../lib/utils/blur-editors";
 import { useTheme } from "../../lib/theme/ThemeProvider";
+import { blurEditors } from "../../lib/utils/blur-editors";
 
 const appIcon = require("../../assets/icon.png") as number;
 
@@ -507,10 +507,11 @@ function MainLayout() {
   );
 
   const handleNoEntries = useCallback(() => {
-    if (!isWideScreen) {
-      closeDrawerRef.current();
-    }
-  }, [isWideScreen]);
+    // No-op: drawer already starts closed on mount, so no action needed.
+    // Closing the drawer here would prevent users with zero entries from
+    // ever opening the sidebar (HomeScreen remounts each time the drawer
+    // opens, re-triggering this callback).
+  }, []);
 
   const handleSidebarDeleteEntry = useCallback(
     (entryId: number) => {
@@ -544,7 +545,15 @@ function MainLayout() {
     if (pathname === "/compose/chat") {
       return composerEntryTitle || "New Chat";
     }
-    return activeEntryTitle || "";
+    // For journal entries, treat "Untitled" as no title — show preview instead
+    const raw = activeEntryTitle || "";
+    if (raw === "Untitled" && activeEntryType === "journal") {
+      const preview = activeEntryQuery.data
+        ? extractPreviewText(activeEntryQuery.data.blocks)
+        : "";
+      return preview || "";
+    }
+    return raw;
   };
 
   // The entry whose title is displayed in the header.
@@ -558,7 +567,9 @@ function MainLayout() {
     if (!isTitleEditable) return;
     const currentTitle =
       pathname === "/compose/chat" ? composerEntryTitle : activeEntryTitle;
-    setEditingTitleText(currentTitle);
+    // If title is the default sentinel, start with empty input (placeholder will show)
+    const isDefault = !currentTitle || currentTitle === "Untitled";
+    setEditingTitleText(isDefault ? "" : currentTitle);
     setIsEditingTitle(true);
     // Focus the TextInput after state update
     setTimeout(() => titleInputRef.current?.focus(), 50);
@@ -576,12 +587,21 @@ function MainLayout() {
   const handleTitleSubmit = useCallback(() => {
     const trimmed = editingTitleText.trim();
     setIsEditingTitle(false);
-    if (!editableEntryId || !trimmed) return;
+    if (!editableEntryId) return;
 
-    updateEntryRef.current.mutate({
-      id: editableEntryId,
-      input: { title: trimmed, titlePinned: true },
-    });
+    if (trimmed) {
+      // User set a custom title — pin it
+      updateEntryRef.current.mutate({
+        id: editableEntryId,
+        input: { title: trimmed, titlePinned: true },
+      });
+    } else {
+      // User cleared the title — revert to auto-generated title (unpin)
+      updateEntryRef.current.mutate({
+        id: editableEntryId,
+        input: { title: "Untitled", titlePinned: false },
+      });
+    }
   }, [editingTitleText, editableEntryId]);
 
   // Render the content header (shared between desktop and mobile)
@@ -649,6 +669,8 @@ function MainLayout() {
                 onChangeText={setEditingTitleText}
                 onSubmitEditing={handleTitleSubmit}
                 onBlur={handleTitleSubmit}
+                placeholder="Title"
+                placeholderTextColor={seasonalTheme.textSecondary + "80"}
                 style={[
                   {
                     color: seasonalTheme.textPrimary,
@@ -661,7 +683,7 @@ function MainLayout() {
                     minWidth: 40,
                     height: 32,
                   },
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-only CSS
+
                   {
                     outlineStyle: "none",
                     background: "transparent",
@@ -674,7 +696,7 @@ function MainLayout() {
               <TouchableOpacity
                 onPress={handleTitleTap}
                 activeOpacity={0.7}
-                style={{ flexShrink: 1 }}
+                style={{ flexShrink: 1, minWidth: 0 }}
               >
                 <Text
                   variant="body"
@@ -697,6 +719,8 @@ function MainLayout() {
             onChangeText={setEditingTitleText}
             onSubmitEditing={handleTitleSubmit}
             onBlur={handleTitleSubmit}
+            placeholder="Title"
+            placeholderTextColor={seasonalTheme.textSecondary + "80"}
             style={[
               {
                 color: seasonalTheme.textPrimary,
@@ -709,7 +733,7 @@ function MainLayout() {
                 minWidth: 40,
                 height: 32,
               },
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-only CSS
+
               {
                 outlineStyle: "none",
                 background: "transparent",
@@ -723,6 +747,7 @@ function MainLayout() {
             onPress={isTitleEditable ? handleTitleTap : undefined}
             activeOpacity={isTitleEditable ? 0.7 : 1}
             disabled={!isTitleEditable}
+            style={{ flexShrink: 1, minWidth: 0 }}
           >
             <Text
               variant="body"
@@ -1562,6 +1587,7 @@ const styles = StyleSheet.create({
   headerModelSelector: {
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 0,
     marginLeft: spacingPatterns.sm,
     paddingVertical: 3,
     paddingHorizontal: 6,

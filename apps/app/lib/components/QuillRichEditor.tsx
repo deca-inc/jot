@@ -1251,16 +1251,40 @@ export const QuillRichEditor = forwardRef<
                 }
               }
 
-              // Intercept touch events to prevent Quill's native handler
+              // Intercept touch events to prevent Quill's native handler.
+              // Toggle on touchend (not touchstart) so scrolling doesn't accidentally check items.
+              var checkboxTouchInfo = null;
+
               document.addEventListener('touchstart', function(e) {
                 var result = findChecklistLi(e.target);
                 if (result) {
-                  // Prevent the touchstart from triggering Quill's native handlers
-                  // This stops both touchstart AND the synthetic mousedown that follows
+                  // Prevent Quill's native handlers from firing
                   e.preventDefault();
                   e.stopImmediatePropagation();
-                  toggleCheckbox(result.li, result.ul);
+                  checkboxTouchInfo = {
+                    li: result.li,
+                    ul: result.ul,
+                    startX: e.touches[0].clientX,
+                    startY: e.touches[0].clientY,
+                  };
                 }
+              }, true);
+
+              document.addEventListener('touchend', function(e) {
+                if (checkboxTouchInfo) {
+                  var touch = e.changedTouches[0];
+                  var dx = touch.clientX - checkboxTouchInfo.startX;
+                  var dy = touch.clientY - checkboxTouchInfo.startY;
+                  // Only toggle if finger didn't move much (tap, not scroll)
+                  if (Math.sqrt(dx * dx + dy * dy) < 10) {
+                    toggleCheckbox(checkboxTouchInfo.li, checkboxTouchInfo.ul);
+                  }
+                  checkboxTouchInfo = null;
+                }
+              }, true);
+
+              document.addEventListener('touchcancel', function() {
+                checkboxTouchInfo = null;
               }, true);
 
               // Also handle regular mouse clicks (for desktop/testing)

@@ -17,8 +17,8 @@ import * as add_tokenizer_urls from "./2026_01_25_17_11_05_add_tokenizer_urls";
 import * as add_sync_columns from "./2026_02_07_04_15_41_add_sync_columns";
 import * as add_sync_settings_columns from "./2026_02_07_04_15_48_add_sync_settings_columns";
 import * as add_sync_queue_table from "./2026_02_08_05_23_01_add_sync_queue_table";
-import * as initialSeed from "./seeds/2025_01_13_16_25_00_initial_seed";
 import * as add_title_pinned from "./2026_04_12_02_25_54_add_title_pinned";
+import * as initialSeed from "./seeds/2025_01_13_16_25_00_initial_seed";
 
 /**
  * All migrations in order. Add new migrations to the end of this array.

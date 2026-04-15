@@ -2,7 +2,9 @@
  * useSpeechToText - Hook for on-device speech-to-text transcription
  *
  * Uses expo-audio for audio recording on iOS and native PCM recording on Android.
- * Uses react-native-executorch SpeechToTextModule for on-device Whisper model transcription.
+ * Supports two STT runtimes:
+ * - react-native-executorch (Whisper .pte models)
+ * - react-native-sherpa-onnx (Moonshine, Whisper ONNX models)
  */
 
 import {
@@ -29,7 +31,25 @@ import {
   cancelPCMRecording,
   getPCMMeteringLevel,
 } from "../../modules/platform-ai/src";
-import { type SpeechToTextModelConfig } from "./modelConfig";
+import { type SpeechToTextModelConfig, type SttRuntime } from "./modelConfig";
+
+// Lazy import sherpa-onnx to avoid loading the native module when not needed
+let sherpaOnnxImport: typeof import("react-native-sherpa-onnx/stt") | null =
+  null;
+async function getSherpaOnnx() {
+  if (!sherpaOnnxImport) {
+    sherpaOnnxImport = await import("react-native-sherpa-onnx/stt");
+  }
+  return sherpaOnnxImport;
+}
+
+let sherpaPathImport: typeof import("react-native-sherpa-onnx") | null = null;
+async function getSherpaPath() {
+  if (!sherpaPathImport) {
+    sherpaPathImport = await import("react-native-sherpa-onnx");
+  }
+  return sherpaPathImport;
+}
 
 /**
  * Convert Uint8Array to base64 string without stack overflow
@@ -217,6 +237,18 @@ function cleanTranscription(text: string): string {
 }
 
 /**
+ * Clean a chunk transcription for the live preview.
+ * Strips trailing sentence punctuation since Whisper treats each 2-second
+ * chunk as a complete utterance and adds periods/etc. at cut boundaries.
+ * The final full-file re-transcription adds proper punctuation.
+ */
+function cleanChunkForPreview(text: string): string {
+  return cleanTranscription(text)
+    .replace(/[.!?]+$/, "")
+    .trim();
+}
+
+/**
  * Concatenate multiple WAV files into a single WAV file
  * All input files must have the same format (16kHz, mono, 16-bit PCM)
  */
@@ -367,6 +399,9 @@ export function useSpeechToText(
 
   // Refs
   const sttModuleRef = useRef<SpeechToTextModule | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sherpa-onnx SttEngine type is dynamically imported
+  const sherpaEngineRef = useRef<any>(null);
+  const activeRuntimeRef = useRef<SttRuntime>("executorch");
   const isMultilingualRef = useRef(false);
   const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isProcessingChunkRef = useRef(false);
@@ -389,14 +424,41 @@ export function useSpeechToText(
     async (config: SpeechToTextModelConfig): Promise<boolean> => {
       try {
         setError(null);
+        const runtime = config.runtime ?? "executorch";
+        activeRuntimeRef.current = runtime;
 
-        // Create new module instance
+        if (runtime === "sherpa-onnx") {
+          // sherpa-onnx: load from model directory
+          const { createSTT } = await getSherpaOnnx();
+          const { fileModelPath } = await getSherpaPath();
+          const { getModelsDirectory } = await import("./modelManager");
+
+          const modelsDir = getModelsDirectory();
+          const modelDir = `${modelsDir}/${config.folderName}`;
+          // Strip file:// prefix — sherpa-onnx expects a filesystem path
+          const cleanPath = modelDir.replace(/^file:\/\//, "");
+
+          const engine = await createSTT({
+            modelPath: fileModelPath(cleanPath),
+            modelType: (config.sttModelType ?? "auto") as "moonshine" | "auto",
+            preferInt8: true,
+            numThreads: 4,
+          });
+
+          sherpaEngineRef.current = engine;
+          sttModuleRef.current = null;
+          isMultilingualRef.current = config.isMultilingual;
+          setIsModelLoaded(true);
+          return true;
+        }
+
+        // ExecuTorch: existing path
         const sttModule = new SpeechToTextModule();
         const rneConfig = toRNEConfig(config);
-
         await sttModule.load(rneConfig);
 
         sttModuleRef.current = sttModule;
+        sherpaEngineRef.current = null;
         isMultilingualRef.current = config.isMultilingual;
         setIsModelLoaded(true);
         return true;
@@ -416,6 +478,10 @@ export function useSpeechToText(
    * Unload the STT model
    */
   const unloadModel = useCallback(() => {
+    if (sherpaEngineRef.current) {
+      sherpaEngineRef.current.destroy().catch(() => {});
+      sherpaEngineRef.current = null;
+    }
     sttModuleRef.current = null;
     setIsModelLoaded(false);
     setCommittedText("");
@@ -426,15 +492,26 @@ export function useSpeechToText(
    * Transcribe a WAV file and return the text
    */
   const transcribeFile = useCallback(async (uri: string): Promise<string> => {
-    const sttModule = sttModuleRef.current;
-    if (!sttModule) {
-      console.warn(
-        "[useSpeechToText] STT module not loaded, skipping transcription",
-      );
-      return "";
-    }
-
     try {
+      // sherpa-onnx runtime: use transcribeFile (handles WAV parsing internally)
+      if (
+        activeRuntimeRef.current === "sherpa-onnx" &&
+        sherpaEngineRef.current
+      ) {
+        const cleanPath = uri.replace(/^file:\/\//, "");
+        const result = await sherpaEngineRef.current.transcribeFile(cleanPath);
+        return result.text ?? "";
+      }
+
+      // ExecuTorch runtime: manual WAV parsing + transcribe
+      const sttModule = sttModuleRef.current;
+      if (!sttModule) {
+        console.warn(
+          "[useSpeechToText] STT module not loaded, skipping transcription",
+        );
+        return "";
+      }
+
       const waveform = await readWavFile(uri);
       const options = isMultilingualRef.current
         ? { language: "en" as const }
@@ -468,7 +545,7 @@ export function useSpeechToText(
 
         // Transcribe this chunk
         const rawText = await transcribeFile(chunkUri);
-        const chunkText = cleanTranscription(rawText);
+        const chunkText = cleanChunkForPreview(rawText);
 
         // Append to accumulated text (preview only, don't write to canvas yet)
         if (chunkText) {
@@ -507,7 +584,7 @@ export function useSpeechToText(
 
           // Transcribe this chunk
           const rawText = await transcribeFile(chunkUri);
-          const chunkText = cleanTranscription(rawText);
+          const chunkText = cleanChunkForPreview(rawText);
 
           // Append to accumulated text (preview only, don't write to canvas yet)
           if (chunkText) {
@@ -536,7 +613,7 @@ export function useSpeechToText(
    * Start recording audio with chunked transcription
    */
   const startRecording = useCallback(async () => {
-    if (!sttModuleRef.current) {
+    if (!sttModuleRef.current && !sherpaEngineRef.current) {
       const msg = "STT model not loaded";
       setError(msg);
       onErrorRef.current?.(msg);
@@ -647,7 +724,7 @@ export function useSpeechToText(
     }
 
     const sttModule = sttModuleRef.current;
-    if (!sttModule) {
+    if (!sttModule && !sherpaEngineRef.current) {
       isRecordingRef.current = false;
       setIsRecording(false);
       setPendingText("");
@@ -684,7 +761,7 @@ export function useSpeechToText(
 
             // Transcribe final chunk
             const rawText = await transcribeFile(finalChunkUri);
-            const finalChunkText = cleanTranscription(rawText);
+            const finalChunkText = cleanChunkForPreview(rawText);
 
             if (finalChunkText) {
               accumulatedTextRef.current = accumulatedTextRef.current
@@ -715,7 +792,7 @@ export function useSpeechToText(
 
               // Transcribe final chunk
               const rawText = await transcribeFile(finalChunkUri);
-              const finalChunkText = cleanTranscription(rawText);
+              const finalChunkText = cleanChunkForPreview(rawText);
 
               if (finalChunkText) {
                 accumulatedTextRef.current = accumulatedTextRef.current
@@ -770,7 +847,10 @@ export function useSpeechToText(
       }
 
       const finalText = accumulatedTextRef.current;
-      setCommittedText(finalText);
+
+      // Clear all state so nothing leaks into the next session
+      accumulatedTextRef.current = "";
+      setCommittedText("");
       setPendingText("");
       setIsTranscribing(false);
 
@@ -796,6 +876,9 @@ export function useSpeechToText(
       setIsRecording(false);
       setIsTranscribing(false);
       setPendingText("");
+      // Clear accumulated state on error too
+      accumulatedTextRef.current = "";
+      setCommittedText("");
       onErrorRef.current?.(message);
 
       // Clean up chunks on error

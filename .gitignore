@@ -78,3 +78,11 @@ journal-test.db
 
 credentials.json
 jotapp-*.json
+
+# Wrangler (Cloudflare Workers)
+.wrangler/
+.dev.vars*
+!.dev.vars.example
+
+# Remix build output
+apps/web/build/

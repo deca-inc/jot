@@ -12,6 +12,9 @@ const config = getDefaultConfig(projectRoot);
 // Add monorepo root to watch folders (preserve defaults)
 config.watchFolders = [...(config.watchFolders || []), monorepoRoot];
 
+// Enable package exports resolution for ESM-only packages in monorepo
+config.resolver.unstable_enablePackageExports = true;
+
 // Ensure ExecuTorch assets are recognized by Metro (for tokenizer files)
 config.resolver.assetExts.push("pte");
 config.resolver.assetExts.push("bin");

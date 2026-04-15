@@ -19,6 +19,7 @@ export interface ModelDownloadInfo {
 export interface ModelSettings {
   selectedModelId: string;
   selectedSttModelId?: string; // Selected speech-to-text model
+  sttPostProcess?: boolean; // Post-process transcripts with LLM (default: true)
   downloadedModels: ModelDownloadInfo[];
 }
 
@@ -132,6 +133,20 @@ export class ModelSettingsRepository {
     await this.set(settings);
   }
 
+  async getSttPostProcess(): Promise<boolean> {
+    const settings = await this.get();
+    return settings?.sttPostProcess !== false; // Default to true
+  }
+
+  async setSttPostProcess(enabled: boolean): Promise<void> {
+    const settings = (await this.get()) || {
+      selectedModelId: "",
+      downloadedModels: [],
+    };
+    settings.sttPostProcess = enabled;
+    await this.set(settings);
+  }
+
   async getDownloadedModelsByType(
     modelType: ModelType,
   ): Promise<ModelDownloadInfo[]> {
@@ -157,6 +172,8 @@ export function useModelSettings(): {
   // STT methods
   getSelectedSttModelId: () => Promise<string | null>;
   setSelectedSttModelId: (modelId: string) => Promise<void>;
+  getSttPostProcess: () => Promise<boolean>;
+  setSttPostProcess: (enabled: boolean) => Promise<void>;
   getDownloadedModelsByType: (
     modelType: ModelType,
   ) => Promise<ModelDownloadInfo[]>;
@@ -186,6 +203,8 @@ export function useModelSettings(): {
       getSelectedSttModelId: () => repo.getSelectedSttModelId(),
       setSelectedSttModelId: (modelId: string) =>
         repo.setSelectedSttModelId(modelId),
+      getSttPostProcess: () => repo.getSttPostProcess(),
+      setSttPostProcess: (enabled: boolean) => repo.setSttPostProcess(enabled),
       getDownloadedModelsByType: (modelType: ModelType) =>
         repo.getDownloadedModelsByType(modelType),
     };

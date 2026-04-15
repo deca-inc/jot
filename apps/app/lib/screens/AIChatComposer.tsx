@@ -428,9 +428,9 @@ const ChatInputBar = memo(
             left: 0,
             right: 0,
             bottom: keyboardHeight,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-only CSS property
+
             marginLeft: "auto" as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-only CSS property
+
             marginRight: "auto" as any,
           },
         ]}
@@ -464,7 +464,7 @@ const ChatInputBar = memo(
                   ? spacingPatterns.md
                   : spacingPatterns.md + 36,
               },
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-only CSS property
+
               { outlineStyle: "none" } as any,
             ]}
             placeholder="Reply..."
@@ -713,8 +713,8 @@ export function AIChatComposer({
       if (selectedModelId === "gemini-nano") return "Gemini Nano";
     }
 
-    // For non-platform models, show agent name if set
-    if (currentAgent) {
+    // For non-platform models, show agent name if set (skip for default agent)
+    if (currentAgent && !currentAgent.isDefault) {
       // Show "AgentName · ModelName" so user knows which model is active
       const modelName = getModelById(selectedModelId)?.displayName;
       if (modelName) {

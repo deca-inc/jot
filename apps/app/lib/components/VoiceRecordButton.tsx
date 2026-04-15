@@ -48,6 +48,7 @@ import type {
   CustomLocalModelConfig,
   RemoteModelConfig,
 } from "../ai/customModels";
+import type { SpeechToTextModelConfig } from "../ai/modelConfig";
 
 // Check if glass effect is available (iOS 26+)
 const glassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
@@ -186,6 +187,100 @@ const ICON_SIZES = {
   xlarge: 30,
 };
 
+/**
+ * Convert markdown (or plain text) to Quill-compatible HTML.
+ * Handles: paragraphs, bullet lists, checklists, ordered lists, headings, blockquotes.
+ */
+function markdownToHtml(text: string): string {
+  const lines = text.split("\n");
+  const htmlParts: string[] = [];
+  let currentList: "ul" | "ol" | "checklist" | null = null;
+
+  const closeList = () => {
+    if (currentList === "checklist") {
+      htmlParts.push("</ul>");
+    } else if (currentList) {
+      htmlParts.push(`</${currentList}>`);
+    }
+    currentList = null;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+
+    // Skip empty lines (close any open list)
+    if (!line.trim()) {
+      closeList();
+      continue;
+    }
+
+    // Checklist: - [ ] item or - [x] item
+    const checklistMatch = line.match(/^\s*[-*]\s*\[([ xX])\]\s+(.*)/);
+    if (checklistMatch) {
+      const checked = checklistMatch[1].toLowerCase() === "x";
+      const item = checklistMatch[2].trim();
+      if (currentList !== "checklist") {
+        closeList();
+        htmlParts.push(`<ul data-checked="${checked ? "true" : "false"}">`);
+        currentList = "checklist";
+      }
+      htmlParts.push(`<li>${item}</li>`);
+      continue;
+    }
+
+    // Unordered list: - item or * item
+    const ulMatch = line.match(/^\s*[-*]\s+(.*)/);
+    if (ulMatch) {
+      const item = ulMatch[1].trim();
+      if (currentList !== "ul") {
+        closeList();
+        htmlParts.push("<ul>");
+        currentList = "ul";
+      }
+      htmlParts.push(`<li>${item}</li>`);
+      continue;
+    }
+
+    // Ordered list: 1. item
+    const olMatch = line.match(/^\s*\d+[.)]\s+(.*)/);
+    if (olMatch) {
+      const item = olMatch[1].trim();
+      if (currentList !== "ol") {
+        closeList();
+        htmlParts.push("<ol>");
+        currentList = "ol";
+      }
+      htmlParts.push(`<li>${item}</li>`);
+      continue;
+    }
+
+    // Not a list item — close any open list
+    closeList();
+
+    // Headings: ## or ###
+    const headingMatch = line.match(/^(#{1,3})\s+(.*)/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const tag = `h${Math.max(level, 2)}`; // h2 or h3 (skip h1)
+      htmlParts.push(`<${tag}>${headingMatch[2].trim()}</${tag}>`);
+      continue;
+    }
+
+    // Blockquote: > text
+    const quoteMatch = line.match(/^>\s*(.*)/);
+    if (quoteMatch) {
+      htmlParts.push(`<blockquote>${quoteMatch[1].trim()}</blockquote>`);
+      continue;
+    }
+
+    // Regular paragraph
+    htmlParts.push(`<p>${line.trim()}</p>`);
+  }
+
+  closeList();
+  return htmlParts.join("");
+}
+
 // Helper to check if an STT model ID is a platform model
 function isPlatformSttModelId(modelId: string): boolean {
   return Object.values(PLATFORM_STT_IDS).includes(
@@ -213,6 +308,7 @@ export function VoiceRecordButton({
   // State
   const [isModelLoading, setIsModelLoading] = useState(false);
   const [hasLLMModel, setHasLLMModel] = useState(false);
+  const [sttPostProcess, setSttPostProcess] = useState(true);
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [usePlatformSTT, setUsePlatformSTT] = useState(false);
   const [useRemoteSTT, setUseRemoteSTT] = useState(false);
@@ -397,48 +493,76 @@ export function VoiceRecordButton({
     };
   }, []);
 
-  // Check if LLM is downloaded on mount (for transcription correction)
+  // Check if LLM is downloaded and if post-processing is enabled
   useEffect(() => {
     const checkModels = async () => {
-      const downloaded = await modelSettings.getDownloadedModels();
+      const [downloaded, postProcess] = await Promise.all([
+        modelSettings.getDownloadedModels(),
+        modelSettings.getSttPostProcess(),
+      ]);
       const llmModels = downloaded.filter((m) => m.modelType === "llm");
       setHasLLMModel(llmModels.length > 0);
+      setSttPostProcess(postProcess);
     };
     checkModels();
   }, [modelSettings]);
 
   /**
-   * Correct transcription using LLM for better grammar and accuracy
+   * Format transcription into styled HTML.
+   * With LLM: fixes grammar and outputs markdown, which we convert to HTML.
+   * Without LLM: wraps raw text in <p> tags as-is.
    */
-  const correctWithLLM = useCallback(
+  const formatTranscription = useCallback(
     async (rawText: string): Promise<string> => {
-      if (!hasLLMModel || !rawText.trim()) {
-        return rawText;
+      if (!rawText.trim()) {
+        return "";
+      }
+
+      // Post-processing disabled or no LLM available — wrap raw text in paragraphs
+      if (!sttPostProcess || !hasLLMModel) {
+        return markdownToHtml(rawText);
       }
 
       try {
         setIsCorrecting(true);
 
-        const correctedText = await llmContext.sendMessage([
+        const markdown = await llmContext.sendMessage([
           {
             role: "user",
-            content: `You are a transcription corrector. Fix any grammar, punctuation, and obvious transcription errors in the following text. Keep the meaning and tone exactly the same. Only output the corrected text, nothing else.\n\nTranscription: "${rawText}"`,
+            content: [
+              "Clean up this voice transcript. Fix grammar and punctuation. Format as markdown.",
+              "",
+              "IMPORTANT: When someone lists things they need to do, want to do, should do, or plan to do, ALWAYS use checklist format:",
+              "- [ ] First thing",
+              "- [ ] Second thing",
+              "",
+              "Other formatting:",
+              "- Regular text for paragraphs",
+              "- `- item` for simple lists (groceries, items, etc.)",
+              "- `1. item` for numbered/ordered steps",
+              "- `## heading` for titles or topic changes",
+              "- `> text` for quotes",
+              "",
+              "Output ONLY the formatted markdown. No explanations.",
+              "",
+              `${rawText}`,
+            ].join("\n"),
           },
         ]);
 
         setIsCorrecting(false);
-        return correctedText.trim() || rawText;
-      } catch (err) {
-        console.error("[VoiceRecordButton] LLM correction failed:", err);
+        return markdownToHtml(markdown.trim() || rawText);
+      } catch {
+        // LLM unavailable or failed — silently fall back to plain text
         setIsCorrecting(false);
-        return rawText; // Fallback to raw transcription
+        return markdownToHtml(rawText);
       }
     },
-    [hasLLMModel, llmContext],
+    [hasLLMModel, sttPostProcess, llmContext],
   );
 
-  // Update the ref whenever correctWithLLM changes
-  correctWithLLMRef.current = correctWithLLM;
+  // Update the ref whenever formatTranscription changes
+  correctWithLLMRef.current = formatTranscription;
 
   // Start pulse animation when recording
   useEffect(() => {
@@ -487,6 +611,31 @@ export function VoiceRecordButton({
       // Get selected STT model
       const selectedId = await modelSettings.getSelectedSttModelId();
 
+      /** Override source paths to use local files (ExecuTorch models only) */
+      const withLocalPaths = (
+        cfg: SpeechToTextModelConfig,
+      ): SpeechToTextModelConfig => {
+        // sherpa-onnx loads by directory — no need to override individual file sources
+        if (cfg.runtime === "sherpa-onnx") return cfg;
+        const modelsDir = getModelsDirectory();
+        const modelDir = `${modelsDir}/${cfg.folderName}`;
+        return {
+          ...cfg,
+          encoderSource: {
+            kind: "remote" as const,
+            url: `${modelDir}/${cfg.encoderFileName}`,
+          },
+          decoderSource: {
+            kind: "remote" as const,
+            url: `${modelDir}/${cfg.decoderFileName}`,
+          },
+          tokenizerSource: {
+            kind: "remote" as const,
+            url: `${modelDir}/${cfg.tokenizerFileName}`,
+          },
+        };
+      };
+
       // Helper to find and load a downloadable STT model
       const loadDownloadableModel = async () => {
         setUsePlatformSTT(false);
@@ -499,31 +648,14 @@ export function VoiceRecordButton({
             "No STT model downloaded. Please download a voice model in settings.",
           );
         }
-        let config = getSTTModelById(sttModel.modelId);
+        const config = getSTTModelById(sttModel.modelId);
         if (!config) {
           throw new Error("STT model config not found");
         }
-        // Override remote URLs with local paths (model files are downloaded locally)
-        const modelsDir = getModelsDirectory();
-        const modelDir = `${modelsDir}/${config.folderName}`;
-        config = {
-          ...config,
-          encoderSource: {
-            kind: "remote" as const,
-            url: `${modelDir}/${config.encoderFileName}`,
-          },
-          decoderSource: {
-            kind: "remote" as const,
-            url: `${modelDir}/${config.decoderFileName}`,
-          },
-          tokenizerSource: {
-            kind: "remote" as const,
-            url: `${modelDir}/${config.tokenizerFileName}`,
-          },
-        };
         if (!whisperSTT.isModelLoaded) {
-          // loadModel returns boolean - state updates are async so we can't rely on isModelLoaded
-          const loadSuccess = await whisperSTT.loadModel(config);
+          const loadSuccess = await whisperSTT.loadModel(
+            withLocalPaths(config),
+          );
           if (!loadSuccess) {
             throw new Error(
               whisperSTT.error ||
@@ -565,33 +697,15 @@ export function VoiceRecordButton({
         shouldUsePlatform = true;
         setUsePlatformSTT(true);
       } else {
-        // Downloadable Whisper model selected (built-in or custom)
+        // Downloadable model selected (built-in or custom)
         setUsePlatformSTT(false);
         if (!whisperSTT.isModelLoaded) {
           // First try built-in STT models
           let config = getSTTModelById(selectedId);
 
-          // If found, override remote URLs with local paths (model files are downloaded locally)
+          // If found, override source paths for local files
           if (config) {
-            const modelsDir = getModelsDirectory();
-            const modelDir = `${modelsDir}/${config.folderName}`;
-
-            // Override source paths to use local files
-            config = {
-              ...config,
-              encoderSource: {
-                kind: "remote" as const,
-                url: `${modelDir}/${config.encoderFileName}`,
-              },
-              decoderSource: {
-                kind: "remote" as const,
-                url: `${modelDir}/${config.decoderFileName}`,
-              },
-              tokenizerSource: {
-                kind: "remote" as const,
-                url: `${modelDir}/${config.tokenizerFileName}`,
-              },
-            };
+            config = withLocalPaths(config);
           }
 
           // If not found, check if it's a custom local STT model

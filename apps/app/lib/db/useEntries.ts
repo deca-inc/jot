@@ -314,8 +314,28 @@ export function useUpdateEntry() {
       // Sync widgets if this is a countdown (do this regardless of skipCacheUpdate)
       syncWidgetsIfCountdown(entry, entryRepository);
 
-      // Skip cache update if requested (e.g., during active editing to prevent HTML escaping)
+      // Skip full cache update if requested (e.g., during active editing to prevent HTML escaping)
       if (variables.skipCacheUpdate) {
+        // Still update title + updatedAt in list caches so the sidebar stays current
+        if (variables.input.title !== undefined) {
+          queryClient.setQueriesData<InfiniteEntryData | undefined>(
+            { queryKey: entryKeys.lists() },
+            (oldData) => {
+              if (!oldData?.pages) return oldData;
+              return {
+                ...oldData,
+                pages: oldData.pages.map((page) => ({
+                  ...page,
+                  entries: page.entries.map((e: Entry) =>
+                    e.id === entry.id
+                      ? { ...e, title: entry.title, updatedAt: entry.updatedAt }
+                      : e,
+                  ),
+                })),
+              };
+            },
+          );
+        }
         return;
       }
 

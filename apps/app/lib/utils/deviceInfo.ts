@@ -23,9 +23,11 @@ interface TierConfig {
 const TIER_CONFIGS: Record<DeviceTier, TierConfig> = {
   high: {
     tier: "high",
-    // High-end: M1+, A15+, 8GB+ RAM - can handle larger models
+    // High-end: 6GB+ RAM - can handle larger models
     compatibleModels: [
-      "qwen-3-1.7b", // Best quality
+      "qwen-3-4b", // Highest quality
+      "llama-3.2-3b-instruct", // High quality
+      "qwen-3-1.7b", // Good quality
       "qwen-3-0.6b", // Fast option
       "llama-3.2-1b-instruct",
       "smollm2-1.7b",
@@ -33,26 +35,31 @@ const TIER_CONFIGS: Record<DeviceTier, TierConfig> = {
       "smollm2-135m",
     ],
     recommendedModel: "qwen-3-1.7b",
-    description: "High-end device (M1+, A15+, 8GB+ RAM)",
+    description: "High-end device (6GB+ RAM)",
   },
   mid: {
     tier: "mid",
-    // Mid-range: A12-A14, 4-6GB RAM - stick to smaller models
+    // Mid-range: 4-6GB RAM - stick to smaller models
+    compatibleModels: [
+      "llama-3.2-3b-instruct", // Usable on 4GB+
+      "qwen-3-1.7b", // Good quality for this tier
+      "qwen-3-0.6b", // Fast option
+      "llama-3.2-1b-instruct",
+      "smollm2-1.7b",
+      "smollm2-360m",
+      "smollm2-135m",
+    ],
+    recommendedModel: "qwen-3-0.6b",
+    description: "Mid-range device (4-6GB RAM)",
+  },
+  low: {
+    tier: "low",
+    // Low-end: <4GB RAM - only smallest models
     compatibleModels: [
       "qwen-3-0.6b", // Best quality for this tier
       "llama-3.2-1b-instruct",
       "smollm2-360m",
       "smollm2-135m",
-    ],
-    recommendedModel: "qwen-3-0.6b",
-    description: "Mid-range device (A12-A14, 4-6GB RAM)",
-  },
-  low: {
-    tier: "low",
-    // Low-end: Older devices, limited RAM - only smallest models
-    compatibleModels: [
-      "smollm2-360m", // Best quality for this tier
-      "smollm2-135m", // Fallback
     ],
     recommendedModel: "smollm2-360m",
     description: "Older device (limited RAM)",
@@ -60,58 +67,43 @@ const TIER_CONFIGS: Record<DeviceTier, TierConfig> = {
 };
 
 /**
- * Detect device performance tier based on chip/model
+ * RAM thresholds (in bytes) for tier detection.
+ * These are the primary signal — model-name matching is only a fallback.
+ */
+const RAM_HIGH_THRESHOLD = 6 * 1024 * 1024 * 1024; // 6 GB
+const RAM_MID_THRESHOLD = 4 * 1024 * 1024 * 1024; // 4 GB
+
+/**
+ * Detect device performance tier based on RAM (preferred) or chip/model (fallback).
  */
 export async function getDeviceTier(): Promise<DeviceTier> {
   try {
-    if (Platform.OS === "ios" || Platform.OS === "macos") {
-      const modelName = Device.modelName || "";
-
-      // High-end iOS devices
-      if (
-        // iPhone 15/16 series
-        modelName.includes("iPhone 15") ||
-        modelName.includes("iPhone 16") ||
-        // iPhone 14 Pro models (A16)
-        modelName.includes("iPhone 14 Pro") ||
-        // iPad Pro (M1/M2)
-        modelName.includes("iPad Pro") ||
-        // iPad Air 5th gen+ (M1)
-        (modelName.includes("iPad Air") && /iPad Air \(5|6/.test(modelName)) ||
-        // Macs with Apple Silicon
-        modelName.includes("Mac")
-      ) {
-        return "high";
-      }
-
-      // Mid-range iOS devices
-      if (
-        // iPhone 12-14 (non-Pro 14)
-        modelName.includes("iPhone 12") ||
-        modelName.includes("iPhone 13") ||
-        modelName.includes("iPhone 14") ||
-        // iPhone 11 series (A13)
-        modelName.includes("iPhone 11") ||
-        // iPad Air 3rd/4th gen
-        modelName.includes("iPad Air") ||
-        // iPad mini 5th/6th gen
-        modelName.includes("iPad mini")
-      ) {
-        return "mid";
-      }
-
-      // Everything else is low-end
+    // Primary: use actual RAM when available (iOS, Android, macOS)
+    const totalMemory = Device.totalMemory;
+    if (totalMemory != null && totalMemory > 0) {
+      if (totalMemory >= RAM_HIGH_THRESHOLD) return "high";
+      if (totalMemory >= RAM_MID_THRESHOLD) return "mid";
       return "low";
     }
 
-    if (Platform.OS === "android") {
-      // For Android, we'd need more sophisticated detection
-      // For now, assume mid-range as a safe default
-      // TODO: Could check android.os.Build for RAM or chip info
+    // Fallback: model-name heuristics (only when RAM isn't reported)
+    if (Platform.OS === "ios" || Platform.OS === "macos") {
+      const modelName = Device.modelName || "";
+
+      // Macs with Apple Silicon are always high-end
+      if (modelName.includes("Mac")) return "high";
+      // iPad Pro is always high-end
+      if (modelName.includes("iPad Pro")) return "high";
+
+      // Default unknown iOS/macOS to mid (safe — avoids false "crash" warnings)
       return "mid";
     }
 
-    // Desktop/other - assume high-end
+    if (Platform.OS === "android") {
+      return "mid";
+    }
+
+    // Desktop/other — assume high-end
     return "high";
   } catch (error) {
     console.error("[DeviceInfo] Error detecting device tier:", error);
@@ -152,10 +144,15 @@ export async function logModelCompatibilityDebug(): Promise<void> {
   const config = TIER_CONFIGS[tier];
   const modelName = Device.modelName || "Unknown";
   const deviceType = Device.deviceType;
+  const totalMemory = Device.totalMemory;
+  const ramGB = totalMemory
+    ? (totalMemory / (1024 * 1024 * 1024)).toFixed(1)
+    : "unknown";
 
   console.log("[ModelSelection] === Device Analysis ===");
   console.log(`[ModelSelection] Device: ${modelName}`);
   console.log(`[ModelSelection] Device Type: ${deviceType}`);
+  console.log(`[ModelSelection] RAM: ${ramGB} GB`);
   console.log(`[ModelSelection] Platform: ${Platform.OS}`);
   console.log(`[ModelSelection] Detected Tier: ${tier.toUpperCase()}`);
   console.log(`[ModelSelection] Tier Description: ${config.description}`);

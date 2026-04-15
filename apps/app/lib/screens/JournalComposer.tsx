@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system/legacy";
 import React, {
   useCallback,
@@ -17,7 +18,7 @@ import {
 } from "../components";
 import { useAttachmentsRepository } from "../db/attachmentsRepository";
 import { useEntryRepository } from "../db/entries";
-import { useEntry, useUpdateEntry } from "../db/useEntries";
+import { useEntry, useUpdateEntry, entryKeys } from "../db/useEntries";
 import { useSyncEngine } from "../sync";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -68,9 +69,14 @@ export function JournalComposer({
   // Lazy entry creation: entryId may be undefined for new notes (created on first edit)
   const [entryId, setEntryId] = useState(entryIdProp);
   const entryRepository = useEntryRepository();
+  const queryClient = useQueryClient();
   const isCreatingRef = useRef(false);
   const onCreatedRef = useRef(onCreated);
   onCreatedRef.current = onCreated;
+
+  // Track whether this component started as a new entry (no entryIdProp).
+  // Used to keep the editor stable when transitioning from new → saved.
+  const wasCreatedAsNew = useRef(!entryIdProp);
 
   // Use react-query hooks
   const { data: entry, isLoading: _isLoadingEntry } = useEntry(entryId);
@@ -180,6 +186,14 @@ export function JournalComposer({
 
   // Hydrate attachments when entry loads - decrypt files to cache and get file:// URLs
   useEffect(() => {
+    // When a new entry is first saved to DB, useEntry returns data which
+    // changes baseContent. Skip re-hydration — the editor already has
+    // the user's content and is the source of truth.
+    if (wasCreatedAsNew.current && entryId) {
+      lastLoadTimeRef.current = Date.now();
+      return;
+    }
+
     let cancelled = false;
 
     async function hydrateContent() {
@@ -434,13 +448,33 @@ export function JournalComposer({
           parentId,
         });
         setEntryId(entry.id);
+
+        // Add to React Query caches so sidebar shows the new entry immediately
+        queryClient.setQueryData(entryKeys.detail(entry.id), entry);
+        if (!parentId) {
+          queryClient.setQueriesData<
+            | { pages: { entries: unknown[] }[]; pageParams: unknown[] }
+            | undefined
+          >({ queryKey: entryKeys.lists() }, (oldData) => {
+            if (!oldData?.pages) return oldData;
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page, index: number) =>
+                index === 0
+                  ? { ...page, entries: [entry, ...page.entries] }
+                  : page,
+              ),
+            };
+          });
+        }
+
         onCreatedRef.current?.(entry.id);
       } catch (error) {
         console.error("Error creating entry on first edit:", error);
         isCreatingRef.current = false;
       }
     },
-    [entryId, entryRepository, parentId],
+    [entryId, entryRepository, parentId, queryClient],
   );
 
   // Handle content changes from editor
@@ -521,9 +555,9 @@ export function JournalComposer({
         }
       }
 
-      // Insert transcription text after the audio
+      // Insert transcription text after the audio (already HTML from formatTranscription)
       if (result.text.trim()) {
-        editorRef.current?.insertHtml(`<p>${result.text}</p>`);
+        editorRef.current?.insertHtml(result.text);
       }
     },
     [entryId],
@@ -568,19 +602,21 @@ export function JournalComposer({
           },
         ]}
       >
-        {!isDeleting && (entry || !entryId) && initialContent !== null && (
-          <QuillRichEditor
-            key={`editor-${entryId}-${seasonalTheme.isDark ? "dark" : "light"}-v${contentVersion}`}
-            ref={editorRef}
-            initialHtml={initialContent}
-            placeholder="Start writing..."
-            onChangeHtml={handleChangeHtml}
-            autoFocus={isContentEmpty}
-            editorPadding={spacingPatterns.screen}
-            onTranscriptionComplete={handleTranscriptionComplete}
-            onNoModelAvailable={handleNoModelAvailable}
-          />
-        )}
+        {!isDeleting &&
+          (entry || !entryId || wasCreatedAsNew.current) &&
+          initialContent !== null && (
+            <QuillRichEditor
+              key={`editor-${wasCreatedAsNew.current ? "new" : entryId}-${seasonalTheme.isDark ? "dark" : "light"}-v${contentVersion}`}
+              ref={editorRef}
+              initialHtml={initialContent}
+              placeholder="Start writing..."
+              onChangeHtml={handleChangeHtml}
+              autoFocus={isContentEmpty}
+              editorPadding={spacingPatterns.screen}
+              onTranscriptionComplete={handleTranscriptionComplete}
+              onNoModelAvailable={handleNoModelAvailable}
+            />
+          )}
       </View>
 
       {/* Model Management Modal */}
