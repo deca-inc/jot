@@ -33,20 +33,30 @@ export const entryKeys = {
   list: (filters?: {
     type?: string;
     isFavorite?: boolean;
+    includeArchived?: boolean;
     tag?: string;
     limit?: number;
+    offset?: number;
+    orderBy?: string;
+    order?: string;
   }) => [...entryKeys.lists(), filters] as const,
   infinite: (filters?: {
     type?: string;
     isFavorite?: boolean;
+    includeArchived?: boolean;
     tag?: string;
     limit?: number;
+    orderBy?: string;
+    order?: string;
   }) => [...entryKeys.lists(), "infinite", filters] as const,
   searches: () => [...entryKeys.all, "search"] as const,
   search: (filters?: {
     query?: string;
     type?: string;
     isFavorite?: boolean;
+    isPinned?: boolean;
+    includeArchived?: boolean;
+    archivedOnly?: boolean;
     dateFrom?: number;
     dateTo?: number;
     limit?: number;
@@ -192,7 +202,9 @@ export function useSearchEntries(options: {
   query: string;
   type?: "journal" | "ai_chat" | "countdown";
   isFavorite?: boolean;
+  isPinned?: boolean;
   includeArchived?: boolean;
+  archivedOnly?: boolean;
   dateFrom?: number;
   dateTo?: number;
   limit?: number;
@@ -216,7 +228,15 @@ export function useSearchEntries(options: {
     },
     getNextPageParam: (lastPage) => lastPage.nextOffset,
     initialPageParam: 0,
-    enabled: options.query.trim().length > 0,
+    enabled:
+      options.query.trim().length > 0 ||
+      options.type !== undefined ||
+      options.isFavorite !== undefined ||
+      options.isPinned !== undefined ||
+      options.includeArchived !== undefined ||
+      options.archivedOnly !== undefined ||
+      options.dateFrom !== undefined ||
+      options.dateTo !== undefined,
     // Always refetch on mount when searching
     refetchOnMount: "always",
   });
@@ -314,28 +334,10 @@ export function useUpdateEntry() {
       // Sync widgets if this is a countdown (do this regardless of skipCacheUpdate)
       syncWidgetsIfCountdown(entry, entryRepository);
 
-      // Skip full cache update if requested (e.g., during active editing to prevent HTML escaping)
+      // Skip cache update during active editing to avoid re-renders.
+      // List caches will be updated when the user navigates away
+      // (skipCacheUpdate=false), so the sidebar shows fresh data at that point.
       if (variables.skipCacheUpdate) {
-        // Still update title + updatedAt in list caches so the sidebar stays current
-        if (variables.input.title !== undefined) {
-          queryClient.setQueriesData<InfiniteEntryData | undefined>(
-            { queryKey: entryKeys.lists() },
-            (oldData) => {
-              if (!oldData?.pages) return oldData;
-              return {
-                ...oldData,
-                pages: oldData.pages.map((page) => ({
-                  ...page,
-                  entries: page.entries.map((e: Entry) =>
-                    e.id === entry.id
-                      ? { ...e, title: entry.title, updatedAt: entry.updatedAt }
-                      : e,
-                  ),
-                })),
-              };
-            },
-          );
-        }
         return;
       }
 

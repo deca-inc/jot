@@ -42,6 +42,7 @@ import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import {
   extractCountdownData,
   formatCountdown,
+  formatCompletedAgo,
   isCountdownComplete,
 } from "../utils/countdown";
 import { cancelNotification } from "../utils/notifications";
@@ -774,7 +775,9 @@ function EntryListItemComponent({
             >
               {countdownData.isCountUp
                 ? `started ${formatCountdown(countdownData.targetDate, countdownData.isCountUp)} ago`
-                : `${formatCountdown(countdownData.targetDate, countdownData.isCountUp)} left`}
+                : isCountdownComplete(countdownData.targetDate)
+                  ? formatCompletedAgo(countdownData.targetDate).toLowerCase()
+                  : `${formatCountdown(countdownData.targetDate)} left`}
             </Text>
           )}
         </View>
@@ -1071,14 +1074,20 @@ function EntryListItemComponent({
                 </Text>
                 <Text
                   style={[
-                    styles.countdownTime,
+                    !countdownData.isCountUp &&
+                    isCountdownComplete(countdownData.targetDate)
+                      ? styles.countdownCompletedText
+                      : styles.countdownTime,
                     { color: itemTheme.textPrimary },
                   ]}
                 >
-                  {formatCountdown(
-                    countdownData.targetDate,
-                    countdownData.isCountUp,
-                  )}
+                  {!countdownData.isCountUp &&
+                  isCountdownComplete(countdownData.targetDate)
+                    ? formatCompletedAgo(countdownData.targetDate)
+                    : formatCountdown(
+                        countdownData.targetDate,
+                        countdownData.isCountUp,
+                      )}
                 </Text>
                 <Text
                   variant="caption"
@@ -1558,7 +1567,7 @@ function EntryListItemComponent({
                   fontWeight: "600",
                 }}
               >
-                Dismiss
+                Let's Go!
               </Text>
             </TouchableOpacity>
             {countdownData?.confettiEnabled && (
@@ -1844,6 +1853,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 1,
     fontVariant: ["tabular-nums"],
+  },
+  countdownCompletedText: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "600",
   },
   countdownTargetDate: {
     fontSize: 12,

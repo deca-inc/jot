@@ -355,29 +355,38 @@ export class EntryRepository {
     query: string;
     type?: EntryType;
     isFavorite?: boolean;
+    isPinned?: boolean;
     includeArchived?: boolean;
+    archivedOnly?: boolean;
     includeChildren?: boolean;
     dateFrom?: number;
     dateTo?: number;
     limit?: number;
     offset?: number;
   }): Promise<Entry[]> {
-    if (!options.query.trim()) {
-      return [];
+    const hasQuery = !!options.query.trim();
+
+    let query: string;
+    const params: (string | number)[] = [];
+
+    if (hasQuery) {
+      // Build FTS5 query - escape special characters and add wildcard prefix matching
+      const searchQuery = options.query.trim().replace(/['"]/g, '""');
+      query = `
+        SELECT e.* FROM entries e
+        INNER JOIN entries_fts fts ON e.id = fts.rowid
+        WHERE entries_fts MATCH ?
+      `;
+      params.push(`"${searchQuery}"*`);
+    } else {
+      // No search text — browse with filters only
+      query = "SELECT e.* FROM entries e WHERE 1=1";
     }
 
-    // Build FTS5 query - escape special characters and add wildcard prefix matching
-    const searchQuery = options.query.trim().replace(/['"]/g, '""');
-
-    let query = `
-      SELECT e.* FROM entries e
-      INNER JOIN entries_fts fts ON e.id = fts.rowid
-      WHERE entries_fts MATCH ?
-    `;
-    const params: (string | number)[] = [`"${searchQuery}"*`];
-
-    // Filter out archived entries by default
-    if (!options.includeArchived) {
+    // Archive filtering
+    if (options.archivedOnly) {
+      query += " AND e.archivedAt IS NOT NULL";
+    } else if (!options.includeArchived) {
       query += " AND e.archivedAt IS NULL";
     }
 
@@ -394,6 +403,11 @@ export class EntryRepository {
     if (options.isFavorite !== undefined) {
       query += " AND e.isFavorite = ?";
       params.push(options.isFavorite ? 1 : 0);
+    }
+
+    if (options.isPinned !== undefined) {
+      query += " AND e.isPinned = ?";
+      params.push(options.isPinned ? 1 : 0);
     }
 
     if (options.dateFrom !== undefined) {

@@ -13,7 +13,12 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Modal,
+  Pressable,
+  Platform,
+  useWindowDimensions,
 } from "react-native";
+import { PIConfetti, type PIConfettiMethods } from "react-native-fast-confetti";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
 import { Text, Dialog, MenuItem } from "../components";
@@ -32,6 +37,7 @@ import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import {
   extractCountdownData,
   formatCountdown,
+  formatCompletedAgo,
   calculateTimeRemaining,
   isCountdownComplete,
 } from "../utils/countdown";
@@ -113,12 +119,17 @@ export function CountdownViewer({
 
   // State for check-in prompt visibility (synced with prop)
 
+  const { width, height } = useWindowDimensions();
+
   // State for refreshing
   const [refreshing, setRefreshing] = useState(false);
 
   // State for overflow menu and dialogs
   const [showMenu, setShowMenu] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showDismissDialog, setShowDismissDialog] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const confettiRef = useRef<PIConfettiMethods>(null);
 
   // Mutations
   const updateEntryMutation = useUpdateEntry();
@@ -242,26 +253,42 @@ export function CountdownViewer({
     trackEvent,
   ]);
 
-  // Handler: Dismiss completed countdown (archive + unpin + navigate away)
-  const handleDismiss = useCallback(async () => {
-    try {
-      // Cancel notification if exists
-      if (countdownData?.notificationId) {
-        await cancelNotification(countdownData.notificationId);
+  // Start confetti after dismiss dialog render settles
+  const triggerConfetti = useCallback(() => {
+    const timer = setTimeout(() => {
+      confettiRef.current?.restart();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Handler: Dismiss completed countdown — always show celebration dialog
+  const handleDismiss = useCallback(() => {
+    setShowDismissDialog(true);
+    setShowConfetti(true);
+    triggerConfetti();
+  }, [triggerConfetti]);
+
+  // Handler: Confirm dismiss from dialog (archive + unpin + close)
+  const handleConfirmDismiss = useCallback(async () => {
+    setShowDismissDialog(false);
+    setShowConfetti(false);
+    // Delay archive until after modal close animation
+    setTimeout(async () => {
+      try {
+        if (countdownData?.notificationId) {
+          await cancelNotification(countdownData.notificationId);
+        }
+        await archiveEntryMutation.mutateAsync(entryId);
+        if (entry?.isPinned) {
+          await togglePinnedMutation.mutateAsync(entryId);
+        }
+        trackEvent("Dismiss Countdown", { entryType: "countdown" });
+        onClose?.();
+      } catch (error) {
+        console.error("[CountdownViewer] Error dismissing:", error);
+        Alert.alert("Error", "Failed to dismiss countdown");
       }
-      // Archive the entry
-      await archiveEntryMutation.mutateAsync(entryId);
-      // Unpin if pinned
-      if (entry?.isPinned) {
-        await togglePinnedMutation.mutateAsync(entryId);
-      }
-      trackEvent("Dismiss Countdown", { entryType: "countdown" });
-      // Navigate to empty state
-      onClose?.();
-    } catch (error) {
-      console.error("[CountdownViewer] Error dismissing:", error);
-      Alert.alert("Error", "Failed to dismiss countdown");
-    }
+    }, 350);
   }, [
     countdownData?.notificationId,
     archiveEntryMutation,
@@ -390,51 +417,66 @@ export function CountdownViewer({
 
         {/* Large Timer Display */}
         <View style={styles.timerContainer}>
-          <Text
-            style={[styles.timerText, { color: seasonalTheme.textPrimary }]}
-          >
-            {formattedTime}
-          </Text>
-          {timeRemaining.isPast && !countdownData.isCountUp && (
-            <View
+          {/* Show friendly "Completed X ago" for past countdowns, normal timer otherwise */}
+          {timeRemaining.isPast && !countdownData.isCountUp ? (
+            <Text
               style={[
-                styles.completeBadge,
-                { backgroundColor: seasonalTheme.chipBg },
+                styles.completedAgoText,
+                { color: seasonalTheme.textSecondary },
               ]}
             >
-              <Ionicons
-                name="checkmark-circle"
-                size={16}
-                color={seasonalTheme.chipText}
-              />
-              <Text
-                variant="caption"
-                style={{ color: seasonalTheme.chipText, marginLeft: 4 }}
-              >
-                Complete
-              </Text>
-            </View>
+              {formatCompletedAgo(countdownData.targetDate)}
+            </Text>
+          ) : (
+            <Text
+              style={[styles.timerText, { color: seasonalTheme.textPrimary }]}
+            >
+              {formattedTime}
+            </Text>
           )}
-          {/* Dismiss button for completed countdowns */}
+          {/* Complete badge — only shown for already-archived countdowns */}
+          {timeRemaining.isPast &&
+            !countdownData.isCountUp &&
+            !!entry.archivedAt && (
+              <View
+                style={[
+                  styles.completeIndicator,
+                  { backgroundColor: seasonalTheme.chipBg },
+                ]}
+              >
+                <Ionicons
+                  name="checkmark-circle"
+                  size={16}
+                  color={seasonalTheme.chipText}
+                />
+                <Text
+                  variant="caption"
+                  style={{ color: seasonalTheme.chipText, marginLeft: 4 }}
+                >
+                  Complete
+                </Text>
+              </View>
+            )}
+          {/* Complete button — shown for completed but not-yet-archived countdowns */}
           {!countdownData.isCountUp &&
             !entry.archivedAt &&
             isCountdownComplete(countdownData.targetDate) && (
               <TouchableOpacity
                 style={[
-                  styles.dismissButton,
+                  styles.completeButton,
                   { backgroundColor: seasonalTheme.textPrimary },
                 ]}
                 onPress={handleDismiss}
                 activeOpacity={0.8}
               >
                 <Text
-                  variant="body"
+                  variant="caption"
                   style={{
                     color: seasonalTheme.gradient.middle,
                     fontWeight: "600",
                   }}
                 >
-                  Dismiss
+                  Mark Completed
                 </Text>
               </TouchableOpacity>
             )}
@@ -666,6 +708,111 @@ export function CountdownViewer({
         />
       </Dialog>
 
+      {/* Dismiss Countdown Dialog with Confetti */}
+      <Modal
+        visible={showDismissDialog}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDismissDialog(false);
+          setShowConfetti(false);
+        }}
+      >
+        <Pressable
+          style={styles.dialogOverlay}
+          onPress={() => {
+            setShowDismissDialog(false);
+            setShowConfetti(false);
+          }}
+        >
+          {showConfetti && (
+            <View style={styles.confettiContainer} pointerEvents="none">
+              <PIConfetti
+                ref={confettiRef}
+                count={150}
+                blastPosition={{ x: width / 2, y: height / 2 - 140 }}
+                blastRadius={500}
+                blastDuration={1000}
+                fallDuration={2000}
+              />
+            </View>
+          )}
+          <Pressable
+            style={[
+              styles.dismissDialog,
+              { backgroundColor: seasonalTheme.gradient.middle },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text
+              variant="h2"
+              style={{
+                color: seasonalTheme.textPrimary,
+                marginBottom: spacingPatterns.md,
+                textAlign: "center",
+              }}
+            >
+              🎉
+            </Text>
+            <Text
+              variant="h3"
+              style={{
+                color: seasonalTheme.textPrimary,
+                marginBottom: spacingPatterns.sm,
+                textAlign: "center",
+              }}
+            >
+              Countdown Complete!
+            </Text>
+            {countdownData?.rewardsNote && (
+              <Text
+                variant="body"
+                style={{
+                  color: seasonalTheme.textSecondary,
+                  marginBottom: spacingPatterns.lg,
+                  textAlign: "center",
+                  lineHeight: 22,
+                }}
+              >
+                {countdownData.rewardsNote}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.dismissDialogButton,
+                { backgroundColor: seasonalTheme.textPrimary },
+              ]}
+              onPress={handleConfirmDismiss}
+            >
+              <Text
+                style={{
+                  color: seasonalTheme.gradient.middle,
+                  fontWeight: "600",
+                }}
+              >
+                Let's Go!
+              </Text>
+            </TouchableOpacity>
+            {countdownData?.confettiEnabled && (
+              <TouchableOpacity
+                onPress={() => confettiRef.current?.restart()}
+                style={{ marginTop: spacingPatterns.md, alignSelf: "center" }}
+              >
+                <Text
+                  style={{
+                    color: seasonalTheme.textSecondary,
+                    fontSize: 14,
+                    textAlign: "center",
+                  }}
+                >
+                  More confetti 🎊
+                </Text>
+              </TouchableOpacity>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Reset Timer Dialog */}
       <Dialog
         visible={showResetDialog}
@@ -779,12 +926,6 @@ const styles = StyleSheet.create({
   title: {
     marginBottom: spacingPatterns.sm,
   },
-  dismissButton: {
-    paddingHorizontal: spacingPatterns.lg,
-    paddingVertical: spacingPatterns.sm,
-    borderRadius: borderRadius.lg,
-    marginTop: spacingPatterns.md,
-  },
   timerContainer: {
     alignItems: "center",
     marginBottom: spacingPatterns.md,
@@ -795,13 +936,29 @@ const styles = StyleSheet.create({
     letterSpacing: -2,
     lineHeight: 64,
   },
-  completeBadge: {
+  completedAgoText: {
+    fontSize: 24,
+    fontWeight: "600",
+    lineHeight: 32,
+  },
+  // Badge and button share the same size, differ in color and roundness
+  completeIndicator: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacingPatterns.md,
-    paddingVertical: spacingPatterns.xs,
+    justifyContent: "center",
+    paddingHorizontal: spacingPatterns.lg,
+    paddingVertical: spacingPatterns.sm,
     borderRadius: borderRadius.full,
-    marginTop: spacingPatterns.sm,
+    marginTop: spacingPatterns.md,
+  },
+  completeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacingPatterns.lg,
+    paddingVertical: spacingPatterns.sm,
+    borderRadius: borderRadius.md,
+    marginTop: spacingPatterns.md,
   },
   targetDateContainer: {
     flexDirection: "row",
@@ -916,6 +1073,42 @@ const styles = StyleSheet.create({
   },
   addCheckinText: {
     fontWeight: "600",
+  },
+  dialogOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dismissDialog: {
+    width: "80%",
+    maxWidth: 400,
+    padding: spacingPatterns.lg,
+    borderRadius: borderRadius.lg,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  dismissDialogButton: {
+    paddingVertical: spacingPatterns.sm,
+    paddingHorizontal: spacingPatterns.lg,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+  },
+  confettiContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   resetDialog: {
     width: "80%",

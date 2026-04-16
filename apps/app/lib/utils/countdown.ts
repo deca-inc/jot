@@ -155,6 +155,25 @@ export function formatCountdown(
 }
 
 /**
+ * Format a human-friendly "completed X ago" string for past countdowns
+ */
+export function formatCompletedAgo(targetDate: number): string {
+  const elapsed = Date.now() - targetDate;
+  const minutes = Math.floor(elapsed / (1000 * 60));
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (minutes < 60) return "Completed just now";
+  if (hours < 24) return "Completed today";
+  if (days < 2) return "Completed yesterday";
+  if (days < 7) return `Completed ${days} days ago`;
+  if (days < 14) return "Completed last week";
+  if (days < 30) return `Completed ${Math.floor(days / 7)} weeks ago`;
+  if (days < 60) return "Completed last month";
+  return "Completed a while ago";
+}
+
+/**
  * Check if confetti should be triggered
  * Returns true if countdown is complete, confetti is enabled, and hasn't been triggered yet
  */

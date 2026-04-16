@@ -39,8 +39,8 @@ export function SearchModal({
   const [typeFilter, setTypeFilter] = useState<EntryTypeFilter>("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [showPinned, setShowPinned] = useState(true);
-  const [includeArchived, setIncludeArchived] = useState(false);
+  const [pinnedOnly, setPinnedOnly] = useState(false);
+  const [archivedOnly, setArchivedOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const debouncedQuery = useDebounce(query, 200);
 
@@ -72,12 +72,22 @@ export function SearchModal({
       query: debouncedQuery,
       type: typeFilter !== "all" ? typeFilter : undefined,
       isFavorite: favoritesOnly ? true : undefined,
-      includeArchived: includeArchived ? true : undefined,
+      isPinned: pinnedOnly ? true : undefined,
+      // Default: show all (including archived). When checked: only archived.
+      includeArchived: !archivedOnly ? true : undefined,
+      archivedOnly: archivedOnly ? true : undefined,
       dateFrom: dateRange.dateFrom,
       dateTo: dateRange.dateTo,
       limit: 20,
     }),
-    [debouncedQuery, typeFilter, favoritesOnly, includeArchived, dateRange],
+    [
+      debouncedQuery,
+      typeFilter,
+      favoritesOnly,
+      pinnedOnly,
+      archivedOnly,
+      dateRange,
+    ],
   );
 
   const searchResult = useSearchEntries(searchOptions);
@@ -90,16 +100,16 @@ export function SearchModal({
     typeFilter !== "all" ||
     dateFilter !== "all" ||
     favoritesOnly ||
-    !showPinned ||
-    includeArchived;
+    pinnedOnly ||
+    archivedOnly;
   const isSearching = debouncedQuery.trim().length > 0 || hasActiveFilters;
 
   const activeFilterCount = [
     typeFilter !== "all",
     dateFilter !== "all",
     favoritesOnly,
-    !showPinned,
-    includeArchived,
+    pinnedOnly,
+    archivedOnly,
   ].filter(Boolean).length;
 
   const handleSelect = useCallback(
@@ -112,8 +122,8 @@ export function SearchModal({
       setTypeFilter("all");
       setDateFilter("all");
       setFavoritesOnly(false);
-      setShowPinned(true);
-      setIncludeArchived(false);
+      setPinnedOnly(false);
+      setArchivedOnly(false);
       setShowFilters(false);
       onClose();
     },
@@ -125,8 +135,8 @@ export function SearchModal({
     setTypeFilter("all");
     setDateFilter("all");
     setFavoritesOnly(false);
-    setShowPinned(true);
-    setIncludeArchived(false);
+    setPinnedOnly(false);
+    setArchivedOnly(false);
     setShowFilters(false);
     onClose();
   }, [onClose]);
@@ -454,10 +464,10 @@ export function SearchModal({
 
                 <TouchableOpacity
                   style={styles.toggleItem}
-                  onPress={() => setShowPinned((v) => !v)}
+                  onPress={() => setPinnedOnly((v) => !v)}
                 >
-                  <View style={checkboxStyle(showPinned)}>
-                    {showPinned && (
+                  <View style={checkboxStyle(pinnedOnly)}>
+                    {pinnedOnly && (
                       <Ionicons
                         name="checkmark-sharp"
                         size={12}
@@ -479,10 +489,10 @@ export function SearchModal({
 
                 <TouchableOpacity
                   style={styles.toggleItem}
-                  onPress={() => setIncludeArchived((v) => !v)}
+                  onPress={() => setArchivedOnly((v) => !v)}
                 >
-                  <View style={checkboxStyle(includeArchived)}>
-                    {includeArchived && (
+                  <View style={checkboxStyle(archivedOnly)}>
+                    {archivedOnly && (
                       <Ionicons
                         name="checkmark-sharp"
                         size={12}

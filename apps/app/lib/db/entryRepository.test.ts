@@ -405,9 +405,9 @@ describe("EntryRepository", () => {
       expect(results).toHaveLength(0);
     });
 
-    it("returns empty for empty query", async () => {
+    it("returns all entries for empty query (filter-only browsing)", async () => {
       const results = await repo.search({ query: "" });
-      expect(results).toHaveLength(0);
+      expect(results.length).toBeGreaterThan(0);
     });
 
     it("filters search by type", async () => {
