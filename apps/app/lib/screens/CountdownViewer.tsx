@@ -25,6 +25,7 @@ import {
   useDeleteEntry,
   useArchiveEntry,
   useUnarchiveEntry,
+  useTogglePinned,
 } from "../db/useEntries";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -32,6 +33,7 @@ import {
   extractCountdownData,
   formatCountdown,
   calculateTimeRemaining,
+  isCountdownComplete,
 } from "../utils/countdown";
 import { cancelNotification } from "../utils/notifications";
 
@@ -123,6 +125,7 @@ export function CountdownViewer({
   const deleteEntryMutation = useDeleteEntry();
   const archiveEntryMutation = useArchiveEntry();
   const unarchiveEntryMutation = useUnarchiveEntry();
+  const togglePinnedMutation = useTogglePinned();
   const trackEvent = useTrackEvent();
 
   // Timer state for live updates
@@ -237,6 +240,36 @@ export function CountdownViewer({
     unarchiveEntryMutation,
     entryId,
     trackEvent,
+  ]);
+
+  // Handler: Dismiss completed countdown (archive + unpin + navigate away)
+  const handleDismiss = useCallback(async () => {
+    try {
+      // Cancel notification if exists
+      if (countdownData?.notificationId) {
+        await cancelNotification(countdownData.notificationId);
+      }
+      // Archive the entry
+      await archiveEntryMutation.mutateAsync(entryId);
+      // Unpin if pinned
+      if (entry?.isPinned) {
+        await togglePinnedMutation.mutateAsync(entryId);
+      }
+      trackEvent("Dismiss Countdown", { entryType: "countdown" });
+      // Navigate to empty state
+      onClose?.();
+    } catch (error) {
+      console.error("[CountdownViewer] Error dismissing:", error);
+      Alert.alert("Error", "Failed to dismiss countdown");
+    }
+  }, [
+    countdownData?.notificationId,
+    archiveEntryMutation,
+    togglePinnedMutation,
+    entry?.isPinned,
+    entryId,
+    trackEvent,
+    onClose,
   ]);
 
   // Handler: Reset countup timer
@@ -382,6 +415,29 @@ export function CountdownViewer({
               </Text>
             </View>
           )}
+          {/* Dismiss button for completed countdowns */}
+          {!countdownData.isCountUp &&
+            !entry.archivedAt &&
+            isCountdownComplete(countdownData.targetDate) && (
+              <TouchableOpacity
+                style={[
+                  styles.dismissButton,
+                  { backgroundColor: seasonalTheme.textPrimary },
+                ]}
+                onPress={handleDismiss}
+                activeOpacity={0.8}
+              >
+                <Text
+                  variant="body"
+                  style={{
+                    color: seasonalTheme.gradient.middle,
+                    fontWeight: "600",
+                  }}
+                >
+                  Dismiss
+                </Text>
+              </TouchableOpacity>
+            )}
         </View>
 
         {/* Target Date */}
@@ -722,6 +778,12 @@ const styles = StyleSheet.create({
   },
   title: {
     marginBottom: spacingPatterns.sm,
+  },
+  dismissButton: {
+    paddingHorizontal: spacingPatterns.lg,
+    paddingVertical: spacingPatterns.sm,
+    borderRadius: borderRadius.lg,
+    marginTop: spacingPatterns.md,
   },
   timerContainer: {
     alignItems: "center",

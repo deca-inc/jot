@@ -860,6 +860,21 @@ function EntryListItemComponent({
           />
           <MenuItem
             compact
+            icon={entry.archivedAt ? "arrow-undo-outline" : "archive-outline"}
+            label={entry.archivedAt ? "Unarchive" : "Archive"}
+            onPress={() => {
+              setShowMenu(false);
+              if (entry.archivedAt) {
+                unarchiveEntryMutation.mutate(entry.id);
+              } else if (onArchive) {
+                onArchive(entry);
+              } else {
+                archiveEntryMutation.mutate(entry.id);
+              }
+            }}
+          />
+          <MenuItem
+            compact
             icon="trash-outline"
             label="Delete"
             variant="destructive"

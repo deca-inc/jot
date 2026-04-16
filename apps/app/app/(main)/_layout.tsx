@@ -27,12 +27,17 @@ import {
   Dialog,
 } from "../../lib/components";
 import { DrawerIcon } from "../../lib/components/icons/DrawerIcon";
+import { PinIcon } from "../../lib/components/icons/PinIcon";
 import { extractPreviewText } from "../../lib/db/entries";
 import {
   useEntry,
   useEntries,
   useDeleteEntry,
   useUpdateEntry,
+  useToggleFavorite,
+  useTogglePinned,
+  useArchiveEntry,
+  useUnarchiveEntry,
 } from "../../lib/db/useEntries";
 import { useIsWideScreen } from "../../lib/hooks/useIsWideScreen";
 import {
@@ -122,6 +127,10 @@ function MainLayout() {
   const { modelInfo, composerEntryId } = useModelInfo();
   const deleteEntryMutation = useDeleteEntry();
   const updateEntryMutation = useUpdateEntry();
+  const toggleFavoriteMutation = useToggleFavorite();
+  const togglePinnedMutation = useTogglePinned();
+  const archiveEntryMutation = useArchiveEntry();
+  const unarchiveEntryMutation = useUnarchiveEntry();
   const updateEntryRef = useRef(updateEntryMutation);
   updateEntryRef.current = updateEntryMutation;
   const screenWidth = useRef(0);
@@ -826,6 +835,49 @@ function MainLayout() {
             />
           )}
           <MenuItem
+            compact
+            icon={activeEntryQuery.data?.isFavorite ? "star" : "star-outline"}
+            label={
+              activeEntryQuery.data?.isFavorite ? "Unfavorite" : "Favorite"
+            }
+            onPress={() => {
+              setShowContentMenu(false);
+              if (activeEntryId) {
+                toggleFavoriteMutation.mutate(activeEntryId);
+              }
+            }}
+          />
+          <MenuItem
+            compact
+            customIcon={<PinIcon size={16} color={seasonalTheme.textPrimary} />}
+            label={activeEntryQuery.data?.isPinned ? "Unpin" : "Pin"}
+            onPress={() => {
+              setShowContentMenu(false);
+              if (activeEntryId) {
+                togglePinnedMutation.mutate(activeEntryId);
+              }
+            }}
+          />
+          <MenuItem
+            compact
+            icon={
+              activeEntryQuery.data?.archivedAt
+                ? "arrow-undo-outline"
+                : "archive-outline"
+            }
+            label={activeEntryQuery.data?.archivedAt ? "Unarchive" : "Archive"}
+            onPress={() => {
+              setShowContentMenu(false);
+              if (activeEntryId) {
+                if (activeEntryQuery.data?.archivedAt) {
+                  unarchiveEntryMutation.mutate(activeEntryId);
+                } else {
+                  archiveEntryMutation.mutate(activeEntryId);
+                }
+              }
+            }}
+          />
+          <MenuItem
             icon="trash-outline"
             label="Delete"
             variant="destructive"
@@ -1276,67 +1328,69 @@ function MainLayout() {
         </TouchableOpacity>
       </View>
 
-      {/* Recent entries */}
-      {recentEntries.length > 0 && (
-        <View style={styles.recentSection}>
-          <Text
-            variant="caption"
-            style={{
-              color: seasonalTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: "600",
-              marginBottom: spacingPatterns.xs,
-              textTransform: "uppercase",
-              letterSpacing: 0.5,
-            }}
-          >
-            Recents
-          </Text>
-          {recentEntries.map((entry) => {
-            const preview =
-              entry.title ||
-              extractPreviewText(entry.blocks) ||
-              (entry.type === "ai_chat" ? "AI Chat" : "Untitled");
-            const icon =
-              entry.type === "ai_chat"
-                ? "chatbubbles-outline"
-                : entry.type === "countdown"
-                  ? "timer-outline"
-                  : "document-text-outline";
-            return (
-              <TouchableOpacity
-                key={entry.id}
-                style={styles.recentItem}
-                onPress={() => {
-                  navigateToEntry(
-                    entry.id,
-                    entry.type as "journal" | "ai_chat" | "countdown",
-                  );
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={icon as "chatbubbles-outline"}
-                  size={14}
-                  color={seasonalTheme.textSecondary}
-                />
-                <Text
-                  variant="body"
-                  numberOfLines={1}
-                  style={{
-                    color: seasonalTheme.textPrimary,
-                    fontSize: 14,
-                    marginLeft: spacingPatterns.xs,
-                    flex: 1,
+      {/* Recent entries — fixed height to prevent layout shift while loading */}
+      <View style={styles.recentSection}>
+        {recentEntries.length > 0 && (
+          <>
+            <Text
+              variant="caption"
+              style={{
+                color: seasonalTheme.textSecondary,
+                fontSize: 12,
+                fontWeight: "600",
+                marginBottom: spacingPatterns.xs,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
+            >
+              Recents
+            </Text>
+            {recentEntries.map((entry) => {
+              const preview =
+                entry.title ||
+                extractPreviewText(entry.blocks) ||
+                (entry.type === "ai_chat" ? "AI Chat" : "Untitled");
+              const icon =
+                entry.type === "ai_chat"
+                  ? "chatbubbles-outline"
+                  : entry.type === "countdown"
+                    ? "timer-outline"
+                    : "document-text-outline";
+              return (
+                <TouchableOpacity
+                  key={entry.id}
+                  style={styles.recentItem}
+                  onPress={() => {
+                    navigateToEntry(
+                      entry.id,
+                      entry.type as "journal" | "ai_chat" | "countdown",
+                    );
                   }}
+                  activeOpacity={0.7}
                 >
-                  {preview}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
+                  <Ionicons
+                    name={icon as "chatbubbles-outline"}
+                    size={14}
+                    color={seasonalTheme.textSecondary}
+                  />
+                  <Text
+                    variant="body"
+                    numberOfLines={1}
+                    style={{
+                      color: seasonalTheme.textPrimary,
+                      fontSize: 14,
+                      marginLeft: spacingPatterns.xs,
+                      flex: 1,
+                    }}
+                  >
+                    {preview}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </>
+        )}
+      </View>
     </View>
   );
 
@@ -1658,6 +1712,7 @@ const styles = StyleSheet.create({
     marginTop: spacingPatterns.xl * 1.5,
     width: "100%",
     maxWidth: 360,
+    minHeight: 204,
   },
   recentItem: {
     flexDirection: "row",

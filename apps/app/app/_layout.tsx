@@ -7,7 +7,10 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useState, useEffect, useRef } from "react";
 import { AppState, LogBox, Platform } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+} from "react-native-safe-area-context";
 import { UnifiedModelProvider } from "../lib/ai/UnifiedModelProvider";
 import { ConditionalPostHogProvider } from "../lib/analytics/PostHogProvider";
 import {
@@ -129,7 +132,7 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <QueryClientProvider client={queryClient}>
         <DatabaseProvider encryptionKey={encryptionKey}>
           <ConditionalPostHogProvider>

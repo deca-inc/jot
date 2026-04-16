@@ -8,7 +8,14 @@ import {
   Platform,
   Alert,
 } from "react-native";
-import { useDeleteEntry } from "../db/useEntries";
+import {
+  useDeleteEntry,
+  useEntry,
+  useToggleFavorite,
+  useTogglePinned,
+  useArchiveEntry,
+  useUnarchiveEntry,
+} from "../db/useEntries";
 import { deleteEntry, type EntryActionContext } from "../screens/entryActions";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -44,6 +51,11 @@ export function FloatingComposerHeader({
   const seasonalTheme = useSeasonalTheme();
   const [showMenu, setShowMenu] = useState(false);
   const deleteEntryMutation = useDeleteEntry();
+  const { data: entry } = useEntry(entryId);
+  const toggleFavoriteMutation = useToggleFavorite();
+  const togglePinnedMutation = useTogglePinned();
+  const archiveEntryMutation = useArchiveEntry();
+  const unarchiveEntryMutation = useUnarchiveEntry();
 
   // Action context
   const actionContext = useMemo<EntryActionContext>(
@@ -183,6 +195,40 @@ export function FloatingComposerHeader({
 
       {/* Settings Menu Modal */}
       <Dialog visible={showMenu} onRequestClose={() => setShowMenu(false)}>
+        <MenuItem
+          icon={entry?.isFavorite ? "star" : "star-outline"}
+          label={entry?.isFavorite ? "Unfavorite" : "Favorite"}
+          onPress={() => {
+            setShowMenu(false);
+            if (entryId) {
+              toggleFavoriteMutation.mutate(entryId);
+            }
+          }}
+        />
+        <MenuItem
+          icon={entry?.isPinned ? "pin" : "pin-outline"}
+          label={entry?.isPinned ? "Unpin" : "Pin"}
+          onPress={() => {
+            setShowMenu(false);
+            if (entryId) {
+              togglePinnedMutation.mutate(entryId);
+            }
+          }}
+        />
+        <MenuItem
+          icon={entry?.archivedAt ? "arrow-undo-outline" : "archive-outline"}
+          label={entry?.archivedAt ? "Unarchive" : "Archive"}
+          onPress={() => {
+            setShowMenu(false);
+            if (entryId) {
+              if (entry?.archivedAt) {
+                unarchiveEntryMutation.mutate(entryId);
+              } else {
+                archiveEntryMutation.mutate(entryId);
+              }
+            }
+          }}
+        />
         <MenuItem
           icon="trash-outline"
           label="Delete Entry"
