@@ -143,7 +143,6 @@ export default function RootLayout() {
                     <SyncAuthProvider>
                       <SyncInitializer />
                       <StatusBarController />
-                      <OnboardingGate />
                       <Stack
                         screenOptions={{
                           headerShown: false,
@@ -153,6 +152,7 @@ export default function RootLayout() {
                         <Stack.Screen name="(onboarding)" />
                         <Stack.Screen name="(main)" />
                       </Stack>
+                      <OnboardingGate />
                     </SyncAuthProvider>
                   </ToastProvider>
                 </SeasonalThemeProvider>
@@ -186,11 +186,10 @@ function OnboardingGate() {
         }
         // If onboarding is complete, no redirect needed — app already starts on /(main)
       } catch (error) {
-        console.error("Error checking onboarding status:", error);
-        if (!hasNavigatedRef.current) {
-          hasNavigatedRef.current = true;
-          router.replace("/(onboarding)/welcome");
-        }
+        // DB may be temporarily unavailable (e.g. strict mode re-mount closes
+        // the SQLite handle). Don't navigate on error — SQLiteProvider will
+        // reopen the DB and this component will remount with a fresh effect.
+        console.warn("Error checking onboarding status:", error);
       }
     };
 

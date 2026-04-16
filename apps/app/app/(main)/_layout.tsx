@@ -405,9 +405,9 @@ function MainLayout() {
     return () => backHandler.remove();
   }, []);
 
-  // Cmd+K / Ctrl+K to open search
+  // Cmd+K / Ctrl+K to open search (web only)
   useEffect(() => {
-    if (!isWideScreen) return;
+    if (!isWideScreen || Platform.OS !== "web") return;
 
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {

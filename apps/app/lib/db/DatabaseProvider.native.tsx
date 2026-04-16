@@ -1,5 +1,9 @@
-import { SQLiteProvider, useSQLiteContext } from "expo-sqlite";
-import React, { useEffect, useRef, useState } from "react";
+import {
+  SQLiteProvider,
+  useSQLiteContext,
+  type SQLiteDatabase,
+} from "expo-sqlite";
+import React, { Suspense, useCallback } from "react";
 import { logDatabasePath } from "./databasePath";
 import { migrateTo } from "./migrations";
 import "./migrations/index"; // Register all migrations
@@ -11,81 +15,6 @@ interface DatabaseProviderProps {
   encryptionKey: string | null;
 }
 
-// Component that runs migrations once the database is ready
-const DatabaseInitializer: React.FC<{
-  children: React.ReactNode;
-  encryptionKey: string | null;
-}> = ({ children, encryptionKey }) => {
-  const db = useSQLiteContext();
-  const [isReady, setIsReady] = useState(false);
-  const [initError, setInitError] = useState<Error | null>(null);
-  const isInitialized = useRef(false);
-
-  useEffect(() => {
-    // Prevent multiple initializations
-    if (isInitialized.current) {
-      return;
-    }
-
-    const initializeDatabase = async () => {
-      try {
-        // Set encryption key if provided (must be done before any other operations)
-        if (encryptionKey) {
-          console.log("Setting encryption key, length:", encryptionKey.length);
-          // Pass the hex key as a string passphrase to SQLCipher
-          // Note: The key is a hex string, but SQLCipher will hash it as a passphrase
-          await db.execAsync(`PRAGMA key = '${encryptionKey}';`);
-          console.log("Database encryption key set");
-        }
-
-        // Verify database can be decrypted with this key
-        try {
-          await db.getFirstAsync("SELECT count(*) FROM sqlite_master");
-          console.log("Database decryption successful");
-        } catch (decryptError) {
-          console.error(
-            "Database decryption failed - key mismatch detected:",
-            decryptError,
-          );
-          // This can happen on fresh installs where an old key exists
-          // The old key will work fine with the new database
-          console.log(
-            "Continuing with existing encryption key on fresh database",
-          );
-        }
-
-        // Log database path for debugging
-        await logDatabasePath(db, DATABASE_NAME);
-
-        await migrateTo(db, Number.POSITIVE_INFINITY, { verbose: true });
-
-        isInitialized.current = true;
-        setIsReady(true);
-        console.log("Database ready");
-      } catch (error) {
-        console.error("Failed to initialize database:", error);
-        setInitError(error as Error);
-      }
-    };
-
-    initializeDatabase();
-  }, []); // Only run once on mount
-
-  if (initError) {
-    // Show error state
-    return null;
-  }
-
-  // Wait for database to be ready before rendering children
-  // This prevents race conditions where OnboardingWrapper tries to
-  // query the database before migrations complete
-  if (!isReady) {
-    return null;
-  }
-
-  return <>{children}</>;
-};
-
 export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({
   children,
   encryptionKey,
@@ -94,12 +23,47 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({
     throw new Error("Encryption key is required for SQLCipher");
   }
 
+  // Stable callback — encryptionKey is set once and never changes.
+  // Using useSuspense mode avoids the useEffect-based teardown in the
+  // default SQLiteProvider, which closes the DB during React strict-mode
+  // cleanup and causes "Access to closed resource" errors.
+  const onInit = useCallback(
+    async (db: SQLiteDatabase) => {
+      // Set encryption key (must be the first operation)
+      console.log("Setting encryption key, length:", encryptionKey.length);
+      await db.execAsync(`PRAGMA key = '${encryptionKey}';`);
+      console.log("Database encryption key set");
+
+      // Verify database can be decrypted with this key
+      try {
+        await db.getFirstAsync("SELECT count(*) FROM sqlite_master");
+        console.log("Database decryption successful");
+      } catch (decryptError) {
+        console.error(
+          "Database decryption failed - key mismatch detected:",
+          decryptError,
+        );
+        console.log(
+          "Continuing with existing encryption key on fresh database",
+        );
+      }
+
+      // Log database path for debugging
+      await logDatabasePath(db, DATABASE_NAME);
+
+      // Run migrations
+      await migrateTo(db, Number.POSITIVE_INFINITY, { verbose: true });
+      console.log("Database ready");
+    },
+    [encryptionKey],
+  );
+
   return (
-    <SQLiteProvider databaseName={DATABASE_NAME}>
-      <DatabaseInitializer encryptionKey={encryptionKey}>
+    <Suspense fallback={null}>
+      <SQLiteProvider databaseName={DATABASE_NAME} useSuspense onInit={onInit}>
         {children}
-      </DatabaseInitializer>
-    </SQLiteProvider>
+      </SQLiteProvider>
+    </Suspense>
   );
 };
 
