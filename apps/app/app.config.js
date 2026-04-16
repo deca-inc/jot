@@ -104,14 +104,6 @@ module.exports = ({ config }) => {
       "./plugins/withCmake",
       "./plugins/withExcludeMmkvShared",
       "./plugins/withJotWidget",
-      [
-        "./plugins/withSparkle",
-        {
-          feedURL:
-            "https://github.com/deca-inc/jot/releases/latest/download/appcast.xml",
-          publicEDKey: "KhtdMowTo6v2E4BFcrg6EzqNDl2/+bmjCooYZWMPC8A=",
-        },
-      ],
       "@react-native-community/datetimepicker",
       "expo-background-task",
       "expo-localization",

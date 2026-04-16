@@ -6,7 +6,7 @@
     <key>com.apple.security.app-sandbox</key>
     <true/>
 
-    <!-- Network access for Sparkle updates and sync server -->
+    <!-- Network access for sync server -->
     <key>com.apple.security.network.client</key>
     <true/>
 
@@ -28,11 +28,5 @@
         <string>group.com.betazeta.jot.widgets</string>
     </array>
 
-    <!-- Hardened runtime exceptions for Sparkle -->
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <false/>
-
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <false/>
 </dict>
 </plist>

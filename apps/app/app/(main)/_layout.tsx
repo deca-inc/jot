@@ -40,12 +40,14 @@ import {
   useUnarchiveEntry,
 } from "../../lib/db/useEntries";
 import { useIsWideScreen } from "../../lib/hooks/useIsWideScreen";
+import { useUpdateChecker } from "../../lib/hooks/useUpdateChecker";
 import {
   ModelInfoProvider,
   useModelInfo,
 } from "../../lib/navigation/ModelInfoContext";
 import { HomeScreen } from "../../lib/screens";
 import { useSyncAuthContext } from "../../lib/sync/SyncAuthProvider";
+import { useSyncEngine } from "../../lib/sync/useSyncEngine";
 import { borderRadius, spacingPatterns } from "../../lib/theme";
 import { springPresets } from "../../lib/theme";
 import { useSeasonalTheme } from "../../lib/theme/SeasonalThemeProvider";
@@ -120,8 +122,10 @@ function MainLayout() {
   const isWideScreen = useIsWideScreen();
   const insets = useSafeAreaInsets();
   const syncAuth = useSyncAuthContext();
+  const syncEngine = useSyncEngine();
   const pathname = usePathname();
   const globalParams = useGlobalSearchParams<{ parentId?: string }>();
+  const updateCheck = useUpdateChecker();
 
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showContentMenu, setShowContentMenu] = useState(false);
@@ -1163,6 +1167,68 @@ function MainLayout() {
           </Animated.View>
         )}
 
+        {/* Update banner */}
+        {(updateCheck.state.status === "available" ||
+          updateCheck.state.status === "downloading" ||
+          updateCheck.state.status === "ready") && (
+          <TouchableOpacity
+            onPress={updateCheck.install}
+            activeOpacity={0.7}
+            style={[
+              styles.updateBanner,
+              {
+                backgroundColor: seasonalTheme.isDark
+                  ? "rgba(59, 130, 246, 0.15)"
+                  : "rgba(59, 130, 246, 0.1)",
+                borderTopColor: seasonalTheme.isDark
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(0,0,0,0.08)",
+              },
+            ]}
+          >
+            <Ionicons
+              name={
+                updateCheck.state.status === "ready"
+                  ? "checkmark-circle"
+                  : updateCheck.state.status === "downloading"
+                    ? "cloud-download"
+                    : "arrow-up-circle"
+              }
+              size={16}
+              color="#3B82F6"
+            />
+            {isMobile ? (
+              <Text
+                variant="caption"
+                numberOfLines={1}
+                style={styles.updateBannerText}
+              >
+                {updateCheck.state.status === "ready"
+                  ? `v${updateCheck.state.info.version} ready — tap to install`
+                  : updateCheck.state.status === "downloading"
+                    ? `Downloading v${updateCheck.state.info.version}… ${updateCheck.state.progress}%`
+                    : `v${updateCheck.state.info.version} available — tap to update`}
+              </Text>
+            ) : (
+              <Animated.View
+                style={{ opacity: sidebarContentOpacity, flex: 1 }}
+              >
+                <Text
+                  variant="caption"
+                  numberOfLines={1}
+                  style={styles.updateBannerText}
+                >
+                  {updateCheck.state.status === "ready"
+                    ? `v${updateCheck.state.info.version} ready — click to install`
+                    : updateCheck.state.status === "downloading"
+                      ? `Downloading v${updateCheck.state.info.version}… ${updateCheck.state.progress}%`
+                      : `v${updateCheck.state.info.version} available — click to update`}
+                </Text>
+              </Animated.View>
+            )}
+          </TouchableOpacity>
+        )}
+
         {/* Settings footer */}
         <SidebarLink
           href="/(main)/settings"
@@ -1177,11 +1243,31 @@ function MainLayout() {
             },
           ]}
         >
-          <Ionicons
-            name="settings-outline"
-            size={18}
-            color={seasonalTheme.textSecondary}
-          />
+          <View>
+            <Ionicons
+              name="settings-outline"
+              size={18}
+              color={seasonalTheme.textSecondary}
+            />
+            {syncEngine.status === "error" ? (
+              <View style={styles.syncErrorBadge}>
+                <Ionicons name="warning" size={10} color="#FFB400" />
+              </View>
+            ) : updateCheck.state.status === "available" ||
+              updateCheck.state.status === "ready" ? (
+              <View
+                style={[
+                  styles.updateDot,
+                  {
+                    backgroundColor:
+                      updateCheck.state.status === "ready"
+                        ? "#22C55E"
+                        : "#3B82F6",
+                  },
+                ]}
+              />
+            ) : null}
+          </View>
           {isMobile ? (
             <Text
               variant="body"
@@ -1680,6 +1766,35 @@ const styles = StyleSheet.create({
   sidebarList: {
     flex: 1,
     overflow: "hidden",
+  },
+  updateBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    gap: 8,
+    flexShrink: 0,
+  },
+  updateBannerText: {
+    color: "#3B82F6",
+    fontSize: 12,
+    fontWeight: "500",
+    flex: 1,
+    marginLeft: 0,
+  },
+  updateDot: {
+    position: "absolute",
+    top: -2,
+    right: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  syncErrorBadge: {
+    position: "absolute",
+    top: -4,
+    right: -6,
   },
   sidebarFooter: {
     flexDirection: "row",
