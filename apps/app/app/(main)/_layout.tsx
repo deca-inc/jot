@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Slot, router, usePathname } from "expo-router";
+import { Slot, router, usePathname, useGlobalSearchParams } from "expo-router";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
@@ -51,6 +51,7 @@ import { springPresets } from "../../lib/theme";
 import { useSeasonalTheme } from "../../lib/theme/SeasonalThemeProvider";
 import { useTheme } from "../../lib/theme/ThemeProvider";
 import { blurEditors } from "../../lib/utils/blur-editors";
+import { requestSave } from "../../lib/utils/request-save";
 
 const appIcon = require("../../assets/icon.png") as number;
 
@@ -120,6 +121,7 @@ function MainLayout() {
   const insets = useSafeAreaInsets();
   const syncAuth = useSyncAuthContext();
   const pathname = usePathname();
+  const globalParams = useGlobalSearchParams<{ parentId?: string }>();
 
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showContentMenu, setShowContentMenu] = useState(false);
@@ -158,7 +160,10 @@ function MainLayout() {
   // Fetch active entry for content header title
   const activeEntryQuery = useEntry(activeEntryId);
   const activeEntryTitle = activeEntryQuery.data?.title || "";
-  const activeEntryParentId = activeEntryQuery.data?.parentId ?? undefined;
+  // parentId from the entry data, or from URL query params during compose
+  const activeEntryParentId =
+    activeEntryQuery.data?.parentId ??
+    (globalParams.parentId ? Number(globalParams.parentId) : undefined);
   const activeEntryType = activeEntryQuery.data?.type;
 
   // While the user is on /compose/chat and the composer has created a new
@@ -173,7 +178,8 @@ function MainLayout() {
 
   // Fetch parent entry for breadcrumb
   const parentEntryQuery = useEntry(activeEntryParentId);
-  const parentEntryTitle = parentEntryQuery.data?.title || "";
+  const parentEntryTitle =
+    parentEntryQuery.data?.title || (activeEntryParentId ? "Untitled" : "");
 
   // Mobile drawer state — always start closed for a clean launch experience
   const { width: windowWidth } = useWindowDimensions();
@@ -643,15 +649,16 @@ function MainLayout() {
         {isEntryScreen && activeEntryParentId && parentEntryTitle ? (
           <>
             <TouchableOpacity
-              onPress={() =>
+              onPress={async () => {
+                await requestSave.emit();
                 navigateToEntry(
                   activeEntryParentId,
                   parentEntryQuery.data?.type as
                     | "journal"
                     | "ai_chat"
                     | "countdown",
-                )
-              }
+                );
+              }}
               activeOpacity={0.7}
             >
               <Text

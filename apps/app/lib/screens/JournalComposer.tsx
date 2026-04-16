@@ -19,7 +19,11 @@ import {
 import { useAttachmentsRepository } from "../db/attachmentsRepository";
 import { useEntryRepository } from "../db/entries";
 import { useEntry, useUpdateEntry, entryKeys } from "../db/useEntries";
-import { useSyncEngine } from "../sync";
+import { useSyncAuth, useSyncEngine } from "../sync";
+import {
+  downloadAttachmentFromServer,
+  uploadAttachmentForSync,
+} from "../sync/assetSyncService";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { debounce } from "../utils/debounce";
@@ -31,6 +35,7 @@ import {
   isHtmlContentEmpty,
   stripBase64FromAttachments,
 } from "../utils/htmlUtils";
+import { requestSave } from "../utils/request-save";
 import { saveJournalContent } from "./journalActions";
 import type { QuillRichEditorRef } from "../components";
 
@@ -87,6 +92,10 @@ export function JournalComposer({
 
   // Sync on open - connect to server and sync entry when opened
   const { syncOnOpen, disconnectOnClose, onEntryUpdated } = useSyncEngine();
+
+  // Sync auth state - needed for server URL when downloading/uploading attachments
+  const { state: syncAuthState } = useSyncAuth();
+  const serverUrl = syncAuthState.settings?.serverUrl ?? null;
 
   // Stabilize sync callback with ref
   const onEntryUpdatedRef = useRef(onEntryUpdated);
@@ -232,7 +241,39 @@ export function JournalComposer({
           const url = await getAudioAttachmentUrl(entryId!, attachment.id);
           urls.set(attachment.id, url);
         } catch (error) {
-          console.warn(`Failed to prepare attachment ${attachment.id}:`, error);
+          // File not found locally - try downloading from sync server
+          if (entry?.uuid && serverUrl) {
+            try {
+              const downloaded = await downloadAttachmentFromServer(
+                serverUrl,
+                entryId!,
+                entry.uuid,
+                attachment.id,
+              );
+              if (downloaded) {
+                const url = await getAudioAttachmentUrl(
+                  entryId!,
+                  attachment.id,
+                );
+                urls.set(attachment.id, url);
+              } else {
+                console.warn(
+                  `Failed to prepare attachment ${attachment.id}:`,
+                  error,
+                );
+              }
+            } catch (downloadError) {
+              console.warn(
+                `Failed to download attachment ${attachment.id}:`,
+                downloadError,
+              );
+            }
+          } else {
+            console.warn(
+              `Failed to prepare attachment ${attachment.id}:`,
+              error,
+            );
+          }
         }
       }
 
@@ -340,6 +381,22 @@ export function JournalComposer({
         });
       }
     };
+  }, [debouncedSave, entryId, actionContext]);
+
+  // Register a save handler so external navigation (e.g. breadcrumb click)
+  // can await a save before leaving the composer.
+  useEffect(() => {
+    return requestSave.register(async () => {
+      debouncedSave.cancel();
+      const currentContent = htmlContentRef.current;
+      if (entryId && currentContent.trim() && !isDeletingRef.current) {
+        const sanitizedContent = stripBase64FromAttachments(currentContent);
+        await saveJournalContent(entryId, sanitizedContent, "", actionContext, {
+          updateCache: true,
+          titlePinned: titlePinnedRef.current,
+        });
+      }
+    });
   }, [debouncedSave, entryId, actionContext]);
 
   // Track initial content hash to detect sync updates
@@ -550,6 +607,21 @@ export function JournalComposer({
 
           // Clean up the temp file
           await FileSystem.deleteAsync(result.audioUri, { idempotent: true });
+
+          // Upload to sync server in background (non-blocking)
+          if (entry?.uuid && serverUrl) {
+            uploadAttachmentForSync(
+              serverUrl,
+              entryId,
+              entry.uuid,
+              attachment.id,
+            ).catch((uploadErr) =>
+              console.warn(
+                "[JournalComposer] Background attachment upload failed:",
+                uploadErr,
+              ),
+            );
+          }
         } catch (err) {
           console.error("Failed to save audio:", err);
         }

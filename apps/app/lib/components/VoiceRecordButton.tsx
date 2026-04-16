@@ -171,6 +171,8 @@ export interface VoiceRecordButtonProps {
   disabled?: boolean;
   /** Hide the built-in chat bubble (when parent handles transcript display) */
   hideTranscriptBubble?: boolean;
+  /** Override the button background color */
+  backgroundColor?: string;
 }
 
 const BUTTON_SIZES = {
@@ -298,6 +300,7 @@ export function VoiceRecordButton({
   size = "medium",
   disabled = false,
   hideTranscriptBubble = false,
+  backgroundColor: backgroundColorProp,
 }: VoiceRecordButtonProps) {
   const seasonalTheme = useSeasonalTheme();
   const modelSettings = useModelSettings();
@@ -922,7 +925,7 @@ export function VoiceRecordButton({
 
   // Button background color - keep consistent regardless of recording state
   // The icon color changes to red when recording, not the background
-  const bgColor = seasonalTheme.glassFallbackBg;
+  const bgColor = backgroundColorProp ?? seasonalTheme.glassFallbackBg;
 
   // Glass tint color - keep consistent regardless of recording state
   const glassTintColor = seasonalTheme.cardBg;

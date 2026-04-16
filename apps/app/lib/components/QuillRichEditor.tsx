@@ -94,8 +94,8 @@ export const QuillRichEditor = forwardRef<
   const insets = useSafeAreaInsets();
 
   // Responsive sizing
-  const isDesktopLayout = screenWidth > 768;
   const isSmallScreen = screenWidth < 375;
+  const isWideScreen = screenWidth >= 768;
   const iconSize = isSmallScreen ? 17 : 19;
   const fontSize = isSmallScreen ? 14 : 15;
 
@@ -685,69 +685,6 @@ export const QuillRichEditor = forwardRef<
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
-    ${
-      isDesktopLayout
-        ? `
-    /* Bubble toolbar for desktop/tablet */
-    .bubble-toolbar {
-      position: absolute;
-      display: none;
-      flex-direction: row;
-      align-items: center;
-      gap: 2px;
-      padding: 4px 6px;
-      border-radius: 8px;
-      background: ${seasonalTheme.isDark ? "rgba(50, 50, 50, 0.95)" : "rgba(255, 255, 255, 0.97)"};
-      box-shadow: 0 2px 12px rgba(0, 0, 0, ${seasonalTheme.isDark ? "0.4" : "0.15"}), 0 0 0 1px rgba(${seasonalTheme.isDark ? "255,255,255,0.1" : "0,0,0,0.06"});
-      z-index: 1000;
-      opacity: 0;
-      transition: opacity 0.15s ease;
-      pointer-events: none;
-      white-space: nowrap;
-    }
-    .bubble-toolbar.visible {
-      display: flex;
-      opacity: 1;
-      pointer-events: auto;
-    }
-    .bubble-toolbar .bubble-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 30px;
-      height: 30px;
-      border: none;
-      border-radius: 5px;
-      background: transparent;
-      color: ${seasonalTheme.textPrimary};
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.12s ease;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-    .bubble-toolbar .bubble-btn:hover {
-      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.07)"};
-    }
-    .bubble-toolbar .bubble-btn.active {
-      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)"};
-      color: ${seasonalTheme.isDark ? "#fff" : "#000"};
-    }
-    .bubble-toolbar .bubble-sep {
-      width: 1px;
-      height: 18px;
-      background: ${seasonalTheme.isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)"};
-      margin: 0 3px;
-    }
-    .bubble-toolbar .bubble-btn svg {
-      width: 16px;
-      height: 16px;
-      fill: currentColor;
-    }
-    `
-        : ""
-    }
   `;
 
   // Render toolbar buttons (shared between iOS and Android)
@@ -980,13 +917,61 @@ export const QuillRichEditor = forwardRef<
 
   return (
     <View style={styles.container}>
+      {/* Fixed toolbar for wide screens (tablet/desktop) - always visible above editor */}
+      {isWideScreen && !hideToolbar && (
+        <View
+          style={[
+            styles.fixedToolbar,
+            {
+              borderBottomColor: seasonalTheme.isDark
+                ? "rgba(255, 255, 255, 0.08)"
+                : "rgba(0, 0, 0, 0.08)",
+              backgroundColor: seasonalTheme.gradient.middle,
+            },
+          ]}
+        >
+          <View style={styles.fixedToolbarInner}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.fixedToolbarContent}
+            >
+              {renderToolbarButtons()}
+            </ScrollView>
+            {onTranscriptionComplete && onNoModelAvailable && (
+              <View style={styles.voiceButtonContainer}>
+                <VoiceRecordButton
+                  onTranscriptionComplete={(result) => {
+                    setIsVoiceRecording(false);
+                    onTranscriptionComplete(result);
+                  }}
+                  onNoModelAvailable={onNoModelAvailable}
+                  onRecordingStart={() => setIsVoiceRecording(true)}
+                  onRecordingStop={() => setIsVoiceRecording(false)}
+                  onTranscriptChange={setTranscriptText}
+                  onCancel={() => setIsVoiceRecording(false)}
+                  size="medium"
+                  hideTranscriptBubble
+                  backgroundColor={
+                    seasonalTheme.isDark
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(0, 0, 0, 0.06)"
+                  }
+                />
+              </View>
+            )}
+          </View>
+        </View>
+      )}
+
       {/* Editor - margin adjusts for keyboard, toolbar floats on top */}
       <View
         style={[
           styles.editorContainer,
           {
             // Use margin (not padding) to avoid solid background gap
-            marginBottom: isKeyboardVisible ? keyboardHeight : 0,
+            marginBottom:
+              !isWideScreen && isKeyboardVisible ? keyboardHeight : 0,
           },
         ]}
       >
@@ -1491,175 +1476,28 @@ export const QuillRichEditor = forwardRef<
               }, true);
             })();
 
-            ${
-              isDesktopLayout
-                ? `
-            // Bubble toolbar for desktop/tablet
+            // Escape key: collapse selection (deselect) — useful with physical keyboards
             (function() {
-              var toolbar = document.createElement('div');
-              toolbar.className = 'bubble-toolbar';
-              toolbar.innerHTML =
-                '<button class="bubble-btn" data-format="bold" title="Bold"><strong>B</strong></button>' +
-                '<button class="bubble-btn" data-format="italic" title="Italic"><em>I</em></button>' +
-                '<button class="bubble-btn" data-format="underline" title="Underline"><u>U</u></button>' +
-                '<button class="bubble-btn" data-format="strike" title="Strikethrough"><s>S</s></button>' +
-                '<div class="bubble-sep"></div>' +
-                '<button class="bubble-btn" data-format="header" data-value="1" title="Heading 1" style="font-size:16px">H1</button>' +
-                '<button class="bubble-btn" data-format="header" data-value="2" title="Heading 2" style="font-size:14px">H2</button>' +
-                '<button class="bubble-btn" data-format="header" data-value="3" title="Heading 3" style="font-size:13px">H3</button>' +
-                '<div class="bubble-sep"></div>' +
-                '<button class="bubble-btn" data-format="list" data-value="bullet" title="Bullet List"><svg viewBox="0 0 24 24"><circle cx="4" cy="7" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="4" cy="17" r="2"/><rect x="9" y="6" width="12" height="2" rx="1"/><rect x="9" y="11" width="12" height="2" rx="1"/><rect x="9" y="16" width="12" height="2" rx="1"/></svg></button>' +
-                '<button class="bubble-btn" data-format="list" data-value="ordered" title="Numbered List"><svg viewBox="0 0 24 24"><text x="2" y="9" font-size="7" font-weight="bold" fill="currentColor">1</text><text x="2" y="14.5" font-size="7" font-weight="bold" fill="currentColor">2</text><text x="2" y="20" font-size="7" font-weight="bold" fill="currentColor">3</text><rect x="10" y="6" width="11" height="2" rx="1"/><rect x="10" y="11" width="11" height="2" rx="1"/><rect x="10" y="16" width="11" height="2" rx="1"/></svg></button>' +
-                '<button class="bubble-btn" data-format="list" data-value="unchecked" title="Checklist"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="7 12 10 15 17 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
-                '<div class="bubble-sep"></div>' +
-                '<button class="bubble-btn" data-format="indent" data-value="-1" title="Decrease indent"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="2" rx="1"/><rect x="11" y="9" width="10" height="2" rx="1"/><rect x="11" y="14" width="10" height="2" rx="1"/><rect x="3" y="19" width="18" height="2" rx="1"/><path d="M7 9 L3 12.5 L7 16 Z"/></svg></button>' +
-                '<button class="bubble-btn" data-format="indent" data-value="+1" title="Increase indent"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="2" rx="1"/><rect x="11" y="9" width="10" height="2" rx="1"/><rect x="11" y="14" width="10" height="2" rx="1"/><rect x="3" y="19" width="18" height="2" rx="1"/><path d="M3 9 L7 12.5 L3 16 Z"/></svg></button>';
-
-              document.body.appendChild(toolbar);
-
-              // Prevent toolbar clicks from stealing selection
-              toolbar.addEventListener('mousedown', function(e) {
-                e.preventDefault();
-              });
-
-              // Handle format button clicks
-              toolbar.addEventListener('click', function(e) {
-                var btn = e.target.closest('.bubble-btn');
-                if (!btn) return;
-
-                var format = btn.getAttribute('data-format');
-                var value = btn.getAttribute('data-value');
-                if (!format) return;
-
-                if (format === 'header') {
-                  var headerVal = parseInt(value);
-                  var currentFormat = quill.getFormat();
-                  // Toggle: if already this header, remove it
-                  quill.format('header', currentFormat.header === headerVal ? false : headerVal);
-                } else if (format === 'list') {
-                  var currentFormat = quill.getFormat();
-                  // Toggle: if already this list type, remove it
-                  quill.format('list', currentFormat.list === value ? false : value);
-                } else if (format === 'indent') {
-                  // value is '+1' or '-1' — Quill clamps at 0 and 8
-                  quill.format('indent', value);
-                } else {
-                  // Toggle inline format (bold, italic, etc)
-                  var currentFormat = quill.getFormat();
-                  quill.format(format, !currentFormat[format]);
-                }
-
-                // Update active states after formatting
-                updateBubbleToolbar();
-              });
-
-              function updateBubbleToolbar() {
-                var range = quill.getSelection();
-                if (!range || range.length === 0) return;
-
-                var formats = quill.getFormat(range);
-                var buttons = toolbar.querySelectorAll('.bubble-btn');
-                for (var i = 0; i < buttons.length; i++) {
-                  var btn = buttons[i];
-                  var fmt = btn.getAttribute('data-format');
-                  var val = btn.getAttribute('data-value');
-                  var isActive = false;
-
-                  if (fmt === 'header') {
-                    isActive = formats.header === parseInt(val);
-                  } else if (fmt === 'list') {
-                    isActive = formats.list === val;
-                  } else if (fmt === 'indent') {
-                    // Indent buttons are actions, not toggles
-                    isActive = false;
-                  } else {
-                    isActive = !!formats[fmt];
-                  }
-
-                  if (isActive) {
-                    btn.classList.add('active');
-                  } else {
-                    btn.classList.remove('active');
-                  }
-                }
-              }
-
-              function positionToolbar(range) {
-                var bounds = quill.getBounds(range.index, range.length);
-                if (!bounds) { toolbar.classList.remove('visible'); return; }
-
-                var toolbarHeight = 38;
-                var gap = 6;
-                var editorEl = document.querySelector('.ql-editor');
-                var containerEl = document.querySelector('.ql-container');
-                if (!editorEl || !containerEl) return;
-
-                var containerRect = containerEl.getBoundingClientRect();
-                var toolbarWidth = toolbar.offsetWidth || 320;
-
-                // Calculate top position (above selection by default)
-                var top = bounds.top - toolbarHeight - gap;
-                // If too close to top, position below selection
-                if (top < 8) {
-                  top = bounds.top + bounds.height + gap;
-                }
-
-                // Calculate left position (centered on selection)
-                var selCenter = bounds.left + (bounds.width / 2);
-                var left = selCenter - (toolbarWidth / 2);
-
-                // Clamp horizontal position
-                if (left < 8) left = 8;
-                if (left + toolbarWidth > containerRect.width - 8) {
-                  left = containerRect.width - toolbarWidth - 8;
-                }
-
-                toolbar.style.top = top + 'px';
-                toolbar.style.left = left + 'px';
-                toolbar.classList.add('visible');
-              }
-
               setTimeout(function() {
-                if (typeof quill === 'undefined') return;
-
-                quill.on('selection-change', function(range) {
-                  if (range && range.length > 0) {
-                    updateBubbleToolbar();
-                    positionToolbar(range);
-                  } else {
-                    toolbar.classList.remove('visible');
-                  }
-                });
-
-                // Reposition on scroll
-                var editorEl = document.querySelector('.ql-editor');
-                if (editorEl) {
-                  editorEl.addEventListener('scroll', function() {
-                    var range = quill.getSelection();
-                    if (range && range.length > 0) {
-                      positionToolbar(range);
+                if (typeof quill !== 'undefined') {
+                  quill.root.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                      var sel = quill.getSelection();
+                      if (sel && sel.length > 0) {
+                        e.preventDefault();
+                        quill.setSelection(sel.index + sel.length, 0, 'silent');
+                      }
                     }
                   });
                 }
-
-                // Also update on text change (formatting may change)
-                quill.on('text-change', function() {
-                  var range = quill.getSelection();
-                  if (range && range.length > 0) {
-                    updateBubbleToolbar();
-                  }
-                });
               }, 300);
             })();
-            `
-                : ""
-            }
           `}
         />
       </View>
 
-      {/* Floating Toolbar - swipe down to dismiss keyboard (mobile only) */}
-      {isKeyboardVisible && !hideToolbar && !isDesktopLayout && (
+      {/* Floating Toolbar - swipe down to dismiss keyboard (phone only) */}
+      {!isWideScreen && isKeyboardVisible && !hideToolbar && (
         <Animated.View
           {...toolbarPanResponder.panHandlers}
           style={[
@@ -1798,91 +1636,94 @@ export const QuillRichEditor = forwardRef<
         </Animated.View>
       )}
 
-      {/* Floating Voice Button - shows when keyboard is collapsed */}
-      {!isKeyboardVisible && onTranscriptionComplete && onNoModelAvailable && (
-        <View
-          style={[
-            styles.floatingVoiceRow,
-            {
-              bottom: Math.max(insets.bottom, spacingPatterns.md),
-            },
-          ]}
-        >
-          {/* Transcript area - same styling as toolbar version */}
-          {/* Only render when recording to avoid shadow showing on Android */}
-          {isVoiceRecording && (
-            <View style={styles.floatingTranscriptWrapper}>
-              <Animated.View
-                style={[
-                  styles.floatingTranscriptOverlay,
-                  glassAvailable ? {} : styles.transcriptOverlayFallback,
-                  {
-                    backgroundColor: glassAvailable
-                      ? undefined
-                      : seasonalTheme.glassFallbackBg,
-                    transform: [
-                      {
-                        translateX: transcriptSlideAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [screenWidth, 0],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-                pointerEvents={isVoiceRecording ? "auto" : "none"}
-              >
-                {glassAvailable ? (
-                  <GlassView
-                    glassEffectStyle="regular"
-                    tintColor={
-                      seasonalTheme.isDark
-                        ? "rgba(40, 40, 40, 0.9)"
-                        : "rgba(240, 240, 240, 0.9)"
-                    }
-                    style={styles.floatingTranscriptGlass}
-                  >
-                    <RNText
-                      style={[
-                        styles.transcriptText,
-                        { color: seasonalTheme.textPrimary },
-                      ]}
-                      numberOfLines={1}
-                      ellipsizeMode="head"
+      {/* Floating Voice Button - shows when keyboard is collapsed (phone only) */}
+      {!isWideScreen &&
+        !isKeyboardVisible &&
+        onTranscriptionComplete &&
+        onNoModelAvailable && (
+          <View
+            style={[
+              styles.floatingVoiceRow,
+              {
+                bottom: Math.max(insets.bottom, spacingPatterns.md),
+              },
+            ]}
+          >
+            {/* Transcript area - same styling as toolbar version */}
+            {/* Only render when recording to avoid shadow showing on Android */}
+            {isVoiceRecording && (
+              <View style={styles.floatingTranscriptWrapper}>
+                <Animated.View
+                  style={[
+                    styles.floatingTranscriptOverlay,
+                    glassAvailable ? {} : styles.transcriptOverlayFallback,
+                    {
+                      backgroundColor: glassAvailable
+                        ? undefined
+                        : seasonalTheme.glassFallbackBg,
+                      transform: [
+                        {
+                          translateX: transcriptSlideAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [screenWidth, 0],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                  pointerEvents={isVoiceRecording ? "auto" : "none"}
+                >
+                  {glassAvailable ? (
+                    <GlassView
+                      glassEffectStyle="regular"
+                      tintColor={
+                        seasonalTheme.isDark
+                          ? "rgba(40, 40, 40, 0.9)"
+                          : "rgba(240, 240, 240, 0.9)"
+                      }
+                      style={styles.floatingTranscriptGlass}
                     >
-                      {transcriptText || "Listening..."}
-                    </RNText>
-                  </GlassView>
-                ) : (
-                  <View style={styles.floatingTranscriptContent}>
-                    <RNText
-                      style={[
-                        styles.transcriptText,
-                        { color: seasonalTheme.textPrimary },
-                      ]}
-                      numberOfLines={1}
-                      ellipsizeMode="head"
-                    >
-                      {transcriptText || "Listening..."}
-                    </RNText>
-                  </View>
-                )}
-              </Animated.View>
-            </View>
-          )}
+                      <RNText
+                        style={[
+                          styles.transcriptText,
+                          { color: seasonalTheme.textPrimary },
+                        ]}
+                        numberOfLines={1}
+                        ellipsizeMode="head"
+                      >
+                        {transcriptText || "Listening..."}
+                      </RNText>
+                    </GlassView>
+                  ) : (
+                    <View style={styles.floatingTranscriptContent}>
+                      <RNText
+                        style={[
+                          styles.transcriptText,
+                          { color: seasonalTheme.textPrimary },
+                        ]}
+                        numberOfLines={1}
+                        ellipsizeMode="head"
+                      >
+                        {transcriptText || "Listening..."}
+                      </RNText>
+                    </View>
+                  )}
+                </Animated.View>
+              </View>
+            )}
 
-          <VoiceRecordButton
-            onTranscriptionComplete={onTranscriptionComplete}
-            onNoModelAvailable={onNoModelAvailable}
-            onRecordingStart={() => setIsVoiceRecording(true)}
-            onRecordingStop={() => setIsVoiceRecording(false)}
-            onTranscriptChange={setTranscriptText}
-            onCancel={() => setIsVoiceRecording(false)}
-            size="large"
-            hideTranscriptBubble
-          />
-        </View>
-      )}
+            <VoiceRecordButton
+              onTranscriptionComplete={onTranscriptionComplete}
+              onNoModelAvailable={onNoModelAvailable}
+              onRecordingStart={() => setIsVoiceRecording(true)}
+              onRecordingStop={() => setIsVoiceRecording(false)}
+              onTranscriptChange={setTranscriptText}
+              onCancel={() => setIsVoiceRecording(false)}
+              size="large"
+              hideTranscriptBubble
+            />
+          </View>
+        )}
     </View>
   );
 });
@@ -1896,6 +1737,23 @@ const styles = StyleSheet.create({
   },
   editor: {
     flex: 1,
+  },
+  fixedToolbar: {
+    borderBottomWidth: 1,
+    flexShrink: 0,
+    zIndex: 10,
+  },
+  fixedToolbarInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 6,
+    paddingHorizontal: spacingPatterns.md,
+  },
+  fixedToolbarContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
   },
   floatingToolbar: {
     position: "absolute",
