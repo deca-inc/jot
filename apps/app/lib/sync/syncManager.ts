@@ -1223,10 +1223,10 @@ export class SyncManager {
 
   private handleAuthError(): void {
     this.updateStatus("error");
-    // Shutdown to prevent further attempts
     if (this.client?.isSyncDisabled()) {
-      console.error("[SyncManager] Auth failures exceeded, shutting down sync");
-      this.shutdown();
+      console.info(
+        "[SyncManager] Auth failures exceeded, sync paused until re-authenticated",
+      );
     }
     this.callbacks.onError?.(new Error("Authentication failed"));
   }

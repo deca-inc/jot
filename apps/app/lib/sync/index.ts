@@ -87,6 +87,12 @@ export {
   type NetworkStatus,
 } from "./networkMonitor";
 
+// Asset Sync (upload/download for cross-device attachment transfer)
+export {
+  uploadAttachmentForSync,
+  downloadAttachmentFromServer,
+} from "./assetSyncService";
+
 // Asset Upload
 export {
   AssetUploadQueue,

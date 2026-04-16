@@ -55,7 +55,7 @@ export class AssetUploadService {
    */
   async uploadAsset(
     localPath: string,
-    entryId: number,
+    entryId: number | string,
     _onProgress?: (progress: number) => void,
   ): Promise<UploadResponse> {
     const token = await getValidAccessToken();

@@ -1305,6 +1305,17 @@ export const QuillRichEditor = forwardRef<
       onBlurRef.current?.();
     });
 
+    // Escape key: collapse selection (deselect)
+    quill.root.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        const sel = quill.getSelection();
+        if (sel && sel.length > 0) {
+          e.preventDefault();
+          quill.setSelection(sel.index + sel.length, 0, "silent");
+        }
+      }
+    });
+
     // Auto-scroll cursor into view
     attachAutoScroll(quill);
 

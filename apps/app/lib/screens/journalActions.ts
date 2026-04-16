@@ -257,10 +257,14 @@ export async function saveJournalContent(
             // DON'T call onSave - it triggers a reload which causes the editor to escape HTML
             // The DB is local, trust our editor state
 
-            // Notify sync manager (fire and forget - don't block the save)
-            onEntryUpdated?.(entryId, input).catch((err) => {
-              console.error("[Journal Action] Error notifying sync:", err);
-            });
+            // Only notify sync when navigating away (updateCache=true).
+            // During active editing, avoid sync callbacks that update
+            // pendingCount state and cause unnecessary re-renders.
+            if (updateCache) {
+              onEntryUpdated?.(entryId, input).catch((err) => {
+                console.error("[Journal Action] Error notifying sync:", err);
+              });
+            }
 
             resolve();
           },

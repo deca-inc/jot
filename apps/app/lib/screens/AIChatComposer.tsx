@@ -416,24 +416,18 @@ const ChatInputBar = memo(
 
     return (
       <View
-        style={[
-          styles.chatInputContainer,
-          {
-            backgroundColor: seasonalTheme.gradient.middle,
-            paddingBottom:
-              keyboardHeight > 0
-                ? spacingPatterns.sm
-                : insetsBottom || spacingPatterns.sm,
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: keyboardHeight,
-
-            marginLeft: "auto" as unknown as number,
-
-            marginRight: "auto" as unknown as number,
-          },
-        ]}
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: keyboardHeight,
+          alignItems: "center",
+          backgroundColor: seasonalTheme.gradient.middle,
+          paddingBottom:
+            keyboardHeight > 0
+              ? spacingPatterns.sm
+              : insetsBottom || spacingPatterns.sm,
+        }}
       >
         {Platform.OS === "ios" && (
           <View
@@ -447,62 +441,63 @@ const ChatInputBar = memo(
             }}
           />
         )}
-
-        <View style={{ flex: 1, position: "relative" }}>
-          <TextInput
-            ref={inputRef}
-            style={[
-              styles.chatInput,
-              {
-                color: seasonalTheme.textPrimary,
-                borderColor: seasonalTheme.textSecondary + "20",
-                backgroundColor: seasonalTheme.isDark
-                  ? "rgba(255,255,255,0.08)"
-                  : "rgba(0,0,0,0.04)",
-                // Extra right padding on mobile to make room for the send button
-                paddingRight: isDesktop
-                  ? spacingPatterns.md
-                  : spacingPatterns.md + 36,
-              },
-
-              { outlineStyle: "none" } as unknown as Record<string, string>,
-            ]}
-            placeholder="Reply..."
-            placeholderTextColor={seasonalTheme.textSecondary + "80"}
-            value={text}
-            onChangeText={setText}
-            multiline
-            editable={!isGenerating}
-            onSubmitEditing={handleSend}
-            onKeyPress={handleKeyPress}
-            returnKeyType="send"
-            blurOnSubmit={false}
-          />
-          {/* Mobile-only send button inside the input */}
-          {!isDesktop && (
-            <TouchableOpacity
-              onPress={handleSend}
-              disabled={!canSend}
+        <View style={styles.chatInputContainer}>
+          <View style={{ flex: 1, position: "relative" }}>
+            <TextInput
+              ref={inputRef}
               style={[
-                styles.sendButtonInline,
+                styles.chatInput,
                 {
-                  backgroundColor: canSend
-                    ? seasonalTheme.textPrimary
-                    : seasonalTheme.textSecondary + "30",
+                  color: seasonalTheme.textPrimary,
+                  borderColor: seasonalTheme.textSecondary + "20",
+                  backgroundColor: seasonalTheme.isDark
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.04)",
+                  // Extra right padding on mobile to make room for the send button
+                  paddingRight: isDesktop
+                    ? spacingPatterns.md
+                    : spacingPatterns.md + 36,
                 },
+
+                { outlineStyle: "none" } as unknown as Record<string, string>,
               ]}
-            >
-              <Ionicons
-                name="arrow-up"
-                size={18}
-                color={
-                  canSend
-                    ? seasonalTheme.gradient.middle
-                    : seasonalTheme.textSecondary + "60"
-                }
-              />
-            </TouchableOpacity>
-          )}
+              placeholder="Reply..."
+              placeholderTextColor={seasonalTheme.textSecondary + "80"}
+              value={text}
+              onChangeText={setText}
+              multiline
+              editable={!isGenerating}
+              onSubmitEditing={handleSend}
+              onKeyPress={handleKeyPress}
+              returnKeyType="send"
+              blurOnSubmit={false}
+            />
+            {/* Mobile-only send button inside the input */}
+            {!isDesktop && (
+              <TouchableOpacity
+                onPress={handleSend}
+                disabled={!canSend}
+                style={[
+                  styles.sendButtonInline,
+                  {
+                    backgroundColor: canSend
+                      ? seasonalTheme.textPrimary
+                      : seasonalTheme.textSecondary + "30",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="arrow-up"
+                  size={18}
+                  color={
+                    canSend
+                      ? seasonalTheme.gradient.middle
+                      : seasonalTheme.textSecondary + "60"
+                  }
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     );

@@ -5,7 +5,10 @@
  * Each entry has its own Yjs document and Hocuspocus provider.
  */
 
-import { HocuspocusProvider } from "@hocuspocus/provider";
+import {
+  HocuspocusProvider,
+  HocuspocusProviderWebsocket,
+} from "@hocuspocus/provider";
 import * as Y from "yjs";
 import type { Block } from "../db/entries";
 
@@ -43,9 +46,7 @@ export class SyncClient {
   private callbacks: SyncClientCallbacks;
   private isShuttingDown = false;
   private authFailureCount = 0;
-  private connectionFailureCount = 0;
   private readonly maxAuthFailures = 3;
-  private readonly maxConnectionFailures = 5;
 
   constructor(
     serverUrl: string,
@@ -98,11 +99,6 @@ export class SyncClient {
       throw error;
     }
 
-    if (this.connectionFailureCount >= this.maxConnectionFailures) {
-      const error = new Error("Too many connection failures, sync disabled");
-      throw error;
-    }
-
     // Return existing connection if available
     const existing = this.documents.get(docId);
     if (existing) {
@@ -130,15 +126,22 @@ export class SyncClient {
     // Include token in URL query parameters for server authentication
     const urlWithParams = this.buildUrlWithParams(token);
 
-    const provider = new HocuspocusProvider({
+    // Exponential backoff: start 1s, double each time, cap at 1 hour
+    const websocketProvider = new HocuspocusProviderWebsocket({
       url: urlWithParams,
+      delay: 1000,
+      factor: 2,
+      maxDelay: 3_600_000,
+      maxAttempts: 0, // Retry forever
+    });
+
+    const provider = new HocuspocusProvider({
+      websocketProvider,
       name: docId,
       document: ydoc,
       // Token is passed in URL query params, not as a separate option
       onConnect: () => {
-        // Reset failure counts on successful connection
         this.authFailureCount = 0;
-        this.connectionFailureCount = 0;
         this.updateDocumentStatus(docId, "connected");
       },
       onSynced: () => {
@@ -148,18 +151,7 @@ export class SyncClient {
       },
       onDisconnect: () => {
         if (!this.isShuttingDown) {
-          this.connectionFailureCount++;
-          console.info(
-            `[SyncClient] Connection failed ${this.connectionFailureCount}/${this.maxConnectionFailures} for ${docId}`,
-          );
-
-          if (this.connectionFailureCount >= this.maxConnectionFailures) {
-            console.error(
-              "[SyncClient] Too many connection failures, stopping sync",
-            );
-            this.disconnectAll();
-          }
-
+          console.info(`[SyncClient] Disconnected from ${docId}, will retry`);
           this.updateDocumentStatus(docId, "disconnected");
         }
       },
@@ -169,7 +161,7 @@ export class SyncClient {
           `[SyncClient] Auth failure ${this.authFailureCount}/${this.maxAuthFailures}`,
         );
 
-        // Stop the provider from reconnecting
+        // Stop this provider from reconnecting with bad credentials
         const connection = this.documents.get(docId);
         if (connection) {
           connection.provider.destroy();
@@ -177,8 +169,9 @@ export class SyncClient {
         }
 
         if (this.authFailureCount >= this.maxAuthFailures) {
-          console.error("[SyncClient] Too many auth failures, stopping sync");
-          this.disconnectAll();
+          console.info(
+            "[SyncClient] Auth failures exceeded, sync paused until re-authenticated",
+          );
         }
 
         this.callbacks.onAuthError?.();
@@ -344,17 +337,13 @@ export class SyncClient {
    */
   resetAuthFailures(): void {
     this.authFailureCount = 0;
-    this.connectionFailureCount = 0;
   }
 
   /**
    * Check if sync is disabled due to failures
    */
   isSyncDisabled(): boolean {
-    return (
-      this.authFailureCount >= this.maxAuthFailures ||
-      this.connectionFailureCount >= this.maxConnectionFailures
-    );
+    return this.authFailureCount >= this.maxAuthFailures;
   }
 
   /**
