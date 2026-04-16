@@ -45,6 +45,7 @@ import {
   ModelInfoProvider,
   useModelInfo,
 } from "../../lib/navigation/ModelInfoContext";
+import { isTauri } from "../../lib/platform/isTauri";
 import { HomeScreen } from "../../lib/screens";
 import { useSyncAuthContext } from "../../lib/sync/SyncAuthProvider";
 import { useSyncEngine } from "../../lib/sync/useSyncEngine";
@@ -1167,6 +1168,50 @@ function MainLayout() {
           </Animated.View>
         )}
 
+        {/* Download desktop/mobile banner — web browser only (not Tauri) */}
+        {Platform.OS === "web" && !isTauri() && (
+          <TouchableOpacity
+            onPress={() => window.open("https://jot-ai.app", "_blank")}
+            activeOpacity={0.7}
+            style={[
+              styles.downloadBanner,
+              {
+                backgroundColor: seasonalTheme.isDark
+                  ? "rgba(139, 92, 246, 0.12)"
+                  : "rgba(139, 92, 246, 0.08)",
+                borderTopColor: seasonalTheme.isDark
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(0,0,0,0.08)",
+              },
+            ]}
+          >
+            <Ionicons name="desktop-outline" size={14} color="#8B5CF6" />
+            {isMobile ? (
+              <Text
+                variant="caption"
+                numberOfLines={2}
+                style={styles.downloadBannerText}
+              >
+                Get the desktop or mobile app for offline AI and faster
+                performance
+              </Text>
+            ) : (
+              <Animated.View
+                style={{ opacity: sidebarContentOpacity, flex: 1 }}
+              >
+                <Text
+                  variant="caption"
+                  numberOfLines={2}
+                  style={styles.downloadBannerText}
+                >
+                  Get the desktop or mobile app for offline AI and faster
+                  performance
+                </Text>
+              </Animated.View>
+            )}
+          </TouchableOpacity>
+        )}
+
         {/* Update banner */}
         {(updateCheck.state.status === "available" ||
           updateCheck.state.status === "downloading" ||
@@ -1766,6 +1811,22 @@ const styles = StyleSheet.create({
   sidebarList: {
     flex: 1,
     overflow: "hidden",
+  },
+  downloadBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    gap: 8,
+    flexShrink: 0,
+  },
+  downloadBannerText: {
+    color: "#8B5CF6",
+    fontSize: 11,
+    fontWeight: "500",
+    flex: 1,
+    lineHeight: 15,
   },
   updateBanner: {
     flexDirection: "row",

@@ -1,14 +1,11 @@
 /**
  * App update checker.
  *
- * Polls the GitHub releases API to detect new versions. The install action
- * differs by platform:
- *  - Web: reloads the page to pick up newly-deployed assets.
- *  - Tauri: uses the tauri-plugin-updater to download, install, and relaunch.
- *
- * NOTE: Tauri auto-update requires a valid signing key pair configured in
- * tauri.conf.json. Until that is set up, the Tauri path falls back to
- * opening the release page in the browser.
+ * Detects new versions and handles platform-specific updates:
+ *  - Web: checks a co-deployed version.json, "update" = page reload.
+ *  - Tauri: checks GitHub releases + uses tauri-plugin-updater for
+ *    background download and install + relaunch.
+ *  - Native (iOS/Android): no-op — App Store handles updates.
  */
 
 import { Platform } from "react-native";
@@ -60,6 +57,7 @@ class UpdateChecker {
   private listeners = new Set<Listener>();
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private currentVersion: string = "0.0.0";
+  private buildCommit: string | null = null;
   private visibilityHandler: (() => void) | null = null;
 
   /** Start periodic checks. Call once on app boot. No-op on native (App Store handles updates). */
@@ -74,8 +72,7 @@ class UpdateChecker {
     // Periodic checks
     this.intervalId = setInterval(() => this.check(), CHECK_INTERVAL_MS);
 
-    // Also check on tab/window focus (web and Tauri only — document is
-    // unavailable on native iOS/Android)
+    // Also check on tab/window focus
     if (
       typeof document !== "undefined" &&
       typeof document.addEventListener === "function"
@@ -108,7 +105,6 @@ class UpdateChecker {
   /** Subscribe to state changes. Returns unsubscribe function. */
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
-    // Emit current state immediately
     listener(this.state);
     return () => this.listeners.delete(listener);
   }
@@ -119,7 +115,6 @@ class UpdateChecker {
 
   /** Check for a new version. */
   async check(): Promise<void> {
-    // Don't re-check if we already know an update is available/ready
     if (
       this.state.status === "available" ||
       this.state.status === "ready" ||
@@ -131,10 +126,12 @@ class UpdateChecker {
     this.setState({ status: "checking" });
 
     try {
-      const info = await this.fetchLatestRelease();
+      const info = isTauri()
+        ? await this.fetchGitHubRelease()
+        : await this.fetchVersionJson();
+
       if (info) {
         this.setState({ status: "available", info });
-        // On Tauri, start background download automatically
         if (isTauri()) {
           this.downloadInBackground(info);
         }
@@ -142,7 +139,6 @@ class UpdateChecker {
         this.setState({ status: "idle" });
       }
     } catch {
-      // Silently fall back to idle — network errors during polling are expected
       this.setState({ status: "idle" });
     }
   }
@@ -163,7 +159,41 @@ class UpdateChecker {
     }
   }
 
-  private async fetchLatestRelease(): Promise<UpdateInfo | null> {
+  /**
+   * Web: check a co-deployed version.json file.
+   * This is generated at build time by the deploy-web-app workflow and
+   * contains { version, buildTime, commit }.
+   */
+  private async fetchVersionJson(): Promise<UpdateInfo | null> {
+    const response = await fetch("/version.json", { cache: "no-store" });
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as {
+      version: string;
+      buildTime?: string;
+      commit?: string;
+    };
+
+    // Check by commit hash first (catches same-version redeploys)
+    if (data.commit && this.buildCommit === null) {
+      // First check — store current commit for future comparisons
+      this.buildCommit = data.commit;
+      return null;
+    }
+
+    const hasNewCommit = data.commit && data.commit !== this.buildCommit;
+    const hasNewVersion = isNewerVersion(data.version, this.currentVersion);
+
+    if (!hasNewCommit && !hasNewVersion) return null;
+
+    return {
+      version: data.version,
+      publishedAt: data.buildTime,
+    };
+  }
+
+  /** Tauri: check GitHub releases for latest desktop version. */
+  private async fetchGitHubRelease(): Promise<UpdateInfo | null> {
     const response = await fetch(
       `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
       {
@@ -193,29 +223,23 @@ class UpdateChecker {
 
   /**
    * Tauri: use the updater plugin to download in the background.
-   * Falls back gracefully if the plugin isn't configured (e.g. missing pubkey).
+   * Falls back gracefully if the plugin isn't configured.
    */
   private async downloadInBackground(info: UpdateInfo) {
     try {
       const { invoke, Channel } = await import("@tauri-apps/api/core");
 
-      // The updater plugin exposes a `check` command that returns update metadata
-      // and a `download_and_install` command. We call check first to get the
-      // plugin's own update object.
       const update = (await invoke("plugin:updater|check")) as {
         available: boolean;
         rid?: number;
       };
 
       if (!update?.available || update.rid == null) {
-        // Plugin doesn't see an update (maybe pubkey not configured yet)
-        // Stay in "available" state — user can still open the release page
         return;
       }
 
       this.setState({ status: "downloading", info, progress: 0 });
 
-      // Create a channel for download progress
       const onEvent = new Channel<{
         event: "Started" | "Progress" | "Finished";
         data: { contentLength?: number; chunkLength?: number };
@@ -246,28 +270,21 @@ class UpdateChecker {
 
       this.setState({ status: "ready", info });
     } catch (e) {
-      console.warn(
-        "[updateChecker] Tauri background download failed (signing keys may not be configured):",
-        e,
-      );
-      // Stay in "available" state — user can still see the update banner
+      console.warn("[updateChecker] Tauri background download failed:", e);
     }
   }
 
   private async installTauri() {
     if (this.state.status === "ready") {
-      // Already downloaded — just relaunch
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("plugin:process|restart");
       } catch {
-        // process plugin may not be installed; ask user to restart manually
         window.alert(
           "Update installed. Please restart Jot to apply the update.",
         );
       }
     } else if (this.state.status === "available" && this.state.info.htmlUrl) {
-      // Download wasn't possible (e.g. no signing keys) — open release page
       window.open(this.state.info.htmlUrl, "_blank");
     }
   }

@@ -1,0 +1,53 @@
+name: Deploy Web App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/app/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build Expo web
+        run: npx expo export --platform web
+        working-directory: apps/app
+        env:
+          EXPO_PUBLIC_APP_VARIANT: production
+
+      - name: Generate version.json
+        working-directory: apps/app/dist
+        run: |
+          VERSION=$(node -e "const c = require('../app.config.js'); console.log((typeof c === 'function' ? c({config:{}}) : c).version || '0.0.0')")
+          echo "{\"version\":\"$VERSION\",\"buildTime\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"commit\":\"$GITHUB_SHA\"}" > version.json
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/app/dist --project-name=jot-app --branch=main

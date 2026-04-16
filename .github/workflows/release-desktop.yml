@@ -22,16 +22,33 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # macOS
           - platform: macos-latest
             target: aarch64-apple-darwin
           - platform: macos-latest
             target: x86_64-apple-darwin
+          # Windows
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+          # Linux
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 60
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -61,6 +78,7 @@ jobs:
 
       - name: Determine version
         id: version
+        shell: bash
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
@@ -72,12 +90,14 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS signing
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Tauri update signing
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
@@ -88,18 +108,20 @@ jobs:
             ## Jot Desktop v${{ steps.version.outputs.version }}
 
             ### Download
-            See assets below for your platform.
-
-            ### Installation (macOS)
-            1. Download the .dmg file
-            2. Open the DMG and drag Jot to your Applications folder
-            3. Launch Jot from Applications
+            | Platform | Architecture | Download |
+            |----------|-------------|----------|
+            | macOS | Apple Silicon | `.dmg` (aarch64) |
+            | macOS | Intel | `.dmg` (x86_64) |
+            | Windows | x64 | `.msi` / `.exe` |
+            | Linux | x64 | `.deb` / `.AppImage` |
 
             ### Automatic Updates
             Jot will automatically check for updates on launch.
 
             ### System Requirements
             - macOS 12.0 (Monterey) or later
+            - Windows 10 or later
+            - Ubuntu 22.04+ / Fedora 38+ / other modern Linux distros
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}
