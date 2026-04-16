@@ -7,7 +7,7 @@ module.exports = ({ config }) => {
     owner: "beta-zeta-inc",
     slug: "jot",
     scheme: "jot",
-    version: "2.0.3",
+    version: "2.0.4",
     orientation: "portrait",
     icon: isDev ? "./assets/icon-dev.png" : "./assets/icon.png",
     userInterfaceStyle: "light",
@@ -54,7 +54,6 @@ module.exports = ({ config }) => {
       permissions: [
         "RECEIVE_BOOT_COMPLETED",
         "WAKE_LOCK",
-        "FOREGROUND_SERVICE",
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "READ_EXTERNAL_STORAGE",
