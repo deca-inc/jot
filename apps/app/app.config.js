@@ -103,6 +103,7 @@ module.exports = ({ config }) => {
       ],
       "@bacons/apple-targets",
       "./plugins/withCmake",
+      "./plugins/withExcludeMmkvShared",
       "./plugins/withJotWidget",
       [
         "./plugins/withSparkle",
