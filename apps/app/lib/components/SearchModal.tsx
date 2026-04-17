@@ -8,6 +8,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  Platform,
 } from "react-native";
 import { Entry, extractPreviewText } from "../db/entries";
 import { useSearchEntries } from "../db/useEntries";
@@ -240,7 +241,14 @@ export function SearchModal({
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <Pressable style={styles.overlay} onPress={handleClose}>
+      <Pressable
+        style={styles.overlay}
+        onPress={handleClose}
+        {...(Platform.OS === "web" && {
+          tabIndex: -1,
+          "aria-hidden": true,
+        })}
+      >
         <Pressable
           style={[
             styles.modal,
@@ -252,6 +260,11 @@ export function SearchModal({
             },
           ]}
           onPress={(e) => e.stopPropagation()}
+          {...(Platform.OS === "web" && {
+            "aria-hidden": false,
+            onKeyDown: (e: { stopPropagation: () => void }) =>
+              e.stopPropagation(),
+          })}
         >
           {/* Search input */}
           <View

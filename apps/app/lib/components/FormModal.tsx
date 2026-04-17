@@ -15,6 +15,7 @@ import {
   ScrollView,
   TouchableOpacity,
   KeyboardAvoidingView,
+  Platform,
   useWindowDimensions,
 } from "react-native";
 import { borderRadius, spacingPatterns } from "../theme";
@@ -63,7 +64,16 @@ export function FormModal({
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          // Prevent backdrop from receiving keyboard focus on web,
+          // which would let Tab/Enter/Space trigger accidental closes
+          {...(Platform.OS === "web" && {
+            tabIndex: -1,
+            "aria-hidden": true,
+          })}
+        />
         <KeyboardAvoidingView behavior="padding" style={styles.keyboardView}>
           <View
             style={[
@@ -73,6 +83,12 @@ export function FormModal({
                 maxHeight: screenHeight * maxHeightRatio,
               },
             ]}
+            // Stop keyboard events from leaking out of the modal to
+            // page-level handlers (e.g. Cmd+A selecting page content)
+            {...(Platform.OS === "web" && {
+              onKeyDown: (e: { stopPropagation: () => void }) =>
+                e.stopPropagation(),
+            })}
           >
             {/* Header */}
             <View style={styles.header}>

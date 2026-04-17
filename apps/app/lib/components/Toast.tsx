@@ -7,7 +7,6 @@ import {
   Platform,
   TouchableOpacity,
   PanResponder,
-  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacingPatterns, borderRadius } from "../theme";
@@ -157,83 +156,89 @@ export function Toast({
 
   // Get proper background color from theme
   const getBackgroundColor = () => {
-    // Use the theme's gradient middle color as the main background
     return seasonalTheme.gradient.middle;
   };
 
-  // Wrap in Modal to ensure toast appears above all other modals.
-  // On web, Modal is a fixed-position div whose z-index depends on DOM order.
-  // Force a very high z-index so it always renders above other modals.
-  const webModalStyle = Platform.OS === "web" ? { zIndex: 99999 } : undefined;
+  if (!visible) return null;
 
+  // Render as an absolutely-positioned overlay instead of Modal.
+  // This avoids Modal's focus-trapping and event-blocking behavior
+  // while still rendering above other content.
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={handleHide}
-      style={webModalStyle}
-    >
-      <View style={styles.modalOverlay} pointerEvents="box-none">
+    <View style={styles.overlay} pointerEvents="box-none">
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            top: insets.top,
+            transform: [{ translateY }],
+          },
+        ]}
+        pointerEvents="box-none"
+      >
         <Animated.View
-          style={[
-            styles.container,
-            {
-              top: insets.top,
-              transform: [{ translateY }],
-            },
-          ]}
-          pointerEvents="box-none"
+          style={[styles.toastContainer, { transform: [{ translateX }] }]}
+          {...panResponder.panHandlers}
         >
-          <Animated.View
-            style={[styles.toastContainer, { transform: [{ translateX }] }]}
-            {...panResponder.panHandlers}
+          <View
+            style={[
+              styles.toast,
+              {
+                backgroundColor: getBackgroundColor(),
+                shadowColor: "#000",
+              },
+              Platform.OS === "android" && styles.androidElevation,
+            ]}
           >
-            <View
-              style={[
-                styles.toast,
-                {
-                  backgroundColor: getBackgroundColor(),
-                  shadowColor: "#000",
-                },
-                Platform.OS === "android" && styles.androidElevation,
-              ]}
+            <Ionicons name={getIcon()} size={20} color={getColor()} />
+            <Text
+              variant="body"
+              style={[styles.message, { color: seasonalTheme.textPrimary }]}
             >
-              <Ionicons name={getIcon()} size={20} color={getColor()} />
-              <Text
-                variant="body"
-                style={[styles.message, { color: seasonalTheme.textPrimary }]}
-              >
-                {message}
-              </Text>
-              <TouchableOpacity onPress={handleHide} style={styles.closeButton}>
-                <Ionicons
-                  name="close"
-                  size={18}
-                  color={seasonalTheme.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+              {message}
+            </Text>
+            <TouchableOpacity onPress={handleHide} style={styles.closeButton}>
+              <Ionicons
+                name="close"
+                size={18}
+                color={seasonalTheme.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
         </Animated.View>
-      </View>
-    </Modal>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    // Transparent overlay allows touches to pass through to content below
-    backgroundColor: "transparent",
+  overlay: {
+    // Position fixed on web so it floats above everything including modals.
+    // On native, absolute positioning within the root provider is sufficient.
+    ...Platform.select({
+      web: {
+        position: "fixed" as "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 99999,
+      },
+      default: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 99999,
+      },
+    }),
   },
   container: {
     position: "absolute",
     left: 0,
     right: 0,
     alignItems: "center",
-    zIndex: 1000,
     paddingHorizontal: spacingPatterns.md,
     paddingTop: spacingPatterns.md,
   },

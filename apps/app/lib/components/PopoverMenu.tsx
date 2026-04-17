@@ -6,6 +6,7 @@ import {
   Modal,
   Dimensions,
   LayoutChangeEvent,
+  Platform,
 } from "react-native";
 import { borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -103,7 +104,14 @@ export function PopoverMenu({
         animationType="none"
         onRequestClose={onClose}
       >
-        <Pressable style={popoverStyles.dismissOverlay} onPress={onClose}>
+        <Pressable
+          style={popoverStyles.dismissOverlay}
+          onPress={onClose}
+          {...(Platform.OS === "web" && {
+            tabIndex: -1,
+            "aria-hidden": true,
+          })}
+        >
           <View
             onLayout={handleMenuLayout}
             style={[
@@ -118,6 +126,11 @@ export function PopoverMenu({
                   : "rgba(0,0,0,0.12)",
               },
             ]}
+            {...(Platform.OS === "web" && {
+              "aria-hidden": false,
+              onKeyDown: (e: { stopPropagation: () => void }) =>
+                e.stopPropagation(),
+            })}
           >
             {children}
           </View>

@@ -1214,8 +1214,21 @@ export function ModelManagementModal({
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.container, { backgroundColor: dialogBackground }]}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          {...(Platform.OS === "web" && {
+            tabIndex: -1,
+            "aria-hidden": true,
+          })}
+        />
+        <View
+          style={[styles.container, { backgroundColor: dialogBackground }]}
+          {...(Platform.OS === "web" && {
+            onKeyDown: (e: { stopPropagation: () => void }) =>
+              e.stopPropagation(),
+          })}
+        >
           {/* Header */}
           <View style={styles.header}>
             <Text

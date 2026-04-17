@@ -42,7 +42,14 @@ export function Dialog({
       animationType="fade"
       onRequestClose={onRequestClose}
     >
-      <Pressable style={styles.overlay} onPress={onRequestClose}>
+      <Pressable
+        style={styles.overlay}
+        onPress={onRequestClose}
+        {...(Platform.OS === "web" && {
+          tabIndex: -1,
+          "aria-hidden": true,
+        })}
+      >
         <Pressable
           style={[
             styles.container,
@@ -52,6 +59,11 @@ export function Dialog({
             containerStyle,
           ]}
           onPress={(e) => e.stopPropagation()}
+          {...(Platform.OS === "web" && {
+            "aria-hidden": false,
+            onKeyDown: (e: { stopPropagation: () => void }) =>
+              e.stopPropagation(),
+          })}
         >
           {children}
         </Pressable>
