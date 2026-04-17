@@ -135,8 +135,6 @@ export function createHocuspocusConfig(
         `Client connected: session=${sessionId} user=${userId} doc=${data.documentName} ` +
         `totalConnections=${connectionCount}`,
       );
-
-      data.connection.readOnly = false;
     },
 
     async onDisconnect(data: onDisconnectPayload) {

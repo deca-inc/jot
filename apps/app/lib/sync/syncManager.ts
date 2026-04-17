@@ -618,16 +618,27 @@ export class SyncManager {
    */
   async syncOnOpen(entryId: number): Promise<void> {
     if (!this.client || !this.isInitialized) {
+      console.warn(
+        `[SyncManager] syncOnOpen(${entryId}) skipped: client=${!!this.client} initialized=${this.isInitialized}`,
+      );
       return;
     }
 
     if (this.client.isSyncDisabled()) {
+      console.warn(
+        `[SyncManager] syncOnOpen(${entryId}) skipped: sync disabled (auth failures)`,
+      );
       return;
     }
 
     if (!this.userId) {
+      console.warn(
+        `[SyncManager] syncOnOpen(${entryId}) skipped: no userId set`,
+      );
       return;
     }
+
+    console.log(`[SyncManager] syncOnOpen(${entryId}) starting...`);
 
     // Get or generate UUID
     let uuid = await this.getEntryUuid(entryId);
@@ -1009,6 +1020,9 @@ export class SyncManager {
   ): Promise<void> {
     const uuid = await this.getEntryUuid(entryId);
     if (!uuid) {
+      console.log(
+        `[SyncManager] onEntryUpdated(${entryId}) - no UUID, marking modified`,
+      );
       await this.markEntryModified(entryId);
       return;
     }
@@ -1016,6 +1030,9 @@ export class SyncManager {
     // Queue the sync operation with debouncing for rapid edits
     // Pass the entry's updatedAt for conflict detection
     if (this.syncQueue) {
+      console.log(
+        `[SyncManager] onEntryUpdated(${entryId}) - queuing sync for uuid=${uuid.slice(0, 8)}...`,
+      );
       this.syncQueue.enqueueUpdateDebounced(
         entryId,
         uuid,
@@ -1182,6 +1199,10 @@ export class SyncManager {
         if (item.entryId === null) {
           throw new Error("Update operation requires entryId");
         }
+
+        console.log(
+          `[SyncManager] Processing sync queue: update entry=${item.entryId} uuid=${item.entryUuid.slice(0, 8)}...`,
+        );
 
         // Get current local entry state
         const currentEntry = await this.getLocalEntry(item.entryId);

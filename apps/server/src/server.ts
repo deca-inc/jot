@@ -169,7 +169,8 @@ export function createServer_impl(config: ServerConfig): JotServer {
         }
 
         if (hocuspocus) {
-          hocuspocus.destroy();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Hocuspocus v3 types don't export destroy() but it exists at runtime
+          (hocuspocus as any).destroy?.();
           hocuspocus = null;
         }
 
