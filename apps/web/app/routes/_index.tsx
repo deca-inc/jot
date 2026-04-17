@@ -235,7 +235,7 @@ export default function Index() {
               </a>
               <span className="hidden text-gray-600 sm:inline">·</span>
               <a
-                href="https://github.com/deca-inc/jot/releases/latest"
+                href="https://github.com/deca-inc/jot/releases?q=desktop"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-white"
@@ -428,7 +428,7 @@ export default function Index() {
 
             {/* macOS */}
             <a
-              href="https://github.com/deca-inc/jot/releases/latest"
+              href="https://github.com/deca-inc/jot/releases?q=desktop"
               target="_blank"
               rel="noopener noreferrer"
               className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-5 py-4 transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
@@ -450,7 +450,7 @@ export default function Index() {
 
             {/* Windows */}
             <a
-              href="https://github.com/deca-inc/jot/releases/latest"
+              href="https://github.com/deca-inc/jot/releases?q=desktop"
               target="_blank"
               rel="noopener noreferrer"
               className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-5 py-4 transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
@@ -470,7 +470,7 @@ export default function Index() {
 
             {/* Linux */}
             <a
-              href="https://github.com/deca-inc/jot/releases/latest"
+              href="https://github.com/deca-inc/jot/releases?q=desktop"
               target="_blank"
               rel="noopener noreferrer"
               className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-5 py-4 transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
