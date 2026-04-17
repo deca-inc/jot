@@ -6,6 +6,7 @@ This document provides essential context for AI assistants (like Claude) working
 
 - [Product Fundamentals](#product-fundamentals)
 - [Architecture](#architecture)
+- [Deployment](#deployment)
 - [Coding Guidelines](#coding-guidelines)
 - [Design System](#design-system)
 - [Data Model](#data-model)
@@ -231,6 +232,57 @@ Background workers: indexing, embeddings, backup scheduler
 ### Telemetry
 
 - Default off. If enabled, anonymous, no content ever leaves device.
+
+---
+
+## Deployment
+
+### Server (`apps/server`)
+
+Release via the script in `apps/server/scripts/release.sh`. Creates and pushes a `v<version>` git tag, which triggers a GitHub Actions workflow to build for all platforms.
+
+```bash
+cd apps/server
+pnpm release <version>        # e.g. pnpm release 1.0.11
+pnpm release <version> --dry  # Dry run
+```
+
+### Desktop (`apps/desktop`)
+
+Release by bumping the version in `apps/desktop/package.json` and `apps/desktop/src-tauri/tauri.conf.json`, then creating and pushing a `desktop-v<version>` git tag. GitHub Actions builds release artifacts (macOS ARM/Intel, Windows, Linux).
+
+```bash
+# 1. Bump version in package.json and tauri.conf.json
+# 2. Commit and push
+# 3. Tag and push
+git tag desktop-v<version>
+git push origin desktop-v<version>
+```
+
+### Marketing Site — jot-ai.app (`apps/web`)
+
+Remix app on Cloudflare Workers. Deployed manually:
+
+```bash
+cd apps/web
+pnpm run deploy  # remix vite:build && wrangler deploy
+```
+
+### Web App — app.jot-ai.app (`apps/app`)
+
+Expo web export on Cloudflare Pages. Deployed automatically via GitHub Actions (`.github/workflows/deploy-web-app.yml`) on push to `main` when `apps/app/**`, `packages/**`, or `pnpm-lock.yaml` changes. Can also be triggered manually via `workflow_dispatch`.
+
+Build: `npx expo export --platform web` → `apps/app/dist/` → Cloudflare Pages (project `jot-app`).
+
+### Mobile (`apps/app`)
+
+Built and submitted manually via EAS Build:
+
+```bash
+cd apps/app
+eas build --platform ios
+eas build --platform android
+```
 
 ---
 
