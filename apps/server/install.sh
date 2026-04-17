@@ -44,8 +44,12 @@ detect_platform() {
 # Get latest release version
 get_latest_version() {
     info "Fetching latest server version..."
-    # Filter for server releases (v* tags, not desktop-v*)
-    VERSION=$(curl -sL -H "User-Agent: jot-server-installer" "https://api.github.com/repos/$REPO/releases?per_page=15" | grep '"tag_name"' | grep -v 'desktop-v' | head -1 | sed -E 's/.*"v([^"]+)".*/\1/')
+    # Read version from raw.githubusercontent.com (no API rate limits)
+    VERSION=$(curl -sL "https://raw.githubusercontent.com/$REPO/main/apps/server/VERSION" 2>/dev/null | tr -d '[:space:]')
+    if [ -z "$VERSION" ]; then
+        warn "Could not fetch VERSION file, trying GitHub API..."
+        VERSION=$(curl -sL -H "User-Agent: jot-server-installer" "https://api.github.com/repos/$REPO/releases?per_page=15" | grep '"tag_name"' | grep -v 'desktop-v' | head -1 | sed -E 's/.*"v([^"]+)".*/\1/')
+    fi
     if [ -z "$VERSION" ]; then
         error "Could not determine latest version"
     fi

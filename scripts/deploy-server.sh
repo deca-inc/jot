@@ -62,9 +62,12 @@ sed -i '' "s/const VERSION = \"[0-9]*\.[0-9]*\.[0-9]*\"/const VERSION = \"${VERS
 # Update server package.json
 sed -i '' "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"${VERSION}\"/" "$SERVER_PKG"
 
+# Update VERSION file (used by install.sh to avoid GitHub API rate limits)
+echo "$VERSION" > "$REPO_ROOT/apps/server/VERSION"
+
 # Commit version bump
 echo -e "${YELLOW}Committing version bump...${NC}"
-git add "$UPDATER_FILE" "$SERVER_PKG"
+git add "$UPDATER_FILE" "$SERVER_PKG" "$REPO_ROOT/apps/server/VERSION"
 git commit -m "Bump server version to ${VERSION}"
 
 # Create and push tag
