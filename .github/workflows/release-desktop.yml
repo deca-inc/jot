@@ -107,16 +107,20 @@ jobs:
           releaseBody: |
             ## Jot Desktop v${{ steps.version.outputs.version }}
 
-            ### Download
-            | Platform | Architecture | Download |
-            |----------|-------------|----------|
-            | macOS | Apple Silicon | `.dmg` (aarch64) |
-            | macOS | Intel | `.dmg` (x86_64) |
-            | Windows | x64 | `.msi` / `.exe` |
-            | Linux | x64 | `.deb` / `.AppImage` |
+            ### Which file should I download?
+
+            | I have a... | Download |
+            |-------------|----------|
+            | Mac (M1, M2, M3, M4 — 2020 or newer) | `Jot_${{ steps.version.outputs.version }}_aarch64.dmg` |
+            | Mac (Intel — pre-2020) | `Jot_${{ steps.version.outputs.version }}_x64.dmg` |
+            | Windows PC | `.msi` installer |
+            | Linux (Debian/Ubuntu) | `.deb` package |
+            | Linux (other) | `.AppImage` |
+
+            > The `.tar.gz` and `.sig` files are used by the auto-updater — you don't need to download them.
 
             ### Automatic Updates
-            Jot will automatically check for updates on launch.
+            After installing, Jot will automatically check for and install updates.
 
             ### System Requirements
             - macOS 12.0 (Monterey) or later

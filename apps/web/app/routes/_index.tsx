@@ -234,10 +234,8 @@ export default function Index() {
                 Try in your browser
               </a>
               <span className="hidden text-gray-600 sm:inline">·</span>
-              <a
-                href="https://github.com/deca-inc/jot/releases?q=desktop"
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                to="/download"
                 className="inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-white"
               >
                 <svg
@@ -254,7 +252,7 @@ export default function Index() {
                   />
                 </svg>
                 Desktop app
-              </a>
+              </Link>
               <span className="hidden text-gray-600 sm:inline">·</span>
               <a
                 href="https://github.com/deca-inc/jot"
