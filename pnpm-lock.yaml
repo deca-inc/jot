@@ -328,8 +328,8 @@ importers:
   apps/server:
     dependencies:
       '@hocuspocus/server':
-        specifier: ^2.15.0
-        version: 2.15.3(y-protocols@1.0.7)(yjs@13.6.29)
+        specifier: ^3.4.4
+        version: 3.4.4(y-protocols@1.0.7)(yjs@13.6.29)
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -3422,12 +3422,6 @@ packages:
     engines: {node: '>=14'}
     dev: true
 
-  /@hocuspocus/common@2.15.3:
-    resolution: {integrity: sha512-Rzh1HF0a2o/tf90A3w2XNdXd9Ym3aQzMDfD3lAUONCX9B9QOdqdyiORrj6M25QEaJrEIbXFy8LtAFcL0wRdWzA==}
-    dependencies:
-      lib0: 0.2.117
-    dev: false
-
   /@hocuspocus/common@3.4.4:
     resolution: {integrity: sha512-RykIJ0tsHHMP4Xk+4UCbc7SO5LgGxGUSTdbh6anJEsaALAyqinf1Nn5HYuMjLPolAmsar1v++m9zufR09NLpXA==}
     dependencies:
@@ -3451,17 +3445,17 @@ packages:
       - utf-8-validate
     dev: false
 
-  /@hocuspocus/server@2.15.3(y-protocols@1.0.7)(yjs@13.6.29):
-    resolution: {integrity: sha512-Ju4ty4/7JtmvivcP7gKReOLf8KrFwN7Yx/5VhXYh4TRULy4kSo2fsDVUaluPp0neZa6PbVhizJuzlOim73IEbQ==}
+  /@hocuspocus/server@3.4.4(y-protocols@1.0.7)(yjs@13.6.29):
+    resolution: {integrity: sha512-UV+oaONAejOzeYgUygNcgsc8RdZvSokVvAxluZJIisLACpRO/VsseQ5lWKDRwLd7Fn6+rHWDH3hGuQ1fdX1Ycg==}
     peerDependencies:
       y-protocols: ^1.0.6
       yjs: ^13.6.8
     dependencies:
-      '@hocuspocus/common': 2.15.3
+      '@hocuspocus/common': 3.4.4
       async-lock: 1.4.1
+      async-mutex: 0.5.0
       kleur: 4.1.5
       lib0: 0.2.117
-      uuid: 11.1.0
       ws: 8.18.3
       y-protocols: 1.0.7(yjs@13.6.29)
       yjs: 13.6.29
@@ -6881,6 +6875,12 @@ packages:
 
   /async-lock@1.4.1:
     resolution: {integrity: sha512-Az2ZTpuytrtqENulXwO3GGv1Bztugx6TT37NIo7imr/Qo0gsYiGtSdBa2B6fsXhTpVZDNfu1Qn3pk531e3q+nQ==}
+    dev: false
+
+  /async-mutex@0.5.0:
+    resolution: {integrity: sha512-1A94B18jkJ3DYq284ohPxoXbfTA5HsQ7/Mf4DEhcyLx3Bz27Rh59iScbB6EPiP+B+joue6YCxcMXSbFC1tZKwA==}
+    dependencies:
+      tslib: 2.8.1
     dev: false
 
   /at-least-node@1.0.0:
@@ -17471,11 +17471,6 @@ packages:
   /utils-merge@1.0.1:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
-
-  /uuid@11.1.0:
-    resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
-    hasBin: true
-    dev: false
 
   /uuid@7.0.3:
     resolution: {integrity: sha512-DPSke0pXhTZgoF/d+WSt2QaKMCFSfx7QegxEWT+JOuHF5aWrKEn0G+ztjuJg/gG8/ItK+rbPCD/yNv8yyih6Cg==}
