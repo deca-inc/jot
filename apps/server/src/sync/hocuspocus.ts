@@ -94,6 +94,7 @@ export function createHocuspocusConfig(
      * onAuthenticate validates the token and rejects unauthenticated connections
      */
     async onAuthenticate(data: onAuthenticatePayload): Promise<void> {
+      console.log(">>> onAuthenticate called, params:", [...data.requestParameters.entries()]);
       const token = data.requestParameters.get("token");
 
       if (!token) {

@@ -66,6 +66,12 @@ export function createServer_impl(config: ServerConfig): JotServer {
   // Middleware
   app.use(express.json());
 
+  // Request logging
+  app.use((req, _res, next) => {
+    logger.info(`${req.method} ${req.path}`);
+    next();
+  });
+
   // CORS — allow requests from Tauri webview and web app origins
   app.use((_req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
@@ -141,7 +147,9 @@ export function createServer_impl(config: ServerConfig): JotServer {
 
           // Handle WebSocket upgrade requests
           httpServer.on("upgrade", (request, socket, head) => {
+            console.log(">>> UPGRADE REQUEST", request.url);
             wss?.handleUpgrade(request, socket, head, (websocket) => {
+              console.log(">>> WEBSOCKET UPGRADED, passing to hocuspocus");
               hocuspocus?.handleConnection(websocket, request);
             });
           });
