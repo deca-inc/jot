@@ -86,7 +86,9 @@ export function createDocumentsRouter(
 
       res.json({
         uuid: doc.id,
-        state: doc.yjsState ? doc.yjsState.toString("base64") : null,
+        state: doc.yjsState
+          ? Buffer.from(doc.yjsState).toString("base64")
+          : null,
         metadata: doc.metadata,
         updatedAt: doc.updatedAt,
       });
@@ -271,7 +273,9 @@ export function createDocumentsRouter(
           if (doc) {
             documents.push({
               uuid: doc.id,
-              state: doc.yjsState ? doc.yjsState.toString("base64") : null,
+              state: doc.yjsState
+                ? Buffer.from(doc.yjsState).toString("base64")
+                : null,
               metadata: doc.metadata as Record<string, unknown> | null,
               updatedAt: doc.updatedAt,
             });
