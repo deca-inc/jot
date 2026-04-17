@@ -77,7 +77,6 @@ export function createHocuspocusConfig(
     async onAuthenticate(data: onAuthenticatePayload): Promise<void> {
       // Token can come from HocuspocusProvider's token option or URL query params
       const token = data.token || data.requestParameters.get("token");
-      console.log(">>> onAuthenticate called, hasToken:", !!token, "source:", data.token ? "provider" : "query");
 
       if (!token) {
         logger.warn("Connection rejected: No authentication token provided");

@@ -147,9 +147,7 @@ export function createServer_impl(config: ServerConfig): JotServer {
 
           // Handle WebSocket upgrade requests
           httpServer.on("upgrade", (request, socket, head) => {
-            console.log(">>> UPGRADE REQUEST", request.url);
             wss?.handleUpgrade(request, socket, head, (websocket) => {
-              console.log(">>> WEBSOCKET UPGRADED, passing to hocuspocus");
               hocuspocus?.handleConnection(websocket, request);
             });
           });
