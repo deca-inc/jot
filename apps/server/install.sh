@@ -45,7 +45,7 @@ detect_platform() {
 get_latest_version() {
     info "Fetching latest server version..."
     # Filter for server releases (v* tags, not desktop-v*)
-    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=15" | grep '"tag_name"' | grep -v 'desktop-v' | head -1 | sed -E 's/.*"v([^"]+)".*/\1/')
+    VERSION=$(curl -sL -H "User-Agent: jot-server-installer" "https://api.github.com/repos/$REPO/releases?per_page=15" | grep '"tag_name"' | grep -v 'desktop-v' | head -1 | sed -E 's/.*"v([^"]+)".*/\1/')
     if [ -z "$VERSION" ]; then
         error "Could not determine latest version"
     fi
@@ -63,7 +63,8 @@ install() {
 
     # Download and extract
     TEMP_DIR=$(mktemp -d)
-    curl -fsSL "$DOWNLOAD_URL" | tar -xz -C "$TEMP_DIR"
+    curl -fSL "$DOWNLOAD_URL" -o "$TEMP_DIR/download.tar.gz" || error "Download failed. Check that the release exists at: $DOWNLOAD_URL"
+    tar -xzf "$TEMP_DIR/download.tar.gz" -C "$TEMP_DIR"
 
     # Install executable
     cp "$TEMP_DIR/jot-server" "$INSTALL_DIR/"
