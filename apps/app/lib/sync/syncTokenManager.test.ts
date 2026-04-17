@@ -4,7 +4,7 @@
  * Tests that network errors (server offline) are handled differently
  * from actual auth errors (expired/invalid tokens).
  */
-
+// eslint-disable-next-line import/order
 import { SyncAuthError } from "./syncAuthService";
 // Mock syncAuthService
 const mockRefreshAccessToken = jest.fn();
