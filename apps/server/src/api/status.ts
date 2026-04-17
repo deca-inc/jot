@@ -2,6 +2,7 @@ import { Router } from "express";
 import { DocumentRepository } from "../db/repositories/documents.js";
 import { SessionRepository } from "../db/repositories/sessions.js";
 import Database from "../db/sqlite.js";
+import { getCurrentVersion } from "../utils/updater.js";
 
 export interface StatusResponse {
   ok: boolean;
@@ -20,7 +21,7 @@ export function createStatusRouter(db: Database.Database, startTime: number): Ro
   router.get("/", (_req, res) => {
     const response: StatusResponse = {
       ok: true,
-      version: "1.0.0",
+      version: getCurrentVersion(),
       uptime: Date.now() - startTime,
       documents: documentRepo.count(),
       sessions: sessionRepo.count(),
