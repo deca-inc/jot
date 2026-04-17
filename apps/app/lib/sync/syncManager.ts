@@ -290,11 +290,10 @@ export class SyncManager {
       throw new Error("Not authenticated");
     }
 
-    // Use last sync timestamp for incremental sync
-    const lastSynced = await this.getLastSyncTimestamp();
-    const url = lastSynced
-      ? `${this.serverUrl}/api/documents/manifest?since=${lastSynced}`
-      : `${this.serverUrl}/api/documents/manifest`;
+    // Always fetch the full manifest — it's lightweight (UUIDs + timestamps)
+    // and a full comparison is more reliable than incremental sync which can
+    // miss entries if a previous sync partially failed.
+    const url = `${this.serverUrl}/api/documents/manifest`;
 
     const response = await fetch(url, {
       headers: {
