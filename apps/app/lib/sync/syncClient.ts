@@ -5,10 +5,7 @@
  * Each entry has its own Yjs document and Hocuspocus provider.
  */
 
-import {
-  HocuspocusProvider,
-  HocuspocusProviderWebsocket,
-} from "@hocuspocus/provider";
+import { HocuspocusProvider } from "@hocuspocus/provider";
 import * as Y from "yjs";
 import type { Block } from "../db/entries";
 
@@ -114,17 +111,12 @@ export class SyncClient {
     const sessionParams = new URLSearchParams({ sessionId, displayName });
     const wsUrl = `${this.serverUrl}?${sessionParams.toString()}`;
 
-    // WebSocket with exponential backoff
-    const websocketProvider = new HocuspocusProviderWebsocket({
-      url: wsUrl,
-      delay: 1000,
-      factor: 2,
-      maxDelay: 3_600_000,
-      maxAttempts: 0,
-    });
-
+    // Let the provider manage its own WebSocket connection.
+    // In Hocuspocus v3, passing a separate websocketProvider skips attach(),
+    // so the protocol handshake never starts. Passing the URL directly
+    // triggers auto-attach and the connection works end-to-end.
     const provider = new HocuspocusProvider({
-      websocketProvider,
+      url: wsUrl,
       name: docId,
       document: ydoc,
       token,
