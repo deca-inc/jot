@@ -315,7 +315,6 @@ program
       // On Unix, run bash
       const child = spawn("bash", ["-c", installCmd], {
         stdio: "inherit",
-        shell: true,
       });
       child.on("close", (code) => process.exit(code || 0));
     }
