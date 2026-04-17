@@ -39,6 +39,52 @@ import { requestSave } from "../utils/request-save";
 import { saveJournalContent } from "./journalActions";
 import type { QuillRichEditorRef } from "../components";
 
+/**
+ * Hydrate HTML content by decrypting attachments and replacing IDs with file:// URLs.
+ * Tries local storage first, falls back to downloading from sync server.
+ */
+async function hydrateHtmlContent(
+  html: string,
+  entryId: number | undefined,
+  entryUuid: string | null | undefined,
+  serverUrl: string | null,
+): Promise<string> {
+  const attachments = getAttachmentsNeedingHydration(html);
+  if (attachments.length === 0 || !entryId) return html;
+
+  const urls = new Map<string, string>();
+  for (const attachment of attachments) {
+    try {
+      const url = await getAudioAttachmentUrl(entryId, attachment.id);
+      urls.set(attachment.id, url);
+    } catch (error) {
+      if (entryUuid && serverUrl) {
+        try {
+          const downloaded = await downloadAttachmentFromServer(
+            serverUrl,
+            entryId,
+            entryUuid,
+            attachment.id,
+          );
+          if (downloaded) {
+            const url = await getAudioAttachmentUrl(entryId, attachment.id);
+            urls.set(attachment.id, url);
+          }
+        } catch (downloadError) {
+          console.warn(
+            `Failed to download attachment ${attachment.id}:`,
+            downloadError,
+          );
+        }
+      } else {
+        console.warn(`Failed to prepare attachment ${attachment.id}:`, error);
+      }
+    }
+  }
+
+  return hydrateAttachments(html, urls);
+}
+
 export interface JournalComposerProps {
   entryId?: number;
   /** Initial text content for new entries (before DB entry exists) */
@@ -134,7 +180,7 @@ export function JournalComposer({
   const lastLoadTimeRef = useRef<number>(0); // Track when we last loaded content
   const lastEditTimeRef = useRef<number>(0); // Track when user last made an edit
   const htmlContentRef = useRef(""); // Track content for saving without causing re-renders
-  const [contentVersion, setContentVersion] = useState(0); // Tracks content "version" for editor key
+  const hasLoadedRef = useRef(false); // True after initial content load — prevents re-hydration on refetch
 
   // Derive base content from entry (before hydration)
   const baseContent = useMemo(() => {
@@ -193,126 +239,37 @@ export function JournalComposer({
   // null means hydration is in progress, string means ready to render
   const [initialContent, setInitialContent] = useState<string | null>(null);
 
-  // Hydrate attachments when entry loads - decrypt files to cache and get file:// URLs
+  // Track previous baseContent to detect remote sync changes after initial load
+  const prevBaseContentRef = useRef(baseContent);
+
+  // Hydrate attachments on initial load — runs once per mount.
+  // After hasLoadedRef is set, subsequent baseContent changes (from React Query
+  // refetches) are handled by the sync update effect below instead.
   useEffect(() => {
-    // When a new entry is first saved to DB, useEntry returns data which
-    // changes baseContent. Skip re-hydration — the editor already has
-    // the user's content and is the source of truth.
-    if (wasCreatedAsNew.current && entryId) {
-      lastLoadTimeRef.current = Date.now();
-      return;
-    }
+    if (hasLoadedRef.current) return;
 
     let cancelled = false;
 
-    async function hydrateContent() {
-      const attachments = getAttachmentsNeedingHydration(baseContent);
-
-      if (attachments.length === 0) {
-        if (!cancelled) {
-          console.log(
-            "[JournalComposer] Hydration complete (no attachments), content length:",
-            baseContent.length,
-          );
-          lastLoadTimeRef.current = Date.now();
-          setInitialContent((prev) => {
-            // If we're going from empty to non-empty content, increment version
-            // to force editor remount with actual content
-            const wasEmpty = !prev || prev === "<p></p>" || prev.length < 10;
-            const isNowNonEmpty = baseContent.length >= 10;
-            if (wasEmpty && isNowNonEmpty) {
-              console.log(
-                "[JournalComposer] Content upgraded from empty to real, incrementing version",
-              );
-              setContentVersion((v) => v + 1);
-            }
-            return baseContent;
-          });
-        }
-        return;
-      }
-
-      // Get file:// URLs for each attachment (this decrypts them to cache)
-      const urls = new Map<string, string>();
-
-      for (const attachment of attachments) {
-        if (cancelled) return;
-        try {
-          const url = await getAudioAttachmentUrl(entryId!, attachment.id);
-          urls.set(attachment.id, url);
-        } catch (error) {
-          // File not found locally - try downloading from sync server
-          if (entry?.uuid && serverUrl) {
-            try {
-              const downloaded = await downloadAttachmentFromServer(
-                serverUrl,
-                entryId!,
-                entry.uuid,
-                attachment.id,
-              );
-              if (downloaded) {
-                const url = await getAudioAttachmentUrl(
-                  entryId!,
-                  attachment.id,
-                );
-                urls.set(attachment.id, url);
-              } else {
-                console.warn(
-                  `Failed to prepare attachment ${attachment.id}:`,
-                  error,
-                );
-              }
-            } catch (downloadError) {
-              console.warn(
-                `Failed to download attachment ${attachment.id}:`,
-                downloadError,
-              );
-            }
-          } else {
-            console.warn(
-              `Failed to prepare attachment ${attachment.id}:`,
-              error,
-            );
-          }
-        }
-      }
-
-      if (cancelled) return;
-
-      // Hydrate the HTML with file:// URLs
-      const hydrated = hydrateAttachments(baseContent, urls);
-
-      console.log(
-        "[JournalComposer] Hydration complete (with attachments), content length:",
-        hydrated.length,
+    (async () => {
+      const hydrated = await hydrateHtmlContent(
+        baseContent,
+        entryId,
+        entry?.uuid,
+        serverUrl,
       );
-      lastLoadTimeRef.current = Date.now();
-      setInitialContent((prev) => {
-        // If we're going from empty to non-empty content, increment version
-        const wasEmpty = !prev || prev === "<p></p>" || prev.length < 10;
-        const isNowNonEmpty = hydrated.length >= 10;
-        if (wasEmpty && isNowNonEmpty) {
-          console.log(
-            "[JournalComposer] Content upgraded from empty to real, incrementing version",
-          );
-          setContentVersion((v) => v + 1);
-        }
-        return hydrated;
-      });
-    }
 
-    // Reset content while hydrating
-    console.log(
-      "[JournalComposer] Hydration starting, baseContent length:",
-      baseContent.length,
-    );
-    setInitialContent(null);
-    hydrateContent();
+      if (!cancelled) {
+        hasLoadedRef.current = true;
+        prevBaseContentRef.current = baseContent;
+        lastLoadTimeRef.current = Date.now();
+        setInitialContent(hydrated);
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [baseContent, entryId]);
+  }, [baseContent, entryId, entry?.uuid, serverUrl]);
 
   // Determine if content is empty (for autoFocus and toolbar visibility)
   const isContentEmpty = useMemo(() => {
@@ -399,50 +356,56 @@ export function JournalComposer({
     });
   }, [debouncedSave, entryId, actionContext]);
 
-  // Track initial content hash to detect sync updates
-  const lastAppliedContentRef = useRef<string | null>(null);
-
-  // Handle sync updates - when content changes from sync, update the editor
-  // This runs when initialContent changes (e.g., from sync pulling new data)
+  // Apply remote sync updates to the editor after initial load.
+  // When a remote change arrives, SyncInitializer invalidates the detail query,
+  // useEntry refetches, and baseContent recalculates. This effect detects the
+  // diff and pushes it to the editor via setHtml() — no remount needed.
   useEffect(() => {
-    if (!initialContent || !editorRef.current) return;
-
-    // On first load, just record the content hash
-    if (lastAppliedContentRef.current === null) {
-      lastAppliedContentRef.current = initialContent;
+    // Before initial load completes, just track baseContent for later comparison
+    if (!hasLoadedRef.current) {
+      prevBaseContentRef.current = baseContent;
       return;
     }
 
-    // If content is same as what we last applied, nothing to do
-    if (initialContent === lastAppliedContentRef.current) {
-      return;
-    }
+    // Skip if content hasn't changed (same DB data after refetch)
+    if (baseContent === prevBaseContentRef.current) return;
+    prevBaseContentRef.current = baseContent;
 
-    // Content changed from sync - check if we should apply it
-    // Only apply if the user hasn't edited recently (avoid overwriting their work)
+    // Content changed from remote sync — only apply if user is idle
     const timeSinceLastEdit = Date.now() - lastEditTimeRef.current;
     const userIsIdle =
-      lastEditTimeRef.current === 0 || timeSinceLastEdit > 2000; // Never edited or 2+ seconds since last edit
+      lastEditTimeRef.current === 0 || timeSinceLastEdit > 2000;
 
-    if (userIsIdle) {
+    if (!userIsIdle || !editorRef.current) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const hydrated = await hydrateHtmlContent(
+        baseContent,
+        entryId,
+        entry?.uuid,
+        serverUrl,
+      );
+
+      if (cancelled || !editorRef.current) return;
+
+      // Re-check idle after async hydration (user may have started typing)
+      const currentTimeSinceEdit = Date.now() - lastEditTimeRef.current;
+      if (lastEditTimeRef.current > 0 && currentTimeSinceEdit <= 2000) return;
+
       console.log("[JournalComposer] Applying sync update to editor");
-      editorRef.current.setHtml(initialContent).catch((err) => {
+      editorRef.current.setHtml(hydrated).catch((err: unknown) => {
         console.warn("[JournalComposer] Failed to apply sync update:", err);
       });
-      lastAppliedContentRef.current = initialContent;
-      // Update the ref so we don't re-save the sync'd content
-      htmlContentRef.current = initialContent;
-      // Reset load time to prevent re-saving the sync'd content as an edit
+      htmlContentRef.current = hydrated;
       lastLoadTimeRef.current = Date.now();
-    } else {
-      console.log(
-        "[JournalComposer] Skipping sync update - user is actively editing (last edit:",
-        timeSinceLastEdit,
-        "ms ago)",
-      );
-      // TODO: Could show a notification here that new changes are available
-    }
-  }, [initialContent]);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseContent, entryId, entry?.uuid, serverUrl]);
 
   const [isDeleting, setIsDeleting] = useState(false);
   const handleBeforeDelete = useCallback(() => {
@@ -678,7 +641,7 @@ export function JournalComposer({
           (entry || !entryId || wasCreatedAsNew.current) &&
           initialContent !== null && (
             <QuillRichEditor
-              key={`editor-${wasCreatedAsNew.current ? "new" : entryId}-${seasonalTheme.isDark ? "dark" : "light"}-v${contentVersion}`}
+              key={`editor-${wasCreatedAsNew.current ? "new" : entryId}-${seasonalTheme.isDark ? "dark" : "light"}`}
               ref={editorRef}
               initialHtml={initialContent}
               placeholder="Start writing..."

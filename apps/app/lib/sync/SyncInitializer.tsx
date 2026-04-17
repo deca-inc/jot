@@ -124,17 +124,21 @@ export function SyncInitializer() {
             console.log("[SyncInitializer] Status:", newStatus);
             notifyStatusChange(newStatus);
           },
-          onEntryUpdated: () => {
-            // Only invalidate list queries (sidebar) — NOT detail queries.
-            // The editor is the source of truth while open; invalidating its
-            // detail query causes a refetch that resets cursor position and
-            // undo history. Sync updates reach the editor through the Yjs
-            // observer path instead.
+          onEntryUpdated: (entryId) => {
+            // Invalidate lists (sidebar) and the specific detail query.
+            // The editor handles detail refetches gracefully — it detects
+            // the content diff and applies via setHtml() without remounting.
             queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
+            queryClient.invalidateQueries({
+              queryKey: entryKeys.detail(entryId),
+            });
             updatePendingCount();
           },
-          onEntryDeleted: () => {
+          onEntryDeleted: (entryId) => {
             queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
+            queryClient.invalidateQueries({
+              queryKey: entryKeys.detail(entryId),
+            });
             updatePendingCount();
           },
           onError: (error) => {
@@ -163,8 +167,8 @@ export function SyncInitializer() {
         await manager.performInitialSync();
         console.log("[SyncInitializer] Initial sync complete");
         await updatePendingCount();
-        // Invalidate list queries to refresh sidebar with any pulled entries
-        queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
+        // Refresh all entry queries (sidebar + any open editor)
+        queryClient.invalidateQueries({ queryKey: entryKeys.all });
       } catch (error) {
         console.error("[SyncInitializer] Failed:", error);
         notifyStatusChange("error");
@@ -199,8 +203,8 @@ export function SyncInitializer() {
           await globalSyncManager.performInitialSync();
           console.log("[SyncInitializer] Resume sync complete");
           updatePendingCount();
-          // Only invalidate list queries — don't disrupt the active editor
-          queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
+          // Refresh all entry queries (sidebar + any open editor)
+          queryClient.invalidateQueries({ queryKey: entryKeys.all });
         } catch (error) {
           console.warn("[SyncInitializer] Resume sync failed:", error);
         }
