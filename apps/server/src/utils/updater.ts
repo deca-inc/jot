@@ -143,14 +143,39 @@ function printUpdateNotice(): void {
 }
 
 /**
- * Get the install command for the current platform
+ * Get the direct download URL and install command for the current platform.
+ * Uses the known version to download the binary directly from GitHub releases,
+ * avoiding the install script (which can hit GitHub API rate limits).
  */
 export function getInstallCommand(): string {
-  const platform = process.platform;
+  if (!latestRelease) {
+    // Fallback to install script if we don't know the version
+    return `curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/apps/server/install.sh | bash`;
+  }
 
-  if (platform === "win32") {
-    return `irm https://raw.githubusercontent.com/${GITHUB_REPO}/main/apps/server/install.ps1 | iex`;
+  const version = latestRelease.version;
+  const os = process.platform;
+  const arch = process.arch;
+
+  let artifact: string;
+  if (os === "darwin" && arch === "arm64") {
+    artifact = "jot-server-macos-arm64";
+  } else if (os === "darwin") {
+    artifact = "jot-server-macos-x64";
+  } else if (os === "linux" && arch === "arm64") {
+    artifact = "jot-server-linux-arm64";
+  } else if (os === "linux") {
+    artifact = "jot-server-linux-x64";
+  } else if (os === "win32") {
+    artifact = "jot-server-windows-x64";
+    const url = `https://github.com/${GITHUB_REPO}/releases/download/v${version}/${artifact}.zip`;
+    return `irm ${url} -OutFile jot-server.zip; Expand-Archive -Force jot-server.zip .; Remove-Item jot-server.zip`;
   } else {
     return `curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/apps/server/install.sh | bash`;
   }
+
+  const url = `https://github.com/${GITHUB_REPO}/releases/download/v${version}/${artifact}.tar.gz`;
+  const installDir = process.env.JOT_INSTALL_DIR || `${process.env.HOME}/.jot-server`;
+
+  return `curl -L -o /tmp/jot-server-update.tar.gz "${url}" && mkdir -p "${installDir}" && tar -xzf /tmp/jot-server-update.tar.gz -C "${installDir}" && chmod +x "${installDir}/jot-server" && rm /tmp/jot-server-update.tar.gz && echo "Updated to v${version}"`;
 }
