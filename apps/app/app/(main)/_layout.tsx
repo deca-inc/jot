@@ -730,12 +730,14 @@ function MainLayout() {
                   variant="body"
                   numberOfLines={1}
                   style={{
-                    color: seasonalTheme.textPrimary,
+                    color: getHeaderTitle()
+                      ? seasonalTheme.textPrimary
+                      : seasonalTheme.textSecondary,
                     fontWeight: "600",
                     fontSize: 14,
                   }}
                 >
-                  {activeEntryTitle || ""}
+                  {getHeaderTitle() || "Untitled"}
                 </Text>
               </TouchableOpacity>
             )}
