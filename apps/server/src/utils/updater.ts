@@ -19,51 +19,25 @@ export function getCurrentVersion(): string {
 
 export async function checkForUpdates(): Promise<ReleaseInfo | null> {
   try {
-    // Fetch recent releases and find the latest server release (v* tag, not desktop-v*)
-    const response = await fetch(
-      `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=15`,
-      {
-        headers: {
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "jot-server",
-        },
-      },
+    // Read latest version from VERSION file (no API rate limits)
+    const versionResponse = await fetch(
+      `https://raw.githubusercontent.com/${GITHUB_REPO}/main/apps/server/VERSION`,
+      { headers: { "User-Agent": "jot-server" } },
     );
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(`GitHub API returned ${response.status}`);
-    }
-
-    const releases = (await response.json()) as Array<{
-      tag_name: string;
-      html_url: string;
-      published_at: string;
-      draft: boolean;
-      prerelease: boolean;
-    }>;
-
-    // Find the latest server release: tag starts with "v" but NOT "desktop-v"
-    const serverRelease = releases.find(
-      (r) =>
-        r.tag_name.startsWith("v") &&
-        !r.tag_name.startsWith("desktop-v") &&
-        !r.draft &&
-        !r.prerelease,
-    );
-
-    if (!serverRelease) {
+    if (!versionResponse.ok) {
       return null;
     }
 
-    const latestVersion = serverRelease.tag_name.replace(/^v/, "");
+    const latestVersion = (await versionResponse.text()).trim();
+    if (!latestVersion || !/^\d+\.\d+\.\d+$/.test(latestVersion)) {
+      return null;
+    }
 
     latestRelease = {
       version: latestVersion,
-      url: serverRelease.html_url,
-      publishedAt: serverRelease.published_at,
+      url: `https://github.com/${GITHUB_REPO}/releases/tag/v${latestVersion}`,
+      publishedAt: "",
     };
 
     return latestRelease;
