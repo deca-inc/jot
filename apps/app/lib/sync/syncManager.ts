@@ -30,6 +30,10 @@ import {
   SyncClientCallbacks,
 } from "./syncClient";
 import { SyncQueue, QueuedSync, createSyncQueue } from "./syncQueue";
+import {
+  uploadAttachmentForSync,
+  downloadAttachmentFromServer,
+} from "./assetSyncService";
 import type { Entry, Block, UpdateEntryInput } from "../db/entries";
 
 /** Convert Uint8Array to base64 string (works in React Native and web) */
@@ -392,12 +396,30 @@ export class SyncManager {
       `[SyncManager] Bulk push complete: ${result.pushed} pushed, ${result.failed} failed`,
     );
 
-    // Mark pushed entries as synced
+    // Mark pushed entries as synced and upload their attachments
     for (const entry of entries) {
       try {
         await this.markEntrySynced(entry.id);
       } catch {
         // Non-fatal
+      }
+
+      // Upload attachments in background (non-blocking per entry)
+      if (entry.uuid && this.serverUrl) {
+        const attachmentIds = this.extractAttachmentIds(entry);
+        for (const attachmentId of attachmentIds) {
+          uploadAttachmentForSync(
+            this.serverUrl,
+            entry.id,
+            entry.uuid,
+            attachmentId,
+          ).catch((err) =>
+            console.warn(
+              `[SyncManager] Attachment upload failed for ${attachmentId}:`,
+              err,
+            ),
+          );
+        }
       }
     }
   }
@@ -449,6 +471,9 @@ export class SyncManager {
         Y.applyUpdate(ydoc, stateBuffer);
 
         // Decrypt and create local entry
+        let localEntryId: number | null = null;
+        let pulledEntry: Partial<Entry> | null = null;
+
         if (isYjsEncrypted(ydoc)) {
           const encryptedData = yjsToEncryptedEntry(ydoc);
           if (encryptedData && !encryptedData.deleted) {
@@ -456,16 +481,43 @@ export class SyncManager {
               encryptedData.encrypted,
               this.userId,
             );
-            await this.createOrUpdateLocalEntry(doc.uuid, {
+            pulledEntry = {
               ...decrypted,
               createdAt: encryptedData.createdAt,
               updatedAt: encryptedData.updatedAt,
-            });
+            };
+            localEntryId = await this.createOrUpdateLocalEntry(
+              doc.uuid,
+              pulledEntry,
+            );
           }
         } else {
           // Legacy unencrypted document
-          const remoteEntry = yjsToEntry(ydoc, {});
-          await this.createOrUpdateLocalEntry(doc.uuid, remoteEntry);
+          pulledEntry = yjsToEntry(ydoc, {});
+          localEntryId = await this.createOrUpdateLocalEntry(
+            doc.uuid,
+            pulledEntry,
+          );
+        }
+
+        // Download attachments for the pulled entry (non-blocking)
+        if (localEntryId && pulledEntry && this.serverUrl) {
+          const attachmentIds = this.extractAttachmentIdsFromBlocks(
+            pulledEntry.blocks,
+          );
+          for (const attachmentId of attachmentIds) {
+            downloadAttachmentFromServer(
+              this.serverUrl,
+              localEntryId,
+              doc.uuid,
+              attachmentId,
+            ).catch((err) =>
+              console.warn(
+                `[SyncManager] Attachment download failed for ${attachmentId}:`,
+                err,
+              ),
+            );
+          }
         }
 
         ydoc.destroy();
@@ -485,7 +537,7 @@ export class SyncManager {
   private async createOrUpdateLocalEntry(
     uuid: string,
     remoteData: Partial<Entry>,
-  ): Promise<void> {
+  ): Promise<number> {
     // Check if entry already exists locally
     const existingRow = await this.db.getFirstAsync<{ id: number }>(
       "SELECT id FROM entries WHERE uuid = ?",
@@ -494,13 +546,14 @@ export class SyncManager {
 
     if (existingRow) {
       await this.applyRemoteChanges(existingRow.id, remoteData);
+      return existingRow.id;
     } else {
       // Create new local entry
       const blocks = JSON.stringify(remoteData.blocks ?? []);
       const tags = JSON.stringify(remoteData.tags ?? []);
       const attachments = JSON.stringify(remoteData.attachments ?? []);
 
-      await this.db.runAsync(
+      const result = await this.db.runAsync(
         `INSERT INTO entries (uuid, type, title, blocks, tags, attachments, isFavorite, isPinned, createdAt, updatedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -518,6 +571,7 @@ export class SyncManager {
       );
 
       this.callbacks.onEntryUpdated?.(0, uuid);
+      return result.lastInsertRowId;
     }
   }
 
@@ -1189,6 +1243,45 @@ export class SyncManager {
         break;
       }
     }
+  }
+
+  /**
+   * Extract attachment IDs from an entry's blocks (HTML content).
+   * Looks for data-value attributes containing attachment metadata.
+   */
+  private extractAttachmentIds(entry: Entry): string[] {
+    return this.extractAttachmentIdsFromBlocks(entry.blocks);
+  }
+
+  /**
+   * Extract attachment IDs from blocks array.
+   */
+  private extractAttachmentIdsFromBlocks(
+    blocks: Block[] | undefined,
+  ): string[] {
+    if (!blocks) return [];
+    const ids: string[] = [];
+    for (const block of blocks) {
+      if ("content" in block && block.content) {
+        // Match data-value="..." attributes containing JSON with attachment IDs
+        const regex = /data-value="([^"]*)"/g;
+        let match;
+        while ((match = regex.exec(block.content)) !== null) {
+          try {
+            const decoded = match[1]
+              .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, "&");
+            const parsed = JSON.parse(decoded) as { id?: string };
+            if (parsed.id) {
+              ids.push(parsed.id);
+            }
+          } catch {
+            // Skip invalid JSON
+          }
+        }
+      }
+    }
+    return ids;
   }
 
   /**

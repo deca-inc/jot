@@ -257,14 +257,12 @@ export async function saveJournalContent(
             // DON'T call onSave - it triggers a reload which causes the editor to escape HTML
             // The DB is local, trust our editor state
 
-            // Only notify sync when navigating away (updateCache=true).
-            // During active editing, avoid sync callbacks that update
-            // pendingCount state and cause unnecessary re-renders.
-            if (updateCache) {
-              onEntryUpdated?.(entryId, input).catch((err) => {
-                console.error("[Journal Action] Error notifying sync:", err);
-              });
-            }
+            // Always notify sync so changes propagate to other devices in
+            // real-time via the WebSocket connection. The sync queue has its
+            // own debouncing so this won't spam the server.
+            onEntryUpdated?.(entryId, input).catch((err) => {
+              console.error("[Journal Action] Error notifying sync:", err);
+            });
 
             resolve();
           },
