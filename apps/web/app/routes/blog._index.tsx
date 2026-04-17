@@ -1,5 +1,5 @@
-import type { MetaFunction } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
+import type { MetaFunction } from "@remix-run/cloudflare";
 import { getAllPosts } from "~/blog";
 
 export const meta: MetaFunction = () => {

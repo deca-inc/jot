@@ -1,5 +1,5 @@
-import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
+import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { getPostBySlug } from "~/blog";
 
 export const loader = async ({ params }: LoaderFunctionArgs) => {

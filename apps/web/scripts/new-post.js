@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+/* global require, process, console, __dirname */
+/* eslint-disable @typescript-eslint/no-require-imports */
 
 const fs = require("fs");
 const path = require("path");

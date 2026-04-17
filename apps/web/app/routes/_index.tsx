@@ -1,5 +1,5 @@
-import type { MetaFunction } from "@remix-run/cloudflare";
 import { Link } from "@remix-run/react";
+import type { MetaFunction } from "@remix-run/cloudflare";
 
 export const meta: MetaFunction = () => {
   return [

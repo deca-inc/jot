@@ -1,10 +1,10 @@
-import { defineConfig } from "vite";
 import {
   vitePlugin as remix,
   cloudflareDevProxyVitePlugin,
 } from "@remix-run/dev";
-import tsconfigPaths from "vite-tsconfig-paths";
+import { defineConfig } from "vite";
 import { Mode, plugin as markdown } from "vite-plugin-markdown";
+import tsconfigPaths from "vite-tsconfig-paths";
 import { getLoadContext } from "./load-context";
 
 declare module "@remix-run/cloudflare" {
