@@ -125,8 +125,10 @@ export function useEntry(id: number | undefined) {
     // Always refetch on mount to get latest saved version when navigating back to entry
     // Use 'always' instead of true because we skip cache updates during editing
     refetchOnMount: "always",
-    // Refetch when the tab regains focus so content stays fresh after switching tabs
-    refetchOnWindowFocus: true,
+    // Disabled: The editor is the source of truth while open. Refetching on focus
+    // causes the entry data to change, which triggers baseContent recalculation,
+    // hydration, and ultimately resets the editor — losing cursor position and undo history.
+    refetchOnWindowFocus: false,
   });
 }
 

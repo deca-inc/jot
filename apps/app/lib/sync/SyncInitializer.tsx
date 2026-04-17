@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useCallback } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { useDatabase } from "../db/DatabaseProvider";
+import { entryKeys } from "../db/useEntries";
 import { SyncManager, createSyncManager, SyncStatus } from "./syncManager";
 import { useSyncAuth, getValidAccessToken } from "./useSyncAuth";
 
@@ -123,14 +124,17 @@ export function SyncInitializer() {
             console.log("[SyncInitializer] Status:", newStatus);
             notifyStatusChange(newStatus);
           },
-          onEntryUpdated: (entryId) => {
-            queryClient.invalidateQueries({ queryKey: ["entries"] });
-            queryClient.invalidateQueries({ queryKey: ["entry", entryId] });
+          onEntryUpdated: () => {
+            // Only invalidate list queries (sidebar) — NOT detail queries.
+            // The editor is the source of truth while open; invalidating its
+            // detail query causes a refetch that resets cursor position and
+            // undo history. Sync updates reach the editor through the Yjs
+            // observer path instead.
+            queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
             updatePendingCount();
           },
-          onEntryDeleted: (entryId) => {
-            queryClient.invalidateQueries({ queryKey: ["entries"] });
-            queryClient.invalidateQueries({ queryKey: ["entry", entryId] });
+          onEntryDeleted: () => {
+            queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
             updatePendingCount();
           },
           onError: (error) => {
@@ -159,8 +163,8 @@ export function SyncInitializer() {
         await manager.performInitialSync();
         console.log("[SyncInitializer] Initial sync complete");
         await updatePendingCount();
-        // Invalidate cache to refresh UI with any pulled entries
-        queryClient.invalidateQueries({ queryKey: ["entries"] });
+        // Invalidate list queries to refresh sidebar with any pulled entries
+        queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
       } catch (error) {
         console.error("[SyncInitializer] Failed:", error);
         notifyStatusChange("error");
@@ -195,7 +199,8 @@ export function SyncInitializer() {
           await globalSyncManager.performInitialSync();
           console.log("[SyncInitializer] Resume sync complete");
           updatePendingCount();
-          queryClient.invalidateQueries({ queryKey: ["entries"] });
+          // Only invalidate list queries — don't disrupt the active editor
+          queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
         } catch (error) {
           console.warn("[SyncInitializer] Resume sync failed:", error);
         }
