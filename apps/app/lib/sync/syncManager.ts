@@ -11,6 +11,10 @@
 import * as Crypto from "expo-crypto";
 import { SQLiteDatabase } from "expo-sqlite";
 import * as Y from "yjs";
+import {
+  uploadAttachmentForSync,
+  downloadAttachmentFromServer,
+} from "./assetSyncService";
 import { encryptEntry, decryptEntry, hasUEK, isUEKStale } from "./encryption";
 import {
   yjsToEntry,
@@ -30,10 +34,6 @@ import {
   SyncClientCallbacks,
 } from "./syncClient";
 import { SyncQueue, QueuedSync, createSyncQueue } from "./syncQueue";
-import {
-  uploadAttachmentForSync,
-  downloadAttachmentFromServer,
-} from "./assetSyncService";
 import type { Entry, Block, UpdateEntryInput } from "../db/entries";
 
 /** Convert Uint8Array to base64 string (works in React Native and web) */
