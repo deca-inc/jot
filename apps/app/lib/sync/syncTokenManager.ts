@@ -94,14 +94,19 @@ async function performTokenRefresh(): Promise<void> {
     scheduleTokenRefresh();
     stateCallback?.(true);
   } catch (error) {
-    // If refresh fails, clear all tokens
-    await clearAllTokens();
-    cancelTokenRefresh();
+    if (error instanceof SyncAuthError) {
+      // Server explicitly rejected our token — clear everything
+      await clearAllTokens();
+      cancelTokenRefresh();
 
-    if (error instanceof SyncAuthError && error.isSessionExpired()) {
-      stateCallback?.(false, "Session expired. Please log in again.");
+      if (error.isSessionExpired()) {
+        stateCallback?.(false, "Session expired. Please log in again.");
+      } else {
+        stateCallback?.(false, "Authentication failed.");
+      }
     } else {
-      stateCallback?.(false, "Failed to refresh session.");
+      // Network error or server unreachable — keep tokens, retry later
+      scheduleRetryAfterNetworkError();
     }
 
     throw error;
@@ -138,6 +143,19 @@ function scheduleTokenRefresh(): void {
 }
 
 /**
+ * Schedule a retry after a network error (server unreachable)
+ * Uses a longer interval since the server may be down for a while.
+ */
+function scheduleRetryAfterNetworkError(): void {
+  cancelTokenRefresh();
+  refreshTimer = setTimeout(() => {
+    performTokenRefresh().catch(() => {
+      // Will schedule another retry if still a network error
+    });
+  }, 30_000);
+}
+
+/**
  * Cancel scheduled token refresh
  */
 function cancelTokenRefresh(): void {
@@ -161,8 +179,14 @@ export async function initializeAuth(): Promise<boolean> {
   try {
     await performTokenRefresh();
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    // If the server explicitly rejected our token, we're not authenticated
+    if (error instanceof SyncAuthError) {
+      return false;
+    }
+    // Network error — server is just offline. We still have valid tokens,
+    // so treat as authenticated. Sync will reconnect when server is back.
+    return true;
   }
 }
 
