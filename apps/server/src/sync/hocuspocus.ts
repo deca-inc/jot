@@ -57,25 +57,6 @@ function checkRateLimit(userId: string): boolean {
 }
 
 /**
- * Helper to extract auth info from request parameters
- */
-function getAuthInfo(
-  requestParameters: URLSearchParams,
-  authService: AuthService,
-): { userId: string; sessionId: string } | null {
-  const token = requestParameters.get("token");
-  if (!token) return null;
-
-  try {
-    const payload = authService.verifyAccessToken(token);
-    const sessionId = requestParameters.get("sessionId") || `session-${Date.now()}`;
-    return { userId: payload.userId, sessionId };
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Create Hocuspocus configuration for the given database
  */
 export function createHocuspocusConfig(
@@ -94,8 +75,9 @@ export function createHocuspocusConfig(
      * onAuthenticate validates the token and rejects unauthenticated connections
      */
     async onAuthenticate(data: onAuthenticatePayload): Promise<void> {
-      console.log(">>> onAuthenticate called, params:", [...data.requestParameters.entries()]);
-      const token = data.requestParameters.get("token");
+      // Token can come from HocuspocusProvider's token option or URL query params
+      const token = data.token || data.requestParameters.get("token");
+      console.log(">>> onAuthenticate called, hasToken:", !!token, "source:", data.token ? "provider" : "query");
 
       if (!token) {
         logger.warn("Connection rejected: No authentication token provided");
@@ -112,6 +94,12 @@ export function createHocuspocusConfig(
           throw new Error("Connection rate limit exceeded");
         }
 
+        // Store auth info in context for use in subsequent callbacks
+        const sessionId = data.requestParameters.get("sessionId") || `session-${Date.now()}`;
+        data.context.userId = payload.userId;
+        data.context.sessionId = sessionId;
+        data.context.email = payload.email;
+
         logger.debug(`Authenticated connection for user: ${payload.email}`);
       } catch (error) {
         if (error instanceof AuthError) {
@@ -123,14 +111,13 @@ export function createHocuspocusConfig(
     },
 
     async onConnect(data: onConnectPayload): Promise<void> {
-      const authInfo = getAuthInfo(data.requestParameters, authService);
-      if (!authInfo) {
-        // Should not happen since onAuthenticate runs first
+      const userId = data.context.userId as string | undefined;
+      const sessionId = data.context.sessionId as string | undefined;
+      if (!userId || !sessionId) {
         logger.warn("No auth info in onConnect");
         return;
       }
 
-      const { userId, sessionId } = authInfo;
       const displayName = data.requestParameters.get("displayName") || null;
 
       // Create or update session (non-fatal if it fails)
@@ -181,13 +168,12 @@ export function createHocuspocusConfig(
         throw new Error("Invalid document ID format");
       }
 
-      const authInfo = getAuthInfo(data.requestParameters, authService);
-      if (!authInfo) {
+      const userId = data.context.userId as string | undefined;
+      const sessionId = data.context.sessionId as string | undefined;
+      if (!userId || !sessionId) {
         logger.warn(`Load rejected: No auth info for document ${data.documentName}`);
         throw new Error("Authentication required");
       }
-
-      const { userId, sessionId } = authInfo;
 
       // Check how many connections already exist for this document
       const docConnections = data.instance.documents.get(data.documentName)?.getConnectionsCount() ?? 0;
@@ -237,13 +223,12 @@ export function createHocuspocusConfig(
         throw new Error("Invalid document ID format");
       }
 
-      const authInfo = getAuthInfo(data.requestParameters, authService);
-      if (!authInfo) {
+      const userId = data.context.userId as string | undefined;
+      const sessionId = data.context.sessionId as string | undefined;
+      if (!userId || !sessionId) {
         logger.warn(`Store rejected: No auth info for document ${data.documentName}`);
         throw new Error("Authentication required");
       }
-
-      const { userId, sessionId } = authInfo;
 
       // Check document ownership before storing
       const existingDoc = documentRepo.getById(data.documentName);

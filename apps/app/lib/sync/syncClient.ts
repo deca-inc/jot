@@ -66,24 +66,10 @@ export class SyncClient {
   }
 
   /**
-   * Convert HTTP URL to WebSocket URL and add query parameters
+   * Convert HTTP URL to WebSocket URL
    */
   private normalizeUrl(url: string): string {
     return url.replace(/^http/, "ws").replace(/\/$/, "");
-  }
-
-  /**
-   * Build URL with query parameters for session identification and auth
-   */
-  private buildUrlWithParams(token: string): string {
-    const sessionId = this.getSessionId();
-    const displayName = this.getDisplayName();
-    const params = new URLSearchParams({
-      token,
-      sessionId,
-      displayName,
-    });
-    return `${this.serverUrl}?${params.toString()}`;
   }
 
   /**
@@ -123,23 +109,25 @@ export class SyncClient {
       resolveSyncPromise = resolve;
     });
 
-    // Include token in URL query parameters for server authentication
-    const urlWithParams = this.buildUrlWithParams(token);
+    const sessionId = this.getSessionId();
+    const displayName = this.getDisplayName();
+    const sessionParams = new URLSearchParams({ sessionId, displayName });
+    const wsUrl = `${this.serverUrl}?${sessionParams.toString()}`;
 
-    // Exponential backoff: start 1s, double each time, cap at 1 hour
+    // WebSocket with exponential backoff
     const websocketProvider = new HocuspocusProviderWebsocket({
-      url: urlWithParams,
+      url: wsUrl,
       delay: 1000,
       factor: 2,
       maxDelay: 3_600_000,
-      maxAttempts: 0, // Retry forever
+      maxAttempts: 0,
     });
 
     const provider = new HocuspocusProvider({
       websocketProvider,
       name: docId,
       document: ydoc,
-      // Token is passed in URL query params, not as a separate option
+      token,
       onConnect: () => {
         this.authFailureCount = 0;
         this.updateDocumentStatus(docId, "connected");
