@@ -43,8 +43,9 @@ detect_platform() {
 
 # Get latest release version
 get_latest_version() {
-    info "Fetching latest version..."
-    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+    info "Fetching latest server version..."
+    # Filter for server releases (v* tags, not desktop-v*)
+    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=15" | grep '"tag_name"' | grep -v 'desktop-v' | head -1 | sed -E 's/.*"v([^"]+)".*/\1/')
     if [ -z "$VERSION" ]; then
         error "Could not determine latest version"
     fi
