@@ -32,6 +32,25 @@ import {
 import { SyncQueue, QueuedSync, createSyncQueue } from "./syncQueue";
 import type { Entry, Block, UpdateEntryInput } from "../db/entries";
 
+/** Convert Uint8Array to base64 string (works in React Native and web) */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/** Convert base64 string to Uint8Array */
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
 export type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
 
 export interface SyncManagerCallbacks {
@@ -237,24 +256,17 @@ export class SyncManager {
         toPull.push(uuid);
       }
 
-      // Push local entries
-      for (const entry of toPush) {
-        try {
-          await this.syncEntry(entry);
-        } catch (error) {
-          console.error("[SyncManager] Failed to sync entry:", error);
-        }
+      // Push local entries via HTTP bulk endpoint
+      if (toPush.length > 0) {
+        await this.bulkPushEntries(toPush);
       }
 
-      // Pull server-only entries (create local entries from Yjs docs)
-      for (const uuid of toPull) {
-        try {
-          await this.pullServerEntry(uuid);
-        } catch (error) {
-          console.error("[SyncManager] Failed to pull entry:", error);
-        }
+      // Pull server-only entries via HTTP bulk endpoint
+      if (toPull.length > 0) {
+        await this.bulkPullEntries(toPull);
       }
 
+      await this.setLastSyncTimestamp(Date.now());
       this.updateStatus("synced");
     } catch (error) {
       console.error("[SyncManager] Sync failed:", error);
@@ -278,7 +290,13 @@ export class SyncManager {
       throw new Error("Not authenticated");
     }
 
-    const response = await fetch(`${this.serverUrl}/api/documents/manifest`, {
+    // Use last sync timestamp for incremental sync
+    const lastSynced = await this.getLastSyncTimestamp();
+    const url = lastSynced
+      ? `${this.serverUrl}/api/documents/manifest?since=${lastSynced}`
+      : `${this.serverUrl}/api/documents/manifest`;
+
+    const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -296,6 +314,212 @@ export class SyncManager {
       documents: data.documents,
       uekVersion: data.uekVersion ?? 0,
     };
+  }
+
+  /**
+   * Bulk push entries to server via HTTP.
+   * Converts each entry to an encrypted Yjs doc and sends as base64.
+   */
+  private async bulkPushEntries(entries: Entry[]): Promise<void> {
+    if (!this.userId) {
+      throw new Error("User ID not set");
+    }
+
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error("Not authenticated");
+    }
+
+    const documents: Array<{
+      uuid: string;
+      state: string;
+      metadata?: Record<string, unknown>;
+    }> = [];
+
+    for (const entry of entries) {
+      try {
+        let uuid = entry.uuid;
+        if (!uuid) {
+          uuid = await this.generateAndStoreUuid(entry.id);
+        }
+
+        // Create a Yjs doc, encrypt the entry into it, encode as base64
+        const ydoc = new Y.Doc();
+        ydoc.getMap<unknown>("metadata");
+        ydoc.getArray<Block>("blocks");
+
+        const encrypted = await encryptEntry(entry, this.userId);
+        encryptedEntryToYjs(encrypted, entry.createdAt, entry.updatedAt, ydoc);
+
+        const state = Y.encodeStateAsUpdate(ydoc);
+        documents.push({
+          uuid,
+          state: uint8ArrayToBase64(state),
+        });
+
+        ydoc.destroy();
+      } catch (error) {
+        console.error(
+          `[SyncManager] Failed to prepare entry ${entry.id} for push:`,
+          error,
+        );
+      }
+    }
+
+    if (documents.length === 0) return;
+
+    console.info(
+      `[SyncManager] Bulk pushing ${documents.length} entries via HTTP`,
+    );
+
+    const response = await fetch(`${this.serverUrl}/api/documents/bulk-push`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ documents }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Bulk push failed: ${response.status}`);
+    }
+
+    const result = (await response.json()) as {
+      pushed: number;
+      failed: number;
+    };
+    console.info(
+      `[SyncManager] Bulk push complete: ${result.pushed} pushed, ${result.failed} failed`,
+    );
+
+    // Mark pushed entries as synced
+    for (const entry of entries) {
+      try {
+        await this.markEntrySynced(entry.id);
+      } catch {
+        // Non-fatal
+      }
+    }
+  }
+
+  /**
+   * Bulk pull entries from server via HTTP.
+   * Downloads Yjs states, decrypts, and creates/updates local entries.
+   */
+  private async bulkPullEntries(uuids: string[]): Promise<void> {
+    if (!this.userId) {
+      throw new Error("User ID not set");
+    }
+
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error("Not authenticated");
+    }
+
+    console.info(`[SyncManager] Bulk pulling ${uuids.length} entries via HTTP`);
+
+    const response = await fetch(`${this.serverUrl}/api/documents/bulk-pull`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ uuids }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Bulk pull failed: ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      documents: Array<{
+        uuid: string;
+        state: string | null;
+        updatedAt: number;
+      }>;
+    };
+
+    for (const doc of data.documents) {
+      try {
+        if (!doc.state) continue;
+
+        // Decode base64 Yjs state and apply to a new doc
+        const stateBuffer = base64ToUint8Array(doc.state);
+        const ydoc = new Y.Doc();
+        Y.applyUpdate(ydoc, stateBuffer);
+
+        // Decrypt and create local entry
+        if (isYjsEncrypted(ydoc)) {
+          const encryptedData = yjsToEncryptedEntry(ydoc);
+          if (encryptedData && !encryptedData.deleted) {
+            const decrypted = await decryptEntry(
+              encryptedData.encrypted,
+              this.userId,
+            );
+            await this.createOrUpdateLocalEntry(doc.uuid, {
+              ...decrypted,
+              createdAt: encryptedData.createdAt,
+              updatedAt: encryptedData.updatedAt,
+            });
+          }
+        } else {
+          // Legacy unencrypted document
+          const remoteEntry = yjsToEntry(ydoc, {});
+          await this.createOrUpdateLocalEntry(doc.uuid, remoteEntry);
+        }
+
+        ydoc.destroy();
+      } catch (error) {
+        console.error(`[SyncManager] Failed to pull entry ${doc.uuid}:`, error);
+      }
+    }
+
+    console.info(
+      `[SyncManager] Bulk pull complete: ${data.documents.length} entries`,
+    );
+  }
+
+  /**
+   * Create or update a local entry from pulled remote data
+   */
+  private async createOrUpdateLocalEntry(
+    uuid: string,
+    remoteData: Partial<Entry>,
+  ): Promise<void> {
+    // Check if entry already exists locally
+    const existingRow = await this.db.getFirstAsync<{ id: number }>(
+      "SELECT id FROM entries WHERE uuid = ?",
+      [uuid],
+    );
+
+    if (existingRow) {
+      await this.applyRemoteChanges(existingRow.id, remoteData);
+    } else {
+      // Create new local entry
+      const blocks = JSON.stringify(remoteData.blocks ?? []);
+      const tags = JSON.stringify(remoteData.tags ?? []);
+      const attachments = JSON.stringify(remoteData.attachments ?? []);
+
+      await this.db.runAsync(
+        `INSERT INTO entries (uuid, type, title, blocks, tags, attachments, isFavorite, isPinned, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          uuid,
+          remoteData.type ?? "journal",
+          remoteData.title ?? "",
+          blocks,
+          tags,
+          attachments,
+          remoteData.isFavorite ? 1 : 0,
+          remoteData.isPinned ? 1 : 0,
+          remoteData.createdAt ?? Date.now(),
+          remoteData.updatedAt ?? Date.now(),
+        ],
+      );
+
+      this.callbacks.onEntryUpdated?.(0, uuid);
+    }
   }
 
   /**
@@ -1030,6 +1254,20 @@ export class SyncManager {
     await this.db.runAsync(
       `UPDATE entries SET sync_status = 'modified' WHERE id = ?`,
       [entryId],
+    );
+  }
+
+  private async getLastSyncTimestamp(): Promise<number | null> {
+    const row = await this.db.getFirstAsync<{ value: string }>(
+      "SELECT value FROM settings WHERE key = 'last_sync_timestamp'",
+    );
+    return row ? Number(row.value) : null;
+  }
+
+  private async setLastSyncTimestamp(timestamp: number): Promise<void> {
+    await this.db.runAsync(
+      `INSERT OR REPLACE INTO settings (key, value, updatedAt) VALUES ('last_sync_timestamp', ?, ?)`,
+      [String(timestamp), Date.now()],
     );
   }
 

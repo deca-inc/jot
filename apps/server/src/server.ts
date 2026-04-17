@@ -64,7 +64,7 @@ export function createServer_impl(config: ServerConfig): JotServer {
   const auditLog = new AuditLogRepository(config.db);
 
   // Middleware
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
 
   // Request logging
   app.use((req, _res, next) => {

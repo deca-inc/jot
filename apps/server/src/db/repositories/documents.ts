@@ -163,6 +163,25 @@ export class DocumentRepository {
     }));
   }
 
+  /**
+   * Get manifest for a user, filtered to documents updated since a given timestamp
+   */
+  getManifestForUserSince(
+    userId: string,
+    since: number,
+  ): { uuid: string; updatedAt: number }[] {
+    const rows = this.db
+      .prepare(
+        "SELECT id, updated_at FROM documents WHERE user_id = ? AND updated_at > ?",
+      )
+      .all(userId, since) as { id: string; updated_at: number }[];
+
+    return rows.map((row) => ({
+      uuid: row.id,
+      updatedAt: row.updated_at,
+    }));
+  }
+
   private mapRowToDocument(row: DocumentRow): Document {
     return {
       id: row.id,
