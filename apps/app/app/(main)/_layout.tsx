@@ -224,6 +224,8 @@ function MainLayout() {
 
   // Drawer open/close helpers
   const openDrawer = useCallback(() => {
+    // Flush pending saves before opening drawer (user may tap a different entry)
+    requestSave.emit();
     Keyboard.dismiss();
     blurEditors.emit();
     if (
