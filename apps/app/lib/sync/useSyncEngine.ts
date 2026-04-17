@@ -107,9 +107,31 @@ export function useSyncEngine(): UseSyncEngineReturn {
     await manager.syncEntry(entry);
   }, []);
 
-  // Sync when opening an entry for viewing/editing
+  // Sync when opening an entry for viewing/editing.
+  // Waits for the sync manager to initialize if it hasn't yet
+  // (handles the race where the first entry opens before sync is ready).
   const syncOnOpen = useCallback(async (entryId: number) => {
-    const manager = getSyncManager();
+    let manager = getSyncManager();
+    if (!manager) {
+      // Wait for sync initialization to complete (up to 30s)
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          const unsub = subscribeSyncStatus(() => {
+            if (getSyncManager()) {
+              unsub();
+              resolve();
+            }
+          });
+          // Check immediately in case init completed between calls
+          if (getSyncManager()) {
+            unsub();
+            resolve();
+          }
+        }),
+        new Promise<void>((resolve) => setTimeout(resolve, 30000)),
+      ]);
+      manager = getSyncManager();
+    }
     if (manager) {
       await manager.syncOnOpen(entryId);
     }

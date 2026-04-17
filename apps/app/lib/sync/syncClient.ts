@@ -111,6 +111,10 @@ export class SyncClient {
     const sessionParams = new URLSearchParams({ sessionId, displayName });
     const wsUrl = `${this.serverUrl}?${sessionParams.toString()}`;
 
+    console.log(
+      `[SyncClient] Creating HocuspocusProvider for ${docId} url=${wsUrl.split("?")[0]}`,
+    );
+
     // Let the provider manage its own WebSocket connection.
     // In Hocuspocus v3, passing a separate websocketProvider skips attach(),
     // so the protocol handshake never starts. Passing the URL directly
@@ -120,18 +124,23 @@ export class SyncClient {
       name: docId,
       document: ydoc,
       token,
+      onOpen: () => {
+        console.log(`[SyncClient] WebSocket opened for ${docId}`);
+      },
       onConnect: () => {
+        console.log(`[SyncClient] Connected to ${docId}`);
         this.authFailureCount = 0;
         this.updateDocumentStatus(docId, "connected");
       },
       onSynced: () => {
+        console.log(`[SyncClient] Synced ${docId}`);
         this.updateDocumentStatus(docId, "synced");
         resolveSyncPromise();
         this.callbacks.onDocumentSynced?.(docId);
       },
       onDisconnect: () => {
+        console.log(`[SyncClient] Disconnected from ${docId}`);
         if (!this.isShuttingDown) {
-          console.info(`[SyncClient] Disconnected from ${docId}, will retry`);
           this.updateDocumentStatus(docId, "disconnected");
         }
       },
