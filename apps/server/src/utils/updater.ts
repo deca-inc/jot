@@ -1,5 +1,5 @@
 // Version is hardcoded to avoid runtime package.json lookup in compiled binary
-const VERSION = "1.0.7";
+const VERSION = "1.0.8";
 
 const GITHUB_REPO = "deca-inc/jot";
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
