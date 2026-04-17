@@ -1,6 +1,6 @@
-import { Link } from "@remix-run/react";
-import { useEffect, useState } from "react";
-import type { MetaFunction } from "@remix-run/cloudflare";
+import { Link, useLoaderData } from "@remix-run/react";
+import { redirect } from "@remix-run/cloudflare";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 
 export const meta: MetaFunction = () => [
   { title: "Download Jot - Desktop, Mobile & Web" },
@@ -32,25 +32,32 @@ interface ReleaseInfo {
   htmlUrl: string;
 }
 
-function detectPlatform(): Platform {
-  if (typeof navigator === "undefined") return "unknown";
-  const ua = navigator.userAgent.toLowerCase();
-  const platform = (navigator.platform || "").toLowerCase();
-
-  if (/iphone|ipad|ipod/.test(ua)) return "ios";
-  if (/android/.test(ua)) return "android";
-  if (/mac/.test(platform) || /macintosh/.test(ua)) {
-    // Check for Apple Silicon — not 100% reliable but good enough
-    // Chrome/Safari on Apple Silicon report "MacIntel" but we can check GL renderer
+function detectPlatformFromUA(ua: string): Platform {
+  const lower = ua.toLowerCase();
+  if (/iphone|ipad|ipod/.test(lower)) return "ios";
+  if (/android/.test(lower)) return "android";
+  if (/macintosh|mac os x/.test(lower)) {
     return "mac-arm"; // Default to ARM since most Macs sold since 2020 are ARM
   }
-  if (/win/.test(platform)) return "windows";
-  if (/linux/.test(platform)) return "linux";
+  if (/windows/.test(lower)) return "windows";
+  if (/linux/.test(lower)) return "linux";
   return "unknown";
 }
 
 function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+interface GitHubRelease {
+  tag_name: string;
+  draft: boolean;
+  prerelease: boolean;
+  assets: Array<{
+    name: string;
+    browser_download_url: string;
+    size: number;
+  }>;
+  html_url: string;
 }
 
 function getAssetForPlatform(
@@ -72,59 +79,76 @@ function getAssetForPlatform(
       return assets.find((a) => a.name.endsWith(".deb"));
     case "linux-appimage":
       return assets.find((a) => a.name.endsWith(".AppImage"));
+    case "linux":
+      return (
+        assets.find((a) => a.name.endsWith(".AppImage")) ||
+        assets.find((a) => a.name.endsWith(".deb"))
+      );
     default:
       return undefined;
   }
 }
 
+async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
+  try {
+    const res = await fetch(
+      "https://api.github.com/repos/deca-inc/jot/releases?per_page=10",
+      { headers: { Accept: "application/vnd.github.v3+json" } },
+    );
+    if (!res.ok) return null;
+    const releases = (await res.json()) as GitHubRelease[];
+    const desktop = releases.find(
+      (r) => r.tag_name.startsWith("desktop-v") && !r.draft && !r.prerelease,
+    );
+    if (!desktop) return null;
+    return {
+      version: desktop.tag_name.replace("desktop-v", ""),
+      assets: desktop.assets
+        .filter((a) => !a.name.endsWith(".sig") && !a.name.endsWith(".tar.gz"))
+        .map((a) => ({
+          name: a.name,
+          url: a.browser_download_url,
+          size: a.size,
+        })),
+      htmlUrl: desktop.html_url,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const ua = request.headers.get("User-Agent") || "";
+  const platform = detectPlatformFromUA(ua);
+
+  // For mobile platforms, redirect to their stores
+  if (platform === "ios") {
+    return redirect(
+      "https://apps.apple.com/us/app/jot-offline-notes-ai/id6755345776",
+    );
+  }
+  if (platform === "android") {
+    return redirect(
+      "https://play.google.com/store/apps/details?id=com.dotdotdot.jot",
+    );
+  }
+
+  const release = await fetchLatestRelease();
+
+  // For desktop platforms with a matching asset, redirect to the download URL
+  if (release && platform !== "unknown") {
+    const asset = getAssetForPlatform(release.assets, platform);
+    if (asset) {
+      return redirect(asset.url);
+    }
+  }
+
+  // Fallback: show the full download page
+  return { release, platform };
+}
+
 export default function Download() {
-  const [platform, setPlatform] = useState<Platform>("unknown");
-  const [release, setRelease] = useState<ReleaseInfo | null>(null);
-
-  useEffect(() => {
-    setPlatform(detectPlatform());
-
-    fetch("https://api.github.com/repos/deca-inc/jot/releases?per_page=10", {
-      headers: { Accept: "application/vnd.github.v3+json" },
-    })
-      .then(
-        (r) =>
-          r.json() as Promise<
-            Array<{
-              tag_name: string;
-              draft: boolean;
-              prerelease: boolean;
-              assets: Array<{
-                name: string;
-                browser_download_url: string;
-                size: number;
-              }>;
-              html_url: string;
-            }>
-          >,
-      )
-      .then((releases) => {
-        const desktop = releases.find(
-          (r) =>
-            r.tag_name.startsWith("desktop-v") && !r.draft && !r.prerelease,
-        );
-        if (!desktop) return;
-        setRelease({
-          version: desktop.tag_name.replace("desktop-v", ""),
-          assets: desktop.assets
-            .filter(
-              (a) => !a.name.endsWith(".sig") && !a.name.endsWith(".tar.gz"),
-            )
-            .map((a) => ({
-              name: a.name,
-              url: a.browser_download_url,
-              size: a.size,
-            })),
-          htmlUrl: desktop.html_url,
-        });
-      })
-      .catch(() => {});
-  }, []);
+  const { release, platform } = useLoaderData<typeof loader>();
 
   const primaryAsset = release
     ? getAssetForPlatform(release.assets, platform)
