@@ -336,10 +336,27 @@ export function useUpdateEntry() {
       // Sync widgets if this is a countdown (do this regardless of skipCacheUpdate)
       syncWidgetsIfCountdown(entry, entryRepository);
 
-      // Skip cache update during active editing to avoid re-renders.
-      // List caches will be updated when the user navigates away
-      // (skipCacheUpdate=false), so the sidebar shows fresh data at that point.
       if (variables.skipCacheUpdate) {
+        // During active editing, only update the title/updatedAt in the list
+        // cache so the sidebar stays current. Don't touch the detail cache
+        // (that would disrupt the editor).
+        queryClient.setQueriesData<InfiniteEntryData | undefined>(
+          { queryKey: entryKeys.lists() },
+          (oldData) => {
+            if (!oldData?.pages) return oldData;
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page) => ({
+                ...page,
+                entries: page.entries.map((e: Entry) =>
+                  e.id === entry.id
+                    ? { ...e, title: entry.title, updatedAt: entry.updatedAt }
+                    : e,
+                ),
+              })),
+            };
+          },
+        );
         return;
       }
 

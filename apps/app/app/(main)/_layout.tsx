@@ -433,7 +433,12 @@ function MainLayout() {
 
   // Navigation helpers
   const navigateToEntry = useCallback(
-    (entryId: number, entryType?: "journal" | "ai_chat" | "countdown") => {
+    async (
+      entryId: number,
+      entryType?: "journal" | "ai_chat" | "countdown",
+    ) => {
+      // Flush any pending saves before navigating away from the current entry
+      await requestSave.emit();
       if (entryType === "countdown") {
         router.push(`/(main)/entry/${entryId}`);
       } else {
