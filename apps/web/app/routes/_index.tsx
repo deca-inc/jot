@@ -212,18 +212,66 @@ export default function Index() {
               </a>
             </div>
 
-            {/* GitHub Link */}
-            <a
-              href="https://github.com/deca-inc/jot"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-6 inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-white"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-              </svg>
-              View source on GitHub
-            </a>
+            {/* Secondary links */}
+            <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
+              <a
+                href="https://app.jot-ai.app"
+                className="inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-white"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418"
+                  />
+                </svg>
+                Try in your browser
+              </a>
+              <span className="hidden text-gray-600 sm:inline">·</span>
+              <a
+                href="https://github.com/deca-inc/jot/releases/latest"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-white"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z"
+                  />
+                </svg>
+                Desktop app
+              </a>
+              <span className="hidden text-gray-600 sm:inline">·</span>
+              <a
+                href="https://github.com/deca-inc/jot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-white"
+              >
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                </svg>
+                GitHub
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -303,50 +351,143 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Final CTA */}
+      {/* Final CTA — All Platforms */}
       <section className="px-4 py-16">
-        <div className="mx-auto max-w-2xl text-center">
+        <div className="mx-auto max-w-3xl text-center">
           <h2 className="mb-4 text-2xl font-bold text-white md:text-3xl">
-            Start writing freely today
+            Available everywhere
           </h2>
-          <p className="mb-8 text-gray-400">
-            Available on iOS and Android. No account required.
+          <p className="mb-10 text-gray-400">
+            No account required. Pick your platform and start writing.
           </p>
-          <div className="flex flex-col justify-center gap-4 sm:flex-row">
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Web App */}
+            <a
+              href="https://app.jot-ai.app"
+              className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-5 py-4 transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
+            >
+              <svg
+                className="h-6 w-6 shrink-0 text-gray-400 transition-colors group-hover:text-violet-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418"
+                />
+              </svg>
+              <div className="text-left">
+                <div className="text-sm font-semibold text-white">Web App</div>
+                <div className="text-xs text-gray-500">Use in your browser</div>
+              </div>
+            </a>
+
+            {/* iOS */}
             <a
               href="https://apps.apple.com/us/app/jot-offline-notes-ai/id6755345776"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-gray-900 transition-all duration-300 hover:bg-gray-100"
+              className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-5 py-4 transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
             >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+              <svg
+                className="h-6 w-6 shrink-0 text-gray-400 transition-colors group-hover:text-violet-400"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
                 <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
               </svg>
-              Download for iOS
+              <div className="text-left">
+                <div className="text-sm font-semibold text-white">iOS</div>
+                <div className="text-xs text-gray-500">App Store</div>
+              </div>
             </a>
+
+            {/* Android */}
             <a
               href="https://play.google.com/store/apps/details?id=com.dotdotdot.jot"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 px-6 py-3 font-semibold text-white transition-all duration-300 hover:bg-white/5"
+              className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-5 py-4 transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
             >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+              <svg
+                className="h-6 w-6 shrink-0 text-gray-400 transition-colors group-hover:text-violet-400"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
                 <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.198l2.807 1.626a1 1 0 0 1 0 1.73l-2.808 1.626L15.206 12l2.492-2.491zM5.864 2.658L16.8 8.99l-2.302 2.302-8.634-8.634z" />
               </svg>
-              Download for Android
+              <div className="text-left">
+                <div className="text-sm font-semibold text-white">Android</div>
+                <div className="text-xs text-gray-500">Google Play</div>
+              </div>
+            </a>
+
+            {/* macOS */}
+            <a
+              href="https://github.com/deca-inc/jot/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-5 py-4 transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
+            >
+              <svg
+                className="h-6 w-6 shrink-0 text-gray-400 transition-colors group-hover:text-violet-400"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+              </svg>
+              <div className="text-left">
+                <div className="text-sm font-semibold text-white">macOS</div>
+                <div className="text-xs text-gray-500">
+                  Apple Silicon & Intel
+                </div>
+              </div>
+            </a>
+
+            {/* Windows */}
+            <a
+              href="https://github.com/deca-inc/jot/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-5 py-4 transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
+            >
+              <svg
+                className="h-6 w-6 shrink-0 text-gray-400 transition-colors group-hover:text-violet-400"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
+              </svg>
+              <div className="text-left">
+                <div className="text-sm font-semibold text-white">Windows</div>
+                <div className="text-xs text-gray-500">Windows 10+</div>
+              </div>
+            </a>
+
+            {/* Linux */}
+            <a
+              href="https://github.com/deca-inc/jot/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-5 py-4 transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
+            >
+              <svg
+                className="h-6 w-6 shrink-0 text-gray-400 transition-colors group-hover:text-violet-400"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 0 0-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.04 1.445.152 2.201.347 1.186.308 2.396.6 3.27-.04.274-.2.394-.48.423-.793.096-.904-.512-1.667-.992-2.197-.18-.2-.332-.39-.422-.602-.117-.3-.07-.668.112-.962.013-.012.09-.09.133-.146.601-.657.99-1.393.862-2.135-.07-.415-.353-.696-.648-.876l-.049-.03c.037-.178.064-.362.076-.553.086-1.16-.411-1.986-.747-2.585-.34-.6-.6-1.047-.519-1.727.074-.676.27-1.109.51-1.397.242-.287.33-.467.33-.696 0-.138-.05-.258-.103-.374-.053-.117-.055-.233-.055-.35 0-.06.003-.12.013-.18.06-.392.04-.838-.105-1.344-.143-.5-.396-.921-.678-1.162-.274-.242-.567-.302-.876-.317z" />
+              </svg>
+              <div className="text-left">
+                <div className="text-sm font-semibold text-white">Linux</div>
+                <div className="text-xs text-gray-500">.deb & .AppImage</div>
+              </div>
             </a>
           </div>
-          <a
-            href="https://github.com/deca-inc/jot"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-6 inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-white"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-            </svg>
-            View source on GitHub
-          </a>
         </div>
       </section>
 
