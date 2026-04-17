@@ -66,6 +66,18 @@ export function createServer_impl(config: ServerConfig): JotServer {
   // Middleware
   app.use(express.json());
 
+  // CORS — allow requests from Tauri webview and web app origins
+  app.use((_req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (_req.method === "OPTIONS") {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+  });
+
   // API Rate Limiting - 100 requests per minute per IP
   const apiLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
