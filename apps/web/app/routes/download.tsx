@@ -1,5 +1,5 @@
-import { Link, useLoaderData } from "@remix-run/react";
 import { redirect } from "@remix-run/cloudflare";
+import { Link, useLoaderData } from "@remix-run/react";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 
 export const meta: MetaFunction = () => [
