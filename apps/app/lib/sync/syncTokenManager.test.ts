@@ -44,6 +44,7 @@ import {
   initializeAuth,
   clearAuth,
   hasAuthTokens,
+  reconnect,
 } from "./syncTokenManager";
 
 describe("syncTokenManager", () => {
@@ -85,7 +86,7 @@ describe("syncTokenManager", () => {
       expect(authCallback).not.toHaveBeenCalledWith(false, expect.any(String));
     });
 
-    it("should clear tokens when server returns INVALID_REFRESH_TOKEN", async () => {
+    it("should NOT clear tokens when server returns INVALID_REFRESH_TOKEN", async () => {
       mockGetRefreshToken.mockResolvedValue("expired-refresh-token");
       mockGetAccessToken.mockReturnValue(null);
       mockIsAccessTokenExpired.mockReturnValue(true);
@@ -98,16 +99,16 @@ describe("syncTokenManager", () => {
       const token = await getValidAccessToken();
 
       expect(token).toBeNull();
-      // Tokens SHOULD be cleared for real auth errors
-      expect(mockClearAllTokens).toHaveBeenCalled();
-      // Callback should fire with session expired message
+      // Tokens should NOT be auto-cleared — only explicit logout clears tokens
+      expect(mockClearAllTokens).not.toHaveBeenCalled();
+      // Callback should still fire with error so UI can show reconnect option
       expect(authCallback).toHaveBeenCalledWith(
         false,
         "Session expired. Please log in again.",
       );
     });
 
-    it("should clear tokens when server returns INVALID_ACCESS_TOKEN", async () => {
+    it("should NOT clear tokens when server returns INVALID_ACCESS_TOKEN", async () => {
       mockGetRefreshToken.mockResolvedValue("some-refresh-token");
       mockGetAccessToken.mockReturnValue(null);
       mockIsAccessTokenExpired.mockReturnValue(true);
@@ -119,7 +120,7 @@ describe("syncTokenManager", () => {
       const token = await getValidAccessToken();
 
       expect(token).toBeNull();
-      expect(mockClearAllTokens).toHaveBeenCalled();
+      expect(mockClearAllTokens).not.toHaveBeenCalled();
       expect(authCallback).toHaveBeenCalledWith(
         false,
         "Session expired. Please log in again.",
@@ -166,7 +167,7 @@ describe("syncTokenManager", () => {
       expect(mockClearAllTokens).not.toHaveBeenCalled();
     });
 
-    it("should return false when server rejects the refresh token", async () => {
+    it("should return true when server rejects token (tokens preserved for reconnect)", async () => {
       mockGetRefreshToken.mockResolvedValue("expired-refresh-token");
 
       // Server explicitly rejects
@@ -176,7 +177,9 @@ describe("syncTokenManager", () => {
 
       const result = await initializeAuth();
 
-      expect(result).toBe(false);
+      // Still true — we have tokens, user can try reconnecting
+      expect(result).toBe(true);
+      expect(mockClearAllTokens).not.toHaveBeenCalled();
     });
 
     it("should return false when no refresh token exists", async () => {
@@ -185,6 +188,45 @@ describe("syncTokenManager", () => {
       const result = await initializeAuth();
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe("reconnect", () => {
+    it("should attempt token refresh and return true on success", async () => {
+      mockGetRefreshToken.mockResolvedValue("valid-refresh-token");
+      mockRefreshAccessToken.mockResolvedValue({
+        accessToken: "new-access-token",
+      });
+
+      const result = await reconnect();
+
+      expect(result).toBe(true);
+      expect(mockRefreshAccessToken).toHaveBeenCalled();
+      expect(authCallback).toHaveBeenCalledWith(true);
+    });
+
+    it("should return false when server is unreachable", async () => {
+      mockGetRefreshToken.mockResolvedValue("valid-refresh-token");
+      mockRefreshAccessToken.mockRejectedValue(
+        new TypeError("Network request failed"),
+      );
+
+      const result = await reconnect();
+
+      expect(result).toBe(false);
+      expect(mockClearAllTokens).not.toHaveBeenCalled();
+    });
+
+    it("should return false when server rejects token but not clear tokens", async () => {
+      mockGetRefreshToken.mockResolvedValue("expired-refresh-token");
+      mockRefreshAccessToken.mockRejectedValue(
+        new SyncAuthError("Token expired", "INVALID_REFRESH_TOKEN"),
+      );
+
+      const result = await reconnect();
+
+      expect(result).toBe(false);
+      expect(mockClearAllTokens).not.toHaveBeenCalled();
     });
   });
 

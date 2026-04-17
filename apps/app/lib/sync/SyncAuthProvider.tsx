@@ -31,6 +31,7 @@ import {
   clearAuth,
   hasAuthTokens,
   getRefreshToken,
+  reconnect as tokenManagerReconnect,
 } from "./syncTokenManager";
 
 export type SyncAuthStatus =
@@ -69,6 +70,11 @@ export interface SyncAuthContextValue {
    * Clear stale state after successful re-login
    */
   clearStaleState: () => void;
+  /**
+   * Manually attempt to reconnect using existing credentials.
+   * Returns true if reconnection succeeded.
+   */
+  reconnect: () => Promise<boolean>;
 }
 
 const SyncAuthContext = createContext<SyncAuthContextValue | null>(null);
@@ -138,13 +144,16 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
         // Try to restore authentication
         const hasAuth = await hasAuthTokens();
         if (hasAuth) {
-          const success = await initializeAuth();
+          // initializeAuth attempts a refresh but always returns true
+          // when tokens exist (tokens are never auto-cleared).
+          // If refresh fails, the auth state callback handles error reporting.
+          await initializeAuth();
           if (!mounted) return;
 
           setState({
-            status: success ? "authenticated" : "error",
+            status: "authenticated",
             settings,
-            error: success ? null : "Session expired. Please log in again.",
+            error: null,
             isLoading: false,
             isUEKStale: false,
           });
@@ -388,6 +397,30 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
     [],
   );
 
+  // Manually reconnect using existing credentials
+  const reconnect = useCallback(async (): Promise<boolean> => {
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+    const success = await tokenManagerReconnect();
+
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        status: "authenticated",
+        error: null,
+        isLoading: false,
+      }));
+    } else {
+      setState((prev) => ({
+        ...prev,
+        isLoading: false,
+        // Error message is set by the token manager's auth state callback
+      }));
+    }
+
+    return success;
+  }, []);
+
   // Clear stale state after successful re-login
   const clearStaleState = useCallback(() => {
     setState((prev) => ({
@@ -407,6 +440,7 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
       refreshSettings,
       checkUEKVersion,
       clearStaleState,
+      reconnect,
     }),
     [
       state,
@@ -417,6 +451,7 @@ export function SyncAuthProvider({ children }: SyncAuthProviderProps) {
       refreshSettings,
       checkUEKVersion,
       clearStaleState,
+      reconnect,
     ],
   );
 

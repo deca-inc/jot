@@ -1010,6 +1010,17 @@ export class SyncManager {
   }
 
   /**
+   * Reconnect to the server with fresh tokens.
+   * Resets auth failure tracking and rebuilds all WebSocket connections.
+   */
+  async reconnect(): Promise<void> {
+    if (!this.client) return;
+    this.client.resetAuthFailures();
+    await this.client.reconnectAll();
+    this.updateStatus("idle");
+  }
+
+  /**
    * Shutdown sync manager
    */
   shutdown(): void {

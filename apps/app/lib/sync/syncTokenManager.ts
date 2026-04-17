@@ -95,8 +95,8 @@ async function performTokenRefresh(): Promise<void> {
     stateCallback?.(true);
   } catch (error) {
     if (error instanceof SyncAuthError) {
-      // Server explicitly rejected our token — clear everything
-      await clearAllTokens();
+      // Server rejected our token — report error but keep tokens.
+      // User can manually reconnect or re-login.
       cancelTokenRefresh();
 
       if (error.isSessionExpired()) {
@@ -175,18 +175,29 @@ export async function initializeAuth(): Promise<boolean> {
     return false;
   }
 
-  // Try to get a fresh access token
+  // Try to get a fresh access token. Whether it succeeds or fails,
+  // we still have tokens — return true so the app treats us as authenticated.
+  // If the server is offline or rejects, the user can manually reconnect.
+  try {
+    await performTokenRefresh();
+  } catch {
+    // Token refresh failed (server offline or rejected) — that's ok,
+    // performTokenRefresh already scheduled a retry or reported the error.
+  }
+  return true;
+}
+
+/**
+ * Manually attempt to reconnect using existing tokens.
+ * Returns true if reconnection succeeded, false otherwise.
+ * Never clears tokens — the user can always try again.
+ */
+export async function reconnect(): Promise<boolean> {
   try {
     await performTokenRefresh();
     return true;
-  } catch (error) {
-    // If the server explicitly rejected our token, we're not authenticated
-    if (error instanceof SyncAuthError) {
-      return false;
-    }
-    // Network error — server is just offline. We still have valid tokens,
-    // so treat as authenticated. Sync will reconnect when server is back.
-    return true;
+  } catch {
+    return false;
   }
 }
 

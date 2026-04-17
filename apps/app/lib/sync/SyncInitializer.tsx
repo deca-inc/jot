@@ -185,20 +185,20 @@ export function SyncInitializer() {
 
   // Handle app resume - sync when app comes back to foreground
   useEffect(() => {
-    const handleAppStateChange = (nextState: AppStateStatus) => {
+    const handleAppStateChange = async (nextState: AppStateStatus) => {
       if (nextState === "active" && globalSyncManager) {
         console.log("[SyncInitializer] App resumed, checking for updates...");
-        globalSyncManager
-          .performInitialSync()
-          .then(() => {
-            console.log("[SyncInitializer] Resume sync complete");
-            updatePendingCount();
-            // Invalidate queries to refresh UI with any new data
-            queryClient.invalidateQueries({ queryKey: ["entries"] });
-          })
-          .catch((error) => {
-            console.warn("[SyncInitializer] Resume sync failed:", error);
-          });
+        try {
+          // Reconnect first in case the sync client is in a broken state
+          // (e.g., server was offline and auth failures accumulated)
+          await globalSyncManager.reconnect();
+          await globalSyncManager.performInitialSync();
+          console.log("[SyncInitializer] Resume sync complete");
+          updatePendingCount();
+          queryClient.invalidateQueries({ queryKey: ["entries"] });
+        } catch (error) {
+          console.warn("[SyncInitializer] Resume sync failed:", error);
+        }
       }
     };
 
