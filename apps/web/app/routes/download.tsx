@@ -93,7 +93,11 @@ async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
   try {
     const res = await fetch(
       "https://api.github.com/repos/deca-inc/jot/releases?per_page=10",
-      { headers: { Accept: "application/vnd.github.v3+json" } },
+      {
+        headers: { Accept: "application/vnd.github.v3+json" },
+        // Cache at Cloudflare edge for 5 min to avoid GitHub API rate limits
+        cf: { cacheTtl: 300, cacheEverything: true },
+      } as RequestInit,
     );
     if (!res.ok) return null;
     const releases = (await res.json()) as GitHubRelease[];
