@@ -95,20 +95,14 @@ async function fetchLatestRelease(
   try {
     const headers: Record<string, string> = {
       Accept: "application/vnd.github.v3+json",
+      "User-Agent": "jot-web/1.0",
     };
     if (githubToken) {
       headers.Authorization = `token ${githubToken}`;
     }
     const res = await fetch(
       "https://api.github.com/repos/deca-inc/jot/releases?per_page=10",
-      {
-        headers,
-        // Cache successful responses at Cloudflare edge for 10 min; don't cache errors
-        cf: {
-          cacheTtlByStatus: { "200-299": 600, "300-599": 0 },
-          cacheEverything: true,
-        },
-      } as RequestInit,
+      { headers },
     );
     if (!res.ok) return null;
     const releases = (await res.json()) as GitHubRelease[];
