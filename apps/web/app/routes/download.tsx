@@ -1,5 +1,6 @@
 import { redirect } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
+import { useEffect } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 
 export const meta: MetaFunction = () => [
@@ -147,20 +148,29 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   const release = await fetchLatestRelease(githubToken);
 
-  // For desktop platforms with a matching asset, redirect to the download URL
+  // Find the auto-download URL for the detected platform
+  let autoDownloadUrl: string | null = null;
   if (release && platform !== "unknown") {
     const asset = getAssetForPlatform(release.assets, platform);
     if (asset) {
-      return redirect(asset.url);
+      autoDownloadUrl = asset.url;
     }
   }
 
-  // Fallback: show the full download page
-  return { release, platform };
+  return { release, platform, autoDownloadUrl };
 }
 
 export default function Download() {
-  const { release, platform } = useLoaderData<typeof loader>();
+  const { release, platform, autoDownloadUrl } = useLoaderData<typeof loader>();
+
+  useEffect(() => {
+    if (autoDownloadUrl) {
+      const timer = setTimeout(() => {
+        window.location.href = autoDownloadUrl;
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoDownloadUrl]);
 
   const primaryAsset = release
     ? getAssetForPlatform(release.assets, platform)
@@ -232,6 +242,22 @@ export default function Download() {
           <p className="mb-10 text-gray-400">
             Available on every platform. No account required.
           </p>
+
+          {/* Auto-download banner */}
+          {autoDownloadUrl && primaryAsset && (
+            <div className="mb-10 rounded-xl border border-violet-500/20 bg-violet-500/5 px-6 py-4">
+              <p className="text-sm text-violet-300">
+                Your download should start automatically.{" "}
+                <a
+                  href={autoDownloadUrl}
+                  className="underline transition-colors hover:text-white"
+                >
+                  Click here
+                </a>{" "}
+                if it doesn&apos;t.
+              </p>
+            </div>
+          )}
 
           {/* Primary CTA — auto-detected platform */}
           {primaryAsset && (
@@ -313,15 +339,11 @@ export default function Download() {
                 const asset = release
                   ? getAssetForPlatform(release.assets, dl.id)
                   : undefined;
+                if (!asset) return null;
                 return (
                   <a
                     key={dl.id}
-                    href={
-                      asset?.url ||
-                      "https://github.com/deca-inc/jot/releases?q=desktop"
-                    }
-                    target={asset ? undefined : "_blank"}
-                    rel={asset ? undefined : "noopener noreferrer"}
+                    href={asset.url}
                     className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-5 py-3.5 transition-all hover:border-white/10 hover:bg-white/[0.04]"
                   >
                     <dl.icon className="h-5 w-5 shrink-0 text-gray-500 transition-colors group-hover:text-gray-300" />
@@ -333,11 +355,9 @@ export default function Download() {
                         {dl.subtitle}
                       </span>
                     </div>
-                    {asset && (
-                      <span className="text-xs text-gray-600">
-                        {formatSize(asset.size)}
-                      </span>
-                    )}
+                    <span className="text-xs text-gray-600">
+                      {formatSize(asset.size)}
+                    </span>
                   </a>
                 );
               })}
