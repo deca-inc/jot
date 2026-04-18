@@ -103,8 +103,11 @@ async function fetchLatestRelease(
       "https://api.github.com/repos/deca-inc/jot/releases?per_page=10",
       {
         headers,
-        // Cache at Cloudflare edge for 5 min to avoid GitHub API rate limits
-        cf: { cacheTtl: 600, cacheEverything: true },
+        // Cache successful responses at Cloudflare edge for 10 min; don't cache errors
+        cf: {
+          cacheTtlByStatus: { "200-299": 600, "300-599": 0 },
+          cacheEverything: true,
+        },
       } as RequestInit,
     );
     if (!res.ok) return null;
