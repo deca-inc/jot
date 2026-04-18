@@ -104,7 +104,7 @@ async function fetchLatestRelease(
       {
         headers,
         // Cache at Cloudflare edge for 5 min to avoid GitHub API rate limits
-        cf: { cacheTtl: 300, cacheEverything: true },
+        cf: { cacheTtl: 600, cacheEverything: true },
       } as RequestInit,
     );
     if (!res.ok) return null;
