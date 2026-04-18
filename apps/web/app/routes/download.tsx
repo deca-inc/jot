@@ -89,12 +89,20 @@ function getAssetForPlatform(
   }
 }
 
-async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
+async function fetchLatestRelease(
+  githubToken?: string,
+): Promise<ReleaseInfo | null> {
   try {
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github.v3+json",
+    };
+    if (githubToken) {
+      headers.Authorization = `token ${githubToken}`;
+    }
     const res = await fetch(
       "https://api.github.com/repos/deca-inc/jot/releases?per_page=10",
       {
-        headers: { Accept: "application/vnd.github.v3+json" },
+        headers,
         // Cache at Cloudflare edge for 5 min to avoid GitHub API rate limits
         cf: { cacheTtl: 300, cacheEverything: true },
       } as RequestInit,
@@ -121,9 +129,12 @@ async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
   }
 }
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
   const ua = request.headers.get("User-Agent") || "";
   const platform = detectPlatformFromUA(ua);
+  const githubToken = (
+    context as { cloudflare: { env: { GITHUB_TOKEN?: string } } }
+  ).cloudflare.env.GITHUB_TOKEN;
 
   // For mobile platforms, redirect to their stores
   if (platform === "ios") {
@@ -137,7 +148,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     );
   }
 
-  const release = await fetchLatestRelease();
+  const release = await fetchLatestRelease(githubToken);
 
   // For desktop platforms with a matching asset, redirect to the download URL
   if (release && platform !== "unknown") {
