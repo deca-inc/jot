@@ -1,0 +1,15 @@
+diff --git a/lighttpd1.4/src/CMakeLists.txt b/lighttpd1.4/src/CMakeLists.txt
+index c6775976bbc18d6c810de9f8bd228744bf805655..0afed5f988d20029225109f551440b89661c3f76 100644
+--- a/lighttpd1.4/src/CMakeLists.txt
++++ b/lighttpd1.4/src/CMakeLists.txt
+@@ -254,7 +254,9 @@ check_function_exists(lstat HAVE_LSTAT)
+ check_function_exists(madvise HAVE_MADVISE)
+ check_function_exists(mempcpy HAVE_MEMPCPY)
+ check_function_exists(mkostemp HAVE_MKOSTEMP)
+-check_symbol_exists(pipe2 "unistd.h" HAVE_PIPE2)
++if(NOT APPLE)
++  check_symbol_exists(pipe2 "unistd.h" HAVE_PIPE2)
++endif()
+ check_function_exists(pread HAVE_PREAD)
+ check_function_exists(pwrite HAVE_PWRITE)
+ check_function_exists(sendfile HAVE_SENDFILE)

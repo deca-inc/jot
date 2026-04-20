@@ -37,7 +37,7 @@
   "dependencies": {
     "@bacons/apple-targets": "^3.0.6",
     "@dr.pogodin/react-native-fs": "^2.38.2",
-    "@dr.pogodin/react-native-static-server": "^0.25.4",
+    "@dr.pogodin/react-native-static-server": "^0.26.2",
     "@expo/metro-runtime": "^6.1.2",
     "@hocuspocus/provider": "^3.4.4",
     "@mlc-ai/web-llm": "^0.2.82",

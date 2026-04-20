@@ -1303,7 +1303,9 @@ function MainLayout() {
               size={18}
               color={seasonalTheme.textSecondary}
             />
-            {syncEngine.status === "error" ? (
+            {syncEngine.status === "error" ||
+            (syncEngine.status === "offline" &&
+              syncAuth.state.status === "authenticated") ? (
               <View style={styles.syncErrorBadge}>
                 <Ionicons name="warning" size={10} color="#FFB400" />
               </View>

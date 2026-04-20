@@ -32,7 +32,9 @@
       "@remix-run/react>react": "^19.0.0",
       "@remix-run/react>react-dom": "^19.0.0"
     },
-    "patchedDependencies": {}
+    "patchedDependencies": {
+      "@dr.pogodin/react-native-static-server@0.26.2": "patches/@dr.pogodin__react-native-static-server@0.26.2.patch"
+    }
   },
   "dependencies": {
     "react-native-sherpa-onnx": "0.4.2"

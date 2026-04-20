@@ -145,7 +145,7 @@ export function SyncSettingsCard() {
             subText:
               pendingCount > 0
                 ? `${pendingCount} entries will sync when online`
-                : undefined,
+                : "Server unavailable or session expired. Will retry automatically.",
           };
         }
         if (syncStatus === "error") {

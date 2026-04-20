@@ -193,21 +193,30 @@ export class SyncManager {
    */
   async performInitialSync(): Promise<void> {
     if (!this.client || !this.serverUrl) {
-      throw new Error("Sync not initialized");
+      console.info("[SyncManager] performInitialSync skipped: not initialized");
+      this.updateStatus("offline");
+      return;
     }
 
     // Check if sync is disabled due to auth failures
     if (this.client.isSyncDisabled()) {
+      console.info(
+        "[SyncManager] performInitialSync skipped: sync disabled (auth failures)",
+      );
       this.updateStatus("error");
-      throw new Error("Sync disabled due to authentication failures");
+      return;
     }
 
     this.updateStatus("syncing");
 
     try {
       // Fetch server manifest (includes UEK version)
-      const { documents: serverManifest, uekVersion } =
-        await this.fetchServerManifest();
+      const manifestResult = await this.fetchServerManifest();
+      if (!manifestResult) {
+        this.updateStatus("offline");
+        return;
+      }
+      const { documents: serverManifest, uekVersion } = manifestResult;
 
       // Check for stale UEK before proceeding with sync
       const stale = await isUEKStale(uekVersion);
@@ -235,7 +244,7 @@ export class SyncManager {
 
       // Determine what needs syncing
       const toPush: Entry[] = []; // Local entries to push to server
-      const toPull: string[] = []; // Server UUIDs to pull (not implemented yet)
+      const toPull: string[] = []; // Server UUIDs to pull
 
       for (const entry of localEntries) {
         if (!entry.uuid) continue;
@@ -248,14 +257,17 @@ export class SyncManager {
         } else if (entry.updatedAt > serverUpdatedAt) {
           // Local is newer → push
           toPush.push(entry);
+        } else if (serverUpdatedAt > entry.updatedAt) {
+          // Server is newer → pull (handles remote deletes, archive, favorite, title changes)
+          toPull.push(entry.uuid);
         }
-        // If server is newer, we'd pull (handled by Yjs observer when connected)
+        // If timestamps are equal, documents are in sync
 
         // Remove from server map (remaining are server-only)
         serverDocs.delete(entry.uuid);
       }
 
-      // Remaining server docs don't exist locally → would need to pull
+      // Remaining server docs don't exist locally → need to pull
       for (const [uuid] of serverDocs) {
         toPull.push(uuid);
       }
@@ -277,7 +289,6 @@ export class SyncManager {
       this.updateStatus("error");
       const err = error instanceof Error ? error : new Error(String(error));
       this.callbacks.onError?.(err);
-      throw error;
     }
   }
 
@@ -288,10 +299,13 @@ export class SyncManager {
   private async fetchServerManifest(): Promise<{
     documents: { uuid: string; updatedAt: number }[];
     uekVersion: number;
-  }> {
+  } | null> {
     const token = await this.getToken();
     if (!token) {
-      throw new Error("Not authenticated");
+      console.info(
+        "[SyncManager] fetchServerManifest skipped: no auth token available",
+      );
+      return null;
     }
 
     // Always fetch the full manifest — it's lightweight (UUIDs + timestamps)
@@ -325,12 +339,14 @@ export class SyncManager {
    */
   private async bulkPushEntries(entries: Entry[]): Promise<void> {
     if (!this.userId) {
-      throw new Error("User ID not set");
+      console.warn("[SyncManager] bulkPushEntries skipped: no userId set");
+      return;
     }
 
     const token = await this.getToken();
     if (!token) {
-      throw new Error("Not authenticated");
+      console.info("[SyncManager] bulkPushEntries skipped: no auth token");
+      return;
     }
 
     const documents: Array<{
@@ -430,12 +446,14 @@ export class SyncManager {
    */
   private async bulkPullEntries(uuids: string[]): Promise<void> {
     if (!this.userId) {
-      throw new Error("User ID not set");
+      console.warn("[SyncManager] bulkPullEntries skipped: no userId set");
+      return;
     }
 
     const token = await this.getToken();
     if (!token) {
-      throw new Error("Not authenticated");
+      console.info("[SyncManager] bulkPullEntries skipped: no auth token");
+      return;
     }
 
     console.info(`[SyncManager] Bulk pulling ${uuids.length} entries via HTTP`);
@@ -470,13 +488,16 @@ export class SyncManager {
         const ydoc = new Y.Doc();
         Y.applyUpdate(ydoc, stateBuffer);
 
-        // Decrypt and create local entry
+        // Decrypt and create/update local entry
         let localEntryId: number | null = null;
         let pulledEntry: Partial<Entry> | null = null;
 
         if (isYjsEncrypted(ydoc)) {
           const encryptedData = yjsToEncryptedEntry(ydoc);
-          if (encryptedData && !encryptedData.deleted) {
+          if (encryptedData && encryptedData.deleted) {
+            // Entry was deleted remotely — remove local copy if it exists
+            await this.deleteLocalEntryByUuid(doc.uuid);
+          } else if (encryptedData) {
             const decrypted = await decryptEntry(
               encryptedData.encrypted,
               this.userId,
@@ -493,11 +514,16 @@ export class SyncManager {
           }
         } else {
           // Legacy unencrypted document
-          pulledEntry = yjsToEntry(ydoc, {});
-          localEntryId = await this.createOrUpdateLocalEntry(
-            doc.uuid,
-            pulledEntry,
-          );
+          const remoteEntry = yjsToEntry(ydoc, {});
+          if (remoteEntry.deleted) {
+            await this.deleteLocalEntryByUuid(doc.uuid);
+          } else {
+            pulledEntry = remoteEntry;
+            localEntryId = await this.createOrUpdateLocalEntry(
+              doc.uuid,
+              pulledEntry,
+            );
+          }
         }
 
         // Download attachments for the pulled entry (non-blocking)
@@ -649,6 +675,7 @@ export class SyncManager {
     try {
       // Connect to the document and wait for sync
       const ydoc = await this.client.connectDocument(uuid);
+      if (!ydoc) return;
       await this.client.waitForSync(uuid);
 
       // Get local entry for comparison
@@ -707,11 +734,13 @@ export class SyncManager {
    */
   async syncEntry(entry: Entry): Promise<void> {
     if (!this.client) {
-      throw new Error("Sync not initialized");
+      console.info("[SyncManager] syncEntry skipped: not initialized");
+      return;
     }
 
     if (!this.userId) {
-      throw new Error("User ID not set - call setUserId() before syncing");
+      console.warn("[SyncManager] syncEntry skipped: no userId set");
+      return;
     }
 
     // Ensure entry has UUID
@@ -722,6 +751,7 @@ export class SyncManager {
 
     // Connect to the document and wait for sync
     const ydoc = await this.client.connectDocument(uuid);
+    if (!ydoc) return;
     await this.client.waitForSync(uuid);
 
     // Check if remote has changes
@@ -891,19 +921,46 @@ export class SyncManager {
   }
 
   /**
+   * Delete a local entry by UUID (used during bulk pull when remote is deleted)
+   */
+  private async deleteLocalEntryByUuid(uuid: string): Promise<void> {
+    try {
+      const row = await this.db.getFirstAsync<{ id: number }>(
+        "SELECT id FROM entries WHERE uuid = ?",
+        [uuid],
+      );
+      if (row) {
+        await this.db.runAsync("DELETE FROM entries WHERE id = ?", [row.id]);
+        this.callbacks.onEntryDeleted?.(row.id, uuid);
+        console.info(
+          `[SyncManager] Deleted local entry ${row.id} (uuid=${uuid.slice(0, 8)}...) - marked deleted on server`,
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[SyncManager] Failed to delete local entry by uuid ${uuid}:`,
+        error,
+      );
+    }
+  }
+
+  /**
    * Pull a server-only entry and create it locally (with E2EE)
    */
   private async pullServerEntry(uuid: string): Promise<void> {
     if (!this.client) {
-      throw new Error("Sync not initialized");
+      console.info("[SyncManager] pullServerEntry skipped: not initialized");
+      return;
     }
 
     if (!this.userId) {
-      throw new Error("User ID not set");
+      console.warn("[SyncManager] pullServerEntry skipped: no userId set");
+      return;
     }
 
     // Connect to the document and wait for sync
     const ydoc = await this.client.connectDocument(uuid);
+    if (!ydoc) return;
     const synced = await this.client.waitForSync(uuid);
     if (!synced) {
       console.info("[SyncManager] pullServerEntry: sync timeout");
@@ -1173,7 +1230,10 @@ export class SyncManager {
    */
   private async processSyncQueueItem(item: QueuedSync): Promise<void> {
     if (!this.client) {
-      throw new Error("Sync client not initialized");
+      console.info(
+        "[SyncManager] processSyncQueueItem skipped: client not initialized",
+      );
+      return;
     }
 
     switch (item.operation) {
@@ -1187,6 +1247,7 @@ export class SyncManager {
           return;
         }
         const ydoc = await this.client.connectDocument(item.entryUuid);
+        if (!ydoc) return;
         await this.client.waitForSync(item.entryUuid);
         // Use encrypted push
         await this.pushEncryptedEntry(entry, ydoc);
@@ -1224,6 +1285,7 @@ export class SyncManager {
         if (!ydoc) {
           // Document not connected - connect first
           ydoc = await this.client.connectDocument(item.entryUuid);
+          if (!ydoc) return;
           await this.client.waitForSync(item.entryUuid);
         }
 
@@ -1238,11 +1300,9 @@ export class SyncManager {
         let ydoc = this.client.getDocument(item.entryUuid);
         if (!ydoc) {
           // Try to connect and mark as deleted
-          try {
-            ydoc = await this.client.connectDocument(item.entryUuid);
+          ydoc = await this.client.connectDocument(item.entryUuid);
+          if (ydoc) {
             await this.client.waitForSync(item.entryUuid);
-          } catch {
-            // If we can't connect, the document might not exist on server yet - skip
           }
         }
         if (ydoc) {
@@ -1584,13 +1644,15 @@ export class SyncManager {
   }
 
   private handleAuthError(): void {
-    this.updateStatus("error");
     if (this.client?.isSyncDisabled()) {
       console.info(
         "[SyncManager] Auth failures exceeded, sync paused until re-authenticated",
       );
+      this.updateStatus("error");
+    } else {
+      console.info("[SyncManager] Auth unavailable, sync offline");
+      this.updateStatus("offline");
     }
-    this.callbacks.onError?.(new Error("Authentication failed"));
   }
 
   private updateStatus(status: SyncStatus): void {

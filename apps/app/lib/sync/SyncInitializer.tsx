@@ -10,7 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useCallback } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { useDatabase } from "../db/DatabaseProvider";
-import { entryKeys } from "../db/useEntries";
+import { entryKeys } from "../db/entryKeys";
 import { SyncManager, createSyncManager, SyncStatus } from "./syncManager";
 import { useSyncAuth, getValidAccessToken } from "./useSyncAuth";
 

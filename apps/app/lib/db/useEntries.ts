@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { usePostHog, sanitizeProperties } from "../analytics";
 import { deleteAllAttachments } from "../attachments";
+import { getSyncManager } from "../sync/SyncInitializer";
 import { syncCountdownsToWidgets } from "../widgets/widgetDataBridge";
 import {
   useEntryRepository,
@@ -15,6 +16,8 @@ import {
   UpdateEntryInput,
   EntryRepository,
 } from "./entries";
+export { entryKeys } from "./entryKeys";
+import { entryKeys } from "./entryKeys";
 
 // Type for paginated entry results from infinite queries
 interface EntryPage {
@@ -23,49 +26,6 @@ interface EntryPage {
 }
 
 type InfiniteEntryData = InfiniteData<EntryPage, number | undefined>;
-
-/**
- * Query keys for entries
- */
-export const entryKeys = {
-  all: ["entries"] as const,
-  lists: () => [...entryKeys.all, "list"] as const,
-  list: (filters?: {
-    type?: string;
-    isFavorite?: boolean;
-    includeArchived?: boolean;
-    tag?: string;
-    limit?: number;
-    offset?: number;
-    orderBy?: string;
-    order?: string;
-  }) => [...entryKeys.lists(), filters] as const,
-  infinite: (filters?: {
-    type?: string;
-    isFavorite?: boolean;
-    includeArchived?: boolean;
-    tag?: string;
-    limit?: number;
-    orderBy?: string;
-    order?: string;
-  }) => [...entryKeys.lists(), "infinite", filters] as const,
-  searches: () => [...entryKeys.all, "search"] as const,
-  search: (filters?: {
-    query?: string;
-    type?: string;
-    isFavorite?: boolean;
-    isPinned?: boolean;
-    includeArchived?: boolean;
-    archivedOnly?: boolean;
-    dateFrom?: number;
-    dateTo?: number;
-    limit?: number;
-  }) => [...entryKeys.searches(), filters] as const,
-  details: () => [...entryKeys.all, "detail"] as const,
-  detail: (id: number) => [...entryKeys.details(), id] as const,
-  children: (parentId: number) =>
-    [...entryKeys.all, "children", parentId] as const,
-};
 
 /**
  * Helper to sync widget data after countdown changes
@@ -405,6 +365,28 @@ export function useDeleteEntry() {
       const id = typeof input === "number" ? input : input.id;
       const parentId = typeof input === "number" ? null : input.parentId;
 
+      // Capture UUID before deletion (needed for sync)
+      let uuid: string | null = null;
+      try {
+        const entry = await entryRepository.getById(id);
+        uuid = entry?.uuid ?? null;
+      } catch {
+        // Entry may already be gone
+      }
+
+      // Notify sync manager BEFORE deleting from local DB
+      // (onEntryDeleted needs the UUID which is stored on the entry row)
+      if (uuid) {
+        const syncManager = getSyncManager();
+        if (syncManager) {
+          try {
+            await syncManager.onEntryDeleted(id, uuid);
+          } catch (err) {
+            console.warn("[useDeleteEntry] Sync notification failed:", err);
+          }
+        }
+      }
+
       // Delete attachment files before deleting the entry
       // (Database records will cascade delete via foreign key)
       try {
@@ -506,6 +488,16 @@ export function useToggleFavorite() {
           return oldData;
         },
       );
+
+      // Notify sync manager
+      const syncManager = getSyncManager();
+      if (syncManager) {
+        syncManager
+          .onEntryUpdated(entry.id, { isFavorite: entry.isFavorite })
+          .catch((err) =>
+            console.warn("[useToggleFavorite] Sync notification failed:", err),
+          );
+      }
     },
   });
 }
@@ -537,6 +529,16 @@ export function useTogglePinned() {
 
       // Invalidate list queries since sort order changes with pinning
       queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
+
+      // Notify sync manager
+      const syncManager = getSyncManager();
+      if (syncManager) {
+        syncManager
+          .onEntryUpdated(entry.id, { isPinned: entry.isPinned })
+          .catch((err) =>
+            console.warn("[useTogglePinned] Sync notification failed:", err),
+          );
+      }
     },
   });
 }
@@ -589,6 +591,16 @@ export function useArchiveEntry() {
 
       // Also invalidate all entry queries to ensure UI updates
       await queryClient.invalidateQueries({ queryKey: entryKeys.all });
+
+      // Notify sync manager
+      const syncManager = getSyncManager();
+      if (syncManager) {
+        syncManager
+          .onEntryUpdated(entry.id, { archivedAt: entry.archivedAt })
+          .catch((err) =>
+            console.warn("[useArchiveEntry] Sync notification failed:", err),
+          );
+      }
     },
   });
 }
@@ -662,6 +674,16 @@ export function useUnarchiveEntry() {
           return oldData;
         },
       );
+
+      // Notify sync manager
+      const syncManager = getSyncManager();
+      if (syncManager) {
+        syncManager
+          .onEntryUpdated(entry.id, { archivedAt: null })
+          .catch((err) =>
+            console.warn("[useUnarchiveEntry] Sync notification failed:", err),
+          );
+      }
     },
   });
 }

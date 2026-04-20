@@ -72,14 +72,14 @@ export class SyncClient {
   /**
    * Connect to a document and start syncing
    */
-  async connectDocument(docId: string): Promise<Y.Doc> {
+  async connectDocument(docId: string): Promise<Y.Doc | null> {
     // Check if we've had too many failures
     if (this.authFailureCount >= this.maxAuthFailures) {
-      const error = new Error(
-        "Too many authentication failures, sync disabled",
+      console.info(
+        "[SyncClient] connectDocument skipped: too many auth failures",
       );
       this.callbacks.onAuthError?.();
-      throw error;
+      return null;
     }
 
     // Return existing connection if available
@@ -90,9 +90,11 @@ export class SyncClient {
 
     const token = await this.getToken();
     if (!token) {
-      const error = new Error("Not authenticated");
+      console.info(
+        "[SyncClient] connectDocument skipped: no auth token available",
+      );
       this.callbacks.onAuthError?.();
-      throw error;
+      return null;
     }
 
     const ydoc = new Y.Doc();
