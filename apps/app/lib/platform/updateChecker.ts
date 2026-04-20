@@ -195,7 +195,7 @@ class UpdateChecker {
   /** Tauri: check GitHub releases for latest desktop version. */
   private async fetchGitHubRelease(): Promise<UpdateInfo | null> {
     const response = await fetch(
-      `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
+      `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=10`,
       {
         headers: { Accept: "application/vnd.github.v3+json" },
         cache: "no-store",
@@ -203,12 +203,21 @@ class UpdateChecker {
     );
     if (!response.ok) return null;
 
-    const release = (await response.json()) as {
+    const releases = (await response.json()) as Array<{
       tag_name: string;
       body?: string;
       published_at?: string;
       html_url?: string;
-    };
+      draft?: boolean;
+      prerelease?: boolean;
+    }>;
+
+    // Find the latest desktop release (tag starts with "desktop-v")
+    const release = releases.find(
+      (r) => r.tag_name.startsWith("desktop-v") && !r.draft && !r.prerelease,
+    );
+    if (!release) return null;
+
     const version = extractVersion(release.tag_name);
 
     if (!isNewerVersion(version, this.currentVersion)) return null;
@@ -286,6 +295,39 @@ class UpdateChecker {
       }
     } else if (this.state.status === "available" && this.state.info.htmlUrl) {
       window.open(this.state.info.htmlUrl, "_blank");
+    }
+  }
+
+  /**
+   * Dev-only: simulate update states to preview UI without a real release.
+   * Cycles through: available → downloading → ready → idle.
+   */
+  simulateUpdate(): void {
+    const fakeInfo: UpdateInfo = {
+      version: "99.0.0",
+      releaseNotes: "Simulated update for UI testing.",
+      publishedAt: new Date().toISOString(),
+    };
+
+    switch (this.state.status) {
+      case "idle":
+      case "checking":
+      case "error":
+        this.setState({ status: "available", info: fakeInfo });
+        break;
+      case "available":
+        this.setState({
+          status: "downloading",
+          info: this.state.info,
+          progress: 50,
+        });
+        break;
+      case "downloading":
+        this.setState({ status: "ready", info: this.state.info });
+        break;
+      case "ready":
+        this.setState({ status: "idle" });
+        break;
     }
   }
 }

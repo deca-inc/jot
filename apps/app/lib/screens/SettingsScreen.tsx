@@ -25,6 +25,7 @@ import { ModelManagementModal } from "../components/ModelManagementModal";
 import { useModelSettings } from "../db/modelSettings";
 import { useOnboardingSettings } from "../db/onboardingSettings";
 import { useTelemetrySettings } from "../db/telemetrySettings";
+import { useUpdateChecker } from "../hooks/useUpdateChecker";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -56,6 +57,7 @@ export function SettingsScreen({
     null,
   );
   const [showModelModal, setShowModelModal] = useState(false);
+  const { state: updateState, simulateUpdate } = useUpdateChecker();
 
   // Track screen view
   useTrackScreenView("Settings");
@@ -740,6 +742,38 @@ export function SettingsScreen({
                 ) : (
                   "Reset"
                 )}
+              </Button>
+            </View>
+
+            {/* Simulate Update */}
+            <View style={styles.adminItem}>
+              <View style={styles.sectionText}>
+                <Text
+                  variant="body"
+                  style={[
+                    styles.adminItemTitle,
+                    { color: seasonalTheme.textPrimary },
+                  ]}
+                >
+                  Simulate Update
+                </Text>
+                <Text
+                  variant="caption"
+                  style={[
+                    styles.adminItemDescription,
+                    { color: seasonalTheme.textSecondary },
+                  ]}
+                >
+                  Cycle: {updateState.status}
+                </Text>
+              </View>
+              <Button
+                variant="secondary"
+                size="sm"
+                label="Simulate Update"
+                onPress={simulateUpdate}
+              >
+                Next State
               </Button>
             </View>
           </Card>
