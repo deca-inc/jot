@@ -7,7 +7,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
 import { saveAttachment, getAudioAttachmentUrl } from "../attachments";
@@ -30,6 +30,7 @@ import { debounce } from "../utils/debounce";
 import {
   convertBlockToHtml,
   convertEnrichedHtmlToQuill,
+  extractTitleFromHtml,
   getAttachmentsNeedingHydration,
   hydrateAttachments,
   isHtmlContentEmpty,
@@ -295,6 +296,76 @@ export function JournalComposer({
   // Track whether the user has pinned a custom title (via ref so debounce sees latest)
   const titlePinnedRef = useRef(entry?.titlePinned ?? false);
   titlePinnedRef.current = entry?.titlePinned ?? false;
+
+  // Title state: shows auto-derived title as placeholder, user can edit to pin
+  const [titleValue, setTitleValue] = useState("");
+  const [isTitleFocused, setIsTitleFocused] = useState(false);
+
+  // Derive the placeholder title from entry or content
+  const titlePlaceholder = useMemo(() => {
+    if (entry?.titlePinned && entry.title && entry.title !== "Untitled") {
+      return entry.title;
+    }
+    // Derive from content when available
+    if (htmlContentRef.current) {
+      const derived = extractTitleFromHtml(htmlContentRef.current);
+      if (derived !== "Untitled") return derived;
+    }
+    if (entry?.title && entry.title !== "Untitled") {
+      return entry.title;
+    }
+    return "Untitled";
+  }, [entry?.title, entry?.titlePinned]);
+
+  // When entry loads with a pinned title, populate the input
+  useEffect(() => {
+    if (entry?.titlePinned && entry.title && entry.title !== "Untitled") {
+      setTitleValue(entry.title);
+    }
+  }, [entry?.titlePinned, entry?.title]);
+
+  // Handle title changes from the user
+  const handleTitleChange = useCallback(
+    (text: string) => {
+      setTitleValue(text);
+      titlePinnedRef.current = true;
+
+      // Save the pinned title to DB
+      if (entryId) {
+        updateEntryMutationRef.current.mutate({
+          id: entryId,
+          input: { title: text.trim() || "Untitled", titlePinned: true },
+          skipCacheUpdate: true,
+        });
+      }
+    },
+    [entryId],
+  );
+
+  // Handle title focus - clear the auto-derived text if not pinned
+  const handleTitleFocus = useCallback(() => {
+    setIsTitleFocused(true);
+    // If not already pinned and showing auto-derived content, clear it so user starts fresh
+    if (!titlePinnedRef.current) {
+      setTitleValue("");
+    }
+  }, []);
+
+  // Handle title blur
+  const handleTitleBlur = useCallback(() => {
+    setIsTitleFocused(false);
+    // If user left it empty, unpin so auto-derivation resumes
+    if (!titleValue.trim()) {
+      titlePinnedRef.current = false;
+      if (entryId) {
+        updateEntryMutationRef.current.mutate({
+          id: entryId,
+          input: { titlePinned: false },
+          skipCacheUpdate: true,
+        });
+      }
+    }
+  }, [titleValue, entryId]);
 
   // Create debounced save function that calls journalActions
   const debouncedSave = useMemo(
@@ -620,7 +691,7 @@ export function JournalComposer({
         hideBackButton={hideBackButton}
       />
 
-      {/* Quill Rich Editor */}
+      {/* Title + Editor */}
       <View
         style={[
           styles.editorContainer,
@@ -637,6 +708,25 @@ export function JournalComposer({
           },
         ]}
       >
+        {/* Title Input */}
+        <TextInput
+          style={[
+            styles.titleInput,
+            { color: seasonalTheme.textPrimary },
+            !titleValue &&
+              !isTitleFocused && { color: seasonalTheme.textSecondary },
+          ]}
+          value={isTitleFocused || titlePinnedRef.current ? titleValue : ""}
+          onChangeText={handleTitleChange}
+          onFocus={handleTitleFocus}
+          onBlur={handleTitleBlur}
+          placeholder={isTitleFocused ? "" : titlePlaceholder}
+          placeholderTextColor={seasonalTheme.textSecondary}
+          returnKeyType="next"
+          blurOnSubmit
+        />
+
+        {/* Quill Rich Editor */}
         {!isDeleting &&
           (entry || !entryId || wasCreatedAsNew.current) &&
           initialContent !== null && (
@@ -670,5 +760,12 @@ const styles = StyleSheet.create({
   },
   editorContainer: {
     flex: 1,
+  },
+  titleInput: {
+    fontSize: 28,
+    fontWeight: "700",
+    paddingHorizontal: spacingPatterns.screen,
+    paddingTop: spacingPatterns.md,
+    paddingBottom: spacingPatterns.xs,
   },
 });

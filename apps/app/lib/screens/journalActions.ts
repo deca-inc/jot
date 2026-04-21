@@ -18,6 +18,7 @@ import {
   CreateEntryInput,
   UpdateEntryInput,
 } from "../db/entries";
+import { extractTitleFromHtml } from "../utils/htmlUtils";
 import type { UseMutationResult } from "@tanstack/react-query";
 
 // Type for the mutation objects returned by useCreateEntry and useUpdateEntry
@@ -145,11 +146,8 @@ function prepareJournalContent(
     },
   ];
 
-  // Use title if set, otherwise use content preview
-  const finalTitle =
-    title.trim() ||
-    textContent.slice(0, 50) + (textContent.length > 50 ? "..." : "") ||
-    "Untitled";
+  // Use explicit title if set, otherwise derive from first line of content
+  const finalTitle = title.trim() || extractTitleFromHtml(cleanHtml);
 
   return { blocks, finalTitle };
 }

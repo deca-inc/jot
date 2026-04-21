@@ -528,8 +528,10 @@ export const QuillRichEditor = forwardRef<
       padding-left: 28px !important;
       min-height: 27px !important;
       line-height: 27px !important;
-      margin: 0 !important;
+      margin-top: 0 !important;
+      margin-right: 0 !important;
       margin-bottom: 4px !important;
+      /* margin-left intentionally omitted — set by ql-indent-N classes */
       position: relative !important;
     }
     .ql-editor ul[data-checked=false] > li {

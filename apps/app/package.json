@@ -7,7 +7,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
+    "web": "expo start --web --port 8082",
     "macos": "expo run:macos",
     "expo": "expo",
     "prebuild": "expo prebuild",

@@ -1309,19 +1309,6 @@ function MainLayout() {
               <View style={styles.syncErrorBadge}>
                 <Ionicons name="warning" size={10} color="#FFB400" />
               </View>
-            ) : updateCheck.state.status === "available" ||
-              updateCheck.state.status === "ready" ? (
-              <View
-                style={[
-                  styles.updateDot,
-                  {
-                    backgroundColor:
-                      updateCheck.state.status === "ready"
-                        ? "#22C55E"
-                        : "#3B82F6",
-                  },
-                ]}
-              />
             ) : null}
           </View>
           {isMobile ? (

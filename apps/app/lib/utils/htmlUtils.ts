@@ -319,31 +319,60 @@ export function hydrateAttachments(
 }
 
 /**
- * Extract title from HTML content (first heading or first paragraph)
+ * Extract title from HTML content.
+ *
+ * Rules:
+ * 1. Skip non-text blocks (audio attachments, images, etc.)
+ * 2. Take only the first line of the first text element (stop at newline / <br>)
+ * 3. Truncate to 100 characters
+ * 4. Fall back to "Untitled" if no text is found
  */
 export function extractTitleFromHtml(html: string): string {
   if (!html) return "Untitled";
 
-  // Try to find first h1
-  const h1Match = html.match(/<h1[^>]*>([^<]*)<\/h1>/i);
-  if (h1Match && h1Match[1].trim()) {
-    return h1Match[1].trim().slice(0, 100);
+  // Remove audio-attachment blocks entirely (they aren't text)
+  const withoutAttachments = html.replace(
+    /<div[^>]*class="audio-attachment"[^>]*>[\s\S]*?<\/div>/gi,
+    "",
+  );
+
+  // Helper: extract first line of text from a tag's inner content.
+  // Splits on <br> tags and newlines, returns the first non-empty segment.
+  const firstLine = (inner: string): string => {
+    // Split on <br>, <br/>, <br />, or literal newlines
+    const segments = inner.split(/<br\s*\/?>/i);
+    for (const seg of segments) {
+      const text = seg.replace(/<[^>]*>/g, "").trim();
+      if (text) return text.slice(0, 100);
+    }
+    return "";
+  };
+
+  // Try first h1
+  const h1Match = withoutAttachments.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  if (h1Match) {
+    const text = firstLine(h1Match[1]);
+    if (text) return text;
   }
 
-  // Try to find first heading of any level
-  const headingMatch = html.match(/<h[1-6][^>]*>([^<]*)<\/h[1-6]>/i);
-  if (headingMatch && headingMatch[1].trim()) {
-    return headingMatch[1].trim().slice(0, 100);
+  // Try first heading of any level
+  const headingMatch = withoutAttachments.match(
+    /<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i,
+  );
+  if (headingMatch) {
+    const text = firstLine(headingMatch[1]);
+    if (text) return text;
   }
 
-  // Try to find first paragraph
-  const pMatch = html.match(/<p[^>]*>([^<]*)<\/p>/i);
-  if (pMatch && pMatch[1].trim()) {
-    return pMatch[1].trim().slice(0, 100);
+  // Try first paragraph
+  const pMatch = withoutAttachments.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  if (pMatch) {
+    const text = firstLine(pMatch[1]);
+    if (text) return text;
   }
 
-  // Fallback: strip all tags and take first 100 chars
-  const stripped = html
+  // Fallback: strip all tags, take first line up to 100 chars
+  const stripped = withoutAttachments
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();

@@ -337,4 +337,32 @@ describe("extractTitleFromHtml", () => {
     const html = "<h2>H2 First</h2><h1>H1 Second</h1>";
     expect(extractTitleFromHtml(html)).toBe("H1 Second");
   });
+
+  it("stops at the first line (br tag)", () => {
+    const html = "<p>First line<br>Second line<br>Third line</p>";
+    expect(extractTitleFromHtml(html)).toBe("First line");
+  });
+
+  it("stops at the first line in h1 with br", () => {
+    const html = "<h1>Title line<br>Subtitle</h1><p>body</p>";
+    expect(extractTitleFromHtml(html)).toBe("Title line");
+  });
+
+  it("skips audio attachment blocks", () => {
+    const html =
+      '<div class="audio-attachment" data-attachment-id="abc"><audio src="data:audio/wav;base64,AAA"></audio></div><p>Real title here</p>';
+    expect(extractTitleFromHtml(html)).toBe("Real title here");
+  });
+
+  it("skips audio attachment and uses first text line", () => {
+    const html =
+      '<div class="audio-attachment" data-attachment-id="xyz"><audio src="file://audio.wav"></audio></div><h1>My Note</h1>';
+    expect(extractTitleFromHtml(html)).toBe("My Note");
+  });
+
+  it("returns Untitled when only audio attachments exist", () => {
+    const html =
+      '<div class="audio-attachment" data-attachment-id="abc"><audio src="file://a.wav"></audio></div>';
+    expect(extractTitleFromHtml(html)).toBe("Untitled");
+  });
 });
