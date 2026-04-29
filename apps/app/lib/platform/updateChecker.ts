@@ -152,6 +152,17 @@ class UpdateChecker {
     }
   }
 
+  /** Open a URL in the default browser (Tauri shell plugin). */
+  private async openExternal(url: string): Promise<void> {
+    try {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(url);
+    } catch {
+      // Last resort — may not work in all Tauri webviews
+      window.open(url, "_blank");
+    }
+  }
+
   private setState(newState: UpdateState) {
     this.state = newState;
     for (const listener of this.listeners) {
@@ -233,8 +244,11 @@ class UpdateChecker {
   /**
    * Tauri: use the updater plugin to download in the background.
    * Falls back gracefully if the plugin isn't configured.
+   *
+   * When `userInitiated` is true, failures open the release page
+   * instead of being silently ignored.
    */
-  private async downloadInBackground(info: UpdateInfo) {
+  private async downloadInBackground(info: UpdateInfo, userInitiated = false) {
     try {
       const { invoke, Channel } = await import("@tauri-apps/api/core");
 
@@ -244,6 +258,9 @@ class UpdateChecker {
       };
 
       if (!update?.available || update.rid == null) {
+        if (userInitiated && info.htmlUrl) {
+          await this.openExternal(info.htmlUrl);
+        }
         return;
       }
 
@@ -280,6 +297,9 @@ class UpdateChecker {
       this.setState({ status: "ready", info });
     } catch (e) {
       console.warn("[updateChecker] Tauri background download failed:", e);
+      if (userInitiated && info.htmlUrl) {
+        await this.openExternal(info.htmlUrl);
+      }
     }
   }
 
@@ -293,9 +313,12 @@ class UpdateChecker {
           "Update installed. Please restart Jot to apply the update.",
         );
       }
-    } else if (this.state.status === "available" && this.state.info.htmlUrl) {
-      window.open(this.state.info.htmlUrl, "_blank");
+    } else if (this.state.status === "available") {
+      // Download failed or hasn't completed — retry with user-initiated flag
+      // so failures open the release page as a fallback.
+      await this.downloadInBackground(this.state.info, true);
     }
+    // "downloading" — no action, progress is shown in the UI.
   }
 
   /**
