@@ -78,9 +78,7 @@ function WebPortalOverlay({
 
   if (!visible || !portalContainer) return null;
 
-  const { createPortal } =
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional web-only import
-    require("react-dom") as typeof import("react-dom");
+  const { createPortal } = require("react-dom") as typeof import("react-dom");
 
   return createPortal(
     <Pressable

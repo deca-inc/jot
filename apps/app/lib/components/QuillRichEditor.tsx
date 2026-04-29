@@ -24,8 +24,8 @@ import {
 } from "react-native";
 import { Text as RNText } from "react-native";
 import QuillEditor from "react-native-cn-quill";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showKeyboard } from "../../modules/keyboard-module/src";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { blurEditors } from "../utils/blur-editors";
@@ -91,7 +91,7 @@ export const QuillRichEditor = forwardRef<
   const seasonalTheme = useSeasonalTheme();
   const editorRef = useRef<QuillEditor>(null);
   const { width: screenWidth } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
 
   // Responsive sizing
   const isSmallScreen = screenWidth < 375;

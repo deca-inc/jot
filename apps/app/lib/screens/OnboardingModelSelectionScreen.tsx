@@ -7,10 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { downloadGeminiNano } from "../../modules/platform-ai/src";
 import { ALL_MODELS } from "../ai/modelConfig";
 import { ensureModelPresent } from "../ai/modelManager";
@@ -20,6 +17,7 @@ import { useTrackScreenView, useTrackEvent } from "../analytics";
 import { Text } from "../components";
 import { useModelSettings } from "../db/modelSettings";
 import { useIsWideScreen } from "../hooks/useIsWideScreen";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -52,7 +50,7 @@ export function OnboardingModelSelectionScreen({
   const seasonalTheme = useSeasonalTheme();
   const theme = useTheme();
   const modelSettings = useModelSettings();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
   const {
     platformLLMs,
     hasPlatformLLM,

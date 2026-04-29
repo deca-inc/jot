@@ -10,8 +10,8 @@ import {
   Platform,
   Keyboard,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackEvent } from "../analytics";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { ComposerInput } from "./ComposerInput";
@@ -32,7 +32,7 @@ export function AIComposerInput({
   screenWidth,
 }: AIComposerInputProps) {
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
   const isDark = seasonalTheme.isDark;
   const [inputText, setInputText] = useState("");
   const [keyboardHeight, setKeyboardHeight] = useState(0);

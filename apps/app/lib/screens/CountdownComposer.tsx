@@ -13,12 +13,12 @@ import {
   LayoutAnimation,
   Alert,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
 import { Text, Input, FormField, Toggle } from "../components";
 import { useDatabase } from "../db/DatabaseProvider";
 import { EntryRepository } from "../db/entries";
 import { useCreateEntry, useUpdateEntry, useEntry } from "../db/useEntries";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import {
@@ -90,7 +90,7 @@ export function CountdownComposer({
   compact = false,
 }: CountdownComposerProps) {
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
   const db = useDatabase();
 
   // Track screen view

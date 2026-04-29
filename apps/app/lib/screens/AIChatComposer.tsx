@@ -28,7 +28,6 @@ import {
 } from "react-native";
 import { Message } from "react-native-executorch";
 import RenderHtml from "react-native-render-html";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALL_MODELS, ALL_LLM_MODELS, getModelById } from "../ai/modelConfig";
 import { isRemoteModelId, isCustomLocalModelId } from "../ai/modelTypeGuards";
 import {
@@ -52,6 +51,7 @@ import { Block } from "../db/entries";
 import { useModelSettings, ModelDownloadInfo } from "../db/modelSettings";
 import { useCustomModels } from "../db/useCustomModels";
 import { useEntry, useCreateEntry, useUpdateEntry } from "../db/useEntries";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { useSyncEngine } from "../sync";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -514,7 +514,7 @@ export function AIChatComposer({
   onComposerEntryId,
 }: AIChatComposerProps) {
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
   const { width } = useWindowDimensions();
   const modelSettings = useModelSettings();
   const agentsRepo = useAgents();

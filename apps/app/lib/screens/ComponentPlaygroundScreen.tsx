@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   Modal,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
 import {
   Text,
@@ -20,6 +19,7 @@ import {
   ThemeControl,
 } from "../components";
 import { useEntryRepository } from "../db/entries";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns, springPresets, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -54,7 +54,7 @@ export function ComponentPlaygroundScreen({
 }: ComponentPlaygroundScreenProps = {}) {
   const _theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
 
   // Track screen view
   useTrackScreenView("Component Playground");

@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   PanResponder,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { Text } from "./Text";
@@ -31,7 +31,7 @@ export function Toast({
   duration = 3000,
 }: ToastProps) {
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
   const translateY = useRef(new Animated.Value(-100)).current;
   const translateX = useRef(new Animated.Value(0)).current;
 

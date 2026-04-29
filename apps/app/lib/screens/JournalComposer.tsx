@@ -8,7 +8,6 @@ import React, {
   useState,
 } from "react";
 import { View, StyleSheet, TextInput } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView } from "../analytics";
 import { saveAttachment, getAudioAttachmentUrl } from "../attachments";
 import {
@@ -19,6 +18,7 @@ import {
 import { useAttachmentsRepository } from "../db/attachmentsRepository";
 import { useEntryRepository } from "../db/entries";
 import { useEntry, useUpdateEntry, entryKeys } from "../db/useEntries";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { useModelInfo } from "../navigation/ModelInfoContext";
 import { useSyncAuth, useSyncEngine } from "../sync";
 import {
@@ -114,7 +114,7 @@ export function JournalComposer({
 
   // Track screen view
   useTrackScreenView("Journal Composer");
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
 
   // Model management modal state
   const [showModelModal, setShowModelModal] = useState(false);

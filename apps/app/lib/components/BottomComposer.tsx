@@ -9,9 +9,9 @@ import {
   Easing,
   Platform,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackEvent } from "../analytics";
 import { type ComposerMode } from "../db/composerSettings";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { ComposerInput } from "./ComposerInput";
@@ -33,7 +33,7 @@ export function BottomComposer({
   isKeyboardVisible = false,
 }: BottomComposerProps) {
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
   const isDark = seasonalTheme.isDark;
   const [inputText, setInputText] = useState("");
   const glowAnimation = useRef(new Animated.Value(0)).current;

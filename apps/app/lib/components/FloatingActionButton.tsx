@@ -9,8 +9,8 @@ import {
   View,
   Pressable,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackEvent } from "../analytics";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { Text } from "./Text";
@@ -33,7 +33,7 @@ export function FloatingActionButton({
   onClose,
 }: FloatingActionButtonProps) {
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
   const trackEvent = useTrackEvent();
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const glowAnimation = useRef(new Animated.Value(0)).current;

@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Linking,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALL_MODELS, type LlmModelConfig } from "../ai/modelConfig";
 import { deleteModel } from "../ai/modelManager";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
@@ -25,6 +24,7 @@ import { ModelManagementModal } from "../components/ModelManagementModal";
 import { useModelSettings } from "../db/modelSettings";
 import { useOnboardingSettings } from "../db/onboardingSettings";
 import { useTelemetrySettings } from "../db/telemetrySettings";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { useUpdateChecker } from "../hooks/useUpdateChecker";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -47,7 +47,7 @@ export function SettingsScreen({
 }: SettingsScreenProps) {
   const theme = useTheme();
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
   const modelSettings = useModelSettings();
   const onboardingSettings = useOnboardingSettings();
   const telemetrySettings = useTelemetrySettings();

@@ -15,10 +15,7 @@ import {
   TextInput,
   useWindowDimensions,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Text,
   SearchModal,
@@ -40,6 +37,7 @@ import {
   useUnarchiveEntry,
 } from "../../lib/db/useEntries";
 import { useIsWideScreen } from "../../lib/hooks/useIsWideScreen";
+import { useStableInsets } from "../../lib/hooks/useStableInsets";
 import { useUpdateChecker } from "../../lib/hooks/useUpdateChecker";
 import {
   ModelInfoProvider,
@@ -121,7 +119,7 @@ function MainLayout() {
   const seasonalTheme = useSeasonalTheme();
   const theme = useTheme();
   const isWideScreen = useIsWideScreen();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
   const syncAuth = useSyncAuthContext();
   const syncEngine = useSyncEngine();
   const pathname = usePathname();

@@ -8,9 +8,9 @@ import {
   Animated,
   Platform,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackEvent } from "../analytics";
 import { type ComposerMode } from "../db/composerSettings";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { Text } from "./Text";
@@ -22,7 +22,7 @@ export interface FooterProps {
 
 export function Footer({ mode, onModeChange }: FooterProps) {
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
   const isDark = seasonalTheme.isDark;
   const trackEvent = useTrackEvent();
 

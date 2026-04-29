@@ -10,6 +10,7 @@ import { AppState, LogBox, Platform } from "react-native";
 import {
   SafeAreaProvider,
   initialWindowMetrics,
+  type Metrics,
 } from "react-native-safe-area-context";
 import { UnifiedModelProvider } from "../lib/ai/UnifiedModelProvider";
 import { ConditionalPostHogProvider } from "../lib/analytics/PostHogProvider";
@@ -56,6 +57,16 @@ LogBox.ignoreLogs([
 ]);
 
 SplashScreen.preventAutoHideAsync();
+
+// Fallback metrics when initialWindowMetrics is null (web, some simulators).
+// Values represent a typical modern iPhone; the stable-insets hook will absorb
+// any small difference once the native measurement completes.
+const FALLBACK_METRICS: Metrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 59, bottom: 34, left: 0, right: 0 },
+};
+
+const safeAreaMetrics = initialWindowMetrics ?? FALLBACK_METRICS;
 
 // On web (including the Tauri desktop webview) the app doesn't ship a
 // custom font, so text falls back to the browser default — which in
@@ -132,7 +143,7 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+    <SafeAreaProvider initialMetrics={safeAreaMetrics}>
       <QueryClientProvider client={queryClient}>
         <DatabaseProvider encryptionKey={encryptionKey}>
           <ConditionalPostHogProvider>

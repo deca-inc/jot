@@ -19,7 +19,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { PIConfetti, type PIConfettiMethods } from "react-native-fast-confetti";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrackScreenView, useTrackEvent } from "../analytics";
 import { Text, Dialog, MenuItem } from "../components";
 import { Entry, extractPreviewText } from "../db/entries";
@@ -32,6 +31,7 @@ import {
   useUnarchiveEntry,
   useTogglePinned,
 } from "../db/useEntries";
+import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns, borderRadius } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import {
@@ -105,7 +105,7 @@ export function CountdownViewer({
   compact = false,
 }: CountdownViewerProps) {
   const seasonalTheme = useSeasonalTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useStableInsets();
 
   // Track screen view
   useTrackScreenView("Countdown Viewer");
