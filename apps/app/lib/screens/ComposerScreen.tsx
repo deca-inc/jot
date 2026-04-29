@@ -122,11 +122,12 @@ export function ComposerScreen({
 
   // Journal composer - show if type is journal OR if we're creating a new journal entry
   if (shouldUseFullScreen) {
-    const handleJournalCreated = (_newEntryId: number) => {
-      // Intentionally a no-op. JournalComposer manages its own entryId
-      // internally via setEntryId(). Calling setActualEntryId here would
-      // change the React key from "journal-new" → "journal-<id>", forcing
-      // a full remount that destroys the editor content.
+    const handleJournalCreated = (newEntryId: number) => {
+      // Don't call setActualEntryId here — it would change the React key
+      // from "journal-new" → "journal-<id>", forcing a full remount that
+      // destroys the editor content. Instead, notify the layout header so
+      // it can show the live title.
+      onComposerEntryId?.(newEntryId);
     };
 
     return (

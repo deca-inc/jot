@@ -19,6 +19,7 @@ import {
 import { useAttachmentsRepository } from "../db/attachmentsRepository";
 import { useEntryRepository } from "../db/entries";
 import { useEntry, useUpdateEntry, entryKeys } from "../db/useEntries";
+import { useModelInfo } from "../navigation/ModelInfoContext";
 import { useSyncAuth, useSyncEngine } from "../sync";
 import {
   downloadAttachmentFromServer,
@@ -522,17 +523,18 @@ export function JournalComposer({
     onCancelRef.current?.();
   }, [entryId, actionContext, debouncedSave]);
 
-  // Create entry in DB on first edit (lazy creation for new notes)
-  const createEntryOnFirstEdit = useCallback(
-    async (html: string) => {
+  // Create entry in DB (lazy creation). Called on first body edit or title edit.
+  const createEntry = useCallback(
+    async (opts: { html?: string; title?: string; titlePinned?: boolean }) => {
       if (entryId || isCreatingRef.current) return;
       isCreatingRef.current = true;
 
       try {
         const entry = await entryRepository.create({
           type: "journal",
-          title: parentId ? "Check-in" : "Untitled",
-          blocks: [{ type: "html" as const, content: html }],
+          title: opts.title ?? (parentId ? "Check-in" : "Untitled"),
+          titlePinned: opts.titlePinned,
+          blocks: [{ type: "html" as const, content: opts.html ?? "<p></p>" }],
           tags: [],
           attachments: [],
           isFavorite: false,
@@ -561,12 +563,34 @@ export function JournalComposer({
 
         onCreatedRef.current?.(entry.id);
       } catch (error) {
-        console.error("Error creating entry on first edit:", error);
+        console.error("Error creating entry:", error);
         isCreatingRef.current = false;
       }
     },
     [entryId, entryRepository, parentId, queryClient],
   );
+
+  // Expose entry creation to the layout header (for title-first creation).
+  // Uses a ref so registering/unregistering doesn't cause re-renders.
+  const { createComposerEntryRef } = useModelInfo();
+  const createEntryRef = useRef(createEntry);
+  createEntryRef.current = createEntry;
+
+  useEffect(() => {
+    const ref = createComposerEntryRef;
+    ref.current = async (title: string) => {
+      await createEntryRef.current({
+        title,
+        titlePinned: true,
+      });
+      // Sync local title state so the body title input shows the pinned title
+      titlePinnedRef.current = true;
+      setTitleValue(title);
+    };
+    return () => {
+      ref.current = null;
+    };
+  }, [createComposerEntryRef]);
 
   // Handle content changes from editor
   const handleChangeHtml = useCallback(
@@ -586,14 +610,14 @@ export function JournalComposer({
 
       // Lazy creation: if no entry yet, create it first
       if (!entryId) {
-        createEntryOnFirstEdit(newHtml);
+        createEntry({ html: newHtml });
         return;
       }
 
       // Event-based auto-save: directly call debounced function
       debouncedSave(newHtml);
     },
-    [entryId, debouncedSave, createEntryOnFirstEdit],
+    [entryId, debouncedSave, createEntry],
   );
 
   // Handle voice transcription completion - insert audio + text into editor
@@ -708,23 +732,25 @@ export function JournalComposer({
           },
         ]}
       >
-        {/* Title Input */}
-        <TextInput
-          style={[
-            styles.titleInput,
-            { color: seasonalTheme.textPrimary },
-            !titleValue &&
-              !isTitleFocused && { color: seasonalTheme.textSecondary },
-          ]}
-          value={isTitleFocused || titlePinnedRef.current ? titleValue : ""}
-          onChangeText={handleTitleChange}
-          onFocus={handleTitleFocus}
-          onBlur={handleTitleBlur}
-          placeholder={isTitleFocused ? "" : titlePlaceholder}
-          placeholderTextColor={seasonalTheme.textSecondary}
-          returnKeyType="next"
-          blurOnSubmit
-        />
+        {/* Title Input — hidden on desktop where the layout header handles it */}
+        {!hideBackButton && (
+          <TextInput
+            style={[
+              styles.titleInput,
+              { color: seasonalTheme.textPrimary },
+              !titleValue &&
+                !isTitleFocused && { color: seasonalTheme.textSecondary },
+            ]}
+            value={isTitleFocused || titlePinnedRef.current ? titleValue : ""}
+            onChangeText={handleTitleChange}
+            onFocus={handleTitleFocus}
+            onBlur={handleTitleBlur}
+            placeholder={isTitleFocused ? "" : titlePlaceholder}
+            placeholderTextColor={seasonalTheme.textSecondary}
+            returnKeyType="next"
+            blurOnSubmit
+          />
+        )}
 
         {/* Quill Rich Editor */}
         {!isDeleting &&

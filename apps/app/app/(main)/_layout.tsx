@@ -131,7 +131,7 @@ function MainLayout() {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showContentMenu, setShowContentMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const { modelInfo, composerEntryId } = useModelInfo();
+  const { modelInfo, composerEntryId, createComposerEntryRef } = useModelInfo();
   const deleteEntryMutation = useDeleteEntry();
   const updateEntryMutation = useUpdateEntry();
   const toggleFavoriteMutation = useToggleFavorite();
@@ -572,28 +572,36 @@ function MainLayout() {
     if (pathname === "/compose/chat") {
       return composerEntryTitle || "New Chat";
     }
+    if (pathname.startsWith("/compose/journal")) {
+      return composerEntryTitle || "Untitled";
+    }
     // For journal entries, treat "Untitled" as no title — show preview instead
     const raw = activeEntryTitle || "";
     if (raw === "Untitled" && activeEntryType === "journal") {
       const preview = activeEntryQuery.data
         ? extractPreviewText(activeEntryQuery.data.blocks)
         : "";
-      return preview || "";
+      return preview || "Untitled";
     }
     return raw;
   };
 
   // The entry whose title is displayed in the header.
-  const editableEntryId =
-    pathname === "/compose/chat" ? composerEntryId : activeEntryId;
+  const editableEntryId = pathname.startsWith("/compose/")
+    ? composerEntryId
+    : activeEntryId;
 
   // Whether the current header title is editable (entries and composer).
-  const isTitleEditable = isEntryScreen && editableEntryId !== undefined;
+  // On compose screens, allow editing even before the entry is created.
+  const isComposeScreen = pathname.startsWith("/compose/");
+  const isTitleEditable =
+    isEntryScreen && (editableEntryId !== undefined || isComposeScreen);
 
   const handleTitleTap = useCallback(() => {
     if (!isTitleEditable) return;
-    const currentTitle =
-      pathname === "/compose/chat" ? composerEntryTitle : activeEntryTitle;
+    const currentTitle = pathname.startsWith("/compose/")
+      ? composerEntryTitle
+      : activeEntryTitle;
     // If title is the default sentinel, start with empty input (placeholder will show)
     const isDefault = !currentTitle || currentTitle === "Untitled";
     setEditingTitleText(isDefault ? "" : currentTitle);
@@ -614,7 +622,14 @@ function MainLayout() {
   const handleTitleSubmit = useCallback(() => {
     const trimmed = editingTitleText.trim();
     setIsEditingTitle(false);
-    if (!editableEntryId) return;
+
+    if (!editableEntryId) {
+      // No entry yet (new compose screen) — ask the composer to create one
+      if (trimmed && createComposerEntryRef.current) {
+        createComposerEntryRef.current(trimmed);
+      }
+      return;
+    }
 
     if (trimmed) {
       // User set a custom title — pin it
@@ -629,7 +644,7 @@ function MainLayout() {
         input: { title: "Untitled", titlePinned: false },
       });
     }
-  }, [editingTitleText, editableEntryId]);
+  }, [editingTitleText, editableEntryId, createComposerEntryRef]);
 
   // Render the content header (shared between desktop and mobile)
   const renderContentHeader = (showDrawerToggle: boolean) => (
@@ -777,18 +792,20 @@ function MainLayout() {
             onPress={isTitleEditable ? handleTitleTap : undefined}
             activeOpacity={isTitleEditable ? 0.7 : 1}
             disabled={!isTitleEditable}
-            style={{ flexShrink: 1, minWidth: 0 }}
+            style={{ flex: 1, minWidth: 40 }}
           >
             <Text
               variant="body"
               numberOfLines={1}
               style={{
-                color: seasonalTheme.textPrimary,
+                color: getHeaderTitle()
+                  ? seasonalTheme.textPrimary
+                  : seasonalTheme.textSecondary,
                 fontWeight: "600",
                 fontSize: 15,
               }}
             >
-              {getHeaderTitle()}
+              {getHeaderTitle() || (isEntryScreen ? "Untitled" : "")}
             </Text>
           </TouchableOpacity>
         )}

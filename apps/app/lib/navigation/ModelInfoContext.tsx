@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 interface ModelInfo {
   displayName: string;
@@ -16,13 +22,25 @@ interface ModelInfoContextValue {
    */
   composerEntryId: number | undefined;
   setComposerEntryId: (id: number | undefined) => void;
+  /**
+   * Ref holding a callback the active composer registers so the layout
+   * header can trigger entry creation (e.g. when user edits the title
+   * before any body content exists). Using a ref avoids re-renders when
+   * the callback is registered/unregistered.
+   */
+  createComposerEntryRef: React.MutableRefObject<
+    ((title: string) => Promise<void>) | null
+  >;
 }
+
+const noop = { current: null };
 
 const ModelInfoContext = createContext<ModelInfoContextValue>({
   modelInfo: null,
   setModelInfo: () => {},
   composerEntryId: undefined,
   setComposerEntryId: () => {},
+  createComposerEntryRef: noop,
 });
 
 export function ModelInfoProvider({ children }: { children: React.ReactNode }) {
@@ -30,9 +48,18 @@ export function ModelInfoProvider({ children }: { children: React.ReactNode }) {
   const [composerEntryId, setComposerEntryId] = useState<number | undefined>(
     undefined,
   );
+  const createComposerEntryRef = useRef<
+    ((title: string) => Promise<void>) | null
+  >(null);
 
   const value = useMemo(
-    () => ({ modelInfo, setModelInfo, composerEntryId, setComposerEntryId }),
+    () => ({
+      modelInfo,
+      setModelInfo,
+      composerEntryId,
+      setComposerEntryId,
+      createComposerEntryRef,
+    }),
     [modelInfo, composerEntryId],
   );
 

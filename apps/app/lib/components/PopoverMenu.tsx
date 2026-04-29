@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState } from "react";
+import React, { useRef, useCallback, useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -32,9 +32,73 @@ interface TriggerLayout {
 }
 
 /**
+ * Web-only portal overlay that replaces Modal to avoid full-viewport repaint
+ * flicker in Tauri / desktop webviews.
+ */
+function WebPortalOverlay({
+  visible,
+  onClose,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!visible) {
+      // Clean up when closing
+      if (portalContainer) {
+        portalContainer.remove();
+        setPortalContainer(null);
+      }
+      return;
+    }
+
+    const el = document.createElement("div");
+    // fixed overlay that captures clicks to dismiss
+    Object.assign(el.style, {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      right: "0",
+      bottom: "0",
+      zIndex: "9999",
+    });
+    document.body.appendChild(el);
+    setPortalContainer(el);
+
+    return () => {
+      el.remove();
+    };
+  }, [visible]);
+
+  if (!visible || !portalContainer) return null;
+
+  const { createPortal } =
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional web-only import
+    require("react-dom") as typeof import("react-dom");
+
+  return createPortal(
+    <Pressable
+      style={popoverStyles.dismissOverlay}
+      onPress={onClose}
+      tabIndex={-1}
+      aria-hidden
+    >
+      {children}
+    </Pressable>,
+    portalContainer,
+  );
+}
+
+/**
  * A dropdown popover menu that appears anchored to the trigger.
  * Renders above or below depending on available space.
- * Uses a transparent Modal to escape parent overflow:hidden containers.
+ * On native uses Modal; on web uses a lightweight portal to avoid flicker.
  */
 export function PopoverMenu({
   trigger,
@@ -59,7 +123,7 @@ export function PopoverMenu({
     });
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (visible) {
       measure();
     }
@@ -95,47 +159,45 @@ export function PopoverMenu({
   // Hide menu until trigger is measured to prevent flash at wrong position
   const menuOpacity = hasLayout ? 1 : 0;
 
+  const menuContent = (
+    <View
+      onLayout={handleMenuLayout}
+      style={[
+        popoverStyles.menu,
+        verticalStyle,
+        horizontalStyle,
+        {
+          opacity: menuOpacity,
+          backgroundColor: seasonalTheme.gradient.middle,
+          borderColor: seasonalTheme.isDark
+            ? "rgba(255,255,255,0.12)"
+            : "rgba(0,0,0,0.12)",
+        },
+      ]}
+    >
+      {children}
+    </View>
+  );
+
   return (
     <View ref={triggerRef} collapsable={false}>
       {trigger}
-      <Modal
-        visible={visible}
-        transparent
-        animationType="none"
-        onRequestClose={onClose}
-      >
-        <Pressable
-          style={popoverStyles.dismissOverlay}
-          onPress={onClose}
-          {...(Platform.OS === "web" && {
-            tabIndex: -1,
-            "aria-hidden": true,
-          })}
+      {Platform.OS === "web" ? (
+        <WebPortalOverlay visible={visible} onClose={onClose}>
+          {menuContent}
+        </WebPortalOverlay>
+      ) : (
+        <Modal
+          visible={visible}
+          transparent
+          animationType="none"
+          onRequestClose={onClose}
         >
-          <View
-            onLayout={handleMenuLayout}
-            style={[
-              popoverStyles.menu,
-              verticalStyle,
-              horizontalStyle,
-              {
-                opacity: menuOpacity,
-                backgroundColor: seasonalTheme.gradient.middle,
-                borderColor: seasonalTheme.isDark
-                  ? "rgba(255,255,255,0.12)"
-                  : "rgba(0,0,0,0.12)",
-              },
-            ]}
-            {...(Platform.OS === "web" && {
-              "aria-hidden": false,
-              onKeyDown: (e: { stopPropagation: () => void }) =>
-                e.stopPropagation(),
-            })}
-          >
-            {children}
-          </View>
-        </Pressable>
-      </Modal>
+          <Pressable style={popoverStyles.dismissOverlay} onPress={onClose}>
+            {menuContent}
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 }

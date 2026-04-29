@@ -123,6 +123,7 @@ export interface CreateEntryInput {
   attachments?: string[];
   isFavorite?: boolean;
   isPinned?: boolean;
+  titlePinned?: boolean;
   parentId?: number;
   agentId?: number;
 }
@@ -189,12 +190,13 @@ export class EntryRepository {
         : input.type === "countdown" && !input.parentId;
 
     const result = await this.db.runAsync(
-      `INSERT INTO entries (uuid, type, title, blocks, tags, attachments, isFavorite, isPinned, parentId, agentId, sync_status, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO entries (uuid, type, title, title_pinned, blocks, tags, attachments, isFavorite, isPinned, parentId, agentId, sync_status, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         uuid,
         input.type,
         input.title,
+        input.titlePinned ? 1 : 0,
         JSON.stringify(input.blocks),
         JSON.stringify(input.tags || []),
         JSON.stringify(input.attachments || []),
