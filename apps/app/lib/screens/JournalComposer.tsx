@@ -18,6 +18,7 @@ import {
 import { useAttachmentsRepository } from "../db/attachmentsRepository";
 import { useEntryRepository } from "../db/entries";
 import { useEntry, useUpdateEntry, entryKeys } from "../db/useEntries";
+import { usePersistentEditor } from "../editor/PersistentEditorContext";
 import { useStableInsets } from "../hooks/useStableInsets";
 import { useModelInfo } from "../navigation/ModelInfoContext";
 import { useSyncAuth, useSyncEngine } from "../sync";
@@ -28,6 +29,11 @@ import {
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { debounce } from "../utils/debounce";
+import {
+  resetEditorTrace,
+  getEditorTrace,
+  type EditorTrace,
+} from "../utils/editorPerf";
 import {
   convertBlockToHtml,
   convertEnrichedHtmlToQuill,
@@ -112,6 +118,13 @@ export function JournalComposer({
 }: JournalComposerProps) {
   const seasonalTheme = useSeasonalTheme();
 
+  // Start performance trace on mount (once only, dev only)
+  const perfTraceRef = useRef<EditorTrace | null>(null);
+  if (!perfTraceRef.current && __DEV__) {
+    perfTraceRef.current = resetEditorTrace();
+    perfTraceRef.current?.mark("composer-mounted");
+  }
+
   // Track screen view
   useTrackScreenView("Journal Composer");
   const insets = useStableInsets();
@@ -132,8 +145,22 @@ export function JournalComposer({
   const wasCreatedAsNew = useRef(!entryIdProp);
 
   // Use react-query hooks
-  const { data: entry, isLoading: _isLoadingEntry } = useEntry(entryId);
+  const { data: entry, isLoading: isLoadingEntry } = useEntry(entryId);
   const updateEntryMutation = useUpdateEntry();
+
+  // Track when entry data first arrives from React Query
+  const entryFetchMarkedRef = useRef(false);
+  if (!entryFetchMarkedRef.current) {
+    if (!entryId) {
+      entryFetchMarkedRef.current = true;
+      perfTraceRef.current?.mark("entry-data-ready (new entry, no fetch)");
+    } else if (isLoadingEntry) {
+      perfTraceRef.current?.mark("entry-data-loading");
+    } else if (entry) {
+      entryFetchMarkedRef.current = true;
+      perfTraceRef.current?.mark("entry-data-ready (fetched)");
+    }
+  }
 
   // Attachments repository for tracking attachment metadata
   const attachmentsRepo = useAttachmentsRepository();
@@ -177,7 +204,13 @@ export function JournalComposer({
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
 
-  const editorRef = useRef<QuillRichEditorRef>(null);
+  // Use the persistent (always-mounted) editor on native, local ref on web
+  const persistentEditor = usePersistentEditor();
+  const localEditorRef = useRef<QuillRichEditorRef | null>(null);
+  const editorRef = persistentEditor.isAvailable
+    ? persistentEditor.editorRef
+    : localEditorRef;
+
   const isDeletingRef = useRef(false); // Track deletion state to prevent race conditions
   const lastLoadTimeRef = useRef<number>(0); // Track when we last loaded content
   const lastEditTimeRef = useRef<number>(0); // Track when user last made an edit
@@ -186,6 +219,7 @@ export function JournalComposer({
 
   // Derive base content from entry (before hydration)
   const baseContent = useMemo(() => {
+    getEditorTrace()?.mark("baseContent-compute-start");
     if (!entry) {
       // New note: use initial content prop if provided
       if (initialContentProp.trim()) {
@@ -236,6 +270,7 @@ export function JournalComposer({
     // Empty or no content
     return "<p></p>";
   }, [entry, initialContentProp]);
+  getEditorTrace()?.mark("baseContent-computed");
 
   // Hydrated content state - includes audio/image data URIs loaded from encrypted storage
   // null means hydration is in progress, string means ready to render
@@ -253,17 +288,20 @@ export function JournalComposer({
     let cancelled = false;
 
     (async () => {
+      getEditorTrace()?.mark("hydration-start");
       const hydrated = await hydrateHtmlContent(
         baseContent,
         entryId,
         entry?.uuid,
         serverUrl,
       );
+      getEditorTrace()?.mark("hydration-end");
 
       if (!cancelled) {
         hasLoadedRef.current = true;
         prevBaseContentRef.current = baseContent;
         lastLoadTimeRef.current = Date.now();
+        getEditorTrace()?.mark("setInitialContent");
         setInitialContent(hydrated);
       }
     })();
@@ -277,6 +315,45 @@ export function JournalComposer({
   const isContentEmpty = useMemo(() => {
     return initialContent === null || isHtmlContentEmpty(initialContent);
   }, [initialContent]);
+
+  // Claim the persistent editor when content is ready (native only).
+  // On web, the editor is rendered inline in JSX below.
+  const handleChangeHtmlRef = useRef<(html: string) => void>(() => {});
+  const handleTranscriptionCompleteRef = useRef<
+    (result: {
+      text: string;
+      audioUri: string | null;
+      duration: number;
+    }) => void
+  >(() => {});
+  const handleNoModelAvailableRef = useRef<() => void>(() => {});
+
+  // Stable refs so the effect doesn't re-run when the context object changes
+  const claimRef = useRef(persistentEditor.claim);
+  claimRef.current = persistentEditor.claim;
+  const releaseRef = useRef(persistentEditor.release);
+  releaseRef.current = persistentEditor.release;
+  const isAvailable = persistentEditor.isAvailable;
+
+  useEffect(() => {
+    if (!isAvailable || initialContent === null) return;
+
+    getEditorTrace()?.mark("persistent-editor-claim");
+    lastLoadTimeRef.current = Date.now();
+
+    claimRef.current({
+      initialHtml: initialContent,
+      autoFocus: isHtmlContentEmpty(initialContent),
+      onChangeHtml: (html: string) => handleChangeHtmlRef.current(html),
+      onTranscriptionComplete: (result) =>
+        handleTranscriptionCompleteRef.current(result),
+      onNoModelAvailable: () => handleNoModelAvailableRef.current(),
+    });
+
+    return () => {
+      releaseRef.current();
+    };
+  }, [initialContent, isAvailable]);
 
   // Create action context for journal operations (stable object that accesses current refs)
   const actionContext = useMemo(
@@ -698,6 +775,16 @@ export function JournalComposer({
     setShowModelModal(true);
   }, []);
 
+  // Keep persistent editor callback refs in sync
+  handleChangeHtmlRef.current = handleChangeHtml;
+  handleTranscriptionCompleteRef.current = handleTranscriptionComplete;
+  handleNoModelAvailableRef.current = handleNoModelAvailable;
+
+  // Mark when render occurs with content ready
+  if (initialContent !== null) {
+    getEditorTrace()?.mark("render-with-content");
+  }
+
   // Show UI shell immediately - content loads progressively
   return (
     <View
@@ -752,13 +839,15 @@ export function JournalComposer({
           />
         )}
 
-        {/* Quill Rich Editor */}
-        {!isDeleting &&
+        {/* Quill Rich Editor — on native, the persistent editor (mounted at
+            the layout level) overlays this area; we just claim/release it. */}
+        {!persistentEditor.isAvailable &&
+          !isDeleting &&
           (entry || !entryId || wasCreatedAsNew.current) &&
           initialContent !== null && (
             <QuillRichEditor
               key={`editor-${wasCreatedAsNew.current ? "new" : entryId}-${seasonalTheme.isDark ? "dark" : "light"}`}
-              ref={editorRef}
+              ref={localEditorRef}
               initialHtml={initialContent}
               placeholder="Start writing..."
               onChangeHtml={handleChangeHtml}

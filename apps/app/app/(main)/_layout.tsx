@@ -36,6 +36,7 @@ import {
   useArchiveEntry,
   useUnarchiveEntry,
 } from "../../lib/db/useEntries";
+import { PersistentEditorProvider } from "../../lib/editor/PersistentEditorContext";
 import { useIsWideScreen } from "../../lib/hooks/useIsWideScreen";
 import { useStableInsets } from "../../lib/hooks/useStableInsets";
 import { useUpdateChecker } from "../../lib/hooks/useUpdateChecker";
@@ -1637,9 +1638,11 @@ function MainLayout() {
             style={[styles.contentPanel, { left: sidebarAnimWidth }]}
           >
             {renderContentHeader(false)}
-            <View style={styles.contentBody}>
-              {showEmptyState ? renderEmptyState() : <Slot />}
-            </View>
+            <PersistentEditorProvider>
+              <View style={styles.contentBody}>
+                {showEmptyState ? renderEmptyState() : <Slot />}
+              </View>
+            </PersistentEditorProvider>
           </Animated.View>
         </View>
 
@@ -1673,9 +1676,11 @@ function MainLayout() {
           {...(drawerOpenPanRef.current?.panHandlers || {})}
         >
           {renderContentHeader(true)}
-          <View style={styles.contentBody}>
-            {showEmptyState ? renderEmptyState() : <Slot />}
-          </View>
+          <PersistentEditorProvider>
+            <View style={styles.contentBody}>
+              {showEmptyState ? renderEmptyState() : <Slot />}
+            </View>
+          </PersistentEditorProvider>
         </View>
 
         {/* Drawer backdrop */}

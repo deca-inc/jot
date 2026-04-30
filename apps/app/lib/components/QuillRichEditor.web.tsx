@@ -22,6 +22,7 @@ import { View, StyleSheet } from "react-native";
 import "quill/dist/quill.snow.css";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
+import { getEditorTrace } from "../utils/editorPerf";
 import type { VoiceRecordButtonResult } from "./VoiceRecordButton";
 
 // ---------------------------------------------------------------------------
@@ -63,6 +64,8 @@ export interface QuillRichEditorRef {
     src: string;
     duration: number;
   }) => Promise<void>;
+  /** Inject updated theme CSS into the WebView without remounting */
+  updateThemeCSS: (css: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1221,6 +1224,9 @@ export const QuillRichEditor = forwardRef<
         quill.insertEmbed(index + 1, "audio-attachment", value);
         quill.setSelection(index + 2, 0);
       },
+      updateThemeCSS: () => {
+        // Web version handles theme via dynamic style injection in useEffect
+      },
     }),
     [],
   );
@@ -1232,9 +1238,13 @@ export const QuillRichEditor = forwardRef<
   const initQuill = useCallback(() => {
     const container = containerRef.current;
     if (!container || quillRef.current) return;
+    const trace = getEditorTrace();
+
+    trace?.mark("quill-init-start");
 
     // Register custom blot
     registerAudioAttachmentBlot();
+    trace?.mark("blot-registered");
 
     // Create editor div inside the container
     const editorDiv = document.createElement("div");
@@ -1284,12 +1294,14 @@ export const QuillRichEditor = forwardRef<
     });
 
     quillRef.current = quill;
+    trace?.mark("quill-instance-created");
 
     // Set initial HTML
     if (initialHtml && initialHtml !== "<p></p>") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (quill as any).clipboard.dangerouslyPasteHTML(0, initialHtml);
     }
+    trace?.mark("initial-html-pasted");
 
     // Wire up events using stable refs
     quill.on("text-change", () => {
@@ -1321,12 +1333,14 @@ export const QuillRichEditor = forwardRef<
 
     // Checkbox fix
     attachCheckboxFix(quill, container);
+    trace?.mark("plugins-attached");
 
     // Fixed toolbar (always-visible header row)
     createFixedToolbar(quill, container, editorDiv);
 
     // Bubble toolbar (selection-based formatting)
     createBubbleToolbar(quill, container);
+    trace?.mark("toolbars-created");
 
     // Audio player
     attachAudioPlayer(container);
@@ -1337,6 +1351,8 @@ export const QuillRichEditor = forwardRef<
     }
 
     setIsReady(true);
+    trace?.mark("quill-ready");
+    trace?.end();
   }, []);
 
   // Mount effect

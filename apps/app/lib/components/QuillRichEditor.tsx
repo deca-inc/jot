@@ -29,6 +29,7 @@ import { useStableInsets } from "../hooks/useStableInsets";
 import { spacingPatterns } from "../theme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
 import { blurEditors } from "../utils/blur-editors";
+import { getEditorTrace } from "../utils/editorPerf";
 import {
   VoiceRecordButton,
   type VoiceRecordButtonResult,
@@ -53,6 +54,8 @@ export interface QuillRichEditorRef {
     src: string;
     duration: number;
   }) => Promise<void>;
+  /** Inject updated theme CSS into the WebView without remounting */
+  updateThemeCSS: (css: string) => void;
 }
 
 interface QuillRichEditorProps {
@@ -68,6 +71,8 @@ interface QuillRichEditorProps {
   onTranscriptionComplete?: (result: VoiceRecordButtonResult) => void;
   /** Callback when no voice model is downloaded - should open model manager */
   onNoModelAvailable?: () => void;
+  /** Fired once when the WebView + Quill is fully initialized and ready for commands */
+  onEditorReady?: () => void;
 }
 
 export const QuillRichEditor = forwardRef<
@@ -85,10 +90,14 @@ export const QuillRichEditor = forwardRef<
     hideToolbar = false,
     onTranscriptionComplete,
     onNoModelAvailable,
+    onEditorReady,
   },
   ref,
 ) {
   const seasonalTheme = useSeasonalTheme();
+  const onEditorReadyRef = useRef(onEditorReady);
+  onEditorReadyRef.current = onEditorReady;
+  getEditorTrace()?.mark("quill-component-mounted");
   const editorRef = useRef<QuillEditor>(null);
   const { width: screenWidth } = useWindowDimensions();
   const insets = useStableInsets();
@@ -201,6 +210,23 @@ export const QuillRichEditor = forwardRef<
 
       // Move cursor after the embed
       editor.setSelection(index + 2, 0);
+    },
+    updateThemeCSS: (css: string) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      // Access the underlying WebView to inject CSS at runtime
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- _webview is a private member of react-native-cn-quill
+      const webview = (editor as any)._webview?.current;
+      if (!webview) return;
+      const escaped = JSON.stringify(css);
+      webview.injectJavaScript(`
+        (function() {
+          var el = document.getElementById('jot-theme-override');
+          if (!el) { el = document.createElement('style'); el.id = 'jot-theme-override'; document.head.appendChild(el); }
+          el.textContent = ${escaped};
+        })();
+        true;
+      `);
     },
   }));
 
@@ -345,7 +371,12 @@ export const QuillRichEditor = forwardRef<
   const increaseIndent = useCallback(() => {
     // Restore selection first — on mobile, tapping the native toolbar causes
     // the WebView to lose focus, so Quill's cursor position is lost.
-    // setSelection and format are processed sequentially in the WebView.
+    // On Android, we must also re-focus the editor so the WebView regains
+    // DOM focus; otherwise setSelection is silently ignored and
+    // formatSelection falls back to quill.focus() which resets the cursor.
+    if (Platform.OS === "android") {
+      editorRef.current?.focus();
+    }
     const sel = lastSelectionRef.current;
     if (sel) {
       editorRef.current?.setSelection(sel.index, sel.length, "silent");
@@ -353,6 +384,9 @@ export const QuillRichEditor = forwardRef<
     editorRef.current?.format("indent", "+1");
   }, []);
   const decreaseIndent = useCallback(() => {
+    if (Platform.OS === "android") {
+      editorRef.current?.focus();
+    }
     const sel = lastSelectionRef.current;
     if (sel) {
       editorRef.current?.setSelection(sel.index, sel.length, "silent");
@@ -398,8 +432,15 @@ export const QuillRichEditor = forwardRef<
   );
 
   // Handle HTML change - called directly by Quill when content changes
+  const firstHtmlChangeRef = useRef(true);
   const handleHtmlChange = useCallback(
     (data: { html: string }) => {
+      if (firstHtmlChangeRef.current) {
+        firstHtmlChangeRef.current = false;
+        const trace = getEditorTrace();
+        trace?.mark("first-onHtmlChange-from-webview");
+        trace?.end();
+      }
       onChangeHtml?.(data.html);
     },
     [onChangeHtml],
@@ -917,6 +958,8 @@ export const QuillRichEditor = forwardRef<
     </>
   );
 
+  getEditorTrace()?.mark("quill-component-render");
+
   return (
     <View style={styles.container}>
       {/* Fixed toolbar for wide screens (tablet/desktop) - always visible above editor */}
@@ -1017,6 +1060,21 @@ export const QuillRichEditor = forwardRef<
           webview={{
             dataDetectorTypes: Platform.OS === "ios" ? "none" : ["none"],
             scrollEnabled: true,
+            onMessage: (event) => {
+              try {
+                const msg = JSON.parse(event.nativeEvent.data);
+                if (msg.type === "editor-perf") {
+                  const trace = getEditorTrace();
+                  trace?.mark(
+                    `webview: ${msg.data.label} (${msg.data.elapsed}ms in WV)`,
+                  );
+                } else if (msg.type === "editor-ready") {
+                  onEditorReadyRef.current?.();
+                }
+              } catch {
+                // ignore non-JSON or other messages
+              }
+            },
           }}
           onSelectionChange={(data) => {
             if (data.range) {
@@ -1041,6 +1099,24 @@ export const QuillRichEditor = forwardRef<
           onHtmlChange={handleHtmlChange}
           customStyles={[customStyles]}
           customJS={`
+            // Performance timing inside WebView (dev only)
+            ${
+              __DEV__
+                ? `
+            var __perfStart = Date.now();
+            function __perfLog(label) {
+              var elapsed = Date.now() - __perfStart;
+              if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'editor-perf',
+                  data: { label: label, elapsed: elapsed }
+                }));
+              }
+            }
+            __perfLog('customJS-start');`
+                : "function __perfLog() {}"
+            }
+
             // Register custom AudioAttachment blot BEFORE Quill initializes
             (function() {
               var BlockEmbed = Quill.import('blots/block/embed');
@@ -1112,7 +1188,7 @@ export const QuillRichEditor = forwardRef<
               AudioAttachmentBlot.className = 'audio-attachment';
 
               Quill.register(AudioAttachmentBlot, true);
-              console.log('AudioAttachmentBlot registered');
+              __perfLog('blot-registered');
             })();
 
             // Auto-scroll cursor into view when typing or focusing
@@ -1161,6 +1237,7 @@ export const QuillRichEditor = forwardRef<
                 }
               }, 500);
             })();
+            __perfLog('autoscroll-attached');
 
             // Fix for Quill mobile checkbox bug (issues #3781, #2031)
             // On mobile, touch events cause checkbox to toggle twice
@@ -1284,6 +1361,7 @@ export const QuillRichEditor = forwardRef<
                 }
               }, true);
             })();
+            __perfLog('checkbox-fix-attached');
 
             // Auto-focus the editor on load if requested
             ${
@@ -1494,6 +1572,32 @@ export const QuillRichEditor = forwardRef<
                 }
               }, 300);
             })();
+            __perfLog('all-customJS-done');
+
+            // Fire after Quill constructor runs (customJS executes before new Quill())
+            // setTimeout(0) defers to after the current script block finishes
+            setTimeout(function() {
+              if (typeof quill !== 'undefined') {
+                __perfLog('quill-constructed (innerHTML=' + quill.root.innerHTML.length + ' chars)');
+                // Signal to RN that the editor is ready to receive commands
+                if (window.ReactNativeWebView) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'editor-ready' }));
+                }
+              }
+            }, 0);
+
+            // Check when content is visually painted
+            setTimeout(function() {
+              if (typeof quill !== 'undefined') {
+                __perfLog('quill-after-100ms (innerHTML=' + quill.root.innerHTML.length + ' chars)');
+              }
+            }, 100);
+
+            setTimeout(function() {
+              if (typeof quill !== 'undefined') {
+                __perfLog('quill-after-500ms (innerHTML=' + quill.root.innerHTML.length + ' chars)');
+              }
+            }, 500);
           `}
         />
       </View>
