@@ -7,7 +7,7 @@ module.exports = ({ config }) => {
     owner: "beta-zeta-inc",
     slug: "jot",
     scheme: "jot",
-    version: "2.0.5",
+    version: "2.0.6",
     orientation: "portrait",
     icon: isDev ? "./assets/icon-dev.png" : "./assets/icon.png",
     userInterfaceStyle: "light",
