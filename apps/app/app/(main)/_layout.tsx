@@ -25,7 +25,9 @@ import {
 } from "../../lib/components";
 import { DrawerIcon } from "../../lib/components/icons/DrawerIcon";
 import { PinIcon } from "../../lib/components/icons/PinIcon";
+import { useQueryClient } from "@tanstack/react-query";
 import { extractPreviewText } from "../../lib/db/entries";
+import { entryKeys } from "../../lib/db/entryKeys";
 import {
   useEntry,
   useEntries,
@@ -131,6 +133,7 @@ function MainLayout() {
   const [showContentMenu, setShowContentMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { modelInfo, composerEntryId, createComposerEntryRef } = useModelInfo();
+  const queryClient = useQueryClient();
   const deleteEntryMutation = useDeleteEntry();
   const updateEntryMutation = useUpdateEntry();
   const toggleFavoriteMutation = useToggleFavorite();
@@ -548,6 +551,15 @@ function MainLayout() {
     [activeEntryId],
   );
 
+  const handleSidebarArchiveEntry = useCallback(
+    (entryId: number) => {
+      if (entryId === activeEntryId) {
+        router.replace("/(main)");
+      }
+    },
+    [activeEntryId],
+  );
+
   const handleCountdownViewerEdit = useCallback((entryId: number) => {
     router.push(`/(main)/compose/countdown?editId=${entryId}`);
   }, []);
@@ -909,6 +921,10 @@ function MainLayout() {
                 if (activeEntryQuery.data?.archivedAt) {
                   unarchiveEntryMutation.mutate(activeEntryId);
                 } else {
+                  queryClient.removeQueries({
+                    queryKey: entryKeys.detail(activeEntryId),
+                  });
+                  router.replace("/(main)");
                   archiveEntryMutation.mutate(activeEntryId);
                 }
               }
@@ -1168,6 +1184,7 @@ function MainLayout() {
               onFirstEntryAvailable={handleFirstEntryAvailable}
               onNoEntries={handleNoEntries}
               onDeleteEntry={handleSidebarDeleteEntry}
+              onArchiveEntry={handleSidebarArchiveEntry}
               compact
             />
           </View>
@@ -1188,6 +1205,7 @@ function MainLayout() {
               onFirstEntryAvailable={handleFirstEntryAvailable}
               onNoEntries={handleNoEntries}
               onDeleteEntry={handleSidebarDeleteEntry}
+              onArchiveEntry={handleSidebarArchiveEntry}
               compact
             />
           </Animated.View>

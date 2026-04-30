@@ -19,7 +19,6 @@ import {
   stopAttachmentServer,
 } from "../lib/attachments";
 import { ToastProvider } from "../lib/components/ToastProvider";
-import { WebViewPrewarmer } from "../lib/components/WebViewPrewarmer";
 import { DatabaseProvider, useDatabase } from "../lib/db/DatabaseProvider";
 import { EntryRepository } from "../lib/db/entries";
 import { OnboardingSettingsRepository } from "../lib/db/onboardingSettings";
@@ -140,14 +139,7 @@ export default function RootLayout() {
   }, [isInitializing]);
 
   if (isInitializing || !encryptionKey) {
-    // Start pre-warming WebView during app init (parallel with encryption key).
-    // Wrap in SafeAreaProvider so that the insets are consistent when the full
-    // UI mounts — avoids a layout shift.
-    return (
-      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <WebViewPrewarmer />
-      </SafeAreaProvider>
-    );
+    return null;
   }
 
   return (
