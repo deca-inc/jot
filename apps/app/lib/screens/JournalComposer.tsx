@@ -469,25 +469,38 @@ export function JournalComposer({
     [entryId, actionContext],
   );
 
-  // On unmount or entry switch, cancel pending debounce and save with cache update.
-  // This ensures the React Query cache reflects the latest content when navigating
-  // away via sidebar (where handleBackPress is not called).
+  // On unmount or entry switch, cancel pending debounce and persist to DB.
+  // IMPORTANT: Use a bare mutation (skipCacheUpdate, no sync notification).
+  // Notifying sync from the unmount save causes an infinite loop:
+  //   save → sync → invalidateQueries(detail) → refetch → re-render → save …
   useEffect(() => {
     return () => {
       debouncedSave.cancel();
 
+      // Suppress sync notifications from any in-flight saves (e.g. a
+      // debouncedSave whose timer fired before unmount but whose mutation
+      // completes after).  Each component instance has its own ref, so
+      // this doesn't affect a newly-mounted instance.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional teardown of ref
+      onEntryUpdatedRef.current = (async () => {}) as any;
+
       const currentContent = htmlContentRef.current;
       if (entryId && currentContent.trim() && !isDeletingRef.current) {
         const sanitizedContent = stripBase64FromAttachments(currentContent);
-        saveJournalContent(entryId, sanitizedContent, "", actionContext, {
-          updateCache: true,
-          titlePinned: titlePinnedRef.current,
-        }).catch((error) => {
-          console.error("[JournalComposer] Error saving on unmount:", error);
+        const title = titlePinnedRef.current
+          ? undefined
+          : extractTitleFromHtml(sanitizedContent);
+        updateEntryMutationRef.current.mutate({
+          id: entryId,
+          input: {
+            title,
+            blocks: [{ type: "html" as const, content: sanitizedContent }],
+          },
+          skipCacheUpdate: true,
         });
       }
     };
-  }, [debouncedSave, entryId, actionContext]);
+  }, [debouncedSave, entryId]);
 
   // Register a save handler so external navigation (e.g. breadcrumb click)
   // can await a save before leaving the composer.
@@ -564,7 +577,12 @@ export function JournalComposer({
 
     // Cancel any pending debounced saves
     debouncedSave.cancel();
-  }, [debouncedSave]);
+
+    // Disconnect sync so the Yjs observer stops firing callbacks
+    if (entryId) {
+      disconnectOnClose(entryId).catch(() => {});
+    }
+  }, [debouncedSave, entryId, disconnectOnClose]);
 
   // Handle back button - save before navigating to keep state consistent
   const handleBackPress = useCallback(async () => {

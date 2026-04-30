@@ -239,6 +239,31 @@ export function PersistentEditorProvider({
     [claim, release, isClaimed],
   );
 
+  // Memoize the editor element so it doesn't re-render when the provider
+  // re-renders (e.g. from isClaimed changes or parent layout re-renders).
+  // All callback props are stable useCallbacks, so this is safe.
+  const persistentEditorElement = useMemo(
+    () =>
+      isNative ? (
+        <QuillRichEditor
+          ref={editorRef}
+          initialHtml="<p></p>"
+          placeholder="Start writing..."
+          onChangeHtml={handleChangeHtml}
+          editorPadding={spacingPatterns.screen}
+          onTranscriptionComplete={handleTranscriptionComplete}
+          onNoModelAvailable={handleNoModelAvailable}
+          onEditorReady={handleEditorReady}
+        />
+      ) : null,
+    [
+      handleChangeHtml,
+      handleTranscriptionComplete,
+      handleNoModelAvailable,
+      handleEditorReady,
+    ],
+  );
+
   return (
     <PersistentEditorContext.Provider value={contextValue}>
       <View style={styles.wrapper}>
@@ -246,21 +271,12 @@ export function PersistentEditorProvider({
         {/* The persistent editor — always mounted at the layout level so it
             survives Expo Router navigations. Absolutely positioned to fill
             the wrapper. Hidden when not claimed. */}
-        {isNative && (
+        {persistentEditorElement && (
           <View
             style={[styles.editorOverlay, !isClaimed && styles.hidden]}
             pointerEvents={isClaimed ? "auto" : "none"}
           >
-            <QuillRichEditor
-              ref={editorRef}
-              initialHtml="<p></p>"
-              placeholder="Start writing..."
-              onChangeHtml={handleChangeHtml}
-              editorPadding={spacingPatterns.screen}
-              onTranscriptionComplete={handleTranscriptionComplete}
-              onNoModelAvailable={handleNoModelAvailable}
-              onEditorReady={handleEditorReady}
-            />
+            {persistentEditorElement}
           </View>
         )}
       </View>

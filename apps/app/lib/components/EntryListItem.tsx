@@ -59,9 +59,10 @@ export interface EntryListItemProps {
   onEdit?: (entry: Entry) => void;
   onToggleFavorite?: (entry: Entry) => void;
   onTogglePinned?: (entry: Entry) => void;
-  onArchive?: (entry: Entry) => void;
   onResetCountup?: (entry: Entry) => void;
   onDeleteEntry?: (entryId: number) => void;
+  /** Called before archive to navigate away from active entry */
+  onArchiveEntry?: (entryId: number) => void;
   seasonalTheme?: SeasonalTheme;
   /** Whether this entry is currently selected (highlighted in sidebar layout) */
   isSelected?: boolean;
@@ -77,9 +78,9 @@ function EntryListItemComponent({
   onEdit,
   onToggleFavorite,
   onTogglePinned,
-  onArchive,
   onResetCountup,
   onDeleteEntry,
+  onArchiveEntry,
   seasonalTheme: seasonalThemeProp,
   isSelected = false,
   compact = false,
@@ -619,38 +620,35 @@ function EntryListItemComponent({
   const archiveEntryMutation = useArchiveEntry();
   const unarchiveEntryMutation = useUnarchiveEntry();
 
-  // Event handler: Delete entry (shows confirmation dialog)
-  const handleDeleteConfirm = async () => {
+  // Event handler: Delete entry (confirms then defers mutation to next frame)
+  const handleDeleteConfirm = () => {
     setShowDeleteDialog(false);
-    // Navigate away from the active entry first so the entry screen unmounts
-    // before the cache update cascade hits the Stack navigator.
-    onDeleteEntry?.(entry.id);
-    try {
-      // Cancel notification before deleting if this is a countdown with a notification
-      if (entry.type === "countdown") {
-        const data = extractCountdownData(entry.blocks);
-        if (data?.notificationId) {
-          await cancelNotification(data.notificationId);
+    // Defer to next frame so the Dialog Modal fully unmounts before
+    // navigation + cache updates — prevents "maximum depth exceeded".
+    requestAnimationFrame(async () => {
+      onDeleteEntry?.(entry.id);
+      try {
+        if (entry.type === "countdown") {
+          const data = extractCountdownData(entry.blocks);
+          if (data?.notificationId) {
+            await cancelNotification(data.notificationId);
+          }
         }
+        await actionContext.deleteEntry.mutateAsync(entry.id);
+        trackEvent("Delete Entry", { entryType: entry.type });
+      } catch (error) {
+        console.error("[EntryListItem] Error deleting entry:", error);
       }
-      await actionContext.deleteEntry.mutateAsync(entry.id);
-      trackEvent("Delete Entry", { entryType: entry.type });
-    } catch (error) {
-      console.error("[EntryListItem] Error deleting entry:", error);
-    }
+    });
   };
 
   // Event handler: Archive countdown (cancels notification first)
   const handleArchiveCountdown = async () => {
-    // Cancel notification before archiving if this countdown has one
     if (countdownData?.notificationId) {
       await cancelNotification(countdownData.notificationId);
     }
-    if (onArchive) {
-      onArchive(entry);
-    } else {
-      archiveEntryMutation.mutate(entry.id);
-    }
+    onArchiveEntry?.(entry.id);
+    archiveEntryMutation.mutate(entry.id);
   };
 
   // Event handler: Rename entry (AI chat only)
@@ -677,6 +675,31 @@ function EntryListItemComponent({
     }
   };
 
+  // Shared menu action handlers.
+  // Defer mutations/navigation to the next frame so the menu's Modal fully
+  // unmounts before triggering re-renders. Performing both in the same render
+  // cycle causes "maximum depth exceeded" on mobile.
+  const handleMenuArchive = () => {
+    setShowMenu(false);
+    requestAnimationFrame(() => {
+      if (entry.archivedAt) {
+        unarchiveEntryMutation.mutate(entry.id);
+      } else {
+        // Mutate first — onMutate optimistically removes from lists
+        // before navigation triggers onFirstEntryAvailable.
+        archiveEntryMutation.mutate(entry.id);
+        onArchiveEntry?.(entry.id);
+      }
+    });
+  };
+
+  const handleMenuDeletePress = () => {
+    setShowMenu(false);
+    requestAnimationFrame(() => {
+      setShowDeleteDialog(true);
+    });
+  };
+
   // Compact mode: slim row for sidebar
   if (compact) {
     const isDefaultTitle = !entry.title || entry.title === "Untitled";
@@ -696,47 +719,13 @@ function EntryListItemComponent({
       },
     ];
 
-    // On web, render as <a> via Pressable+href so entries are real links
-    // (cmd+click opens new tab) while preserving RN styles
-    const CompactWrapper =
-      Platform.OS === "web" && href
-        ? ({ children }: { children: React.ReactNode }) => (
-            <Pressable
-              // @ts-expect-error -- web-only: RNW Pressable supports href to render as <a>
-              href={href}
-              onPress={(e: { preventDefault?: () => void }) => {
-                const nativeEvent = (
-                  e as unknown as { nativeEvent?: MouseEvent }
-                ).nativeEvent;
-                if (
-                  nativeEvent &&
-                  (nativeEvent.metaKey ||
-                    nativeEvent.ctrlKey ||
-                    nativeEvent.shiftKey ||
-                    nativeEvent.button === 1)
-                )
-                  return;
-                e.preventDefault?.();
-                onPress?.(entry);
-              }}
-              accessibilityRole="link"
-              style={compactContainerStyle}
-            >
-              {children}
-            </Pressable>
-          )
-        : ({ children }: { children: React.ReactNode }) => (
-            <TouchableOpacity
-              onPress={() => onPress?.(entry)}
-              activeOpacity={0.7}
-              style={compactContainerStyle}
-            >
-              {children}
-            </TouchableOpacity>
-          );
-
-    return (
-      <CompactWrapper>
+    // Render compact content, then wrap in platform-appropriate pressable.
+    // IMPORTANT: Do NOT define wrapper as an inline component — that creates a
+    // new component identity every render, causing React to unmount/remount
+    // the entire subtree (including Modals), which triggers cascading
+    // re-renders ("maximum depth exceeded").
+    const compactChildren = (
+      <>
         <Ionicons
           name={
             entry.type === "journal"
@@ -865,26 +854,14 @@ function EntryListItemComponent({
             compact
             icon={entry.archivedAt ? "arrow-undo-outline" : "archive-outline"}
             label={entry.archivedAt ? "Unarchive" : "Archive"}
-            onPress={() => {
-              setShowMenu(false);
-              if (entry.archivedAt) {
-                unarchiveEntryMutation.mutate(entry.id);
-              } else if (onArchive) {
-                onArchive(entry);
-              } else {
-                archiveEntryMutation.mutate(entry.id);
-              }
-            }}
+            onPress={handleMenuArchive}
           />
           <MenuItem
             compact
             icon="trash-outline"
             label="Delete"
             variant="destructive"
-            onPress={() => {
-              setShowMenu(false);
-              setShowDeleteDialog(true);
-            }}
+            onPress={handleMenuDeletePress}
           />
         </PopoverMenu>
 
@@ -946,7 +923,45 @@ function EntryListItemComponent({
             </TouchableOpacity>
           </View>
         </Dialog>
-      </CompactWrapper>
+      </>
+    );
+
+    // Wrap in platform-appropriate pressable (web uses <a> for cmd+click)
+    if (Platform.OS === "web" && href) {
+      return (
+        <Pressable
+          // @ts-expect-error -- web-only: RNW Pressable supports href to render as <a>
+          href={href}
+          onPress={(e: { preventDefault?: () => void }) => {
+            const nativeEvent = (e as unknown as { nativeEvent?: MouseEvent })
+              .nativeEvent;
+            if (
+              nativeEvent &&
+              (nativeEvent.metaKey ||
+                nativeEvent.ctrlKey ||
+                nativeEvent.shiftKey ||
+                nativeEvent.button === 1)
+            )
+              return;
+            e.preventDefault?.();
+            onPress?.(entry);
+          }}
+          accessibilityRole="link"
+          style={compactContainerStyle}
+        >
+          {compactChildren}
+        </Pressable>
+      );
+    }
+
+    return (
+      <TouchableOpacity
+        onPress={() => onPress?.(entry)}
+        activeOpacity={0.7}
+        style={compactContainerStyle}
+      >
+        {compactChildren}
+      </TouchableOpacity>
     );
   }
 
@@ -1301,25 +1316,13 @@ function EntryListItemComponent({
         <MenuItem
           icon={entry.archivedAt ? "arrow-undo-outline" : "archive-outline"}
           label={entry.archivedAt ? "Unarchive" : "Archive"}
-          onPress={() => {
-            setShowMenu(false);
-            if (entry.archivedAt) {
-              unarchiveEntryMutation.mutate(entry.id);
-            } else if (onArchive) {
-              onArchive(entry);
-            } else {
-              archiveEntryMutation.mutate(entry.id);
-            }
-          }}
+          onPress={handleMenuArchive}
         />
         <MenuItem
           icon="trash-outline"
           label="Delete"
           variant="destructive"
-          onPress={() => {
-            setShowMenu(false);
-            setShowDeleteDialog(true);
-          }}
+          onPress={handleMenuDeletePress}
         />
       </Dialog>
 
@@ -1698,7 +1701,6 @@ function arePropsEqual(
     prevProps.onPress !== nextProps.onPress ||
     prevProps.onToggleFavorite !== nextProps.onToggleFavorite ||
     prevProps.onTogglePinned !== nextProps.onTogglePinned ||
-    prevProps.onArchive !== nextProps.onArchive ||
     prevProps.onResetCountup !== nextProps.onResetCountup
   ) {
     return false;

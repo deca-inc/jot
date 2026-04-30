@@ -25,9 +25,7 @@ import {
 } from "../../lib/components";
 import { DrawerIcon } from "../../lib/components/icons/DrawerIcon";
 import { PinIcon } from "../../lib/components/icons/PinIcon";
-import { useQueryClient } from "@tanstack/react-query";
 import { extractPreviewText } from "../../lib/db/entries";
-import { entryKeys } from "../../lib/db/entryKeys";
 import {
   useEntry,
   useEntries,
@@ -133,7 +131,6 @@ function MainLayout() {
   const [showContentMenu, setShowContentMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { modelInfo, composerEntryId, createComposerEntryRef } = useModelInfo();
-  const queryClient = useQueryClient();
   const deleteEntryMutation = useDeleteEntry();
   const updateEntryMutation = useUpdateEntry();
   const toggleFavoriteMutation = useToggleFavorite();
@@ -545,19 +542,23 @@ function MainLayout() {
   const handleSidebarDeleteEntry = useCallback(
     (entryId: number) => {
       if (entryId === activeEntryId) {
+        // Disconnect sync before navigating so the Yjs observer
+        // stops firing callbacks that cause cascading re-renders.
+        syncEngine.disconnectOnClose(entryId).catch(() => {});
         router.replace("/(main)");
       }
     },
-    [activeEntryId],
+    [activeEntryId, syncEngine],
   );
 
   const handleSidebarArchiveEntry = useCallback(
     (entryId: number) => {
       if (entryId === activeEntryId) {
+        syncEngine.disconnectOnClose(entryId).catch(() => {});
         router.replace("/(main)");
       }
     },
-    [activeEntryId],
+    [activeEntryId, syncEngine],
   );
 
   const handleCountdownViewerEdit = useCallback((entryId: number) => {
@@ -568,9 +569,10 @@ function MainLayout() {
   const handleDeleteActiveEntry = useCallback(() => {
     if (!activeEntryId) return;
     setShowDeleteConfirm(false);
+    syncEngine.disconnectOnClose(activeEntryId).catch(() => {});
     router.replace("/(main)");
     deleteEntryMutation.mutate(activeEntryId);
-  }, [activeEntryId, deleteEntryMutation]);
+  }, [activeEntryId, deleteEntryMutation, syncEngine]);
 
   // Determine content header title
   const getHeaderTitle = () => {
@@ -917,17 +919,23 @@ function MainLayout() {
             label={activeEntryQuery.data?.archivedAt ? "Unarchive" : "Archive"}
             onPress={() => {
               setShowContentMenu(false);
-              if (activeEntryId) {
-                if (activeEntryQuery.data?.archivedAt) {
-                  unarchiveEntryMutation.mutate(activeEntryId);
-                } else {
-                  queryClient.removeQueries({
-                    queryKey: entryKeys.detail(activeEntryId),
-                  });
-                  router.replace("/(main)");
-                  archiveEntryMutation.mutate(activeEntryId);
-                }
+              if (!activeEntryId) return;
+              if (activeEntryQuery.data?.archivedAt) {
+                unarchiveEntryMutation.mutate(activeEntryId);
+                return;
               }
+              // Defer to next frame so the menu fully unmounts before
+              // navigation + cache updates (prevents infinite loop).
+              // Don't removeQueries — the mutation handles list-cache
+              // cleanup and navigation unmounts the entry screen.
+              // Disconnect sync before navigating so the Yjs observer
+              // stops firing callbacks during the transition.
+              const id = activeEntryId;
+              syncEngine.disconnectOnClose(id).catch(() => {});
+              requestAnimationFrame(() => {
+                archiveEntryMutation.mutate(id);
+                router.replace("/(main)");
+              });
             }}
           />
           <MenuItem
@@ -1658,7 +1666,8 @@ function MainLayout() {
             {renderContentHeader(false)}
             <PersistentEditorProvider>
               <View style={styles.contentBody}>
-                {showEmptyState ? renderEmptyState() : <Slot />}
+                {showEmptyState && renderEmptyState()}
+                <Slot />
               </View>
             </PersistentEditorProvider>
           </Animated.View>
@@ -1696,7 +1705,8 @@ function MainLayout() {
           {renderContentHeader(true)}
           <PersistentEditorProvider>
             <View style={styles.contentBody}>
-              {showEmptyState ? renderEmptyState() : <Slot />}
+              {showEmptyState && renderEmptyState()}
+              <Slot />
             </View>
           </PersistentEditorProvider>
         </View>
@@ -1908,10 +1918,11 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   emptyContentPanel: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     padding: spacingPatterns.xl,
+    zIndex: 10,
   },
   emptyActions: {
     flexDirection: "row",

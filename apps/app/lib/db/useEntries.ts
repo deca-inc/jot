@@ -28,6 +28,36 @@ interface EntryPage {
 type InfiniteEntryData = InfiniteData<EntryPage, number | undefined>;
 
 /**
+ * Remove an entry from all list caches (both infinite and flat queries).
+ */
+function removeEntryFromListCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  entryId: number,
+) {
+  queryClient.setQueriesData<InfiniteEntryData | Entry[] | undefined>(
+    { queryKey: entryKeys.lists() },
+    (oldData) => {
+      if (!oldData) return oldData;
+      // Flat array (useEntries)
+      if (Array.isArray(oldData)) {
+        return oldData.filter((e: Entry) => e.id !== entryId);
+      }
+      // Infinite query (useInfiniteEntries)
+      if ("pages" in oldData && oldData.pages && Array.isArray(oldData.pages)) {
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page) => ({
+            ...page,
+            entries: page.entries.filter((e: Entry) => e.id !== entryId),
+          })),
+        };
+      }
+      return oldData;
+    },
+  );
+}
+
+/**
  * Helper to sync widget data after countdown changes
  * Only syncs if the entry is a countdown type
  */
@@ -419,26 +449,8 @@ export function useDeleteEntry() {
         });
       }
 
-      // Update ALL infinite query caches directly
-      queryClient.setQueriesData<InfiniteEntryData | undefined>(
-        { queryKey: entryKeys.lists() },
-        (oldData) => {
-          if (!oldData) return oldData;
-
-          // Check if this is an infinite query
-          if (oldData.pages && Array.isArray(oldData.pages)) {
-            return {
-              ...oldData,
-              pages: oldData.pages.map((page) => ({
-                ...page,
-                entries: page.entries.filter((entry: Entry) => entry.id !== id),
-              })),
-            };
-          }
-
-          return oldData;
-        },
-      );
+      // Remove from all list caches (infinite + flat)
+      removeEntryFromListCaches(queryClient, id);
     },
   });
 }
@@ -555,6 +567,14 @@ export function useArchiveEntry() {
     mutationFn: async (id: number) => {
       return entryRepository.archive(id);
     },
+    // Optimistically remove from lists BEFORE the async DB write.
+    // The caller navigates to "/(main)" right after mutate(), and
+    // onFirstEntryAvailable will pick the first list entry.  Without
+    // this, the archived entry is still in the list and gets re-opened.
+    onMutate: async (id: number) => {
+      await queryClient.cancelQueries({ queryKey: entryKeys.lists() });
+      removeEntryFromListCaches(queryClient, id);
+    },
     onSuccess: async (entry) => {
       // Sync widgets if this is a countdown (archived countdowns are excluded from widgets)
       syncWidgetsIfCountdown(entry, entryRepository);
@@ -565,32 +585,6 @@ export function useArchiveEntry() {
           entryType: entry.type,
         });
       }
-      // Update detail cache
-      queryClient.setQueryData(entryKeys.detail(entry.id), entry);
-
-      // Remove from list caches since archived entries are hidden by default
-      queryClient.setQueriesData<InfiniteEntryData | undefined>(
-        { queryKey: entryKeys.lists() },
-        (oldData) => {
-          if (!oldData) return oldData;
-
-          // Check if this is an infinite query
-          if (oldData.pages && Array.isArray(oldData.pages)) {
-            return {
-              ...oldData,
-              pages: oldData.pages.map((page) => ({
-                ...page,
-                entries: page.entries.filter((e: Entry) => e.id !== entry.id),
-              })),
-            };
-          }
-
-          return oldData;
-        },
-      );
-
-      // Also invalidate all entry queries to ensure UI updates
-      await queryClient.invalidateQueries({ queryKey: entryKeys.all });
 
       // Notify sync manager
       const syncManager = getSyncManager();

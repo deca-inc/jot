@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import { router } from "expo-router";
 import React, { useState, useMemo } from "react";
 import {
   View,
@@ -220,13 +221,21 @@ export function FloatingComposerHeader({
           label={entry?.archivedAt ? "Unarchive" : "Archive"}
           onPress={() => {
             setShowMenu(false);
-            if (entryId) {
-              if (entry?.archivedAt) {
-                unarchiveEntryMutation.mutate(entryId);
-              } else {
-                archiveEntryMutation.mutate(entryId);
-              }
+            if (!entryId) return;
+            if (entry?.archivedAt) {
+              unarchiveEntryMutation.mutate(entryId);
+              return;
             }
+            // Reuse the delete cleanup: cancel saves, disconnect sync,
+            // suppress the unmount save — same concerns apply to archive.
+            onBeforeDelete?.(entryId);
+            const id = entryId;
+            requestAnimationFrame(() => {
+              // Mutate first — onMutate optimistically removes from lists
+              // before navigation triggers onFirstEntryAvailable.
+              archiveEntryMutation.mutate(id);
+              router.replace("/(main)");
+            });
           }}
         />
         <MenuItem
@@ -235,7 +244,7 @@ export function FloatingComposerHeader({
           variant="destructive"
           onPress={() => {
             setShowMenu(false);
-            handleDelete();
+            requestAnimationFrame(() => handleDelete());
           }}
         />
       </Dialog>

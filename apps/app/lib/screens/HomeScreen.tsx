@@ -62,6 +62,8 @@ export interface HomeScreenProps {
   onNoEntries?: () => void;
   /** Called when an entry is deleted from the list */
   onDeleteEntry?: (entryId: number) => void;
+  /** Called after an entry is archived from the list */
+  onArchiveEntry?: (entryId: number) => void;
   /** Compact mode for sidebar — tighter spacing, slim entry rows */
   compact?: boolean;
 }
@@ -79,6 +81,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
     onFirstEntryAvailable,
     onNoEntries,
     onDeleteEntry,
+    onArchiveEntry,
     compact = false,
   } = props;
   const seasonalTheme = useSeasonalTheme();
@@ -294,8 +297,15 @@ export function HomeScreen(props: HomeScreenProps = {}) {
   const onDeleteEntryRef = useRef(onDeleteEntry);
   onDeleteEntryRef.current = onDeleteEntry;
 
+  const onArchiveEntryRef = useRef(onArchiveEntry);
+  onArchiveEntryRef.current = onArchiveEntry;
+
   const handleDeleteEntry = useCallback((entryId: number) => {
     onDeleteEntryRef.current?.(entryId);
+  }, []);
+
+  const handleArchiveEntry = useCallback((entryId: number) => {
+    onArchiveEntryRef.current?.(entryId);
   }, []);
 
   const handleToggleFavorite = useCallback((entry: Entry) => {
@@ -550,6 +560,7 @@ export function HomeScreen(props: HomeScreenProps = {}) {
           onToggleFavorite={handleToggleFavorite}
           onResetCountup={handleResetCountup}
           onDeleteEntry={handleDeleteEntry}
+          onArchiveEntry={handleArchiveEntry}
           seasonalTheme={seasonalTheme}
           isSelected={selectedEntryId === item.entry.id}
           compact={compact}

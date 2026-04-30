@@ -124,16 +124,27 @@ export function SyncInitializer() {
             console.log("[SyncInitializer] Status:", newStatus);
             notifyStatusChange(newStatus);
           },
-          onEntryUpdated: (entryId) => {
-            // Invalidate lists (sidebar) and the specific detail query.
-            // The editor handles detail refetches gracefully — it detects
-            // the content diff and applies via setHtml() without remounting.
-            queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
-            queryClient.invalidateQueries({
-              queryKey: entryKeys.detail(entryId),
-            });
-            updatePendingCount();
-          },
+          onEntryUpdated: (() => {
+            // Debounce list invalidation.  The Yjs document observer fires
+            // this callback many times in rapid succession during a sync,
+            // and each invalidateQueries call triggers a React setState.
+            // Without debouncing, 50+ invalidations hit React's maximum
+            // update depth limit.
+            //
+            // Don't invalidate the detail query at all — JournalComposer's
+            // sync-update effect already handles content diffs via setHtml.
+            let timer: ReturnType<typeof setTimeout> | null = null;
+            return () => {
+              if (timer) clearTimeout(timer);
+              timer = setTimeout(() => {
+                timer = null;
+                queryClient.invalidateQueries({
+                  queryKey: entryKeys.lists(),
+                });
+                updatePendingCount();
+              }, 300);
+            };
+          })(),
           onEntryDeleted: (entryId) => {
             queryClient.invalidateQueries({ queryKey: entryKeys.lists() });
             queryClient.invalidateQueries({
