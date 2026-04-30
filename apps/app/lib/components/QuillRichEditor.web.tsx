@@ -912,7 +912,7 @@ function createFixedToolbar(
 // Bubble toolbar (shown on text selection)
 // ---------------------------------------------------------------------------
 
-function createBubbleToolbar(
+function _createBubbleToolbar(
   quill: InstanceType<typeof Quill>,
   containerEl: HTMLElement,
 ) {
@@ -1338,8 +1338,8 @@ export const QuillRichEditor = forwardRef<
     // Fixed toolbar (always-visible header row)
     createFixedToolbar(quill, container, editorDiv);
 
-    // Bubble toolbar (selection-based formatting)
-    createBubbleToolbar(quill, container);
+    // Bubble toolbar (selection-based formatting) — disabled; header bar covers formatting
+    // createBubbleToolbar(quill, container);
     trace?.mark("toolbars-created");
 
     // Audio player
