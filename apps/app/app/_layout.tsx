@@ -23,6 +23,10 @@ import { DatabaseProvider, useDatabase } from "../lib/db/DatabaseProvider";
 import { EntryRepository } from "../lib/db/entries";
 import { OnboardingSettingsRepository } from "../lib/db/onboardingSettings";
 import { getOrCreateMasterKey } from "../lib/encryption/keyDerivation";
+import {
+  getCachedSafeAreaInsets,
+  useStableInsets,
+} from "../lib/hooks/useStableInsets";
 import { SyncAuthProvider } from "../lib/sync/SyncAuthProvider";
 import { SyncInitializer } from "../lib/sync/SyncInitializer";
 import {
@@ -58,15 +62,44 @@ LogBox.ignoreLogs([
 
 SplashScreen.preventAutoHideAsync();
 
-// Fallback metrics when initialWindowMetrics is null (web, some simulators).
-// Values represent a typical modern iPhone; the stable-insets hook will absorb
-// any small difference once the native measurement completes.
-const FALLBACK_METRICS: Metrics = {
-  frame: { x: 0, y: 0, width: 390, height: 844 },
-  insets: { top: 59, bottom: 34, left: 0, right: 0 },
-};
+// Platform-aware fallback insets when no cached or native values are available.
+// iOS values represent a typical modern iPhone; web/desktop defaults to zero
+// (no notch/home indicator in a desktop window).
+const FALLBACK_METRICS: Metrics = Platform.select({
+  ios: {
+    frame: { x: 0, y: 0, width: 390, height: 844 },
+    insets: { top: 59, bottom: 34, left: 0, right: 0 },
+  },
+  android: {
+    frame: { x: 0, y: 0, width: 393, height: 852 },
+    insets: { top: 24, bottom: 0, left: 0, right: 0 },
+  },
+  default: {
+    frame: { x: 0, y: 0, width: 1280, height: 800 },
+    insets: { top: 0, bottom: 0, left: 0, right: 0 },
+  },
+})!;
 
-const safeAreaMetrics = initialWindowMetrics ?? FALLBACK_METRICS;
+// Build initial metrics: native module > cached from prior boot > platform fallback.
+// On web, initialWindowMetrics is null; on native it has synchronous values.
+// The cached insets (from localStorage) allow web/Tauri to skip the async
+// measurement on subsequent boots.
+function buildInitialMetrics(): Metrics {
+  // Native module provides synchronous values — trust them
+  if (initialWindowMetrics) {
+    return initialWindowMetrics;
+  }
+
+  // Use insets cached from a prior boot (synchronous localStorage read)
+  const cached = getCachedSafeAreaInsets();
+  if (cached) {
+    return { frame: FALLBACK_METRICS.frame, insets: cached };
+  }
+
+  return FALLBACK_METRICS;
+}
+
+const safeAreaMetrics = buildInitialMetrics();
 
 // On web (including the Tauri desktop webview) the app doesn't ship a
 // custom font, so text falls back to the browser default — which in
@@ -152,6 +185,7 @@ export default function RootLayout() {
                 <SeasonalThemeProvider>
                   <ToastProvider>
                     <SyncAuthProvider>
+                      <SafeAreaCacher />
                       <SyncInitializer />
                       <StatusBarController />
                       <Stack
@@ -282,6 +316,13 @@ function OnboardingGate() {
     };
   }, [db]);
 
+  return null;
+}
+
+/** Renders nothing — just calls useStableInsets() to cache the first real
+ * measurement (e.g. during onboarding) so it's available on next boot. */
+function SafeAreaCacher() {
+  useStableInsets();
   return null;
 }
 

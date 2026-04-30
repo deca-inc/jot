@@ -15,7 +15,9 @@ import {
   TextInput,
   useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+// SafeAreaView replaced with View + useStableInsets() to prevent layout shift
+// from async re-measurement. The useStableInsets hook caches values between
+// boots so insets are available synchronously on subsequent launches.
 import {
   Text,
   SearchModal,
@@ -141,9 +143,9 @@ function MainLayout() {
   updateEntryRef.current = updateEntryMutation;
   const screenWidth = useRef(0);
 
-  // Inline title editing state
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editingTitleText, setEditingTitleText] = useState("");
+  // Header title input state — always an input for entry screens.
+  // While focused, user input wins. On blur, save. When not focused,
+  // external updates (auto-derived title, sync) flow in.
   const titleInputRef = useRef<TextInput>(null);
 
   // Derive active entry ID from the current route
@@ -176,9 +178,29 @@ function MainLayout() {
   const composerEntryQuery = useEntry(composerEntryId);
   const composerEntryTitle = composerEntryQuery.data?.title || "";
 
+  // The entry used for the overflow menu (favorite, pin, archive, delete).
+  // On compose screens the entry ID comes from the composer (lazy creation),
+  // not from the URL, so we prefer composerEntryId there.
+  const menuEntryId = pathname.startsWith("/compose/")
+    ? composerEntryId
+    : activeEntryId;
+  const menuEntryQuery =
+    menuEntryId === activeEntryId ? activeEntryQuery : composerEntryQuery;
+  const menuEntryData = menuEntryQuery.data;
+
   // Fetch recent entries for mobile empty state
   const recentEntriesQuery = useEntries({ limit: 5 });
   const recentEntries = recentEntriesQuery.data ?? [];
+  const recentsFadeAnim = useRef(new Animated.Value(0)).current;
+  const recentsShownRef = useRef(false);
+  if (recentEntries.length > 0 && !recentsShownRef.current) {
+    recentsShownRef.current = true;
+    Animated.timing(recentsFadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }
 
   // Fetch parent entry for breadcrumb
   const parentEntryQuery = useEntry(activeEntryParentId);
@@ -565,16 +587,18 @@ function MainLayout() {
     router.push(`/(main)/compose/countdown?editId=${entryId}`);
   }, []);
 
-  // Delete active entry
+  // Delete active entry (uses menuEntryId to support both /entry/:id and /compose/ screens)
   const handleDeleteActiveEntry = useCallback(() => {
-    if (!activeEntryId) return;
+    const id = menuEntryId;
+    if (!id) return;
     setShowDeleteConfirm(false);
-    syncEngine.disconnectOnClose(activeEntryId).catch(() => {});
+    syncEngine.disconnectOnClose(id).catch(() => {});
     router.replace("/(main)");
-    deleteEntryMutation.mutate(activeEntryId);
-  }, [activeEntryId, deleteEntryMutation, syncEngine]);
+    deleteEntryMutation.mutate(id);
+  }, [menuEntryId, deleteEntryMutation, syncEngine]);
 
-  // Determine content header title
+  // Determine content header title (used for non-editable screens and
+  // as the external source for the always-editable title input).
   const getHeaderTitle = () => {
     if (isSettings) return "Settings";
     if (isPlayground) return "Component Playground";
@@ -600,6 +624,8 @@ function MainLayout() {
   };
 
   // The entry whose title is displayed in the header.
+  // On compose screens the entry doesn't appear in the URL, so use the id
+  // reported by the composer once it lazily creates the entry.
   const editableEntryId = pathname.startsWith("/compose/")
     ? composerEntryId
     : activeEntryId;
@@ -610,31 +636,24 @@ function MainLayout() {
   const isTitleEditable =
     isEntryScreen && (editableEntryId !== undefined || isComposeScreen);
 
-  const handleTitleTap = useCallback(() => {
-    if (!isTitleEditable) return;
-    const currentTitle = pathname.startsWith("/compose/")
-      ? composerEntryTitle
-      : activeEntryTitle;
-    // If title is the default sentinel, start with empty input (placeholder will show)
-    const isDefault = !currentTitle || currentTitle === "Untitled";
-    setEditingTitleText(isDefault ? "" : currentTitle);
-    setIsEditingTitle(true);
-    // Focus the TextInput after state update
-    setTimeout(() => titleInputRef.current?.focus(), 50);
-  }, [isTitleEditable, pathname, composerEntryTitle, activeEntryTitle]);
+  // Default value for the title input — computed from the entry's saved
+  // title. The TextInput is uncontrolled (defaultValue, not value) so
+  // React never fights the native text during typing. The key on the
+  // TextInput forces a remount when navigating to a different entry.
+  const headerDefaultTitle = (() => {
+    const title = getHeaderTitle();
+    return title && title !== "Untitled" ? title : "";
+  })();
 
-  // Dismiss editing when navigating to a different entry
-  const prevEditableEntryIdRef = useRef(editableEntryId);
-  if (prevEditableEntryIdRef.current !== editableEntryId) {
-    prevEditableEntryIdRef.current = editableEntryId;
-    if (isEditingTitle) {
-      setIsEditingTitle(false);
-    }
-  }
+  // Track the current title text via ref (no state → no re-renders while typing).
+  const headerTitleRef = useRef(headerDefaultTitle);
 
-  const handleTitleSubmit = useCallback(() => {
-    const trimmed = editingTitleText.trim();
-    setIsEditingTitle(false);
+  const handleTitleChangeText = useCallback((text: string) => {
+    headerTitleRef.current = text;
+  }, []);
+
+  const handleTitleBlur = useCallback(() => {
+    const trimmed = headerTitleRef.current.trim();
 
     if (!editableEntryId) {
       // No entry yet (new compose screen) — ask the composer to create one
@@ -645,19 +664,17 @@ function MainLayout() {
     }
 
     if (trimmed) {
-      // User set a custom title — pin it
       updateEntryRef.current.mutate({
         id: editableEntryId,
         input: { title: trimmed, titlePinned: true },
       });
     } else {
-      // User cleared the title — revert to auto-generated title (unpin)
       updateEntryRef.current.mutate({
         id: editableEntryId,
         input: { title: "Untitled", titlePinned: false },
       });
     }
-  }, [editingTitleText, editableEntryId, createComposerEntryRef]);
+  }, [editableEntryId, createComposerEntryRef]);
 
   // Render the content header (shared between desktop and mobile)
   const renderContentHeader = (showDrawerToggle: boolean) => (
@@ -718,109 +735,74 @@ function MainLayout() {
               color={seasonalTheme.textSecondary + "80"}
               style={{ marginHorizontal: 4 }}
             />
-            {isEditingTitle ? (
+            {isTitleEditable ? (
               <TextInput
+                key={`title-${editableEntryId || "new"}`}
                 ref={titleInputRef}
-                value={editingTitleText}
-                onChangeText={setEditingTitleText}
-                onSubmitEditing={handleTitleSubmit}
-                onBlur={handleTitleSubmit}
-                placeholder="Title"
+                defaultValue={headerDefaultTitle}
+                onChangeText={handleTitleChangeText}
+                onBlur={handleTitleBlur}
+                blurOnSubmit
+                placeholder="Untitled"
                 placeholderTextColor={seasonalTheme.textSecondary + "80"}
                 style={[
-                  {
-                    color: seasonalTheme.textPrimary,
-                    fontWeight: "600",
-                    fontSize: 14,
-                    padding: 0,
-                    margin: 0,
-                    borderWidth: 0,
-                    flexShrink: 1,
-                    minWidth: 40,
-                    height: 32,
-                  },
-
+                  styles.headerTitleInput,
+                  { color: seasonalTheme.textPrimary, fontSize: 14 },
                   {
                     outlineStyle: "none",
                     background: "transparent",
-                    verticalAlign: "middle",
                   } as unknown as Record<string, string>,
                 ]}
                 returnKeyType="done"
               />
             ) : (
-              <TouchableOpacity
-                onPress={handleTitleTap}
-                activeOpacity={0.7}
-                style={{ flexShrink: 1, minWidth: 0 }}
+              <Text
+                variant="body"
+                numberOfLines={1}
+                style={{
+                  color: seasonalTheme.textPrimary,
+                  fontWeight: "600",
+                  fontSize: 14,
+                }}
               >
-                <Text
-                  variant="body"
-                  numberOfLines={1}
-                  style={{
-                    color: getHeaderTitle()
-                      ? seasonalTheme.textPrimary
-                      : seasonalTheme.textSecondary,
-                    fontWeight: "600",
-                    fontSize: 14,
-                  }}
-                >
-                  {getHeaderTitle() || "Untitled"}
-                </Text>
-              </TouchableOpacity>
+                {getHeaderTitle() || "Untitled"}
+              </Text>
             )}
           </>
-        ) : isEditingTitle && isTitleEditable ? (
+        ) : isTitleEditable ? (
           <TextInput
+            key={`title-${editableEntryId || "new"}`}
             ref={titleInputRef}
-            value={editingTitleText}
-            onChangeText={setEditingTitleText}
-            onSubmitEditing={handleTitleSubmit}
-            onBlur={handleTitleSubmit}
-            placeholder="Title"
+            defaultValue={headerDefaultTitle}
+            onChangeText={handleTitleChangeText}
+            onBlur={handleTitleBlur}
+            blurOnSubmit
+            placeholder="Untitled"
             placeholderTextColor={seasonalTheme.textSecondary + "80"}
             style={[
-              {
-                color: seasonalTheme.textPrimary,
-                fontWeight: "600",
-                fontSize: 15,
-                padding: 0,
-                margin: 0,
-                borderWidth: 0,
-                flexShrink: 1,
-                minWidth: 40,
-                height: 32,
-              },
-
+              styles.headerTitleInput,
+              { color: seasonalTheme.textPrimary, fontSize: 15 },
               {
                 outlineStyle: "none",
                 background: "transparent",
-                verticalAlign: "middle",
               } as unknown as Record<string, string>,
             ]}
             returnKeyType="done"
           />
         ) : (
-          <TouchableOpacity
-            onPress={isTitleEditable ? handleTitleTap : undefined}
-            activeOpacity={isTitleEditable ? 0.7 : 1}
-            disabled={!isTitleEditable}
-            style={{ flex: 1, minWidth: 40 }}
+          <Text
+            variant="body"
+            numberOfLines={1}
+            style={{
+              color: getHeaderTitle()
+                ? seasonalTheme.textPrimary
+                : seasonalTheme.textSecondary,
+              fontWeight: "600",
+              fontSize: 15,
+            }}
           >
-            <Text
-              variant="body"
-              numberOfLines={1}
-              style={{
-                color: getHeaderTitle()
-                  ? seasonalTheme.textPrimary
-                  : seasonalTheme.textSecondary,
-                fontWeight: "600",
-                fontSize: 15,
-              }}
-            >
-              {getHeaderTitle() || (isEntryScreen ? "Untitled" : "")}
-            </Text>
-          </TouchableOpacity>
+            {getHeaderTitle() || (isEntryScreen ? "Untitled" : "")}
+          </Text>
         )}
         {/* Model selector in header for AI chats */}
         {(activeEntryType === "ai_chat" || pathname === "/compose/chat") &&
@@ -855,7 +837,7 @@ function MainLayout() {
             </TouchableOpacity>
           )}
       </View>
-      {isEntryScreen && activeEntryId && (
+      {isEntryScreen && menuEntryId && (
         <PopoverMenu
           visible={showContentMenu}
           onClose={() => setShowContentMenu(false)}
@@ -872,56 +854,54 @@ function MainLayout() {
             </TouchableOpacity>
           }
         >
-          {activeEntryType === "countdown" && (
+          {menuEntryData?.type === "countdown" && (
             <MenuItem
               icon="pencil-outline"
               label="Edit Timer"
               compact
               onPress={() => {
                 setShowContentMenu(false);
-                if (activeEntryId) {
-                  handleCountdownViewerEdit(activeEntryId);
+                if (menuEntryId) {
+                  handleCountdownViewerEdit(menuEntryId);
                 }
               }}
             />
           )}
           <MenuItem
             compact
-            icon={activeEntryQuery.data?.isFavorite ? "star" : "star-outline"}
-            label={
-              activeEntryQuery.data?.isFavorite ? "Unfavorite" : "Favorite"
-            }
+            icon={menuEntryData?.isFavorite ? "star" : "star-outline"}
+            label={menuEntryData?.isFavorite ? "Unfavorite" : "Favorite"}
             onPress={() => {
               setShowContentMenu(false);
-              if (activeEntryId) {
-                toggleFavoriteMutation.mutate(activeEntryId);
+              if (menuEntryId) {
+                toggleFavoriteMutation.mutate(menuEntryId);
               }
             }}
           />
           <MenuItem
             compact
             customIcon={<PinIcon size={16} color={seasonalTheme.textPrimary} />}
-            label={activeEntryQuery.data?.isPinned ? "Unpin" : "Pin"}
+            label={menuEntryData?.isPinned ? "Unpin" : "Pin"}
             onPress={() => {
               setShowContentMenu(false);
-              if (activeEntryId) {
-                togglePinnedMutation.mutate(activeEntryId);
+              if (menuEntryId) {
+                togglePinnedMutation.mutate(menuEntryId);
               }
             }}
           />
           <MenuItem
             compact
             icon={
-              activeEntryQuery.data?.archivedAt
+              menuEntryData?.archivedAt
                 ? "arrow-undo-outline"
                 : "archive-outline"
             }
-            label={activeEntryQuery.data?.archivedAt ? "Unarchive" : "Archive"}
+            label={menuEntryData?.archivedAt ? "Unarchive" : "Archive"}
             onPress={() => {
               setShowContentMenu(false);
-              if (!activeEntryId) return;
-              if (activeEntryQuery.data?.archivedAt) {
-                unarchiveEntryMutation.mutate(activeEntryId);
+              if (!menuEntryId) return;
+              if (menuEntryData?.archivedAt) {
+                unarchiveEntryMutation.mutate(menuEntryId);
                 return;
               }
               // Defer to next frame so the menu fully unmounts before
@@ -930,7 +910,7 @@ function MainLayout() {
               // cleanup and navigation unmounts the entry screen.
               // Disconnect sync before navigating so the Yjs observer
               // stops firing callbacks during the transition.
-              const id = activeEntryId;
+              const id = menuEntryId;
               syncEngine.disconnectOnClose(id).catch(() => {});
               requestAnimationFrame(() => {
                 archiveEntryMutation.mutate(id);
@@ -1429,11 +1409,13 @@ function MainLayout() {
           onPress={() => handleOpenFullEditor()}
           activeOpacity={0.7}
         >
-          <Ionicons
-            name="create-outline"
-            size={16}
-            color={theme.colors.accent}
-          />
+          <View style={{ width: 16, height: 16 }}>
+            <Ionicons
+              name="create-outline"
+              size={16}
+              color={theme.colors.accent}
+            />
+          </View>
           <Text
             variant="body"
             style={{
@@ -1458,11 +1440,13 @@ function MainLayout() {
           onPress={handleCreateNewAIChat}
           activeOpacity={0.7}
         >
-          <Ionicons
-            name="chatbubbles-outline"
-            size={16}
-            color={theme.colors.accent}
-          />
+          <View style={{ width: 16, height: 16 }}>
+            <Ionicons
+              name="chatbubbles-outline"
+              size={16}
+              color={theme.colors.accent}
+            />
+          </View>
           <Text
             variant="body"
             style={{
@@ -1487,11 +1471,13 @@ function MainLayout() {
           onPress={handleCreateCountdown}
           activeOpacity={0.7}
         >
-          <Ionicons
-            name="timer-outline"
-            size={16}
-            color={theme.colors.accent}
-          />
+          <View style={{ width: 16, height: 16 }}>
+            <Ionicons
+              name="timer-outline"
+              size={16}
+              color={theme.colors.accent}
+            />
+          </View>
           <Text
             variant="body"
             style={{
@@ -1509,7 +1495,7 @@ function MainLayout() {
       {/* Recent entries — fixed height to prevent layout shift while loading */}
       <View style={styles.recentSection}>
         {recentEntries.length > 0 && (
-          <>
+          <Animated.View style={{ opacity: recentsFadeAnim }}>
             <Text
               variant="caption"
               style={{
@@ -1546,11 +1532,13 @@ function MainLayout() {
                   }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons
-                    name={icon as "chatbubbles-outline"}
-                    size={14}
-                    color={seasonalTheme.textSecondary}
-                  />
+                  <View style={{ width: 14, height: 14 }}>
+                    <Ionicons
+                      name={icon as "chatbubbles-outline"}
+                      size={14}
+                      color={seasonalTheme.textSecondary}
+                    />
+                  </View>
                   <Text
                     variant="body"
                     numberOfLines={1}
@@ -1566,7 +1554,7 @@ function MainLayout() {
                 </TouchableOpacity>
               );
             })}
-          </>
+          </Animated.View>
         )}
       </View>
     </View>
@@ -1633,12 +1621,15 @@ function MainLayout() {
   // ===== WIDE SCREEN (Desktop) =====
   if (isWideScreen) {
     return (
-      <SafeAreaView
+      <View
         style={[
           styles.safeAreaContainer,
-          { backgroundColor: seasonalTheme.gradient.middle },
+          {
+            backgroundColor: seasonalTheme.gradient.middle,
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+          },
         ]}
-        edges={["top", "bottom"]}
         onLayout={(event) => {
           screenWidth.current = event.nativeEvent.layout.width;
         }}
@@ -1680,18 +1671,20 @@ function MainLayout() {
         />
 
         {deleteDialog}
-      </SafeAreaView>
+      </View>
     );
   }
 
   // ===== NARROW SCREEN (Mobile) =====
   return (
-    <SafeAreaView
+    <View
       style={[
         styles.safeAreaContainer,
-        { backgroundColor: seasonalTheme.gradient.middle },
+        {
+          backgroundColor: seasonalTheme.gradient.middle,
+          paddingTop: insets.top,
+        },
       ]}
-      edges={["top"]}
       onLayout={(event) => {
         screenWidth.current = event.nativeEvent.layout.width;
       }}
@@ -1761,11 +1754,20 @@ function MainLayout() {
       />
 
       {deleteDialog}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  headerTitleInput: {
+    fontWeight: "600",
+    flex: 1,
+    padding: 0,
+    margin: 0,
+    borderWidth: 0,
+    minWidth: 40,
+    height: 32,
+  },
   safeAreaContainer: {
     flex: 1,
   },
@@ -1942,7 +1944,7 @@ const styles = StyleSheet.create({
     marginTop: spacingPatterns.xl * 1.5,
     width: "100%",
     maxWidth: 360,
-    minHeight: 204,
+    height: 204,
   },
   recentItem: {
     flexDirection: "row",

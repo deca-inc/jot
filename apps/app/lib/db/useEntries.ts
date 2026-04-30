@@ -329,7 +329,7 @@ export function useUpdateEntry() {
       if (variables.skipCacheUpdate) {
         // During active editing, only update the title/updatedAt in the list
         // cache so the sidebar stays current. Don't touch the detail cache
-        // (that would disrupt the editor).
+        // — that causes re-renders that flicker the header title input.
         queryClient.setQueriesData<InfiniteEntryData | undefined>(
           { queryKey: entryKeys.lists() },
           (oldData) => {

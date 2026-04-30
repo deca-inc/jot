@@ -402,23 +402,11 @@ export function JournalComposer({
     }
   }, [entry?.titlePinned, entry?.title]);
 
-  // Handle title changes from the user
-  const handleTitleChange = useCallback(
-    (text: string) => {
-      setTitleValue(text);
-      titlePinnedRef.current = true;
-
-      // Save the pinned title to DB
-      if (entryId) {
-        updateEntryMutationRef.current.mutate({
-          id: entryId,
-          input: { title: text.trim() || "Untitled", titlePinned: true },
-          skipCacheUpdate: true,
-        });
-      }
-    },
-    [entryId],
-  );
+  // Handle title changes from the user — local state only, save deferred to blur
+  const handleTitleChange = useCallback((text: string) => {
+    setTitleValue(text);
+    titlePinnedRef.current = true;
+  }, []);
 
   // Handle title focus - clear the auto-derived text if not pinned
   const handleTitleFocus = useCallback(() => {
@@ -429,19 +417,27 @@ export function JournalComposer({
     }
   }, []);
 
-  // Handle title blur
+  // Handle title blur — persist the title to DB
   const handleTitleBlur = useCallback(() => {
     setIsTitleFocused(false);
-    // If user left it empty, unpin so auto-derivation resumes
-    if (!titleValue.trim()) {
+    if (!entryId) return;
+
+    const trimmed = titleValue.trim();
+    if (trimmed) {
+      // User typed a custom title — save and pin
+      updateEntryMutationRef.current.mutate({
+        id: entryId,
+        input: { title: trimmed, titlePinned: true },
+        skipCacheUpdate: true,
+      });
+    } else {
+      // User left it empty — unpin so auto-derivation resumes
       titlePinnedRef.current = false;
-      if (entryId) {
-        updateEntryMutationRef.current.mutate({
-          id: entryId,
-          input: { titlePinned: false },
-          skipCacheUpdate: true,
-        });
-      }
+      updateEntryMutationRef.current.mutate({
+        id: entryId,
+        input: { titlePinned: false },
+        skipCacheUpdate: true,
+      });
     }
   }, [titleValue, entryId]);
 
