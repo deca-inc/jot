@@ -425,11 +425,22 @@ export function JournalComposer({
     const trimmed = titleValue.trim();
     if (trimmed) {
       // User typed a custom title — save and pin
-      updateEntryMutationRef.current.mutate({
-        id: entryId,
-        input: { title: trimmed, titlePinned: true },
-        skipCacheUpdate: true,
-      });
+      updateEntryMutationRef.current.mutate(
+        {
+          id: entryId,
+          input: { title: trimmed, titlePinned: true },
+          skipCacheUpdate: true,
+        },
+        {
+          onSuccess: () => {
+            onEntryUpdatedRef
+              .current?.(entryId, { title: trimmed })
+              .catch((err) => {
+                console.error("[JournalComposer] Error syncing title:", err);
+              });
+          },
+        },
+      );
     } else {
       // User left it empty — unpin so auto-derivation resumes
       titlePinnedRef.current = false;

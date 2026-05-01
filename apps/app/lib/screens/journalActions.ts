@@ -174,7 +174,9 @@ export function saveJournalContentFireAndForget(
 
   const input: UpdateEntryInput = {
     // When the user has pinned a custom title, don't overwrite it.
-    title: options?.titlePinned ? undefined : prepared.finalTitle,
+    // Omit the key entirely (rather than setting undefined) so the sync
+    // queue's debounce merge doesn't clobber a pending title update.
+    ...(options?.titlePinned ? {} : { title: prepared.finalTitle }),
     blocks: prepared.blocks,
   };
 
@@ -237,7 +239,9 @@ export async function saveJournalContent(
     }
 
     const input: UpdateEntryInput = {
-      title: titlePinned ? undefined : prepared.finalTitle,
+      // Omit title key when pinned so sync debounce merge doesn't clobber
+      // a pending title update.
+      ...(titlePinned ? {} : { title: prepared.finalTitle }),
       blocks: prepared.blocks,
     };
 

@@ -23,6 +23,10 @@ export interface EntryActionContext {
     unknown
   >;
   onNavigateBack?: () => void;
+  onEntryUpdated?: (
+    entryId: number,
+    updates: UpdateEntryInput,
+  ) => Promise<void>;
 }
 
 /**
@@ -38,9 +42,13 @@ export async function renameEntry(
   }
 
   try {
+    const trimmed = newTitle.trim();
     await context.updateEntry.mutateAsync({
       id: entryId,
-      input: { title: newTitle.trim(), titlePinned: true },
+      input: { title: trimmed, titlePinned: true },
+    });
+    context.onEntryUpdated?.(entryId, { title: trimmed }).catch((err) => {
+      console.error("[entryActions] Error syncing title:", err);
     });
   } catch (error) {
     console.error("[entryActions] Error renaming entry:", error);

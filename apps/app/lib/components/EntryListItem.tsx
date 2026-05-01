@@ -36,6 +36,7 @@ import {
   useUnarchiveEntry,
 } from "../db/useEntries";
 import { renameEntry, type EntryActionContext } from "../screens/entryActions";
+import { useSyncEngine } from "../sync";
 import { spacingPatterns, borderRadius } from "../theme";
 import { type SeasonalTheme } from "../theme/seasonalTheme";
 import { useSeasonalTheme } from "../theme/SeasonalThemeProvider";
@@ -131,14 +132,16 @@ function EntryListItemComponent({
   const deleteEntryMutation = useDeleteEntry();
   const updateEntryMutation = useUpdateEntry();
   const trackEvent = useTrackEvent();
+  const { onEntryUpdated } = useSyncEngine();
 
   // Action context
   const actionContext = useMemo<EntryActionContext>(
     () => ({
       updateEntry: updateEntryMutation,
       deleteEntry: deleteEntryMutation,
+      onEntryUpdated,
     }),
-    [updateEntryMutation, deleteEntryMutation],
+    [updateEntryMutation, deleteEntryMutation, onEntryUpdated],
   );
 
   // Check if we should render HTML/markdown
