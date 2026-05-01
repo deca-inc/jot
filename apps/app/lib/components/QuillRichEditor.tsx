@@ -125,11 +125,6 @@ export const QuillRichEditor = forwardRef<
     list: null as string | null,
   });
 
-  // Track last known cursor position for mobile toolbar focus restoration
-  const lastSelectionRef = useRef<{ index: number; length: number } | null>(
-    null,
-  );
-
   // Track voice recording state and transcript for overlay
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [transcriptText, setTranscriptText] = useState("");
@@ -368,31 +363,14 @@ export const QuillRichEditor = forwardRef<
       formatState.list === "unchecked" || formatState.list === "checked";
     editorRef.current?.format("list", isChecklist ? false : "unchecked");
   }, [formatState.list]);
-  const increaseIndent = useCallback(() => {
-    // Restore selection first — on mobile, tapping the native toolbar causes
-    // the WebView to lose focus, so Quill's cursor position is lost.
-    // On Android, we must also re-focus the editor so the WebView regains
-    // DOM focus; otherwise setSelection is silently ignored and
-    // formatSelection falls back to quill.focus() which resets the cursor.
-    if (Platform.OS === "android") {
-      editorRef.current?.focus();
-    }
-    const sel = lastSelectionRef.current;
-    if (sel) {
-      editorRef.current?.setSelection(sel.index, sel.length, "silent");
-    }
-    editorRef.current?.format("indent", "+1");
-  }, []);
-  const decreaseIndent = useCallback(() => {
-    if (Platform.OS === "android") {
-      editorRef.current?.focus();
-    }
-    const sel = lastSelectionRef.current;
-    if (sel) {
-      editorRef.current?.setSelection(sel.index, sel.length, "silent");
-    }
-    editorRef.current?.format("indent", "-1");
-  }, []);
+  const increaseIndent = useCallback(
+    () => editorRef.current?.format("indent", "+1"),
+    [],
+  );
+  const decreaseIndent = useCallback(
+    () => editorRef.current?.format("indent", "-1"),
+    [],
+  );
 
   // PanResponder for toolbar swipe-down to dismiss keyboard
   // Allows horizontal scrolling but detects vertical swipe to dismiss
@@ -1078,10 +1056,6 @@ export const QuillRichEditor = forwardRef<
           }}
           onSelectionChange={(data) => {
             if (data.range) {
-              lastSelectionRef.current = {
-                index: data.range.index,
-                length: data.range.length,
-              };
               editorRef.current
                 ?.getFormat(data.range)
                 .then((format: Record<string, unknown>) => {
