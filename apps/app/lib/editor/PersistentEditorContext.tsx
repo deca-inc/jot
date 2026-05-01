@@ -202,6 +202,9 @@ export function PersistentEditorProvider({
   );
 
   const release = useCallback(() => {
+    // Reset scroll position while the WebView is still full-height so the
+    // next note opens at the top instead of inheriting the previous scroll.
+    editorRef.current?.scrollToTop();
     claimGenRef.current++;
     pendingClaimRef.current = null;
     callbacksRef.current = {

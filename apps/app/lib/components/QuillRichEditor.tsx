@@ -56,6 +56,8 @@ export interface QuillRichEditorRef {
   }) => Promise<void>;
   /** Inject updated theme CSS into the WebView without remounting */
   updateThemeCSS: (css: string) => void;
+  /** Scroll the editor content to the top */
+  scrollToTop: () => void;
 }
 
 interface QuillRichEditorProps {
@@ -220,6 +222,18 @@ export const QuillRichEditor = forwardRef<
           if (!el) { el = document.createElement('style'); el.id = 'jot-theme-override'; document.head.appendChild(el); }
           el.textContent = ${escaped};
         })();
+        true;
+      `);
+    },
+    scrollToTop: () => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- _webview is a private member of react-native-cn-quill
+      const webview = (editor as any)._webview?.current;
+      if (!webview) return;
+      webview.injectJavaScript(`
+        var e = document.querySelector('.ql-editor');
+        if (e) e.scrollTop = 0;
         true;
       `);
     },

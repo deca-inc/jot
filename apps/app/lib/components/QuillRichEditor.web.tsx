@@ -66,6 +66,8 @@ export interface QuillRichEditorRef {
   }) => Promise<void>;
   /** Inject updated theme CSS into the WebView without remounting */
   updateThemeCSS: (css: string) => void;
+  /** Scroll the editor content to the top */
+  scrollToTop: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1226,6 +1228,12 @@ export const QuillRichEditor = forwardRef<
       },
       updateThemeCSS: () => {
         // Web version handles theme via dynamic style injection in useEffect
+      },
+      scrollToTop: () => {
+        const container = containerRef.current;
+        if (!container) return;
+        const editor = container.querySelector(".ql-editor");
+        if (editor) editor.scrollTop = 0;
       },
     }),
     [],
